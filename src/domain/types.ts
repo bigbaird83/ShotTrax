@@ -32,6 +32,9 @@ export type Hole = {
   number: number;
   par: number;
   score: number | null;
+  /** User GPS or map-dropped green estimate — not a licensed pin. */
+  greenLat: number | null;
+  greenLng: number | null;
 };
 
 export type Shot = {

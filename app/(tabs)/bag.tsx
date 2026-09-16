@@ -22,8 +22,8 @@ export default function BagScreen() {
   return (
     <Screen>
       <Text style={styles.lede}>
-        Seeded 14-club bag with full CRUD. Voice pick and top-3 ranking are not in this PR — tap a
-        club when marking a shot.
+        Seeded 14-club bag with full CRUD. Voice pick matches names and nicknames (“seven iron”)
+        then still requires confirm. Top-3 ranking uses club averages after 5 closed shots.
       </Text>
       {clubs.map((club) => (
         <View key={club.id} style={styles.row}>

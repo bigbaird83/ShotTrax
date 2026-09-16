@@ -1,7 +1,7 @@
 import * as Device from 'expo-device';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
 import {
   finishRound,
@@ -10,16 +10,19 @@ import {
   getOpenShotForHole,
   getRound,
   listShotsForHole,
+  setHoleGreen,
   updateHolePar,
   updateHoleScore,
 } from '@/src/db/repo';
 import type { GpsFix } from '@/src/domain/types';
 import { classifyAccuracyM } from '@/src/domain/fixQuality';
+import { MIC_SHOT_ASSIST, WATCH_ASSIST } from '@/src/sensing/assists';
 import { getCurrentFix } from '@/src/services/location';
 import { endOpenShot, promptForPlan } from '@/src/services/shotActions';
 import { QualityBadge } from '@/src/ui/Badge';
 import { BigButton } from '@/src/ui/BigButton';
 import { GpsBanner } from '@/src/ui/GpsBanner';
+import { HoleMap } from '@/src/ui/HoleMap';
 import { Screen } from '@/src/ui/Screen';
 import { colors } from '@/src/ui/theme';
 
@@ -95,8 +98,27 @@ export default function HoleScreen() {
       ? 'MOCK GPS — the OS flagged this fix as mocked. ShotTrax is not synthesizing a location.'
       : null;
 
+  const green =
+    hole.greenLat != null && hole.greenLng != null
+      ? { lat: hole.greenLat, lng: hole.greenLng }
+      : null;
+
+  const onMarkGreen = async () => {
+    if (readOnly) return;
+    setBusy(true);
+    try {
+      const next = await getCurrentFix();
+      setHoleGreen(db, hole.id, { lat: next.lat, lng: next.lng });
+      bump();
+    } catch (err) {
+      Alert.alert('Could not mark green', err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <Screen>
+    <Screen scroll={false}>
       {simBanner ? <GpsBanner message={simBanner} /> : null}
 
       <View style={styles.headerRow}>
@@ -106,6 +128,22 @@ export default function HoleScreen() {
         </Text>
       </View>
 
+      <HoleMap
+        holeNumber={hole.number}
+        shots={shots}
+        userFix={fix}
+        green={green}
+        onDropGreenEstimate={
+          readOnly
+            ? undefined
+            : (coord) => {
+                setHoleGreen(db, hole.id, coord);
+                bump();
+              }
+        }
+      />
+
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollBody} keyboardShouldPersistTaps="handled">
       <Text style={styles.label}>Par</Text>
       <View style={styles.row}>
         {[3, 4, 5].map((par) => (
@@ -207,6 +245,23 @@ export default function HoleScreen() {
             disabled={busy || !open}
             onPress={() => void onEndShot()}
           />
+          <BigButton
+            label={green ? 'Reset green from GPS' : 'Mark green (GPS)'}
+            variant="ghost"
+            disabled={busy}
+            onPress={() => void onMarkGreen()}
+          />
+          {green ? (
+            <BigButton
+              label="Clear green estimate"
+              variant="ghost"
+              disabled={busy}
+              onPress={() => {
+                setHoleGreen(db, hole.id, null);
+                bump();
+              }}
+            />
+          ) : null}
         </View>
       )}
 
@@ -240,6 +295,12 @@ export default function HoleScreen() {
       ) : (
         <BigButton label="Summary" variant="secondary" onPress={() => router.push(`/round/${id}/summary`)} />
       )}
+
+        <Text style={styles.tiny}>
+          Watch assist: {WATCH_ASSIST ? 'on' : 'off'} · Mic shot-detect: {MIC_SHOT_ASSIST ? 'on' : 'off'}{' '}
+          (stubs — out of scope).
+        </Text>
+      </ScrollView>
     </Screen>
   );
 }
@@ -297,4 +358,5 @@ const styles = StyleSheet.create({
   shotSeq: { color: colors.lime, fontWeight: '900', fontSize: 20, width: 24 },
   shotClub: { color: colors.cream, fontSize: 18, fontWeight: '700' },
   navRow: { flexDirection: 'row', gap: 10 },
+  scrollBody: { gap: 12, paddingBottom: 24 },
 });

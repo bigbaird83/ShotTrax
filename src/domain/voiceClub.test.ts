@@ -1,0 +1,75 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { DEFAULT_BAG } from './defaultBag';
+import type { Club } from './types';
+import { matchSpokenClub, normalizeUtterance } from './voiceClub';
+
+function bag(): Club[] {
+  return DEFAULT_BAG.map((c) => ({ ...c, enabled: true }));
+}
+
+function idFor(transcript: string): string | null {
+  return matchSpokenClub(transcript, bag())?.id ?? null;
+}
+
+test('normalize expands number words and strips punctuation', () => {
+  assert.equal(normalizeUtterance('Seven-iron!'), '7 iron');
+  assert.equal(normalizeUtterance('  the  7i '), 'the 7i');
+});
+
+test('seven iron and nicknames map to 7 Iron', () => {
+  assert.equal(idFor('seven iron'), 'club_7i');
+  assert.equal(idFor('7 iron'), 'club_7i');
+  assert.equal(idFor('7i'), 'club_7i');
+  assert.equal(idFor('please hit the seven iron'), 'club_7i');
+});
+
+test('driver nicknames', () => {
+  assert.equal(idFor('driver'), 'club_driver');
+  assert.equal(idFor('big dog'), 'club_driver');
+});
+
+test('woods, hybrid, wedges, putter', () => {
+  assert.equal(idFor('three wood'), 'club_3w');
+  assert.equal(idFor('5w'), 'club_5w');
+  assert.equal(idFor('4 hybrid'), 'club_4h');
+  assert.equal(idFor('pitching wedge'), 'club_pw');
+  assert.equal(idFor('pw'), 'club_pw');
+  assert.equal(idFor('sand wedge'), 'club_sw');
+  assert.equal(idFor('lob'), 'club_lw');
+  assert.equal(idFor('putter'), 'club_putter');
+  assert.equal(idFor('flat stick'), 'club_putter');
+});
+
+test('five iron is 5i, not 5 wood', () => {
+  assert.equal(idFor('five iron'), 'club_5i');
+  assert.equal(idFor('five wood'), 'club_5w');
+});
+
+test('ambiguous five / generic iron does not guess', () => {
+  assert.equal(idFor('five'), null);
+  assert.equal(idFor('iron'), null);
+  assert.equal(idFor(''), null);
+  assert.equal(idFor('   '), null);
+});
+
+test('disabled clubs are not matched', () => {
+  const clubs = bag().map((c) => (c.id === 'club_7i' ? { ...c, enabled: false } : c));
+  assert.equal(matchSpokenClub('seven iron', clubs), null);
+});
+
+test('custom bag club matches on name without a seeded nickname', () => {
+  const clubs: Club[] = [
+    ...bag(),
+    {
+      id: 'club_2i',
+      name: '2 Iron',
+      shortName: '2i',
+      loftRank: 3.5,
+      sortOrder: 3,
+      enabled: true,
+    },
+  ];
+  assert.equal(matchSpokenClub('2 iron', clubs)?.id, 'club_2i');
+  assert.equal(matchSpokenClub('two iron', clubs)?.id, 'club_2i');
+});
