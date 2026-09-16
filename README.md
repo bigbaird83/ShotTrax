@@ -23,7 +23,66 @@ npx expo prebuild
 npx expo run:ios
 ```
 
-or an EAS development build. Tap targets remain if speech is unavailable.
+or an EAS development build (`eas build -p ios --profile development`). Tap targets remain if speech is unavailable.
+
+To install a store-signed build with voice on a physical iPhone, use **TestFlight** below (Expo Go is not enough).
+
+## Install on your iPhone (TestFlight)
+
+Voice club pick needs a **native** binary. `expo-speech-recognition` is **not** in Expo Go. A production EAS build submitted to TestFlight is the path that covers voice on a real iPhone.
+
+### You need
+
+- **Apple Developer Program** ($99/year): [developer.apple.com/programs](https://developer.apple.com/programs/)
+- An [Expo](https://expo.dev/signup) account
+
+### One-time tooling
+
+```bash
+npm i -g eas-cli
+eas login
+eas build:configure
+```
+
+`eas build:configure` (or `eas init`) links this repo to an Expo project.
+
+**TODO:** Expo will write `extra.eas.projectId` into `app.json`. **Commit that UUID** — it is not a secret. Do not invent a project ID.
+
+Do **not** put Apple Team ID, App Store Connect API keys, or `.p8` files in git. Paste them when prompted:
+
+| What | Where Doc pastes it |
+| --- | --- |
+| iOS distribution cert / provisioning | `eas credentials` → production profile (let EAS manage signing) |
+| Apple Team ID | `eas credentials` / `eas submit` prompt — not `eas.json` |
+| App Store Connect API key (`.p8`, Key ID, Issuer ID) | App Store Connect → Users and Access → Integrations → App Store Connect API, then `eas credentials` (Manage your API Key) or the `eas submit` prompt. `.p8` is gitignored. |
+| Optional later: `ascAppId` (numeric Apple ID of the app) | App Store Connect → App Information → Apple ID. Safe to commit in `eas.json` `submit.production.ios` if you want fewer prompts — still do not invent it. |
+
+Bundle ID is already `com.shottrax.app`. Marketing version is `0.1.0`; iOS `buildNumber` starts at `1`. The `production` profile auto-increments build numbers on EAS (`cli.appVersionSource`: `remote`).
+
+### Build and send to TestFlight
+
+```bash
+eas build -p ios --profile production
+# or: npm run eas:build:ios
+
+eas submit -p ios
+# or: npm run eas:submit:ios
+```
+
+`eas submit -p ios` uploads the production `.ipa` to App Store Connect. After Apple processes it (often 10–15 minutes) it appears in **TestFlight**.
+
+### Install on the phone
+
+1. In [App Store Connect](https://appstoreconnect.apple.com), open the app → TestFlight → add yourself as an **internal tester**.
+2. On the iPhone, install the **TestFlight** app from the App Store, accept the invite, install ShotTrax.
+
+### Profiles in `eas.json`
+
+| Profile | What it is |
+| --- | --- |
+| `development` | Expo **dev client** (internal). Use while iterating; not for TestFlight. |
+| `preview` | Production-like **internal** / ad hoc distribution (not App Store). |
+| `production` | App Store / **TestFlight** (this section). |
 
 ## Permissions
 
