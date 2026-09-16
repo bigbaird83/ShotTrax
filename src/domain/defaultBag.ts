@@ -1,6 +1,6 @@
 import type { Club } from './types';
 
-/** Standard 14-club bag. Voice aliases / top-3 ranking are deferred (P2+). */
+/** Standard 14-club bag. Voice nicknames live in `voiceClub.ts`; loftRank ranks shorter clubs higher. */
 export const DEFAULT_BAG: Omit<Club, 'enabled'>[] = [
   { id: 'club_driver', name: 'Driver', shortName: 'Dr', loftRank: 0, sortOrder: 0 },
   { id: 'club_3w', name: '3 Wood', shortName: '3W', loftRank: 1, sortOrder: 1 },

@@ -1,6 +1,13 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { DEFAULT_BAG } from '../domain/defaultBag';
 
+function ensureColumn(db: SQLiteDatabase, table: string, column: string, ddl: string): void {
+  const cols = db.getAllSync<{ name: string }>(`PRAGMA table_info(${table})`);
+  if (!cols.some((c) => c.name === column)) {
+    db.execSync(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+  }
+}
+
 export function migrate(db: SQLiteDatabase): void {
   db.execSync('PRAGMA foreign_keys = ON;');
   db.execSync(`
@@ -27,6 +34,8 @@ export function migrate(db: SQLiteDatabase): void {
       number INTEGER NOT NULL,
       par INTEGER NOT NULL,
       score INTEGER,
+      green_lat REAL,
+      green_lng REAL,
       FOREIGN KEY (round_id) REFERENCES rounds(id) ON DELETE CASCADE
     );
 
@@ -52,6 +61,9 @@ export function migrate(db: SQLiteDatabase): void {
       FOREIGN KEY (club_id) REFERENCES clubs(id)
     );
   `);
+
+  ensureColumn(db, 'holes', 'green_lat', 'REAL');
+  ensureColumn(db, 'holes', 'green_lng', 'REAL');
 
   const clubCount = db.getFirstSync<{ n: number }>('SELECT COUNT(*) AS n FROM clubs');
   if ((clubCount?.n ?? 0) === 0) {

@@ -26,6 +26,8 @@ type HoleRow = {
   number: number;
   par: number;
   score: number | null;
+  green_lat: number | null;
+  green_lng: number | null;
 };
 
 type ShotRow = {
@@ -76,6 +78,8 @@ function mapHole(row: HoleRow): Hole {
     number: row.number,
     par: row.par,
     score: row.score,
+    greenLat: row.green_lat,
+    greenLng: row.green_lng,
   };
 }
 
@@ -226,6 +230,19 @@ export function updateHolePar(db: SQLiteDatabase, holeId: string, par: number): 
 
 export function updateHoleScore(db: SQLiteDatabase, holeId: string, score: number | null): void {
   db.runSync('UPDATE holes SET score = ? WHERE id = ?', [score, holeId]);
+}
+
+/** Green estimate from current GPS or a map long-press. Not a licensed course pin. */
+export function setHoleGreen(
+  db: SQLiteDatabase,
+  holeId: string,
+  green: { lat: number; lng: number } | null,
+): void {
+  db.runSync('UPDATE holes SET green_lat = ?, green_lng = ? WHERE id = ?', [
+    green?.lat ?? null,
+    green?.lng ?? null,
+    holeId,
+  ]);
 }
 
 export function listShotsForHole(db: SQLiteDatabase, holeId: string): Shot[] {

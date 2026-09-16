@@ -13,7 +13,7 @@ export function Screen({
   if (!scroll) {
     return (
       <SafeAreaView style={styles.safe} edges={['bottom']}>
-        <View style={styles.pad}>{children}</View>
+        <View style={[styles.pad, styles.fill]}>{children}</View>
       </SafeAreaView>
     );
   }
@@ -35,5 +35,8 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 32,
     gap: 12,
+  },
+  fill: {
+    flex: 1,
   },
 });
