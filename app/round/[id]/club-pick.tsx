@@ -1,9 +1,10 @@
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
 import { getHole, listClubAverages, listClubs, listShotsForHole } from '@/src/db/repo';
 import { clubToRankInput, lastClosedShotYards, rankTopClubs, resolveDistanceTarget } from '@/src/domain/rankClubs';
+import { parseTypedYards } from '@/src/domain/shotSource';
 import { matchSpokenClub, speechContextualStrings } from '@/src/domain/voiceClub';
 import type { Club } from '@/src/domain/types';
 import { speechRecognitionAvailable, startClubSpeech, type ClubSpeechSession } from '@/src/services/speechClub';
@@ -35,6 +36,7 @@ export default function ClubPickScreen() {
   const [heard, setHeard] = useState<string | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [proposed, setProposed] = useState<Club | null>(null);
+  const [typedYards, setTypedYards] = useState('');
   const sessionRef = useRef<ClubSpeechSession | null>(null);
   const voiceReady = speechRecognitionAvailable();
 
@@ -43,6 +45,7 @@ export default function ClubPickScreen() {
   }, [navigation, withoutGps]);
 
   useEffect(() => {
+    if (withoutGps) return undefined;
     let live = true;
     getCurrentFix()
       .then((next) => {
@@ -54,7 +57,7 @@ export default function ClubPickScreen() {
     return () => {
       live = false;
     };
-  }, [revision]);
+  }, [revision, withoutGps]);
 
   useEffect(() => {
     return () => {
@@ -83,7 +86,12 @@ export default function ClubPickScreen() {
     setBusy(true);
     try {
       if (withoutGps) {
-        addNoGpsShot(db, { roundId: id, holeNumber, clubId });
+        const parsed = parseTypedYards(typedYards);
+        if (!parsed.ok) {
+          Alert.alert('Yards', 'Leave yards blank or type a whole number from 0–999. This is not GPS.');
+          return;
+        }
+        addNoGpsShot(db, { roundId: id, holeNumber, clubId, typedYards: parsed.yards });
         bump();
         router.back();
         return;
@@ -167,9 +175,28 @@ export default function ClubPickScreen() {
       <Text style={styles.title}>{withoutGps ? 'Forgotten swing' : 'Pick a club'}</Text>
       <Text style={styles.lede}>
         {withoutGps
-          ? 'Logs a stroke with this club and no coordinates (source: no_gps). It counts on the hole, never draws a map trail, and is excluded from distance averages and top-3. ShotTrax will not invent a GPS fix.'
+          ? 'Logs a stroke with this club and no coordinates (source: no_gps). Optional typed yards stay off averages and top-3. It counts in the hole shot list. ShotTrax will not invent a GPS fix.'
           : 'Tap a club to confirm GPS now as the start (and the previous shot’s end). Voice names a club but still needs Confirm. Watch / mic shot-detect assists are not in this build.'}
       </Text>
+
+      {withoutGps ? (
+        <View style={styles.voiceBox}>
+          <Text style={styles.label}>Optional yards (typed)</Text>
+          <TextInput
+            placeholder="Blank = no yards"
+            placeholderTextColor={colors.muted}
+            value={typedYards}
+            onChangeText={setTypedYards}
+            keyboardType="number-pad"
+            inputMode="numeric"
+            style={styles.yardsInput}
+          />
+          <Text style={styles.tiny}>
+            Typed yards are a note on this stroke. They are excluded from club averages and top-3.
+            GPS fields stay empty.
+          </Text>
+        </View>
+      ) : null}
 
       <View style={styles.voiceBox}>
         <BigButton
@@ -267,6 +294,16 @@ const styles = StyleSheet.create({
     gap: 10,
     borderWidth: 1,
     borderColor: colors.line,
+  },
+  yardsInput: {
+    minHeight: 56,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    color: colors.cream,
+    fontSize: 18,
+    backgroundColor: colors.bg,
   },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
 });

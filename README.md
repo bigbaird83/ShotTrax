@@ -51,7 +51,7 @@ There is no Watch / motion / mic-shot-detect permission. Those assists are stubb
 4. GPS at confirm = shot **start**. If this hole already had an open GPS shot, that same fix is its **end** and yards are logged (haversine).
 5. **End last shot** closes an open GPS shot without starting a new one.
 6. **+ Penalty** adds 1–5 penalty strokes to the hole score, with reason water / OB / unplayable / other (optional note). Shown as a penalty row — not a map polyline. Does **not** change club averages or top-3.
-7. **Add shot without GPS** (forgotten swing / no fix): pick a club; the shot is stored as `source = no_gps` with **null** lat/lng and **null** yards. It counts as a stroke on the hole list. It is **excluded from distance averages and top-3**. ShotTrax will not invent a coordinate.
+7. **Add shot without GPS** (forgotten swing / no fix): pick a club and optionally type yards (or leave blank). Stored as `source = no_gps` with **null** lat/lng. Typed yards are a note on the stroke and are **excluded from distance averages and top-3**. ShotTrax will not invent a coordinate.
 8. Finish the round for a scorecard. Club averages live on the Averages tab.
 
 Hole **score remains the source of truth**. If you also logged shots and/or penalties, the hole screen and round summary warn when `score ≠ shots + penalty strokes`.
@@ -71,12 +71,12 @@ Use this when you swung but have no GPS fix (or forgot to mark).
 | --- | --- |
 | `source` | `no_gps` |
 | start/end lat, lng, accuracy | `NULL` — never `0,0` or a synthesized pin |
-| `distance_yards` | `NULL` |
+| `distance_yards` | optional user-typed integer, or `NULL` if blank |
 | `ended_at` | set immediately (closed stroke, no trail) |
 
-**Distance averages:** excluded (preferred). We do **not** include them as 0 yards. Honest GPS 0 yd (simulator pin that did not move) still counts.
+**Distance averages / top-3:** excluded by default, even when yards were typed. We do **not** treat them as GPS 0 yd. Honest GPS 0 yd (simulator pin that did not move) still counts.
 
-**Score:** like a GPS mark, this does **not** auto-bump the scorecard; use +/− or **+ Penalty**. The shot still appears in the hole shot list so strokes + penalties can be reconciled with score.
+**Score / sequence:** like a GPS mark, this does **not** auto-bump the scorecard; use +/− or **+ Penalty**. The shot still takes the next `seq` on the hole so strokes + penalties can be reconciled with score.
 
 ## Top-3 ranking
 

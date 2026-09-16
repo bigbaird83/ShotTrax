@@ -138,7 +138,7 @@ export async function endOpenShot(
 
 export function addNoGpsShot(
   db: SQLiteDatabase,
-  args: { roundId: string; holeNumber: number; clubId: string },
+  args: { roundId: string; holeNumber: number; clubId: string; typedYards?: number | null },
 ): string {
   const hole = getHole(db, args.roundId, args.holeNumber);
   if (!hole) {
@@ -148,5 +148,6 @@ export function addNoGpsShot(
     holeId: hole.id,
     clubId: args.clubId,
     seq: nextShotSeq(db, hole.id),
+    typedYards: args.typedYards ?? null,
   });
 }

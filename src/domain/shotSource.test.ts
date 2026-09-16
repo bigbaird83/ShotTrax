@@ -5,6 +5,7 @@ import {
   hasClosedGpsTrail,
   includeInDistanceAverages,
   isNoGpsShot,
+  parseTypedYards,
   planNoGpsShot,
 } from './shotSource';
 import type { Shot } from './types';
@@ -25,7 +26,7 @@ function gpsClosed(yards: number, fixQuality: Shot['fixQuality'] = 'good'): Pick
   };
 }
 
-test('planNoGpsShot never fills coordinates, yards, or fix quality', () => {
+test('planNoGpsShot never fills coordinates or fix quality (blank yards stay null)', () => {
   const plan = planNoGpsShot();
   assert.equal(plan.source, 'no_gps');
   assert.equal(plan.startLat, null);
@@ -36,6 +37,28 @@ test('planNoGpsShot never fills coordinates, yards, or fix quality', () => {
   assert.equal(plan.fixQuality, null);
   assert.equal(plan.startFixQuality, null);
   assert.equal(plan.endFixQuality, null);
+});
+
+test('planNoGpsShot stores typed yards but still invents no lat/lng', () => {
+  const plan = planNoGpsShot(155);
+  assert.equal(plan.distanceYards, 155);
+  assert.equal(plan.startLat, null);
+  assert.equal(plan.startLng, null);
+  assert.equal(plan.endLat, null);
+  assert.equal(plan.endLng, null);
+  assert.equal(includeInDistanceAverages(plan), false);
+  assert.equal(hasClosedGpsTrail({ ...plan, endedAt: 't' }), false);
+});
+
+test('parseTypedYards accepts blank, integer yards, and rejects junk', () => {
+  assert.deepEqual(parseTypedYards(''), { ok: true, yards: null });
+  assert.deepEqual(parseTypedYards('  '), { ok: true, yards: null });
+  assert.deepEqual(parseTypedYards('150'), { ok: true, yards: 150 });
+  assert.deepEqual(parseTypedYards('0'), { ok: true, yards: 0 });
+  assert.equal(parseTypedYards('12.5').ok, false);
+  assert.equal(parseTypedYards('-10').ok, false);
+  assert.equal(parseTypedYards('abc').ok, false);
+  assert.equal(parseTypedYards('1000').ok, false);
 });
 
 test('no_gps shots are excluded from distance averages (preferred: not 0 yd)', () => {
@@ -66,6 +89,21 @@ test('no_gps is excluded even if yards were wrongly present (never treat as 0 yd
   assert.equal(kept[0]?.distanceYards, 200);
   const a = averageWithBadges(kept.map((s) => ({ yards: s.distanceYards as number, fixQuality: 'good' as const })));
   assert.equal(a.avgYards, 200);
+  assert.equal(a.count, 1);
+});
+
+test('typed yards on no_gps still never enter distance averages or top-3 samples', () => {
+  const mixed = [
+    { source: 'gps' as const, distanceYards: 140, fixQuality: 'good' as const },
+    { source: 'no_gps' as const, distanceYards: 155, fixQuality: null },
+  ];
+  const kept = mixed.filter(includeInDistanceAverages);
+  assert.equal(kept.length, 1);
+  assert.equal(kept[0]?.source, 'gps');
+  const a = averageWithBadges(
+    kept.map((s) => ({ yards: s.distanceYards as number, fixQuality: 'good' as const })),
+  );
+  assert.equal(a.avgYards, 140);
   assert.equal(a.count, 1);
 });
 

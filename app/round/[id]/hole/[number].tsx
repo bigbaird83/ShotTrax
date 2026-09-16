@@ -262,7 +262,9 @@ export default function HoleScreen() {
                 <Text style={styles.shotClub}>{club?.name ?? 'Club'}</Text>
                 <Text style={styles.meta}>
                   {noGps
-                    ? 'No GPS — counts as a stroke, not in averages'
+                    ? shot.distanceYards != null
+                      ? `${shot.distanceYards} yd typed · not in averages`
+                      : 'No GPS — counts as a stroke, not in averages'
                     : openShot
                       ? 'Waiting for next mark to log yards'
                       : `${shot.distanceYards ?? '—'} yd${shot.impossibleJump ? ' · jump' : ''}`}

@@ -388,13 +388,13 @@ export function applyClosedShot(
   );
 }
 
-/** Forgotten swing: closed stroke with no coordinates and no yards. */
+/** Forgotten swing: closed stroke with no coordinates. Optional typed yards only. */
 export function insertNoGpsShot(
   db: SQLiteDatabase,
-  args: { holeId: string; clubId: string; seq: number },
+  args: { holeId: string; clubId: string; seq: number; typedYards?: number | null },
 ): string {
   const id = newId();
-  const plan = planNoGpsShot();
+  const plan = planNoGpsShot(args.typedYards ?? null);
   const now = new Date().toISOString();
   db.runSync(
     `INSERT INTO shots (
@@ -478,7 +478,8 @@ export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
   }>(
     `SELECT club_id, distance_yards, fix_quality, source
      FROM shots
-     WHERE distance_yards IS NOT NULL AND club_id IS NOT NULL`,
+     WHERE distance_yards IS NOT NULL AND club_id IS NOT NULL
+       AND IFNULL(source, 'gps') = 'gps'`,
   );
   return clubs.map((club) => {
     const forClub = shots
