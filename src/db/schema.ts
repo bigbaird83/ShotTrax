@@ -40,6 +40,7 @@ function migrateShotsP3(db: SQLiteDatabase): void {
       started_at TEXT NOT NULL,
       ended_at TEXT,
       source TEXT NOT NULL DEFAULT 'gps',
+      typed_yards INTEGER,
       FOREIGN KEY (hole_id) REFERENCES holes(id) ON DELETE CASCADE,
       FOREIGN KEY (club_id) REFERENCES clubs(id)
     );
@@ -63,6 +64,20 @@ function migrateShotsP3(db: SQLiteDatabase): void {
   db.execSync('DROP TABLE shots;');
   db.execSync('ALTER TABLE shots_p3 RENAME TO shots;');
   db.execSync('PRAGMA foreign_keys = ON;');
+}
+
+/** P3 sensing lock: no_gps rows are fixQuality none; typed yards are not GPS distance. */
+function migrateNoGpsSensingLock(db: SQLiteDatabase): void {
+  db.execSync(`
+    UPDATE shots
+    SET
+      typed_yards = COALESCE(typed_yards, CASE WHEN IFNULL(source, 'gps') = 'no_gps' THEN distance_yards END),
+      distance_yards = CASE WHEN IFNULL(source, 'gps') = 'no_gps' THEN NULL ELSE distance_yards END,
+      fix_quality = CASE WHEN IFNULL(source, 'gps') = 'no_gps' THEN 'none' ELSE fix_quality END,
+      start_fix_quality = CASE WHEN IFNULL(source, 'gps') = 'no_gps' THEN 'none' ELSE start_fix_quality END,
+      end_fix_quality = CASE WHEN IFNULL(source, 'gps') = 'no_gps' THEN 'none' ELSE end_fix_quality END
+    WHERE IFNULL(source, 'gps') = 'no_gps';
+  `);
 }
 
 export function migrate(db: SQLiteDatabase): void {
@@ -115,6 +130,7 @@ export function migrate(db: SQLiteDatabase): void {
       started_at TEXT NOT NULL,
       ended_at TEXT,
       source TEXT NOT NULL DEFAULT 'gps',
+      typed_yards INTEGER,
       FOREIGN KEY (hole_id) REFERENCES holes(id) ON DELETE CASCADE,
       FOREIGN KEY (club_id) REFERENCES clubs(id)
     );
@@ -134,6 +150,8 @@ export function migrate(db: SQLiteDatabase): void {
   ensureColumn(db, 'holes', 'green_lng', 'REAL');
   migrateShotsP3(db);
   ensureColumn(db, 'shots', 'source', "TEXT NOT NULL DEFAULT 'gps'");
+  ensureColumn(db, 'shots', 'typed_yards', 'INTEGER');
+  migrateNoGpsSensingLock(db);
 
   const clubCount = db.getFirstSync<{ n: number }>('SELECT COUNT(*) AS n FROM clubs');
   if ((clubCount?.n ?? 0) === 0) {

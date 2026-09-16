@@ -18,6 +18,9 @@ export function clampPenaltyStrokes(n: number): number {
 /**
  * Hole score is the scorecard source of truth. Adding a penalty bumps it by N
  * strokes (same base as the hole +/− control: current score, or par if unset).
+ *
+ * A penalty is NOT a Shot for distance: it never goes through acceptFix,
+ * haversine, club averages, or top-3 samples.
  */
 export function scoreAfterPenalty(
   currentScore: number | null,

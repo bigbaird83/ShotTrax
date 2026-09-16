@@ -254,7 +254,7 @@ export default function HoleScreen() {
         shots.map((shot) => {
           const club = shot.clubId ? clubs[shot.clubId] : null;
           const openShot = shot.endedAt == null;
-          const noGps = shot.source === 'no_gps';
+          const noGps = shot.source === 'no_gps' || shot.fixQuality === 'none';
           return (
             <View key={shot.id} style={styles.shot}>
               <Text style={styles.shotSeq}>{shot.seq}</Text>
@@ -262,8 +262,8 @@ export default function HoleScreen() {
                 <Text style={styles.shotClub}>{club?.name ?? 'Club'}</Text>
                 <Text style={styles.meta}>
                   {noGps
-                    ? shot.distanceYards != null
-                      ? `${shot.distanceYards} yd typed · not in averages`
+                    ? shot.typedYards != null
+                      ? `${shot.typedYards} yd typed · not in averages`
                       : 'No GPS — counts as a stroke, not in averages'
                     : openShot
                       ? 'Waiting for next mark to log yards'

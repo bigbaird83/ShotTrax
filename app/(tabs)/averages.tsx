@@ -15,7 +15,7 @@ export default function AveragesScreen() {
       <Text style={styles.lede}>
         Averages include every closed GPS shot with yards — GOOD, SOFT (15–25 m GPS), and FORCED
         (weak GPS or 400+ yd jump). Badges mean those qualities are in the mix, not excluded.
-        No-GPS shots and hole penalties never enter distance averages or top-3 ranking.
+        No-GPS (`none`) shots, typed yards, and hole penalties never enter distance averages or top-3 ranking.
       </Text>
       {rows.map((row) => (
         <View key={row.club.id} style={styles.row}>

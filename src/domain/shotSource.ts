@@ -1,4 +1,4 @@
-import type { Shot, ShotSource } from './types';
+import type { Shot, ShotFixQuality, ShotSource } from './types';
 
 export type NoGpsShotPlan = {
   source: 'no_gps';
@@ -6,18 +6,19 @@ export type NoGpsShotPlan = {
   startLng: null;
   endLat: null;
   endLng: null;
-  /** User-typed yards, or null if left blank. Never computed from GPS. */
-  distanceYards: number | null;
-  fixQuality: null;
-  startFixQuality: null;
-  endFixQuality: null;
+  /** GPS distance sample — always null. Typed yards live on `typedYards` only. */
+  distanceYards: null;
+  typedYards: number | null;
+  fixQuality: 'none';
+  startFixQuality: 'none';
+  endFixQuality: 'none';
 };
 
 const MAX_TYPED_YARDS = 999;
 
 /**
  * Optional yards typed by the player (blank allowed). Rejects non-integers and
- * values over 999. This is not a GPS distance and never invents a coordinate.
+ * values over 999. Score/UI note only — never a GPS distance and never invented coords.
  */
 export function parseTypedYards(raw: string): { ok: true; yards: number | null } | { ok: false } {
   const trimmed = raw.trim();
@@ -29,9 +30,8 @@ export function parseTypedYards(raw: string): { ok: true; yards: number | null }
 }
 
 /**
- * Forgotten swing / no GPS fix. Coordinates stay null so we never invent a
- * location. Yards are only stored if the user typed them; they still do not
- * enter club averages (see `includeInDistanceAverages`).
+ * Forgotten swing / no GPS fix. Does not call acceptFix or haversine.
+ * Coordinates stay null. `fixQuality` is `none`. Typed yards are UI-only.
  */
 export function planNoGpsShot(typedYards: number | null = null): NoGpsShotPlan {
   return {
@@ -40,40 +40,58 @@ export function planNoGpsShot(typedYards: number | null = null): NoGpsShotPlan {
     startLng: null,
     endLat: null,
     endLng: null,
-    distanceYards: typedYards,
-    fixQuality: null,
-    startFixQuality: null,
-    endFixQuality: null,
+    distanceYards: null,
+    typedYards,
+    fixQuality: 'none',
+    startFixQuality: 'none',
+    endFixQuality: 'none',
   };
 }
 
-export function isNoGpsShot(shot: { source: ShotSource }): boolean {
-  return shot.source === 'no_gps';
+export function isNoGpsShot(shot: { source: ShotSource; fixQuality?: ShotFixQuality | null }): boolean {
+  return shot.source === 'no_gps' || shot.fixQuality === 'none';
 }
 
-/** Closed GPS shots with yards only. Penalties are not shots; `no_gps` is excluded even if yards were typed. */
+/**
+ * Distance averages and top-3 samples: closed GPS shots with haversine yards.
+ * `good` / `soft` / `forced` stay in. Penalties are not shots. `none` / `no_gps`
+ * are excluded even if typed yards exist. No include-typed-yards toggle in MVP.
+ */
 export function includeInDistanceAverages(shot: {
   source: ShotSource;
   distanceYards: number | null;
+  fixQuality?: ShotFixQuality | null;
 }): boolean {
-  return shot.source === 'gps' && shot.distanceYards != null;
+  if (shot.source !== 'gps' || shot.fixQuality === 'none') return false;
+  return shot.distanceYards != null;
+}
+
+/** Top-3 uses the same GPS closed-shot samples as club averages. */
+export function includeInTop3Samples(shot: {
+  source: ShotSource;
+  distanceYards: number | null;
+  fixQuality?: ShotFixQuality | null;
+}): boolean {
+  return includeInDistanceAverages(shot);
 }
 
 export function hasGpsStart<
   T extends {
     source?: ShotSource;
+    fixQuality?: ShotFixQuality | null;
     startLat: number | null;
     startLng: number | null;
   },
 >(shot: T): shot is T & { startLat: number; startLng: number } {
-  if (shot.source === 'no_gps') return false;
+  if (shot.source === 'no_gps' || shot.fixQuality === 'none') return false;
   return shot.startLat != null && shot.startLng != null;
 }
 
-/** Closed GPS trail eligible for a map polyline. Never true for `no_gps`. */
+/** Closed GPS trail eligible for a map polyline. Never true for `no_gps` / `none`. */
 export function hasClosedGpsTrail<
   T extends {
     source?: ShotSource;
+    fixQuality?: ShotFixQuality | null;
     startLat: number | null;
     startLng: number | null;
     endLat: number | null;
@@ -81,7 +99,7 @@ export function hasClosedGpsTrail<
     endedAt?: string | null;
   },
 >(shot: T): shot is T & { startLat: number; startLng: number; endLat: number; endLng: number } {
-  if (shot.source === 'no_gps') return false;
+  if (shot.source === 'no_gps' || shot.fixQuality === 'none') return false;
   return (
     shot.startLat != null &&
     shot.startLng != null &&

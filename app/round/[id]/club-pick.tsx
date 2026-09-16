@@ -175,7 +175,7 @@ export default function ClubPickScreen() {
       <Text style={styles.title}>{withoutGps ? 'Forgotten swing' : 'Pick a club'}</Text>
       <Text style={styles.lede}>
         {withoutGps
-          ? 'Logs a stroke with this club and no coordinates (source: no_gps). Optional typed yards stay off averages and top-3. It counts in the hole shot list. ShotTrax will not invent a GPS fix.'
+          ? 'Logs a stroke with fixQuality none and no coordinates. Optional typed yards are a score/UI note only — they never enter club averages or top-3. ShotTrax will not invent a GPS fix or call acceptFix.'
           : 'Tap a club to confirm GPS now as the start (and the previous shot’s end). Voice names a club but still needs Confirm. Watch / mic shot-detect assists are not in this build.'}
       </Text>
 
@@ -192,8 +192,8 @@ export default function ClubPickScreen() {
             style={styles.yardsInput}
           />
           <Text style={styles.tiny}>
-            Typed yards are a note on this stroke. They are excluded from club averages and top-3.
-            GPS fields stay empty.
+            Typed yards are score/UI only. They are not GPS distance and are excluded from averages
+            and top-3. There is no toggle to include them.
           </Text>
         </View>
       ) : null}

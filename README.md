@@ -50,8 +50,8 @@ There is no Watch / motion / mic-shot-detect permission. Those assists are stubb
 3. **Mark shot** → optional **Say a club** (confirm still required) and/or **top-3**, or expand **Full bag** and tap.
 4. GPS at confirm = shot **start**. If this hole already had an open GPS shot, that same fix is its **end** and yards are logged (haversine).
 5. **End last shot** closes an open GPS shot without starting a new one.
-6. **+ Penalty** adds 1–5 penalty strokes to the hole score, with reason water / OB / unplayable / other (optional note). Shown as a penalty row — not a map polyline. Does **not** change club averages or top-3.
-7. **Add shot without GPS** (forgotten swing / no fix): pick a club and optionally type yards (or leave blank). Stored as `source = no_gps` with **null** lat/lng. Typed yards are a note on the stroke and are **excluded from distance averages and top-3**. ShotTrax will not invent a coordinate.
+6. **+ Penalty** adds 1–5 penalty strokes to the hole score, with reason water / OB / unplayable / other (optional note). Shown as a penalty row — not a map polyline. A penalty is **not a Shot for distance**: it never hits `acceptFix`, haversine, club averages, or top-3.
+7. **Add shot without GPS** (forgotten swing / no fix): pick a club and optionally type yards (or leave blank). Stored as `source = no_gps`, `fixQuality = none`, **null** lat/lng, **null** `distance_yards`. Typed yards live in `typed_yards` (score/UI only) and are **excluded from distance averages and top-3**. No include-typed-yards toggle in MVP. Never invents a coordinate and never calls `acceptFix`.
 8. Finish the round for a scorecard. Club averages live on the Averages tab.
 
 Hole **score remains the source of truth**. If you also logged shots and/or penalties, the hole screen and round summary warn when `score ≠ shots + penalty strokes`.
@@ -60,7 +60,7 @@ Hole **score remains the source of truth**. If you also logged shots and/or pena
 
 - Persisted per hole: `strokes`, `reason` (`water` | `ob` | `unplayable` | `other`), optional free-text `note`.
 - Adding a penalty **increments the hole score** (from the current score, or par if the score is still blank — same base as +/−).
-- Not GPS events. Not included in club distance averages or top-3 ranking.
+- **Not a Shot for distance.** Never calls `acceptFix` / haversine. Not included in club distance averages or top-3 ranking.
 - Listed on the hole screen and per hole on the round summary.
 
 ## Add shot without GPS (`source = no_gps`)
@@ -70,17 +70,19 @@ Use this when you swung but have no GPS fix (or forgot to mark).
 | Field | Stored value |
 | --- | --- |
 | `source` | `no_gps` |
+| `fix_quality` | `none` (not good/soft/forced) |
 | start/end lat, lng, accuracy | `NULL` — never `0,0` or a synthesized pin |
-| `distance_yards` | optional user-typed integer, or `NULL` if blank |
+| `distance_yards` | always `NULL` (GPS haversine only) |
+| `typed_yards` | optional user-typed integer, or `NULL` if blank — score/UI only |
 | `ended_at` | set immediately (closed stroke, no trail) |
 
-**Distance averages / top-3:** excluded by default, even when yards were typed. We do **not** treat them as GPS 0 yd. Honest GPS 0 yd (simulator pin that did not move) still counts.
+**Distance averages / top-3:** excluded by default (`source = no_gps` and/or `fixQuality = none`). Typed yards do **not** count in averages; there is no toggle to include them. Honest GPS 0 yd (simulator pin that did not move) still counts.
 
 **Score / sequence:** like a GPS mark, this does **not** auto-bump the scorecard; use +/− or **+ Penalty**. The shot still takes the next `seq` on the hole so strokes + penalties can be reconciled with score.
 
 ## Top-3 ranking
 
-After a club has **≥5** closed **GPS** shots with yards (soft and forced included, same as averages; `no_gps` excluded):
+After a club has **≥5** closed **GPS** shots with yards (soft and forced included, same as averages; `no_gps` / `fixQuality none` excluded):
 
 - **D** = yards-to-green if this hole has a green estimate and a current GPS fix
 - else **D** = last closed **GPS** shot distance on this hole
@@ -100,7 +102,7 @@ Defined in `src/config/sensing.ts`. Mark path is `getFix` → `acceptFix`, then 
 | `MAX_SHOT_YD` / `impossible_jump` | **400 yd** | Distance **&gt; 400** needs `forceMark` → `forced` |
 | `WALK_BLOCK` | **false** | Walking-length gaps are not blocked |
 
-`soft` and `forced` GPS shots **stay in club averages** (and therefore in top-3 once a club has 5+ closed GPS shots). Badges mean those qualities are in the mix, not that they were dropped. History / summary still show SOFT / FORCED on GPS shots. Penalties and `no_gps` shots are separate.
+`soft` and `forced` GPS shots **stay in club averages** (and therefore in top-3 once a club has 5+ closed GPS shots). Badges mean those qualities are in the mix, not that they were dropped. History / summary still show SOFT / FORCED on GPS shots. Penalties and `no_gps` (`fixQuality: none`) shots are separate and never distance samples.
 
 ## Simulator / mock GPS
 

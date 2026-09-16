@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { MAX_SHOT_YD } from '../config/sensing';
 import { averageWithBadges } from './averages';
 import {
   hasClosedGpsTrail,
   includeInDistanceAverages,
+  includeInTop3Samples,
   isNoGpsShot,
   parseTypedYards,
   planNoGpsShot,
@@ -26,27 +28,33 @@ function gpsClosed(yards: number, fixQuality: Shot['fixQuality'] = 'good'): Pick
   };
 }
 
-test('planNoGpsShot never fills coordinates or fix quality (blank yards stay null)', () => {
+test('planNoGpsShot uses fixQuality none and never fills coordinates or GPS yards', () => {
   const plan = planNoGpsShot();
   assert.equal(plan.source, 'no_gps');
+  assert.equal(plan.fixQuality, 'none');
+  assert.equal(plan.startFixQuality, 'none');
+  assert.equal(plan.endFixQuality, 'none');
   assert.equal(plan.startLat, null);
   assert.equal(plan.startLng, null);
   assert.equal(plan.endLat, null);
   assert.equal(plan.endLng, null);
   assert.equal(plan.distanceYards, null);
-  assert.equal(plan.fixQuality, null);
-  assert.equal(plan.startFixQuality, null);
-  assert.equal(plan.endFixQuality, null);
+  assert.equal(plan.typedYards, null);
+  assert.equal(includeInDistanceAverages(plan), false);
+  assert.equal(includeInTop3Samples(plan), false);
 });
 
-test('planNoGpsShot stores typed yards but still invents no lat/lng', () => {
+test('typed yards are UI-only — not GPS distanceYards and not average/top-3 samples', () => {
   const plan = planNoGpsShot(155);
-  assert.equal(plan.distanceYards, 155);
+  assert.equal(plan.typedYards, 155);
+  assert.equal(plan.distanceYards, null);
+  assert.equal(plan.fixQuality, 'none');
   assert.equal(plan.startLat, null);
   assert.equal(plan.startLng, null);
   assert.equal(plan.endLat, null);
   assert.equal(plan.endLng, null);
   assert.equal(includeInDistanceAverages(plan), false);
+  assert.equal(includeInTop3Samples(plan), false);
   assert.equal(hasClosedGpsTrail({ ...plan, endedAt: 't' }), false);
 });
 
@@ -61,10 +69,10 @@ test('parseTypedYards accepts blank, integer yards, and rejects junk', () => {
   assert.equal(parseTypedYards('1000').ok, false);
 });
 
-test('no_gps shots are excluded from distance averages (preferred: not 0 yd)', () => {
+test('no_gps / none shots are excluded from distance averages; soft GPS stays in', () => {
   const mixed = [
     { source: 'gps' as const, distanceYards: 150, fixQuality: 'good' as const },
-    { source: 'no_gps' as const, distanceYards: null, fixQuality: null },
+    { source: 'no_gps' as const, distanceYards: null, fixQuality: 'none' as const },
     { source: 'gps' as const, distanceYards: 170, fixQuality: 'soft' as const },
   ];
   const forAvg = mixed.filter(includeInDistanceAverages).map((s) => ({
@@ -78,39 +86,36 @@ test('no_gps shots are excluded from distance averages (preferred: not 0 yd)', (
   assert.ok(mixed.some(isNoGpsShot));
 });
 
-test('no_gps is excluded even if yards were wrongly present (never treat as 0 yd average)', () => {
+test('fixQuality none is excluded even if distanceYards were wrongly present', () => {
   const mixed = [
-    { source: 'gps' as const, distanceYards: 200 },
-    { source: 'no_gps' as const, distanceYards: 0 },
-    { source: 'no_gps' as const, distanceYards: 999 },
+    { source: 'gps' as const, distanceYards: 200, fixQuality: 'good' as const },
+    { source: 'gps' as const, distanceYards: 155, fixQuality: 'none' as const },
+    { source: 'no_gps' as const, distanceYards: 999, fixQuality: 'none' as const },
   ];
   const kept = mixed.filter(includeInDistanceAverages);
   assert.equal(kept.length, 1);
   assert.equal(kept[0]?.distanceYards, 200);
-  const a = averageWithBadges(kept.map((s) => ({ yards: s.distanceYards as number, fixQuality: 'good' as const })));
-  assert.equal(a.avgYards, 200);
-  assert.equal(a.count, 1);
 });
 
 test('typed yards on no_gps still never enter distance averages or top-3 samples', () => {
   const mixed = [
-    { source: 'gps' as const, distanceYards: 140, fixQuality: 'good' as const },
-    { source: 'no_gps' as const, distanceYards: 155, fixQuality: null },
+    { source: 'gps' as const, distanceYards: 140, fixQuality: 'forced' as const },
+    { source: 'no_gps' as const, distanceYards: null, fixQuality: 'none' as const },
   ];
-  const kept = mixed.filter(includeInDistanceAverages);
+  const kept = mixed.filter(includeInTop3Samples);
   assert.equal(kept.length, 1);
   assert.equal(kept[0]?.source, 'gps');
   const a = averageWithBadges(
-    kept.map((s) => ({ yards: s.distanceYards as number, fixQuality: 'good' as const })),
+    kept.map((s) => ({ yards: s.distanceYards as number, fixQuality: 'forced' as const })),
   );
   assert.equal(a.avgYards, 140);
-  assert.equal(a.count, 1);
+  assert.equal(a.includesForced, true);
 });
 
 test('honest GPS 0 yd still counts; no_gps still does not', () => {
   const mixed = [
-    { source: 'gps' as const, distanceYards: 0 },
-    { source: 'no_gps' as const, distanceYards: null },
+    { source: 'gps' as const, distanceYards: 0, fixQuality: 'good' as const },
+    { source: 'no_gps' as const, distanceYards: null, fixQuality: 'none' as const },
   ];
   const kept = mixed.filter(includeInDistanceAverages);
   assert.equal(kept.length, 1);
@@ -133,6 +138,18 @@ test('penalties are not shots and cannot enter distance averages', () => {
   assert.equal(a.count, 2);
   assert.equal(a.avgYards, 150);
   assert.equal(a.includesForced, true);
-  // A hole penalty is a separate table — adding one does not change this set.
-  assert.equal(includeInDistanceAverages({ source: 'gps', distanceYards: 140 }), true);
+  assert.equal(includeInDistanceAverages({ source: 'gps', distanceYards: 140, fixQuality: 'good' }), true);
+});
+
+test('P1 sensing lock: MAX_SHOT_YD is 400; good/soft/forced still average', () => {
+  assert.equal(MAX_SHOT_YD, 400);
+  const a = averageWithBadges([
+    { yards: 100, fixQuality: 'good' },
+    { yards: 120, fixQuality: 'soft' },
+    { yards: 140, fixQuality: 'forced' },
+  ]);
+  assert.equal(a.count, 3);
+  assert.equal(a.avgYards, 120);
+  assert.equal(a.includesSoft, true);
+  assert.equal(a.includesForced, true);
 });

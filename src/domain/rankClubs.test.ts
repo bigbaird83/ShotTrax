@@ -67,10 +67,11 @@ test('lastClosedShotYards uses the most recent closed shot and skips the open on
   assert.equal(yards, 155);
 });
 
-test('lastClosedShotYards skips no_gps even if yards were present', () => {
+test('lastClosedShotYards skips no_gps / none even if yards were present', () => {
   const yards = lastClosedShotYards([
-    { endedAt: 'a', distanceYards: 240, source: 'gps' },
-    { endedAt: 'b', distanceYards: 12, source: 'no_gps' },
+    { endedAt: 'a', distanceYards: 240, source: 'gps', fixQuality: 'good' },
+    { endedAt: 'b', distanceYards: 12, source: 'no_gps', fixQuality: 'none' },
+    { endedAt: 'c', distanceYards: 90, source: 'gps', fixQuality: 'none' },
   ]);
   assert.equal(yards, 240);
 });

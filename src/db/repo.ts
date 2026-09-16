@@ -11,6 +11,7 @@ import type {
   PenaltyReason,
   Round,
   Shot,
+  ShotFixQuality,
   ShotSource,
 } from '../domain/types';
 import { newId } from '../lib/id';
@@ -56,6 +57,7 @@ type ShotRow = {
   end_accuracy_m: number | null;
   end_fix_quality: string | null;
   distance_yards: number | null;
+  typed_yards: number | null;
   fix_quality: string | null;
   impossible_jump: number;
   started_at: string;
@@ -109,7 +111,14 @@ function mapSource(value: string | null): ShotSource {
   return value === 'no_gps' ? 'no_gps' : 'gps';
 }
 
+function mapFixQuality(value: string | null, source: ShotSource): ShotFixQuality | null {
+  if (source === 'no_gps' || value === 'none') return 'none';
+  if (value === 'good' || value === 'soft' || value === 'forced') return value;
+  return value as FixQuality | null;
+}
+
 function mapShot(row: ShotRow): Shot {
+  const source = mapSource(row.source);
   return {
     id: row.id,
     holeId: row.hole_id,
@@ -118,17 +127,18 @@ function mapShot(row: ShotRow): Shot {
     startLat: row.start_lat,
     startLng: row.start_lng,
     startAccuracyM: row.start_accuracy_m,
-    startFixQuality: row.start_fix_quality as FixQuality | null,
+    startFixQuality: mapFixQuality(row.start_fix_quality, source),
     endLat: row.end_lat,
     endLng: row.end_lng,
     endAccuracyM: row.end_accuracy_m,
-    endFixQuality: row.end_fix_quality as FixQuality | null,
-    distanceYards: row.distance_yards,
-    fixQuality: row.fix_quality as FixQuality | null,
+    endFixQuality: mapFixQuality(row.end_fix_quality, source),
+    distanceYards: source === 'no_gps' ? null : row.distance_yards,
+    typedYards: row.typed_yards ?? null,
+    fixQuality: mapFixQuality(row.fix_quality, source),
     impossibleJump: row.impossible_jump === 1,
     startedAt: row.started_at,
     endedAt: row.ended_at,
-    source: mapSource(row.source),
+    source,
   };
 }
 
@@ -388,7 +398,7 @@ export function applyClosedShot(
   );
 }
 
-/** Forgotten swing: closed stroke with no coordinates. Optional typed yards only. */
+/** Forgotten swing: not a GPS distance shot. Never calls acceptFix/haversine. */
 export function insertNoGpsShot(
   db: SQLiteDatabase,
   args: { holeId: string; clubId: string; seq: number; typedYards?: number | null },
@@ -401,8 +411,8 @@ export function insertNoGpsShot(
       id, hole_id, club_id, seq,
       start_lat, start_lng, start_accuracy_m, start_fix_quality,
       end_lat, end_lng, end_accuracy_m, end_fix_quality,
-      distance_yards, fix_quality, impossible_jump, started_at, ended_at, source
-    ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, NULL, ?, ?, ?, 0, ?, ?, ?)`,
+      distance_yards, typed_yards, fix_quality, impossible_jump, started_at, ended_at, source
+    ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, NULL, ?, ?, ?, ?, 0, ?, ?, ?)`,
     [
       id,
       args.holeId,
@@ -415,6 +425,7 @@ export function insertNoGpsShot(
       plan.endLng,
       plan.endFixQuality,
       plan.distanceYards,
+      plan.typedYards,
       plan.fixQuality,
       now,
       now,
@@ -433,6 +444,7 @@ export function listPenaltiesForHole(db: SQLiteDatabase, holeId: string): HolePe
     .map(mapPenalty);
 }
 
+/** Score-only event. Never calls acceptFix, haversine, or club-average inserts. */
 export function insertPenalty(
   db: SQLiteDatabase,
   args: {
@@ -479,7 +491,8 @@ export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
     `SELECT club_id, distance_yards, fix_quality, source
      FROM shots
      WHERE distance_yards IS NOT NULL AND club_id IS NOT NULL
-       AND IFNULL(source, 'gps') = 'gps'`,
+       AND IFNULL(source, 'gps') = 'gps'
+       AND fix_quality IN ('good', 'soft', 'forced')`,
   );
   return clubs.map((club) => {
     const forClub = shots
@@ -489,6 +502,12 @@ export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
           includeInDistanceAverages({
             source: s.source === 'no_gps' ? 'no_gps' : 'gps',
             distanceYards: s.distance_yards,
+            fixQuality:
+              s.fix_quality === 'none'
+                ? 'none'
+                : s.fix_quality === 'soft' || s.fix_quality === 'forced' || s.fix_quality === 'good'
+                  ? s.fix_quality
+                  : 'good',
           }),
       )
       .map((s) => ({

@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import type { FixQuality, ShotSource } from '../domain/types';
+import type { ShotFixQuality, ShotSource } from '../domain/types';
 import { colors } from './theme';
 
 export function QualityBadge({
@@ -7,11 +7,11 @@ export function QualityBadge({
   open,
   source,
 }: {
-  quality?: FixQuality | null;
+  quality?: ShotFixQuality | null;
   open?: boolean;
   source?: ShotSource;
 }) {
-  if (source === 'no_gps') {
+  if (source === 'no_gps' || quality === 'none') {
     return (
       <View style={[styles.badge, styles.manual]}>
         <Text style={styles.text}>NO GPS</Text>

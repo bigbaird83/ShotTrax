@@ -144,6 +144,7 @@ export function addNoGpsShot(
   if (!hole) {
     throw new Error(`Hole ${args.holeNumber} not found`);
   }
+  // Sensing lock: missed-mark does not call getFix / acceptFix / haversine.
   return insertNoGpsShot(db, {
     holeId: hole.id,
     clubId: args.clubId,
