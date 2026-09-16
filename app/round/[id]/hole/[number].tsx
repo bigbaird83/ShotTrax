@@ -16,7 +16,7 @@ import {
 import type { GpsFix } from '@/src/domain/types';
 import { classifyAccuracyM } from '@/src/domain/fixQuality';
 import { getCurrentFix } from '@/src/services/location';
-import { endOpenShot, promptForPlan, type ForceState } from '@/src/services/shotActions';
+import { endOpenShot, promptForPlan } from '@/src/services/shotActions';
 import { QualityBadge } from '@/src/ui/Badge';
 import { BigButton } from '@/src/ui/BigButton';
 import { GpsBanner } from '@/src/ui/GpsBanner';
@@ -72,13 +72,13 @@ export default function HoleScreen() {
     );
   }
 
-  const onEndShot = async (flags: ForceState = {}) => {
+  const onEndShot = async (force = false) => {
     if (readOnly || !open) return;
     setBusy(true);
     try {
-      const { plan } = await endOpenShot(db, { roundId: id, holeNumber, flags });
-      const waiting = promptForPlan(plan, (more) => {
-        void onEndShot({ ...flags, ...more });
+      const { plan } = await endOpenShot(db, { roundId: id, holeNumber, force });
+      const waiting = promptForPlan(plan, () => {
+        void onEndShot(true);
       });
       if (!waiting) bump();
     } catch (err) {

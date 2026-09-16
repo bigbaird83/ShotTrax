@@ -130,6 +130,32 @@ export function addClub(db: SQLiteDatabase, name: string, shortName: string): Cl
   return club;
 }
 
+export function updateClub(
+  db: SQLiteDatabase,
+  id: string,
+  name: string,
+  shortName: string,
+): void {
+  db.runSync('UPDATE clubs SET name = ?, short_name = ? WHERE id = ?', [
+    name.trim(),
+    shortName.trim() || name.trim().slice(0, 3),
+    id,
+  ]);
+}
+
+export function deleteClub(db: SQLiteDatabase, id: string): 'deleted' | 'disabled' {
+  const used = db.getFirstSync<{ n: number }>(
+    'SELECT COUNT(*) AS n FROM shots WHERE club_id = ?',
+    [id],
+  );
+  if ((used?.n ?? 0) > 0) {
+    db.runSync('UPDATE clubs SET enabled = 0 WHERE id = ?', [id]);
+    return 'disabled';
+  }
+  db.runSync('DELETE FROM clubs WHERE id = ?', [id]);
+  return 'deleted';
+}
+
 export function listRounds(db: SQLiteDatabase): Round[] {
   return db
     .getAllSync<RoundRow>('SELECT * FROM rounds ORDER BY started_at DESC')

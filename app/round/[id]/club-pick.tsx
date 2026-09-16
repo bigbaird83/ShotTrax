@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
 import { listClubs } from '@/src/db/repo';
-import { markShotWithClub, promptForPlan, type ForceState } from '@/src/services/shotActions';
+import { markShotWithClub, promptForPlan } from '@/src/services/shotActions';
 import { Screen } from '@/src/ui/Screen';
 import { colors } from '@/src/ui/theme';
 
@@ -17,7 +17,7 @@ export default function ClubPickScreen() {
   const clubs = useMemo(() => listClubs(db, true), [db]);
   const [busy, setBusy] = useState(false);
 
-  const onPick = async (clubId: string, flags: ForceState = {}) => {
+  const onPick = async (clubId: string, force = false) => {
     if (!id || Number.isNaN(holeNumber)) return;
     setBusy(true);
     try {
@@ -25,10 +25,10 @@ export default function ClubPickScreen() {
         roundId: id,
         holeNumber,
         clubId,
-        flags,
+        force,
       });
-      const waiting = promptForPlan(plan, (more) => {
-        void onPick(clubId, { ...flags, ...more });
+      const waiting = promptForPlan(plan, () => {
+        void onPick(clubId, true);
       });
       if (!waiting && plan.status === 'commit') {
         bump();

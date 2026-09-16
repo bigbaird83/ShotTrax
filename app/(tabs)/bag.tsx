@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
-import { addClub, listClubs, setClubEnabled } from '@/src/db/repo';
+import { addClub, deleteClub, listClubs, setClubEnabled, updateClub } from '@/src/db/repo';
 import { BigButton } from '@/src/ui/BigButton';
 import { Screen } from '@/src/ui/Screen';
 import { colors } from '@/src/ui/theme';
@@ -11,19 +11,32 @@ export default function BagScreen() {
   const clubs = useMemo(() => listClubs(db), [db, revision]);
   const [name, setName] = useState('');
   const [shortName, setShortName] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const resetForm = () => {
+    setName('');
+    setShortName('');
+    setEditingId(null);
+  };
 
   return (
     <Screen>
       <Text style={styles.lede}>
-        Default 14-club bag. Toggle clubs you carry. Voice pick and top-3 ranking are not in this
-        PR — tap a club when marking a shot.
+        Seeded 14-club bag with full CRUD. Voice pick and top-3 ranking are not in this PR — tap a
+        club when marking a shot.
       </Text>
       {clubs.map((club) => (
         <View key={club.id} style={styles.row}>
-          <View>
+          <Pressable
+            style={{ flex: 1 }}
+            onPress={() => {
+              setEditingId(club.id);
+              setName(club.name);
+              setShortName(club.shortName);
+            }}>
             <Text style={styles.name}>{club.name}</Text>
-            <Text style={styles.short}>{club.shortName}</Text>
-          </View>
+            <Text style={styles.short}>{club.shortName} · tap to edit</Text>
+          </Pressable>
           <Switch
             value={club.enabled}
             onValueChange={(value) => {
@@ -35,7 +48,7 @@ export default function BagScreen() {
           />
         </View>
       ))}
-      <Text style={styles.addTitle}>Add club</Text>
+      <Text style={styles.addTitle}>{editingId ? 'Edit club' : 'Add club'}</Text>
       <TextInput
         placeholder="Name (e.g. 2 Iron)"
         placeholderTextColor={colors.muted}
@@ -51,16 +64,36 @@ export default function BagScreen() {
         style={styles.input}
       />
       <BigButton
-        label="Add to bag"
+        label={editingId ? 'Save club' : 'Add to bag'}
         variant="secondary"
         disabled={!name.trim()}
         onPress={() => {
-          addClub(db, name, shortName);
-          setName('');
-          setShortName('');
+          if (editingId) {
+            updateClub(db, editingId, name, shortName);
+          } else {
+            addClub(db, name, shortName);
+          }
+          resetForm();
           bump();
         }}
       />
+      {editingId ? (
+        <BigButton
+          label="Delete club"
+          variant="danger"
+          onPress={() => {
+            const result = deleteClub(db, editingId);
+            if (result === 'disabled') {
+              Alert.alert(
+                'Club has shots',
+                'It was turned off in the bag so existing shot history and averages stay intact.',
+              );
+            }
+            resetForm();
+            bump();
+          }}
+        />
+      ) : null}
     </Screen>
   );
 }
@@ -75,6 +108,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgElevated,
     paddingHorizontal: 14,
     borderRadius: 14,
+    gap: 8,
   },
   name: { color: colors.cream, fontSize: 18, fontWeight: '700' },
   short: { color: colors.muted, fontSize: 14 },

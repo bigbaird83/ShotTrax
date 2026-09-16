@@ -35,14 +35,15 @@ There is no microphone / speech / motion permission in P1.
 
 ## Sensing gates (locked)
 
-Defined in `src/config/sensing.ts`:
+Defined in `src/config/sensing.ts`. Mark path is `getFix` → `acceptFix`, then `forceMark` after UI confirm (`src/sensing/api.ts`).
 
 | Gate | Value | Behavior |
 | --- | --- | --- |
-| Soft GPS | **15–25 m** inclusive | Shot is kept, `fixQuality = soft`, **SOFT** badge |
+| Soft GPS | **15–25 m** inclusive | `acceptFix` keeps the shot, `fixQuality = soft`, **SOFT** badge |
 | Good GPS | **&lt; 15 m** | `fixQuality = good` |
-| Poor GPS | **&gt; 25 m** or unknown | Prompt to **Force** → `forced` |
-| `MAX_SHOT_YD` / `impossible_jump` | **400 yd** | Distance **&gt; 400** prompts Force → `forced` |
+| Poor GPS | **&gt; 25 m** or unknown | `acceptFix` rejects; **Force** runs `forceMark` → `forced` |
+| `MAX_SHOT_YD` / `impossible_jump` | **400 yd** | Distance **&gt; 400** needs `forceMark` → `forced` |
+| `WALK_BLOCK` | **false** | Walking-length gaps are not blocked |
 
 `soft` and `forced` shots **stay in club averages**. Badges on the Averages tab mean those qualities are in the mix, not that they were dropped.
 
@@ -67,6 +68,6 @@ ShotTrax **does not synthesize a fairway or fake points**.
 ## Tests
 
 ```bash
-npm test
+npm test          # domain tests + sensing smoke 8/8 (getFix/acceptFix/forceMark)
 npm run typecheck
 ```

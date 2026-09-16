@@ -9,5 +9,7 @@
 export const MAX_SHOT_YD = 400;
 export const SOFT_GPS_MIN_M = 15;
 export const SOFT_GPS_MAX_M = 25;
+/** Walking between shots is allowed. Only MAX_SHOT_YD gates distance. */
+export const WALK_BLOCK = false;
 export const METERS_PER_YARD = 0.9144;
 export const EARTH_RADIUS_M = 6_371_000;
