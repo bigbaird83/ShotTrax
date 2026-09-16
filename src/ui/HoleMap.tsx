@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode, useEffect, useMemo, useRef } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import type { GpsFix, Shot } from '@/src/domain/types';
 import { colors } from './theme';
@@ -168,15 +168,9 @@ export function HoleMap(props: Props) {
     <TrailFallback
       holeNumber={props.holeNumber}
       shots={props.shots}
-      message={
-        Platform.OS === 'web'
-          ? 'Satellite map is iOS/Android (react-native-maps). Trails still list closed shots.'
-          : 'Map native module unavailable. Use a development build, or Expo Go on a device. Trails list closed shots below.'
-      }
+      message="Map native module unavailable. Use a development build, or Expo Go on a device. Trails list closed shots below."
     />
   );
-
-  if (Platform.OS === 'web') return fallback;
 
   return (
     <MapGuard fallback={fallback}>
