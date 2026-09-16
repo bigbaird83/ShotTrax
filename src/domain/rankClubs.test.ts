@@ -67,6 +67,14 @@ test('lastClosedShotYards uses the most recent closed shot and skips the open on
   assert.equal(yards, 155);
 });
 
+test('lastClosedShotYards skips no_gps even if yards were present', () => {
+  const yards = lastClosedShotYards([
+    { endedAt: 'a', distanceYards: 240, source: 'gps' },
+    { endedAt: 'b', distanceYards: 12, source: 'no_gps' },
+  ]);
+  assert.equal(yards, 240);
+});
+
 test('top-3 are the lowest |avgYards − D|; clubs with <5 closed shots are excluded', () => {
   const ranked = rankTopClubs(bag, { source: 'last_closed_shot', dYards: 148 });
   assert.deepEqual(

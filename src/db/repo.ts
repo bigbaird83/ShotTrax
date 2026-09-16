@@ -1,6 +1,18 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { averageWithBadges, type ClubAverage } from '../domain/averages';
-import type { Club, FixQuality, Hole, OpenShot, Round, Shot } from '../domain/types';
+import { clampPenaltyStrokes, scoreAfterPenalty } from '../domain/penalty';
+import { includeInDistanceAverages, planNoGpsShot } from '../domain/shotSource';
+import type {
+  Club,
+  FixQuality,
+  Hole,
+  HolePenalty,
+  OpenShot,
+  PenaltyReason,
+  Round,
+  Shot,
+  ShotSource,
+} from '../domain/types';
 import { newId } from '../lib/id';
 
 type ClubRow = {
@@ -35,19 +47,29 @@ type ShotRow = {
   hole_id: string;
   club_id: string | null;
   seq: number;
-  start_lat: number;
-  start_lng: number;
+  start_lat: number | null;
+  start_lng: number | null;
   start_accuracy_m: number | null;
-  start_fix_quality: string;
+  start_fix_quality: string | null;
   end_lat: number | null;
   end_lng: number | null;
   end_accuracy_m: number | null;
   end_fix_quality: string | null;
   distance_yards: number | null;
-  fix_quality: string;
+  fix_quality: string | null;
   impossible_jump: number;
   started_at: string;
   ended_at: string | null;
+  source: string | null;
+};
+
+type PenaltyRow = {
+  id: string;
+  hole_id: string;
+  strokes: number;
+  reason: string;
+  note: string | null;
+  created_at: string;
 };
 
 function mapClub(row: ClubRow): Club {
@@ -83,6 +105,10 @@ function mapHole(row: HoleRow): Hole {
   };
 }
 
+function mapSource(value: string | null): ShotSource {
+  return value === 'no_gps' ? 'no_gps' : 'gps';
+}
+
 function mapShot(row: ShotRow): Shot {
   return {
     id: row.id,
@@ -92,16 +118,32 @@ function mapShot(row: ShotRow): Shot {
     startLat: row.start_lat,
     startLng: row.start_lng,
     startAccuracyM: row.start_accuracy_m,
-    startFixQuality: row.start_fix_quality as FixQuality,
+    startFixQuality: row.start_fix_quality as FixQuality | null,
     endLat: row.end_lat,
     endLng: row.end_lng,
     endAccuracyM: row.end_accuracy_m,
     endFixQuality: row.end_fix_quality as FixQuality | null,
     distanceYards: row.distance_yards,
-    fixQuality: row.fix_quality as FixQuality,
+    fixQuality: row.fix_quality as FixQuality | null,
     impossibleJump: row.impossible_jump === 1,
     startedAt: row.started_at,
     endedAt: row.ended_at,
+    source: mapSource(row.source),
+  };
+}
+
+function mapPenalty(row: PenaltyRow): HolePenalty {
+  const reason = row.reason;
+  return {
+    id: row.id,
+    holeId: row.hole_id,
+    strokes: row.strokes,
+    reason:
+      reason === 'water' || reason === 'ob' || reason === 'unplayable' || reason === 'other'
+        ? reason
+        : 'other',
+    note: row.note,
+    createdAt: row.created_at,
   };
 }
 
@@ -253,15 +295,21 @@ export function listShotsForHole(db: SQLiteDatabase, holeId: string): Shot[] {
 
 export function getOpenShotForHole(db: SQLiteDatabase, holeId: string): OpenShot | null {
   const row = db.getFirstSync<ShotRow>(
-    'SELECT * FROM shots WHERE hole_id = ? AND ended_at IS NULL ORDER BY seq DESC LIMIT 1',
+    `SELECT * FROM shots
+     WHERE hole_id = ?
+       AND ended_at IS NULL
+       AND IFNULL(source, 'gps') = 'gps'
+       AND start_lat IS NOT NULL
+       AND start_lng IS NOT NULL
+     ORDER BY seq DESC LIMIT 1`,
     [holeId],
   );
-  if (!row) return null;
+  if (!row || row.start_lat == null || row.start_lng == null) return null;
   return {
     id: row.id,
     startLat: row.start_lat,
     startLng: row.start_lng,
-    startFixQuality: row.start_fix_quality as FixQuality,
+    startFixQuality: (row.start_fix_quality as FixQuality) ?? 'good',
   };
 }
 
@@ -290,8 +338,8 @@ export function insertOpenShot(
     `INSERT INTO shots (
       id, hole_id, club_id, seq,
       start_lat, start_lng, start_accuracy_m, start_fix_quality,
-      distance_yards, fix_quality, impossible_jump, started_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 0, ?)`,
+      distance_yards, fix_quality, impossible_jump, started_at, source
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 0, ?, 'gps')`,
     [
       id,
       args.holeId,
@@ -340,20 +388,108 @@ export function applyClosedShot(
   );
 }
 
+/** Forgotten swing: closed stroke with no coordinates and no yards. */
+export function insertNoGpsShot(
+  db: SQLiteDatabase,
+  args: { holeId: string; clubId: string; seq: number },
+): string {
+  const id = newId();
+  const plan = planNoGpsShot();
+  const now = new Date().toISOString();
+  db.runSync(
+    `INSERT INTO shots (
+      id, hole_id, club_id, seq,
+      start_lat, start_lng, start_accuracy_m, start_fix_quality,
+      end_lat, end_lng, end_accuracy_m, end_fix_quality,
+      distance_yards, fix_quality, impossible_jump, started_at, ended_at, source
+    ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, NULL, ?, ?, ?, 0, ?, ?, ?)`,
+    [
+      id,
+      args.holeId,
+      args.clubId,
+      args.seq,
+      plan.startLat,
+      plan.startLng,
+      plan.startFixQuality,
+      plan.endLat,
+      plan.endLng,
+      plan.endFixQuality,
+      plan.distanceYards,
+      plan.fixQuality,
+      now,
+      now,
+      plan.source,
+    ],
+  );
+  return id;
+}
+
+export function listPenaltiesForHole(db: SQLiteDatabase, holeId: string): HolePenalty[] {
+  return db
+    .getAllSync<PenaltyRow>(
+      'SELECT * FROM hole_penalties WHERE hole_id = ? ORDER BY created_at ASC',
+      [holeId],
+    )
+    .map(mapPenalty);
+}
+
+export function insertPenalty(
+  db: SQLiteDatabase,
+  args: {
+    holeId: string;
+    par: number;
+    currentScore: number | null;
+    strokes: number;
+    reason: PenaltyReason;
+    note: string | null;
+  },
+): { penalty: HolePenalty; score: number } {
+  const strokes = clampPenaltyStrokes(args.strokes);
+  const score = scoreAfterPenalty(args.currentScore, args.par, strokes);
+  const penalty: HolePenalty = {
+    id: newId(),
+    holeId: args.holeId,
+    strokes,
+    reason: args.reason,
+    note: args.note?.trim() || null,
+    createdAt: new Date().toISOString(),
+  };
+  db.withTransactionSync(() => {
+    db.runSync(
+      'INSERT INTO hole_penalties (id, hole_id, strokes, reason, note, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [penalty.id, penalty.holeId, penalty.strokes, penalty.reason, penalty.note, penalty.createdAt],
+    );
+    db.runSync('UPDATE holes SET score = ? WHERE id = ?', [score, args.holeId]);
+  });
+  return { penalty, score };
+}
+
 export type ClubAverageRow = ClubAverage & {
   club: Club;
 };
 
 export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
   const clubs = listClubs(db, false);
-  const shots = db.getAllSync<{ club_id: string; distance_yards: number; fix_quality: string }>(
-    `SELECT club_id, distance_yards, fix_quality
+  const shots = db.getAllSync<{
+    club_id: string;
+    distance_yards: number;
+    fix_quality: string;
+    source: string | null;
+  }>(
+    `SELECT club_id, distance_yards, fix_quality, source
      FROM shots
      WHERE distance_yards IS NOT NULL AND club_id IS NOT NULL`,
   );
   return clubs.map((club) => {
     const forClub = shots
-      .filter((s) => s.club_id === club.id)
+      .filter(
+        (s) =>
+          s.club_id === club.id &&
+          includeInDistanceAverages({
+            source: s.source === 'no_gps' ? 'no_gps' : 'gps',
+            distanceYards: s.distance_yards,
+          }),
+      )
       .map((s) => ({
         yards: s.distance_yards,
         fixQuality: s.fix_quality as FixQuality,

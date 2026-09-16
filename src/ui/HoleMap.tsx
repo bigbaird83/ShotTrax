@@ -2,6 +2,7 @@ import { Component, type ErrorInfo, type ReactNode, useEffect, useMemo, useRef }
 import { StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import type { GpsFix, Shot } from '@/src/domain/types';
+import { hasClosedGpsTrail, hasGpsStart } from '@/src/domain/shotSource';
 import { colors } from './theme';
 
 type Coord = { latitude: number; longitude: number };
@@ -38,7 +39,7 @@ function TrailFallback({
   shots: Shot[];
   message: string;
 }) {
-  const closed = shots.filter((s) => s.endLat != null && s.endLng != null);
+  const closed = shots.filter(hasClosedGpsTrail);
   return (
     <View style={styles.fallback}>
       <Text style={styles.holeBadgeText}>HOLE {holeNumber}</Text>
@@ -48,8 +49,8 @@ function TrailFallback({
       ) : (
         closed.map((shot) => (
           <Text key={shot.id} style={styles.meta}>
-            {shot.seq}: {shot.startLat.toFixed(5)}, {shot.startLng.toFixed(5)} → {shot.endLat?.toFixed(5)},{' '}
-            {shot.endLng?.toFixed(5)}
+            {shot.seq}: {shot.startLat.toFixed(5)}, {shot.startLng.toFixed(5)} → {shot.endLat.toFixed(5)},{' '}
+            {shot.endLng.toFixed(5)}
           </Text>
         ))
       )}
@@ -60,14 +61,12 @@ function TrailFallback({
 function NativeHoleMap({ holeNumber, shots, userFix, green, onDropGreenEstimate }: Props) {
   const mapRef = useRef<MapView | null>(null);
 
-  const closed = useMemo(
-    () => shots.filter((s) => s.endLat != null && s.endLng != null && s.endedAt != null),
-    [shots],
-  );
+  const closed = useMemo(() => shots.filter(hasClosedGpsTrail), [shots]);
 
   const coords = useMemo(() => {
     const out: Coord[] = [];
     for (const shot of shots) {
+      if (!hasGpsStart(shot)) continue;
       out.push(toCoord(shot.startLat, shot.startLng));
       if (shot.endLat != null && shot.endLng != null) {
         out.push(toCoord(shot.endLat, shot.endLng));
@@ -127,13 +126,13 @@ function NativeHoleMap({ holeNumber, shots, userFix, green, onDropGreenEstimate 
             key={shot.id}
             coordinates={[
               toCoord(shot.startLat, shot.startLng),
-              toCoord(shot.endLat as number, shot.endLng as number),
+              toCoord(shot.endLat, shot.endLng),
             ]}
             strokeColor={index === closed.length - 1 ? colors.lime : '#F4F1E8'}
             strokeWidth={index === closed.length - 1 ? 5 : 3}
           />
         ))}
-        {shots.map((shot) => (
+        {shots.filter(hasGpsStart).map((shot) => (
           <Marker
             key={`start-${shot.id}`}
             coordinate={toCoord(shot.startLat, shot.startLng)}

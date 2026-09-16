@@ -28,11 +28,11 @@ export default function HomeScreen() {
 
   return (
     <Screen>
-      <Text style={styles.kicker}>P2 · GPS shot tracker</Text>
+      <Text style={styles.kicker}>P3 · GPS shot tracker</Text>
       <Text style={styles.title}>ShotTrax</Text>
       <Text style={styles.lede}>
-        Confirm a club to mark the shot start. The next mark is the end and logs yards. Hole map
-        shows closed-shot trails; pick clubs by tap, voice, or top-3.
+        Confirm a club to mark the shot start. The next mark is the end and logs yards. Add a
+        penalty or a no-GPS stroke when you forget a swing. Hole map shows closed GPS trails only.
       </Text>
 
       {isSimulator ? (

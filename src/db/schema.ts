@@ -8,6 +8,63 @@ function ensureColumn(db: SQLiteDatabase, table: string, column: string, ddl: st
   }
 }
 
+/**
+ * P1 shots required start lat/lng. P3 allows null coords for `no_gps` (forgotten
+ * swing). SQLite cannot drop NOT NULL, so rebuild the table when needed.
+ */
+function migrateShotsP3(db: SQLiteDatabase): void {
+  const cols = db.getAllSync<{ name: string; notnull: number }>(`PRAGMA table_info(shots)`);
+  if (cols.length === 0) return;
+  const hasSource = cols.some((c) => c.name === 'source');
+  const startLat = cols.find((c) => c.name === 'start_lat');
+  if (hasSource && startLat?.notnull !== 1) return;
+
+  db.execSync('PRAGMA foreign_keys = OFF;');
+  db.execSync(`
+    CREATE TABLE shots_p3 (
+      id TEXT PRIMARY KEY NOT NULL,
+      hole_id TEXT NOT NULL,
+      club_id TEXT,
+      seq INTEGER NOT NULL,
+      start_lat REAL,
+      start_lng REAL,
+      start_accuracy_m REAL,
+      start_fix_quality TEXT,
+      end_lat REAL,
+      end_lng REAL,
+      end_accuracy_m REAL,
+      end_fix_quality TEXT,
+      distance_yards INTEGER,
+      fix_quality TEXT,
+      impossible_jump INTEGER NOT NULL DEFAULT 0,
+      started_at TEXT NOT NULL,
+      ended_at TEXT,
+      source TEXT NOT NULL DEFAULT 'gps',
+      FOREIGN KEY (hole_id) REFERENCES holes(id) ON DELETE CASCADE,
+      FOREIGN KEY (club_id) REFERENCES clubs(id)
+    );
+  `);
+  const sourceExpr = hasSource ? 'source' : "'gps'";
+  db.execSync(`
+    INSERT INTO shots_p3 (
+      id, hole_id, club_id, seq,
+      start_lat, start_lng, start_accuracy_m, start_fix_quality,
+      end_lat, end_lng, end_accuracy_m, end_fix_quality,
+      distance_yards, fix_quality, impossible_jump, started_at, ended_at, source
+    )
+    SELECT
+      id, hole_id, club_id, seq,
+      start_lat, start_lng, start_accuracy_m, start_fix_quality,
+      end_lat, end_lng, end_accuracy_m, end_fix_quality,
+      distance_yards, fix_quality, impossible_jump, started_at, ended_at,
+      ${sourceExpr}
+    FROM shots;
+  `);
+  db.execSync('DROP TABLE shots;');
+  db.execSync('ALTER TABLE shots_p3 RENAME TO shots;');
+  db.execSync('PRAGMA foreign_keys = ON;');
+}
+
 export function migrate(db: SQLiteDatabase): void {
   db.execSync('PRAGMA foreign_keys = ON;');
   db.execSync(`
@@ -44,26 +101,39 @@ export function migrate(db: SQLiteDatabase): void {
       hole_id TEXT NOT NULL,
       club_id TEXT,
       seq INTEGER NOT NULL,
-      start_lat REAL NOT NULL,
-      start_lng REAL NOT NULL,
+      start_lat REAL,
+      start_lng REAL,
       start_accuracy_m REAL,
-      start_fix_quality TEXT NOT NULL,
+      start_fix_quality TEXT,
       end_lat REAL,
       end_lng REAL,
       end_accuracy_m REAL,
       end_fix_quality TEXT,
       distance_yards INTEGER,
-      fix_quality TEXT NOT NULL,
+      fix_quality TEXT,
       impossible_jump INTEGER NOT NULL DEFAULT 0,
       started_at TEXT NOT NULL,
       ended_at TEXT,
+      source TEXT NOT NULL DEFAULT 'gps',
       FOREIGN KEY (hole_id) REFERENCES holes(id) ON DELETE CASCADE,
       FOREIGN KEY (club_id) REFERENCES clubs(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS hole_penalties (
+      id TEXT PRIMARY KEY NOT NULL,
+      hole_id TEXT NOT NULL,
+      strokes INTEGER NOT NULL,
+      reason TEXT NOT NULL,
+      note TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (hole_id) REFERENCES holes(id) ON DELETE CASCADE
     );
   `);
 
   ensureColumn(db, 'holes', 'green_lat', 'REAL');
   ensureColumn(db, 'holes', 'green_lng', 'REAL');
+  migrateShotsP3(db);
+  ensureColumn(db, 'shots', 'source', "TEXT NOT NULL DEFAULT 'gps'");
 
   const clubCount = db.getFirstSync<{ n: number }>('SELECT COUNT(*) AS n FROM clubs');
   if ((clubCount?.n ?? 0) === 0) {

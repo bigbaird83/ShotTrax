@@ -1,8 +1,23 @@
 import { StyleSheet, Text, View } from 'react-native';
-import type { FixQuality } from '../domain/types';
+import type { FixQuality, ShotSource } from '../domain/types';
 import { colors } from './theme';
 
-export function QualityBadge({ quality, open }: { quality?: FixQuality; open?: boolean }) {
+export function QualityBadge({
+  quality,
+  open,
+  source,
+}: {
+  quality?: FixQuality | null;
+  open?: boolean;
+  source?: ShotSource;
+}) {
+  if (source === 'no_gps') {
+    return (
+      <View style={[styles.badge, styles.manual]}>
+        <Text style={styles.text}>NO GPS</Text>
+      </View>
+    );
+  }
   if (open) {
     return (
       <View style={[styles.badge, styles.open]}>
@@ -67,4 +82,5 @@ const styles = StyleSheet.create({
   soft: { backgroundColor: colors.amber },
   forced: { backgroundColor: colors.orange },
   open: { backgroundColor: colors.line },
+  manual: { backgroundColor: '#3A4A5C' },
 });

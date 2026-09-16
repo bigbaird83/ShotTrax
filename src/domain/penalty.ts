@@ -1,0 +1,49 @@
+import type { PenaltyReason } from './types';
+
+export const PENALTY_REASONS: { reason: PenaltyReason; label: string }[] = [
+  { reason: 'water', label: 'Water' },
+  { reason: 'ob', label: 'OB' },
+  { reason: 'unplayable', label: 'Unplayable' },
+  { reason: 'other', label: 'Other' },
+];
+
+export const MIN_PENALTY_STROKES = 1;
+export const MAX_PENALTY_STROKES = 5;
+
+export function clampPenaltyStrokes(n: number): number {
+  if (!Number.isFinite(n)) return MIN_PENALTY_STROKES;
+  return Math.min(MAX_PENALTY_STROKES, Math.max(MIN_PENALTY_STROKES, Math.floor(n)));
+}
+
+/**
+ * Hole score is the scorecard source of truth. Adding a penalty bumps it by N
+ * strokes (same base as the hole +/− control: current score, or par if unset).
+ */
+export function scoreAfterPenalty(
+  currentScore: number | null,
+  par: number,
+  strokes: number,
+): number {
+  const n = clampPenaltyStrokes(strokes);
+  return (currentScore ?? par) + n;
+}
+
+export function totalPenaltyStrokes(penalties: { strokes: number }[]): number {
+  return penalties.reduce((sum, p) => sum + p.strokes, 0);
+}
+
+export function penaltyReasonLabel(reason: PenaltyReason): string {
+  return PENALTY_REASONS.find((r) => r.reason === reason)?.label ?? 'Other';
+}
+
+export function formatPenaltyRow(penalty: {
+  strokes: number;
+  reason: PenaltyReason;
+  note: string | null;
+}): string {
+  const label = penaltyReasonLabel(penalty.reason);
+  const note = penalty.note?.trim();
+  const reasonText =
+    penalty.reason === 'other' && note ? note : note ? `${label} · ${note}` : label;
+  return `+${penalty.strokes} ${reasonText}`;
+}

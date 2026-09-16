@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
@@ -8,15 +8,17 @@ import { matchSpokenClub, speechContextualStrings } from '@/src/domain/voiceClub
 import type { Club } from '@/src/domain/types';
 import { speechRecognitionAvailable, startClubSpeech, type ClubSpeechSession } from '@/src/services/speechClub';
 import { getCurrentFix } from '@/src/services/location';
-import { markShotWithClub, promptForPlan } from '@/src/services/shotActions';
+import { addNoGpsShot, markShotWithClub, promptForPlan } from '@/src/services/shotActions';
 import { BigButton } from '@/src/ui/BigButton';
 import { ClubButton } from '@/src/ui/ClubButton';
 import { Screen } from '@/src/ui/Screen';
 import { colors } from '@/src/ui/theme';
 
 export default function ClubPickScreen() {
-  const { id, hole } = useLocalSearchParams<{ id: string; hole: string }>();
+  const { id, hole, noGps } = useLocalSearchParams<{ id: string; hole: string; noGps?: string }>();
   const holeNumber = Number(hole);
+  const withoutGps = noGps === '1';
+  const navigation = useNavigation();
   const { db, revision, bump } = useDb();
   const clubs = useMemo(() => listClubs(db, true), [db, revision]);
   const holeRow = useMemo(() => getHole(db, id, holeNumber), [db, id, holeNumber, revision]);
@@ -35,6 +37,10 @@ export default function ClubPickScreen() {
   const [proposed, setProposed] = useState<Club | null>(null);
   const sessionRef = useRef<ClubSpeechSession | null>(null);
   const voiceReady = speechRecognitionAvailable();
+
+  useEffect(() => {
+    navigation.setOptions({ title: withoutGps ? 'No GPS shot' : 'Pick club' });
+  }, [navigation, withoutGps]);
 
   useEffect(() => {
     let live = true;
@@ -76,6 +82,12 @@ export default function ClubPickScreen() {
     if (!id || Number.isNaN(holeNumber)) return;
     setBusy(true);
     try {
+      if (withoutGps) {
+        addNoGpsShot(db, { roundId: id, holeNumber, clubId });
+        bump();
+        router.back();
+        return;
+      }
       const { plan } = await markShotWithClub(db, {
         roundId: id,
         holeNumber,
@@ -90,7 +102,10 @@ export default function ClubPickScreen() {
         router.back();
       }
     } catch (err) {
-      Alert.alert('Could not mark shot', err instanceof Error ? err.message : 'Unknown error');
+      Alert.alert(
+        withoutGps ? 'Could not add shot' : 'Could not mark shot',
+        err instanceof Error ? err.message : 'Unknown error',
+      );
     } finally {
       setBusy(false);
     }
@@ -148,11 +163,12 @@ export default function ClubPickScreen() {
 
   return (
     <Screen>
-      <Text style={styles.kicker}>Mark shot</Text>
-      <Text style={styles.title}>Pick a club</Text>
+      <Text style={styles.kicker}>{withoutGps ? 'No GPS' : 'Mark shot'}</Text>
+      <Text style={styles.title}>{withoutGps ? 'Forgotten swing' : 'Pick a club'}</Text>
       <Text style={styles.lede}>
-        Tap a club to confirm GPS now as the start (and the previous shot’s end). Voice names a club
-        but still needs Confirm. Watch / mic shot-detect assists are not in this build.
+        {withoutGps
+          ? 'Logs a stroke with this club and no coordinates (source: no_gps). It counts on the hole, never draws a map trail, and is excluded from distance averages and top-3. ShotTrax will not invent a GPS fix.'
+          : 'Tap a club to confirm GPS now as the start (and the previous shot’s end). Voice names a club but still needs Confirm. Watch / mic shot-detect assists are not in this build.'}
       </Text>
 
       <View style={styles.voiceBox}>
@@ -170,7 +186,7 @@ export default function ClubPickScreen() {
               {proposed.shortName} · {proposed.name} — confirm to mark
             </Text>
             <BigButton
-              label={`Confirm ${proposed.shortName}`}
+              label={`Confirm ${proposed.shortName}${withoutGps ? ' (no GPS)' : ''}`}
               disabled={busy}
               onPress={() => void onPick(proposed.id)}
             />
@@ -186,8 +202,8 @@ export default function ClubPickScreen() {
       <Text style={styles.meta}>{targetLabel}</Text>
       {ranked.length === 0 ? (
         <Text style={styles.muted}>
-          Ranking needs a distance D and ≥5 closed shots with yards on a club. Soft and forced shots
-          count. Full bag is one tap away.
+          Ranking needs a distance D and ≥5 closed GPS shots with yards on a club. Soft and forced
+          count; no-GPS shots and penalties do not. Full bag is one tap away.
         </Text>
       ) : (
         <View style={{ gap: 8 }}>

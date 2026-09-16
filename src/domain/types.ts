@@ -1,5 +1,10 @@
 export type FixQuality = 'good' | 'soft' | 'forced';
 
+/** How the shot was logged. `no_gps` never stores coordinates. */
+export type ShotSource = 'gps' | 'no_gps';
+
+export type PenaltyReason = 'water' | 'ob' | 'unplayable' | 'other';
+
 export type GpsFix = {
   lat: number;
   lng: number;
@@ -42,19 +47,30 @@ export type Shot = {
   holeId: string;
   clubId: string | null;
   seq: number;
-  startLat: number;
-  startLng: number;
+  /** Null on `no_gps` shots — ShotTrax does not invent coordinates. */
+  startLat: number | null;
+  startLng: number | null;
   startAccuracyM: number | null;
-  startFixQuality: FixQuality;
+  startFixQuality: FixQuality | null;
   endLat: number | null;
   endLng: number | null;
   endAccuracyM: number | null;
   endFixQuality: FixQuality | null;
   distanceYards: number | null;
-  fixQuality: FixQuality;
+  fixQuality: FixQuality | null;
   impossibleJump: boolean;
   startedAt: string;
   endedAt: string | null;
+  source: ShotSource;
+};
+
+export type HolePenalty = {
+  id: string;
+  holeId: string;
+  strokes: number;
+  reason: PenaltyReason;
+  note: string | null;
+  createdAt: string;
 };
 
 export type OpenShot = {

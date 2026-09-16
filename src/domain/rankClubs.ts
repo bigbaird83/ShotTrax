@@ -60,12 +60,13 @@ export function resolveDistanceTarget(args: {
   return null;
 }
 
-/** Most recent closed shot with yards (shots expected in seq order). */
+/** Most recent closed GPS shot with yards (shots expected in seq order). `no_gps` never ranks. */
 export function lastClosedShotYards(
-  shots: { endedAt: string | null; distanceYards: number | null }[],
+  shots: { endedAt: string | null; distanceYards: number | null; source?: 'gps' | 'no_gps' }[],
 ): number | null {
   for (let i = shots.length - 1; i >= 0; i -= 1) {
     const shot = shots[i];
+    if (shot.source === 'no_gps') continue;
     if (shot.endedAt != null && shot.distanceYards != null) {
       return shot.distanceYards;
     }
