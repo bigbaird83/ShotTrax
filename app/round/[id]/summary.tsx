@@ -2,7 +2,10 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
-import { getRound, listHoles, listShotsForHole } from '@/src/db/repo';
+import { getRound, listHoles, listPenaltiesForHole, listShotsForHole } from '@/src/db/repo';
+import { formatPenaltyRow, totalPenaltyStrokes } from '@/src/domain/penalty';
+import { reconcileHoleScore } from '@/src/domain/scoreReconcile';
+import { AverageBadges } from '@/src/ui/Badge';
 import { BigButton } from '@/src/ui/BigButton';
 import { Screen } from '@/src/ui/Screen';
 import { colors } from '@/src/ui/theme';
@@ -35,25 +38,48 @@ export default function RoundSummaryScreen() {
         <Text style={styles.toPar}>{toParLabel}</Text>
       </Text>
       <Text style={styles.muted}>
-        {scored.length} of {round.holeCount} holes scored
+        {scored.length} of {round.holeCount} holes scored. Scorecard score is the source of truth.
       </Text>
 
       {holes.map((hole) => {
         const shots = listShotsForHole(db, hole.id);
-        const closed = shots.filter((s) => s.distanceYards != null);
-        const yards = closed.reduce((sum, s) => sum + (s.distanceYards ?? 0), 0);
+        const penalties = listPenaltiesForHole(db, hole.id);
+        const closedGps = shots.filter((s) => s.source === 'gps' && s.distanceYards != null);
+        const yards = closedGps.reduce((sum, s) => sum + (s.distanceYards ?? 0), 0);
+        const includesSoft = closedGps.some((s) => s.fixQuality === 'soft');
+        const includesForced = closedGps.some((s) => s.fixQuality === 'forced');
+        const noGpsCount = shots.filter((s) => s.source === 'no_gps').length;
+        const penStrokes = totalPenaltyStrokes(penalties);
+        const mismatch = reconcileHoleScore({
+          score: hole.score,
+          shotCount: shots.length,
+          penaltyStrokes: penStrokes,
+        }).mismatch;
+        const shotBits = [
+          `${shots.length} shot${shots.length === 1 ? '' : 's'}`,
+          closedGps.length ? `${yards} yd` : null,
+          noGpsCount ? `${noGpsCount} no GPS` : null,
+        ].filter(Boolean);
         return (
           <Pressable
             key={hole.id}
             onPress={() => router.push(`/round/${id}/hole/${hole.number}`)}
             style={styles.row}>
             <Text style={styles.holeNum}>{hole.number}</Text>
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, gap: 4 }}>
               <Text style={styles.holeTitle}>Par {hole.par}</Text>
-              <Text style={styles.muted}>
-                {shots.length} shot{shots.length === 1 ? '' : 's'}
-                {closed.length ? ` · ${yards} yd` : ''}
-              </Text>
+              <Text style={styles.muted}>{shotBits.join(' · ')}</Text>
+              {penalties.length > 0 ? (
+                <Text style={styles.penalty}>
+                  {penalties.map((p) => formatPenaltyRow(p)).join(' · ')}
+                </Text>
+              ) : null}
+              {mismatch ? (
+                <Text style={styles.warn}>
+                  Score {hole.score} ≠ {shots.length} shots + {penStrokes} penalties
+                </Text>
+              ) : null}
+              <AverageBadges includesSoft={includesSoft} includesForced={includesForced} />
             </View>
             <Text style={styles.score}>{hole.score ?? '—'}</Text>
           </Pressable>
@@ -71,6 +97,8 @@ const styles = StyleSheet.create({
   total: { color: colors.cream, fontSize: 48, fontWeight: '900' },
   toPar: { color: colors.lime, fontSize: 28, fontWeight: '800' },
   muted: { color: colors.muted, fontSize: 16 },
+  penalty: { color: colors.amber, fontSize: 14, fontWeight: '700' },
+  warn: { color: colors.orange, fontSize: 13, fontWeight: '700' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

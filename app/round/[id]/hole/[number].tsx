@@ -1,7 +1,7 @@
 import * as Device from 'expo-device';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
 import {
   finishRound,
@@ -9,13 +9,21 @@ import {
   getHole,
   getOpenShotForHole,
   getRound,
+  insertPenalty,
+  listPenaltiesForHole,
   listShotsForHole,
   setHoleGreen,
   updateHolePar,
   updateHoleScore,
 } from '@/src/db/repo';
-import type { GpsFix } from '@/src/domain/types';
+import type { GpsFix, PenaltyReason } from '@/src/domain/types';
 import { classifyAccuracyM } from '@/src/domain/fixQuality';
+import {
+  formatPenaltyRow,
+  PENALTY_REASONS,
+  totalPenaltyStrokes,
+} from '@/src/domain/penalty';
+import { reconcileHoleScore, scoreMismatchMessage } from '@/src/domain/scoreReconcile';
 import { MIC_SHOT_ASSIST, WATCH_ASSIST } from '@/src/sensing/assists';
 import { getCurrentFix } from '@/src/services/location';
 import { endOpenShot, promptForPlan } from '@/src/services/shotActions';
@@ -34,16 +42,30 @@ export default function HoleScreen() {
   const [fix, setFix] = useState<GpsFix | null>(null);
   const [fixError, setFixError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [penaltyOpen, setPenaltyOpen] = useState(false);
+  const [penaltyStrokes, setPenaltyStrokes] = useState(1);
+  const [penaltyReason, setPenaltyReason] = useState<PenaltyReason>('water');
+  const [penaltyNote, setPenaltyNote] = useState('');
 
   const round = useMemo(() => getRound(db, id), [db, id, revision]);
   const hole = useMemo(() => getHole(db, id, holeNumber), [db, id, holeNumber, revision]);
   const shots = useMemo(() => (hole ? listShotsForHole(db, hole.id) : []), [db, hole, revision]);
+  const penalties = useMemo(
+    () => (hole ? listPenaltiesForHole(db, hole.id) : []),
+    [db, hole, revision],
+  );
   const clubs = useMemo(() => getClubMap(db), [db, revision]);
   const open = useMemo(
     () => (hole ? getOpenShotForHole(db, hole.id) : null),
     [db, hole, revision],
   );
   const readOnly = Boolean(round?.finishedAt);
+  const penaltyTotal = totalPenaltyStrokes(penalties);
+  const reconcile = reconcileHoleScore({
+    score: hole?.score ?? null,
+    shotCount: shots.length,
+    penaltyStrokes: penaltyTotal,
+  });
 
   useEffect(() => {
     navigation.setOptions({ title: `Hole ${holeNumber}` });
@@ -89,6 +111,23 @@ export default function HoleScreen() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const onAddPenalty = () => {
+    if (readOnly) return;
+    insertPenalty(db, {
+      holeId: hole.id,
+      par: hole.par,
+      currentScore: hole.score,
+      strokes: penaltyStrokes,
+      reason: penaltyReason,
+      note: penaltyReason === 'other' || penaltyNote.trim() ? penaltyNote : null,
+    });
+    setPenaltyOpen(false);
+    setPenaltyStrokes(1);
+    setPenaltyReason('water');
+    setPenaltyNote('');
+    bump();
   };
 
   const accClass = fix ? classifyAccuracyM(fix.accuracyM) : null;
@@ -184,6 +223,9 @@ export default function HoleScreen() {
           <Text style={styles.stepText}>+</Text>
         </Pressable>
       </View>
+      {reconcile.mismatch ? (
+        <Text style={styles.warn}>{scoreMismatchMessage(reconcile)}</Text>
+      ) : null}
 
       <View style={styles.gpsBox}>
         <Text style={styles.label}>GPS at last read</Text>
@@ -200,7 +242,8 @@ export default function HoleScreen() {
           <Text style={styles.meta}>Reading GPS…</Text>
         )}
         <Text style={styles.tiny}>
-          Start = GPS when you confirm a club. End = GPS on the next mark (or End last shot).
+          Start = GPS when you confirm a club. End = GPS on the next mark (or End last shot). No-GPS
+          shots never invent coordinates.
         </Text>
       </View>
 
@@ -211,21 +254,41 @@ export default function HoleScreen() {
         shots.map((shot) => {
           const club = shot.clubId ? clubs[shot.clubId] : null;
           const openShot = shot.endedAt == null;
+          const noGps = shot.source === 'no_gps' || shot.fixQuality === 'none';
           return (
             <View key={shot.id} style={styles.shot}>
               <Text style={styles.shotSeq}>{shot.seq}</Text>
               <View style={{ flex: 1 }}>
                 <Text style={styles.shotClub}>{club?.name ?? 'Club'}</Text>
                 <Text style={styles.meta}>
-                  {openShot
-                    ? 'Waiting for next mark to log yards'
-                    : `${shot.distanceYards ?? '—'} yd${shot.impossibleJump ? ' · jump' : ''}`}
+                  {noGps
+                    ? shot.typedYards != null
+                      ? `${shot.typedYards} yd typed · not in averages`
+                      : 'No GPS — counts as a stroke, not in averages'
+                    : openShot
+                      ? 'Waiting for next mark to log yards'
+                      : `${shot.distanceYards ?? '—'} yd${shot.impossibleJump ? ' · jump' : ''}`}
                 </Text>
               </View>
-              <QualityBadge quality={shot.fixQuality} open={openShot} />
+              <QualityBadge quality={shot.fixQuality} open={openShot && !noGps} source={shot.source} />
             </View>
           );
         })
+      )}
+
+      <Text style={styles.label}>Penalties</Text>
+      {penalties.length === 0 ? (
+        <Text style={styles.muted}>No penalties on this hole.</Text>
+      ) : (
+        penalties.map((penalty) => (
+          <View key={penalty.id} style={styles.shot}>
+            <Text style={styles.shotSeq}>+</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.shotClub}>{formatPenaltyRow(penalty)}</Text>
+              <Text style={styles.meta}>Scorecard only — not a map trail, not in averages</Text>
+            </View>
+          </View>
+        ))
       )}
 
       {readOnly ? (
@@ -239,6 +302,57 @@ export default function HoleScreen() {
               router.push(`/round/${id}/club-pick?hole=${holeNumber}`)
             }
           />
+          <BigButton
+            label="Add shot without GPS"
+            variant="secondary"
+            disabled={busy}
+            onPress={() =>
+              router.push(`/round/${id}/club-pick?hole=${holeNumber}&noGps=1`)
+            }
+          />
+          <BigButton
+            label={penaltyOpen ? 'Cancel penalty' : '+ Penalty'}
+            variant="secondary"
+            disabled={busy}
+            onPress={() => setPenaltyOpen((openPanel) => !openPanel)}
+          />
+          {penaltyOpen ? (
+            <View style={styles.penaltyBox}>
+              <Text style={styles.label}>Penalty strokes</Text>
+              <View style={styles.row}>
+                <Pressable
+                  onPress={() => setPenaltyStrokes((n) => Math.max(1, n - 1))}
+                  style={styles.step}>
+                  <Text style={styles.stepText}>−</Text>
+                </Pressable>
+                <Text style={styles.score}>{penaltyStrokes}</Text>
+                <Pressable
+                  onPress={() => setPenaltyStrokes((n) => Math.min(5, n + 1))}
+                  style={styles.step}>
+                  <Text style={styles.stepText}>+</Text>
+                </Pressable>
+              </View>
+              <Text style={styles.label}>Reason</Text>
+              <View style={styles.reasonRow}>
+                {PENALTY_REASONS.map((item) => (
+                  <Pressable
+                    key={item.reason}
+                    onPress={() => setPenaltyReason(item.reason)}
+                    style={[styles.reasonChip, penaltyReason === item.reason && styles.chipOn]}>
+                    <Text style={styles.reasonText}>{item.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <TextInput
+                placeholder={penaltyReason === 'other' ? 'Describe (optional)' : 'Note (optional)'}
+                placeholderTextColor={colors.muted}
+                value={penaltyNote}
+                onChangeText={setPenaltyNote}
+                style={styles.note}
+              />
+              <BigButton label={`Add +${penaltyStrokes} penalty`} onPress={onAddPenalty} />
+            </View>
+          ) : null}
           <BigButton
             label="End last shot"
             variant="secondary"
@@ -345,6 +459,36 @@ const styles = StyleSheet.create({
     padding: 12,
     borderWidth: 1,
     borderColor: colors.line,
+  },
+  penaltyBox: {
+    backgroundColor: colors.bgElevated,
+    borderRadius: 14,
+    padding: 12,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  reasonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  reasonChip: {
+    minHeight: 48,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: colors.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bg,
+  },
+  reasonText: { color: colors.cream, fontSize: 16, fontWeight: '800' },
+  note: {
+    minHeight: 52,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    color: colors.cream,
+    fontSize: 16,
+    backgroundColor: colors.bg,
   },
   shot: {
     flexDirection: 'row',

@@ -4,6 +4,7 @@ import {
   applyClosedShot,
   getHole,
   getOpenShotForHole,
+  insertNoGpsShot,
   insertOpenShot,
   nextShotSeq,
 } from '../db/repo';
@@ -133,4 +134,21 @@ export async function endOpenShot(
   }
   applyClosedShot(db, plan.closePrior);
   return { plan, fix };
+}
+
+export function addNoGpsShot(
+  db: SQLiteDatabase,
+  args: { roundId: string; holeNumber: number; clubId: string; typedYards?: number | null },
+): string {
+  const hole = getHole(db, args.roundId, args.holeNumber);
+  if (!hole) {
+    throw new Error(`Hole ${args.holeNumber} not found`);
+  }
+  // Sensing lock: missed-mark does not call getFix / acceptFix / haversine.
+  return insertNoGpsShot(db, {
+    holeId: hole.id,
+    clubId: args.clubId,
+    seq: nextShotSeq(db, hole.id),
+    typedYards: args.typedYards ?? null,
+  });
 }

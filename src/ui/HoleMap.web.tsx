@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import type { GpsFix, Shot } from '@/src/domain/types';
+import { hasClosedGpsTrail } from '@/src/domain/shotSource';
 import { colors } from './theme';
 
 type Props = {
@@ -12,7 +13,7 @@ type Props = {
 
 /** Web has no Apple Maps / react-native-maps. List closed-shot GPS instead of inventing a map. */
 export function HoleMap({ holeNumber, shots }: Props) {
-  const closed = shots.filter((s) => s.endLat != null && s.endLng != null);
+  const closed = shots.filter(hasClosedGpsTrail);
   return (
     <View style={styles.fallback}>
       <Text style={styles.kicker}>SCORECARD</Text>
@@ -25,8 +26,8 @@ export function HoleMap({ holeNumber, shots }: Props) {
       ) : (
         closed.map((shot) => (
           <Text key={shot.id} style={styles.meta}>
-            {shot.seq}: {shot.startLat.toFixed(5)}, {shot.startLng.toFixed(5)} → {shot.endLat?.toFixed(5)},{' '}
-            {shot.endLng?.toFixed(5)}
+            {shot.seq}: {shot.startLat.toFixed(5)}, {shot.startLng.toFixed(5)} → {shot.endLat.toFixed(5)},{' '}
+            {shot.endLng.toFixed(5)}
           </Text>
         ))
       )}
