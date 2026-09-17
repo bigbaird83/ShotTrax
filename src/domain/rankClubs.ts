@@ -29,6 +29,23 @@ export function shotYardsDistanceTarget(dYards: number | null | undefined): Dist
   return { source: 'shot_yards', dYards };
 }
 
+/**
+ * Catch-up / edit club picker: top-3 vs **that shot’s yards**, never yards-to-green.
+ * Same seed → ≥5 live rule as live Suggested. Putter is never eligible.
+ * Empty → caller shows All clubs.
+ */
+export function rankCatchUpClubs(
+  clubs: RankClubInput[],
+  shotYards: number | null | undefined,
+  limit = 3,
+): RankedClub[] {
+  return rankTopClubs(
+    clubs.filter((club) => !isPutterClubId(club.id)),
+    shotYardsDistanceTarget(shotYards),
+    limit,
+  );
+}
+
 export type RankedClub = RankClubInput & {
   /** |rank yards − D| (live average or typical-carry seed) */
   deltaYards: number;

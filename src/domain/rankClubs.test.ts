@@ -7,6 +7,7 @@ import {
   clubToRankInput,
   lastClosedShotYards,
   MIN_CLOSED_SHOTS_FOR_RANK,
+  rankCatchUpClubs,
   rankDistanceYards,
   rankTopClubs,
   resolveDistanceTarget,
@@ -126,15 +127,90 @@ test('catch-up club rank uses that shot’s yards, not yards-to-green', () => {
   assert.equal(liveTarget?.source, 'yards_to_green');
   assert.equal(liveTarget?.dYards, 260);
   assert.deepEqual(
-    rankTopClubs(bag, shotTarget).map((c) => c.id),
+    rankCatchUpClubs(bag, 148).map((c) => c.id),
     ['7i', '8i', '6i'],
   );
   assert.deepEqual(
     rankTopClubs(bag, liveTarget).map((c) => c.id),
     ['Dr', '5i', '6i'],
   );
+  assert.deepEqual(rankCatchUpClubs(bag, null), []);
   assert.equal(shotYardsDistanceTarget(null), null);
   assert.equal(shotYardsDistanceTarget(Number.NaN), null);
+});
+
+test('catch-up top-3 uses seed until ≥5 live shots; putter stays out', () => {
+  const ranked = rankCatchUpClubs(
+    [
+      club({
+        id: 'club_putter',
+        name: 'Putter',
+        shortName: 'Pt',
+        loftRank: 16,
+        avgYards: 8,
+        count: 20,
+        typicalCarryYards: 8,
+      }),
+      club({
+        id: 'club_gw',
+        name: '52°',
+        shortName: '52°',
+        loftRank: 13,
+        avgYards: 0,
+        count: 0,
+        typicalCarryYards: 105,
+      }),
+      club({
+        id: 'club_sw',
+        name: '56°',
+        shortName: '56°',
+        loftRank: 14,
+        avgYards: 0,
+        count: 2,
+        typicalCarryYards: 90,
+      }),
+      club({
+        id: 'club_7i',
+        name: '7 Iron',
+        shortName: '7i',
+        loftRank: 9,
+        avgYards: 150,
+        count: 8,
+      }),
+    ],
+    92,
+  );
+  assert.deepEqual(
+    ranked.map((c) => c.id),
+    ['club_sw', 'club_gw', 'club_7i'],
+  );
+  assert.ok(!ranked.some((c) => c.id === 'club_putter'));
+
+  const live = rankCatchUpClubs(
+    [
+      club({
+        id: 'club_gw',
+        name: '52°',
+        shortName: '52°',
+        loftRank: 13,
+        avgYards: 118,
+        count: 5,
+        typicalCarryYards: 105,
+      }),
+      club({
+        id: 'club_sw',
+        name: '56°',
+        shortName: '56°',
+        loftRank: 14,
+        avgYards: 0,
+        count: 2,
+        typicalCarryYards: 90,
+      }),
+    ],
+    118,
+  );
+  assert.equal(live[0]?.id, 'club_gw');
+  assert.equal(live[0]?.deltaYards, 0);
 });
 
 test('top-3 are the lowest |avgYards − D|; clubs with <5 closed shots are excluded', () => {

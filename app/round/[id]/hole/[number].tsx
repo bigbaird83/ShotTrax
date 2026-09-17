@@ -48,7 +48,7 @@ import {
   type PuttLengthId,
 } from '@/src/domain/putts';
 import { canMoveFromPin, canMoveToPin, type ShotEditSnapshot } from '@/src/domain/shotEdit';
-import { clubToRankInput, lastClosedShotYards, rankTopClubs, resolveDistanceTarget, shotYardsDistanceTarget } from '@/src/domain/rankClubs';
+import { clubToRankInput, lastClosedShotYards, rankCatchUpClubs, rankTopClubs, resolveDistanceTarget } from '@/src/domain/rankClubs';
 import { reconcileHoleScore, scoreMismatchMessage } from '@/src/domain/scoreReconcile';
 import { resolveStickyClub, selectClubForMark } from '@/src/domain/stickyClub';
 import type { Club, PenaltyReason } from '@/src/domain/types';
@@ -161,9 +161,9 @@ export default function HoleScreen() {
   const placedYards = placedPlan && placedPlan.ok ? placedPlan.distanceYards : null;
   const editingShot = editShotId ? shots.find((shot) => shot.id === editShotId) ?? null : null;
   const pickerYards = editClubOpen ? (editingShot?.distanceYards ?? null) : placedYards;
-  const placedRanked = rankTopClubs(
+  const placedRanked = rankCatchUpClubs(
     averages.map((row) => clubToRankInput(row.club, row)),
-    shotYardsDistanceTarget(pickerYards),
+    pickerYards,
   );
   const placeBag = clubs.filter((club) => !isPutterClubId(club.id));
   const placeRest = placeBag.filter((club) => !placedRanked.some((row) => row.id === club.id));
