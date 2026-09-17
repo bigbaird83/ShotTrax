@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { haversineYards } from './haversine';
 import type { GpsFix } from './types';
+import { SOFT_GPS_MIN_M } from '../config/sensing';
 import {
   DWELL_S,
   DWELL_YD,
@@ -9,6 +10,7 @@ import {
   LEAVE_YD,
   emptyWalkAway,
   stepWalkAway,
+  walkAwayEligible,
 } from './walkAway';
 
 const origin = { lat: 37.0, lng: -122.0 };
@@ -27,6 +29,13 @@ function fix(partial: Partial<GpsFix> & { timestamp: number; lat?: number; lng?:
     ...partial,
   };
 }
+
+test('Signal Lab constants are dwell 10s / 8 yd, leave 20 yd × 2', () => {
+  assert.equal(DWELL_S, 10);
+  assert.equal(DWELL_YD, 8);
+  assert.equal(LEAVE_YD, 20);
+  assert.equal(LEAVE_CONFIRM_FIXES, 2);
+});
 
 test('dwell under 10s does not arm (cart drive-by)', () => {
   let state = emptyWalkAway();
@@ -99,4 +108,48 @@ test('poor GPS dwell never arms a silent mark', () => {
   const done = stepWalkAway(state, fix({ timestamp: DWELL_S * 1000, accuracyM: 40 }));
   assert.equal(done.state.liePin, null);
   assert.equal(done.firePin, null);
+});
+
+test('soft dwell arms and leave fires the lie pin (Approximate + Suggested path)', () => {
+  let state = emptyWalkAway();
+  state = stepWalkAway(state, fix({ timestamp: 0, accuracyM: SOFT_GPS_MIN_M })).state;
+  state = stepWalkAway(state, fix({ timestamp: DWELL_S * 1000, accuracyM: SOFT_GPS_MIN_M })).state;
+  assert.ok(state.liePin);
+  assert.equal(state.liePin?.accuracyM, SOFT_GPS_MIN_M);
+  state = stepWalkAway(state, fix({ timestamp: 12_000, ...north(LEAVE_YD + 1) })).state;
+  const fired = stepWalkAway(state, fix({ timestamp: 13_000, ...north(LEAVE_YD + 2) }));
+  assert.equal(fired.firePin?.accuracyM, SOFT_GPS_MIN_M);
+  assert.equal(fired.state.fired, true);
+  const again = stepWalkAway(fired.state, fix({ timestamp: 14_000, ...north(LEAVE_YD + 3) }));
+  assert.equal(again.firePin, null);
+  const rearmed = stepWalkAway(emptyWalkAway(), fix({ timestamp: 0 }));
+  assert.equal(rearmed.state.fired, false);
+});
+
+test('walkAwayEligible skips Drop-Penalty, no-GPS, and an already-marked lie', () => {
+  const here = fix({ timestamp: 0 });
+  assert.equal(
+    walkAwayEligible({ awaitingClub: true, lastLie: null, fix: here }),
+    true,
+  );
+  assert.equal(
+    walkAwayEligible({ awaitingClub: false, lastLie: null, fix: here }),
+    false,
+  );
+  assert.equal(
+    walkAwayEligible({ awaitingClub: true, dropOrPenaltyOpen: true, lastLie: null, fix: here }),
+    false,
+  );
+  assert.equal(
+    walkAwayEligible({ awaitingClub: true, lastLie: origin, fix: here }),
+    false,
+  );
+  assert.equal(
+    walkAwayEligible({
+      awaitingClub: true,
+      lastLie: origin,
+      fix: fix({ timestamp: 0, ...north(LEAVE_YD) }),
+    }),
+    true,
+  );
 });

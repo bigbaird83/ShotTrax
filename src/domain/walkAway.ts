@@ -1,11 +1,15 @@
 import { classifyAccuracyM } from './fixQuality';
 import { haversineYards } from './haversine';
 import type { GpsFix } from './types';
+import type { LatLng } from './latLng';
 
-/** Signal Lab walk-away auto-mark (assist only — club tap / Watch still primary).
- * Doc placeholder was leave ~25–40 yd + dwell; Signal Lab lock:
- * dwell ≥10 s inside 8 yd, then leave ≥20 yd × 2 consecutive fixes.
- * Marks at the lie pin with top-3 #1. Poor GPS at dwell never silent-marks.
+/** Signal Lab walk-away auto-mark. Assist only — club tap / Watch still primary.
+ *
+ * State: shot pending (Pick a club open, prior shot closed or none) and no club mark yet this lie.
+ * Dwell: ≥10 s inside 8 yd of cluster centroid; best-accuracy fix = lie pin; micro-moves < 8 yd stay.
+ * Leave: ≥20 yd from lie pin AND 2 consecutive fixes still out → fire the lie pin (not the cart).
+ * No-fire: dwell < 10 s, quality none at dwell, already marked this lie, Drop-Penalty open.
+ * Re-arm only after the next dwell (emptyWalkAway). Soft dwell OK.
  */
 export const DWELL_S = 10;
 export const DWELL_YD = 8;
@@ -21,6 +25,18 @@ export type WalkAwayState = {
 
 export function emptyWalkAway(): WalkAwayState {
   return { cluster: [], liePin: null, leaveHits: 0, fired: false };
+}
+
+/** Skip walk-away when Drop/Penalty is open, Change club / no-GPS, or this lie was already marked. */
+export function walkAwayEligible(args: {
+  awaitingClub: boolean;
+  dropOrPenaltyOpen?: boolean;
+  lastLie: LatLng | null;
+  fix: GpsFix | null;
+}): boolean {
+  if (!args.awaitingClub || args.dropOrPenaltyOpen || !args.fix) return false;
+  if (args.lastLie && haversineYards(args.lastLie, args.fix) <= DWELL_YD) return false;
+  return true;
 }
 
 function centroid(fixes: GpsFix[]): { lat: number; lng: number } | null {

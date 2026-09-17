@@ -8,7 +8,7 @@ import { clubToRankInput, lastClosedShotYards, rankTopClubs, resolveDistanceTarg
 import { parseTypedYards } from '@/src/domain/shotSource';
 import { selectClubForMark } from '@/src/domain/stickyClub';
 import { matchSpokenClub, speechContextualStrings } from '@/src/domain/voiceClub';
-import { emptyWalkAway, stepWalkAway } from '@/src/domain/walkAway';
+import { emptyWalkAway, stepWalkAway, walkAwayEligible } from '@/src/domain/walkAway';
 import type { Club, GpsFix } from '@/src/domain/types';
 import { yardsToGreen } from '@/src/sensing/api';
 import { startClubSpeech, type ClubSpeechSession } from '@/src/services/speechClub';
@@ -78,6 +78,12 @@ export default function ClubPickScreen() {
     averages.map((row) => clubToRankInput(row.club, row)),
     target,
   );
+  const lastLie = useMemo(() => {
+    const last = [...shots].reverse().find((shot) => shot.startLat != null && shot.startLng != null);
+    return last?.startLat != null && last.startLng != null
+      ? { lat: last.startLat, lng: last.startLng }
+      : null;
+  }, [shots]);
 
   useWatchClubList(
     {
@@ -157,10 +163,21 @@ export default function ClubPickScreen() {
 
   useEffect(() => {
     walkStateRef.current = emptyWalkAway();
-  }, [withoutGps, relabelId, holeNumber]);
+  }, [withoutGps, relabelId, holeNumber, lastLie]);
 
   useEffect(() => {
-    if (withoutGps || relabelId || !fix || busyRef.current || selectedRef.current) return;
+    if (
+      !fix ||
+      !walkAwayEligible({
+        awaitingClub: !withoutGps && !relabelId,
+        lastLie,
+        fix,
+      }) ||
+      busyRef.current ||
+      selectedRef.current
+    ) {
+      return;
+    }
     const top = rankedRef.current[0];
     if (!top) return;
     const stepped = stepWalkAway(walkStateRef.current, fix);
@@ -169,7 +186,7 @@ export default function ClubPickScreen() {
     const full = clubsRef.current.find((row) => row.id === top.id);
     if (!full) return;
     void markRef.current(full, false, { fixOverride: stepped.firePin, suggested: true });
-  }, [fix, withoutGps, relabelId]);
+  }, [fix, withoutGps, relabelId, lastLie]);
 
   const onLogMissed = () => {
     if (!selected || !id || Number.isNaN(holeNumber)) return;
