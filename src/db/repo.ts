@@ -5,6 +5,11 @@ import {
   type CourseLayoutSeed,
 } from '../course/layout';
 import { DEFAULT_BAG, isPutterClubId, typicalCarryForClub } from '../domain/defaultBag';
+import {
+  COURSE_DISTANCE_SETTING_KEY,
+  parseCourseDistanceUnit,
+  type CourseDistanceUnit,
+} from '../domain/courseDistance';
 import { averageWithBadges, type ClubAverage } from '../domain/averages';
 import { isValidLatLng } from '../domain/latLng';
 import { clampPenaltyStrokes, scoreAfterPenalty } from '../domain/penalty';
@@ -845,4 +850,21 @@ export function getClubMap(db: SQLiteDatabase): Record<string, Club> {
     map[club.id] = club;
   }
   return map;
+}
+
+export function getSetting(db: SQLiteDatabase, key: string): string | null {
+  const row = db.getFirstSync<{ value: string }>('SELECT value FROM settings WHERE key = ?', [key]);
+  return row?.value ?? null;
+}
+
+export function setSetting(db: SQLiteDatabase, key: string, value: string): void {
+  db.runSync('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [key, value]);
+}
+
+export function getCourseDistanceUnit(db: SQLiteDatabase): CourseDistanceUnit {
+  return parseCourseDistanceUnit(getSetting(db, COURSE_DISTANCE_SETTING_KEY));
+}
+
+export function setCourseDistanceUnit(db: SQLiteDatabase, unit: CourseDistanceUnit): void {
+  setSetting(db, COURSE_DISTANCE_SETTING_KEY, unit);
 }

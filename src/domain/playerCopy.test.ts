@@ -45,6 +45,9 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.previousHole, 'Previous hole');
   assert.equal(COPY.settings, 'Settings');
   assert.equal(COPY.home, 'Home');
+  assert.equal(COPY.courseDistance, 'Course distance');
+  assert.equal(COPY.miles, 'Miles');
+  assert.equal(COPY.kilometers, 'Kilometers');
   assert.equal(finishPuttsChip(4), 'Finish putts · Hole 4');
   assert.equal(markedSuggestedMessage('7i'), 'Marked 7i (suggested) · Change club.');
 });

@@ -81,6 +81,13 @@ test('walking off the green / to the next tee does not invent putts', () => {
   assert.equal(puttsFromWalkOff(), null);
 });
 
+test('Finish putts chip is score-only — never a fabricated distance', () => {
+  const chip = finishPuttsChipLabel(7);
+  assert.equal(chip, 'Finish putts · Hole 7');
+  assert.doesNotMatch(chip, /yd|mi|km|GPS/i);
+  assert.equal(puttsFromWalkOff({ yards: 4, quality: 'good' }), null);
+});
+
 test('Made it advances to the next hole, or summary after the last', () => {
   assert.deepEqual(holeAfterDone(1, 18), { kind: 'hole', holeNumber: 2 });
   assert.deepEqual(holeAfterDone(9, 9), { kind: 'summary' });

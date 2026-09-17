@@ -154,7 +154,7 @@ EAS credentials for `com.shottrax.app.watch` and `com.shottrax.app.watch.widget`
 
 ## On-course flow
 
-1. Find a nearby course (GPS) or type a name, then start a 9- or 18-hole round (or attach a course to a round in progress).
+1. Find a nearby course (GPS) or type a name, then start a 9- or 18-hole round (or attach a course to a round in progress). Nearby list distance is **miles** by default (**Course distance: Miles / Kilometers** in Settings). Shot yards and putt buckets stay as they are.
 2. On a hole, par comes from the course when present; otherwise **Par unknown**. Set par and score (large +/− targets).
 3. Hole advance opens **Pick a club**. Say or tap a club — that **marks GPS immediately** (start now; closes the prior shot’s end). On-screen: “Picking a club marks where you hit from.” No Confirm sheet. Top-3 **#1 suggested** is larger/highlighted; #2–3 are secondary.
 4. **Walk-away assist** (Pick a club only — shot pending, no club tap yet this lie): dwell ≥10 s inside 8 yd, then leave ≥20 yd for 2 consecutive fixes → auto-mark **#1** at the lie pin (not the cart). Badge **Suggested**. Toast: **“Marked 7i (suggested) · Change club.”** Soft dwell → Approximate + Suggested. Poor/none dwell never silent-marks. Already-marked lie / Drop-Penalty / Change club / no-GPS skip. Re-arm only after the next dwell. Club tap / Watch stay primary.

@@ -204,6 +204,11 @@ export function migrate(db: SQLiteDatabase): void {
       lng REAL,
       FOREIGN KEY (hole_id) REFERENCES holes(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY NOT NULL,
+      value TEXT NOT NULL
+    );
   `);
 
   ensureColumn(db, 'holes', 'green_lat', 'REAL');

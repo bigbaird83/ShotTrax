@@ -18,6 +18,7 @@ import {
   deleteRound,
   finishRound,
   getActiveRound,
+  getCourseDistanceUnit,
   listHoles,
   listRounds,
   startRound,
@@ -67,6 +68,7 @@ export default function HomeScreen() {
   const refreshRef = useRef<(() => Promise<void>) | null>(null);
   const rounds = useMemo(() => listRounds(db), [db, revision]);
   const active = useMemo(() => getActiveRound(db), [db, revision]);
+  const courseDistanceUnit = useMemo(() => getCourseDistanceUnit(db), [db, revision]);
 
   const applyPickedCourse = async (course: CourseSummary, holeCount: 9 | 18) => {
     const layout = await loadLayout(course, pickedDetail, pickedTee);
@@ -193,6 +195,7 @@ export default function HomeScreen() {
           selected={picked}
           selectedTee={pickedTee}
           attachMode={Boolean(active)}
+          courseDistanceUnit={courseDistanceUnit}
           onSelect={onSelectCourse}
           onRefreshReady={(fn) => {
             refreshRef.current = fn;
