@@ -1,15 +1,20 @@
-/** Watch Connectivity club-pick messages. Only two types this cut: clubList and clubPick.
- * Phone owns undo, averages, Drop/Penalty, Hole done / putts. Ranking/seeds/avgs stay on phone.
+/** Watch Connectivity: clubList + clubPick, plus puttSheet + puttPick for hole finish,
+ * and clubNav (Back / Home — never a mark).
+ * Phone owns undo, averages, Drop/Penalty. Ranking/seeds/avgs stay on phone.
  * Watch UI shows top-3 Suggested by default; All clubs reveals the bag payload.
+ * Putter opens the putt sheet (buckets + Made it) — never a GPS mark.
  * Stretch: prefer a fresh Watch GPS fix; else phone GPS. Same acceptFix bands.
- * Watch never marks alone, never silent-forces, no motion/mic.
+ * Watch never marks alone, never silent-forces, no motion/mic, no auto-detect putts.
  */
+
+import { isPutterClubId } from './defaultBag';
+import { isPuttLengthId, PUTT_LENGTHS, type PuttLengthId } from './putts';
 
 export type ClubId = string;
 
 export type YardsQuality = 'good' | 'soft' | 'none';
 
-export const WATCH_MESSAGE_TYPES = ['clubList', 'clubPick'] as const;
+export const WATCH_MESSAGE_TYPES = ['clubList', 'clubPick', 'puttSheet', 'puttPick', 'clubNav'] as const;
 export type WatchMessageType = (typeof WATCH_MESSAGE_TYPES)[number];
 
 /** Phone → Watch. Push on hole change / fix quality change / bag rank change.
@@ -48,6 +53,13 @@ export type ClubPickMessage = {
   lat?: number;
   lng?: number;
   accuracyM?: number | null;
+};
+
+/** Watch → Phone Back / Home. Never a club tap and never a mark. */
+export type ClubNavMessage = {
+  type: 'clubNav';
+  action: 'back' | 'home';
+  at: string;
 };
 
 export type ClubPickReply = {
@@ -114,6 +126,23 @@ export function parseClubList(raw: unknown): ClubListMessage | null {
   return msg;
 }
 
+export function parseClubNav(raw: unknown): ClubNavMessage | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as Record<string, unknown>;
+  if (row.type !== 'clubNav') return null;
+  if (row.action !== 'back' && row.action !== 'home') return null;
+  if (typeof row.at !== 'string' || !isIso8601(row.at)) return null;
+  return { type: 'clubNav', action: row.action, at: row.at };
+}
+
+export function clubNavPayload(args: { action: 'back' | 'home'; at?: string }): ClubNavMessage {
+  return {
+    type: 'clubNav',
+    action: args.action,
+    at: args.at ?? new Date().toISOString(),
+  };
+}
+
 export function parseClubPick(raw: unknown): ClubPickMessage | null {
   if (!raw || typeof raw !== 'object') return null;
   const row = raw as Record<string, unknown>;
@@ -133,6 +162,61 @@ export function parseClubPick(raw: unknown): ClubPickMessage | null {
     pick.accuracyM = row.accuracyM;
   }
   return pick;
+}
+
+/**
+ * Signal Lab: Back / Home never mark. Putter never marks GPS.
+ * Only a real club tap / Watch club tap / Same club runs acceptFix.
+ */
+export type WatchInboundIntent =
+  | {
+      kind: 'leave';
+      action: 'back' | 'home';
+      runsAcceptFix: false;
+      savesGps: false;
+      closesPendingShot: false;
+    }
+  | {
+      kind: 'putter';
+      clubId: string;
+      runsAcceptFix: false;
+      savesGps: false;
+      closesPendingShot: false;
+    }
+  | {
+      kind: 'club';
+      pick: ClubPickMessage;
+      runsAcceptFix: true;
+    };
+
+export function parseWatchInboundIntent(raw: unknown): WatchInboundIntent | null {
+  const nav = parseClubNav(raw);
+  if (nav) {
+    return {
+      kind: 'leave',
+      action: nav.action,
+      runsAcceptFix: false,
+      savesGps: false,
+      closesPendingShot: false,
+    };
+  }
+  const pick = parseClubPick(raw);
+  if (!pick) return null;
+  if (isPutterClubId(pick.clubId)) {
+    return {
+      kind: 'putter',
+      clubId: pick.clubId,
+      runsAcceptFix: false,
+      savesGps: false,
+      closesPendingShot: false,
+    };
+  }
+  return { kind: 'club', pick, runsAcceptFix: true };
+}
+
+/** Only a club tap / Watch tap / Same club runs acceptFix. Back/Home never do. */
+export function watchPayloadRunsAcceptFix(raw: unknown): boolean {
+  return parseWatchInboundIntent(raw)?.runsAcceptFix === true;
 }
 
 export function clubListPayload(args: {
@@ -187,3 +271,102 @@ export function formatClubMarkedFeedback(shortName: string): string {
 
 export const PHONE_UNAVAILABLE = 'Phone unavailable';
 export const CHECK_PHONE = 'Check phone';
+export const PUTTS_ON_WATCH = 'Putts';
+export const MADE_IT_FEEDBACK = 'Made it ✓';
+
+export const PUTT_PICK_ACTIONS = ['add', 'undo', 'made'] as const;
+export type PuttPickAction = (typeof PUTT_PICK_ACTIONS)[number];
+
+/** Phone → Watch. Putter selected: buckets + Made it. Never a GPS mark. */
+export type PuttSheetMessage = {
+  type: 'puttSheet';
+  open: boolean;
+  holeNumber: number;
+  lengths: PuttLengthId[];
+  labels: Record<PuttLengthId, string>;
+  canAdd: boolean;
+  canMake: boolean;
+};
+
+/** Watch → Phone. Add a bucket, undo last, or Made it (finishes the hole). */
+export type PuttPickMessage = {
+  type: 'puttPick';
+  action: PuttPickAction;
+  at: string;
+  lengthId?: PuttLengthId;
+};
+
+export type PuttPickReply = {
+  ok: boolean;
+  feedback: string;
+};
+
+export function puttLengthLabels(): Record<PuttLengthId, string> {
+  const labels = {} as Record<PuttLengthId, string>;
+  for (const row of PUTT_LENGTHS) labels[row.id] = row.label;
+  return labels;
+}
+
+export function puttSheetPayload(args: {
+  open: boolean;
+  holeNumber: number;
+  lengths: PuttLengthId[];
+}): PuttSheetMessage {
+  const lengths = args.lengths.filter(isPuttLengthId).slice(0, 5);
+  return {
+    type: 'puttSheet',
+    open: args.open,
+    holeNumber: args.holeNumber,
+    lengths,
+    labels: puttLengthLabels(),
+    canAdd: lengths.length < 5,
+    canMake: lengths.length > 0,
+  };
+}
+
+export function parsePuttSheet(raw: unknown): PuttSheetMessage | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as Record<string, unknown>;
+  if (row.type !== 'puttSheet') return null;
+  if (typeof row.open !== 'boolean') return null;
+  const holeNumber =
+    typeof row.holeNumber === 'number' && Number.isFinite(row.holeNumber)
+      ? Math.round(row.holeNumber)
+      : NaN;
+  if (!Number.isFinite(holeNumber) || holeNumber < 1) return null;
+  if (!Array.isArray(row.lengths) || !row.lengths.every((id) => typeof id === 'string' && isPuttLengthId(id))) {
+    return null;
+  }
+  return puttSheetPayload({
+    open: row.open,
+    holeNumber,
+    lengths: row.lengths as PuttLengthId[],
+  });
+}
+
+export function puttPickPayload(args: {
+  action: PuttPickAction;
+  at?: string;
+  lengthId?: PuttLengthId;
+}): PuttPickMessage {
+  const msg: PuttPickMessage = {
+    type: 'puttPick',
+    action: args.action,
+    at: args.at ?? new Date().toISOString(),
+  };
+  if (args.lengthId && isPuttLengthId(args.lengthId)) msg.lengthId = args.lengthId;
+  return msg;
+}
+
+export function parsePuttPick(raw: unknown): PuttPickMessage | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as Record<string, unknown>;
+  if (row.type !== 'puttPick') return null;
+  if (row.action !== 'add' && row.action !== 'undo' && row.action !== 'made') return null;
+  if (typeof row.at !== 'string' || !isIso8601(row.at)) return null;
+  if (row.action === 'add') {
+    if (typeof row.lengthId !== 'string' || !isPuttLengthId(row.lengthId)) return null;
+    return { type: 'puttPick', action: 'add', at: row.at, lengthId: row.lengthId };
+  }
+  return { type: 'puttPick', action: row.action, at: row.at };
+}

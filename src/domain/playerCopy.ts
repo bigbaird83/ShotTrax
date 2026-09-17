@@ -2,6 +2,8 @@
 
 export const COPY = {
   homeLede: 'Find a course nearby, pick your tee, start the round.',
+  home: 'Home',
+  back: 'Back',
   nearbyHint: 'Courses near you — pull to refresh.',
   nearbyEmpty: 'No courses near you.',
   nearbyUnavailable: 'Courses near you aren’t available. Type a course name to start.',
@@ -44,9 +46,24 @@ export const COPY = {
   endShot: 'End last shot',
   prevHole: 'Prev',
   nextHole: 'Next',
-  holeDone: 'Hole done',
+  previousHole: 'Previous hole',
+  menu: 'Menu',
+  settings: 'Settings',
+  courseDistance: 'Course distance',
+  courseDistanceSetting: 'Course distance: Miles / Kilometers',
+  miles: 'Miles',
+  kilometers: 'Kilometers',
+  madeIt: 'Made it',
   putts: 'Putts',
+  puttSheetLede: 'How long was the putt?',
+  addPutt: 'Add a putt',
+  undoPutt: 'Undo putt',
   forgotShot: 'Log a missed shot',
+  addShot: 'Add shot',
+  placed: 'Placed',
+  placeFromHint: 'Tap where you hit from.',
+  placeToHint: 'Tap where it landed.',
+  cancelPlace: 'Cancel',
   score: 'Score',
   shots: 'Shots',
   noShots: 'No shots yet.',
@@ -55,6 +72,12 @@ export const COPY = {
   didntCatchClub: 'Didn’t catch a club. Say it again or pick one.',
   suggested: 'Suggested',
   changeClub: 'Change club',
+  editShot: 'Edit shot',
+  moveFrom: 'Move from',
+  moveTo: 'Move to',
+  undoEdit: 'Undo edit',
+  editFromHint: 'Tap the new from pin.',
+  editToHint: 'Tap the new landing pin.',
   weakLocation: 'Location is weak. Mark anyway?',
   tooFar: 'That looks too far. Mark anyway?',
   markAnyway: 'Mark anyway',
@@ -67,8 +90,18 @@ export const COPY = {
   averagesLede: 'How far you hit each club — from marked shots.',
   noClosedShots: 'No marked shots yet',
   typicalCarry: 'Typical',
+  typicalCarryYards: 'Typical carry (yd)',
+  clearTypicalCarry: 'Clear typical carry',
   summaryHome: 'Home',
 } as const;
+
+export function finishPuttsChip(holeNumber: number): string {
+  return `Finish putts · Hole ${holeNumber}`;
+}
+
+export function finishShotChip(holeNumber: number): string {
+  return `Finish shot · Hole ${holeNumber}`;
+}
 
 export function markedSuggestedMessage(shortName: string): string {
   return `Marked ${shortName} (suggested) · Change club.`;

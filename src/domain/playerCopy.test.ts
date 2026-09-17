@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   COPY,
+  finishPuttsChip,
+  finishShotChip,
   formatHoleHeader,
   formatParLabel,
   formatSiLabel,
@@ -34,11 +36,37 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.approximate, 'Approximate');
   assert.equal(COPY.suggested, 'Suggested');
   assert.equal(COPY.changeClub, 'Change club');
+  assert.equal(COPY.editShot, 'Edit shot');
+  assert.equal(COPY.moveFrom, 'Move from');
+  assert.equal(COPY.moveTo, 'Move to');
+  assert.equal(COPY.undoEdit, 'Undo edit');
+  assert.equal(COPY.editFromHint, 'Tap the new from pin.');
+  assert.equal(COPY.editToHint, 'Tap the new landing pin.');
   assert.equal(COPY.bagLede, 'Your bag. Turn off what you don’t carry.');
   assert.equal(COPY.restoreBag, 'Restore stock bag');
   assert.equal(COPY.typicalCarry, 'Typical');
+  assert.equal(COPY.typicalCarryYards, 'Typical carry (yd)');
+  assert.equal(COPY.clearTypicalCarry, 'Clear typical carry');
   assert.equal(COPY.putts, 'Putts');
-  assert.equal(COPY.holeDone, 'Hole done');
+  assert.equal(COPY.madeIt, 'Made it');
+  assert.equal(COPY.puttSheetLede, 'How long was the putt?');
+  assert.equal(COPY.menu, 'Menu');
+  assert.equal(COPY.previousHole, 'Previous hole');
+  assert.equal(COPY.settings, 'Settings');
+  assert.equal(COPY.home, 'Home');
+  assert.equal(COPY.back, 'Back');
+  assert.equal(COPY.addShot, 'Add shot');
+  assert.equal(COPY.placed, 'Placed');
+  assert.equal(COPY.placeFromHint, 'Tap where you hit from.');
+  assert.equal(COPY.placeToHint, 'Tap where it landed.');
+  assert.equal(COPY.cancelPlace, 'Cancel');
+  assert.equal(COPY.nextHole, 'Next');
+  assert.equal(COPY.courseDistance, 'Course distance');
+  assert.equal(COPY.courseDistanceSetting, 'Course distance: Miles / Kilometers');
+  assert.equal(COPY.miles, 'Miles');
+  assert.equal(COPY.kilometers, 'Kilometers');
+  assert.equal(finishPuttsChip(4), 'Finish putts · Hole 4');
+  assert.equal(finishShotChip(2), 'Finish shot · Hole 2');
   assert.equal(markedSuggestedMessage('7i'), 'Marked 7i (suggested) · Change club.');
 });
 

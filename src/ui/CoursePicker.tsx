@@ -5,6 +5,7 @@ import { getCourseDataClient } from '@/src/course/client';
 import { formatTeeHoleYards, formatTeeMeta } from '@/src/course/layout';
 import type { CourseDetail, CourseSummary, TeeSet } from '@/src/course/types';
 import { COPY } from '@/src/domain/playerCopy';
+import { formatCourseDistance, type CourseDistanceUnit } from '@/src/domain/courseDistance';
 import { getCurrentFix } from '@/src/services/location';
 import { BigButton } from './BigButton';
 import { colors, tapTarget, type } from './theme';
@@ -22,17 +23,16 @@ type Props = {
   attachMode?: boolean;
   autoFind?: boolean;
   onRefreshReady?: (refresh: () => Promise<void>) => void;
+  courseDistanceUnit?: CourseDistanceUnit;
 };
 
-function formatDistance(meters: number | null): string | null {
-  if (meters == null || !Number.isFinite(meters) || meters < 0) return null;
-  if (meters < 950) return '< 1 km';
-  return `${(meters / 1000).toFixed(1)} km`;
+function formatDistance(meters: number | null, unit: CourseDistanceUnit): string | null {
+  return formatCourseDistance(meters, unit);
 }
 
-function placeLine(course: CourseSummary): string {
+function placeLine(course: CourseSummary, unit: CourseDistanceUnit): string {
   const place = [course.city, course.state].filter(Boolean).join(', ');
-  const dist = formatDistance(course.distanceMeters);
+  const dist = formatDistance(course.distanceMeters, unit);
   return [place || course.club || 'Course', dist].filter(Boolean).join(' · ');
 }
 
@@ -42,6 +42,7 @@ export function CoursePicker({
   onSelect,
   autoFind = true,
   onRefreshReady,
+  courseDistanceUnit = 'mi',
 }: Props) {
   const configured = isGolfCoursesApiConfigured();
   const [busy, setBusy] = useState(false);
@@ -111,7 +112,7 @@ export function CoursePicker({
       {selected ? (
         <View style={styles.selected}>
           <Text style={styles.selectedName}>{selected.name}</Text>
-          <Text style={styles.meta}>{placeLine(selected)}</Text>
+          <Text style={styles.meta}>{placeLine(selected, courseDistanceUnit)}</Text>
           {selectedTee ? (
             <>
               <Text style={styles.meta}>{formatTeeMeta(selectedTee)}</Text>
@@ -138,7 +139,7 @@ export function CoursePicker({
             onPress={() => void pickCourse(course)}
             style={[styles.row, selected?.id === course.id && styles.rowOn]}>
             <Text style={styles.rowTitle}>{course.name}</Text>
-            <Text style={styles.meta}>{placeLine(course)}</Text>
+            <Text style={styles.meta}>{placeLine(course, courseDistanceUnit)}</Text>
           </Pressable>
         ))}
         {teeBusy ? <Text style={styles.meta}>Loading tees…</Text> : null}

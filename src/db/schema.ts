@@ -1,11 +1,11 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { DEFAULT_BAG } from '../domain/defaultBag';
 
-function ensureColumn(db: SQLiteDatabase, table: string, column: string, ddl: string): void {
+function ensureColumn(db: SQLiteDatabase, table: string, column: string, ddl: string): boolean {
   const cols = db.getAllSync<{ name: string }>(`PRAGMA table_info(${table})`);
-  if (!cols.some((c) => c.name === column)) {
-    db.execSync(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
-  }
+  if (cols.some((c) => c.name === column)) return false;
+  db.execSync(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+  return true;
 }
 
 /**
@@ -134,7 +134,8 @@ export function migrate(db: SQLiteDatabase): void {
       short_name TEXT NOT NULL,
       loft_rank INTEGER NOT NULL,
       sort_order INTEGER NOT NULL,
-      enabled INTEGER NOT NULL DEFAULT 1
+      enabled INTEGER NOT NULL DEFAULT 1,
+      typical_carry_yards INTEGER
     );
 
     CREATE TABLE IF NOT EXISTS rounds (
@@ -204,6 +205,11 @@ export function migrate(db: SQLiteDatabase): void {
       lng REAL,
       FOREIGN KEY (hole_id) REFERENCES holes(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY NOT NULL,
+      value TEXT NOT NULL
+    );
   `);
 
   ensureColumn(db, 'holes', 'green_lat', 'REAL');
@@ -235,9 +241,17 @@ export function migrate(db: SQLiteDatabase): void {
   ensureColumn(db, 'shots', 'suggested', 'INTEGER NOT NULL DEFAULT 0');
   ensureColumn(db, 'holes', 'putts', 'INTEGER NOT NULL DEFAULT 0');
   ensureColumn(db, 'holes', 'putt_lengths', 'TEXT');
+  if (ensureColumn(db, 'holes', 'putts_done', 'INTEGER NOT NULL DEFAULT 0')) {
+    // Existing stepper putts from the prior cut already count as entered.
+    db.execSync('UPDATE holes SET putts_done = 1 WHERE IFNULL(putts, 0) > 0');
+  }
   migrateNoGpsSensingLock(db);
 
+  const addedTypicalCarry = ensureColumn(db, 'clubs', 'typical_carry_yards', 'INTEGER');
   ensureStockBag(db);
+  if (addedTypicalCarry) {
+    seedTypicalCarryYards(db);
+  }
 }
 
 /** First-run seed plus insert any stock clubs missing from an older bag (2i / 3i / 4i / 52° / 56° / 60°). */
@@ -246,7 +260,7 @@ function ensureStockBag(db: SQLiteDatabase): void {
     db.getAllSync<{ id: string }>('SELECT id FROM clubs').map((row) => row.id),
   );
   const insert = db.prepareSync(
-    'INSERT INTO clubs (id, name, short_name, loft_rank, sort_order, enabled) VALUES (?, ?, ?, ?, ?, 1)',
+    'INSERT INTO clubs (id, name, short_name, loft_rank, sort_order, enabled, typical_carry_yards) VALUES (?, ?, ?, ?, ?, 1, ?)',
   );
   try {
     for (const club of DEFAULT_BAG) {
@@ -256,10 +270,27 @@ function ensureStockBag(db: SQLiteDatabase): void {
           [club.name, club.shortName, club.loftRank, club.sortOrder, club.id],
         );
       } else {
-        insert.executeSync([club.id, club.name, club.shortName, club.loftRank, club.sortOrder]);
+        insert.executeSync([
+          club.id,
+          club.name,
+          club.shortName,
+          club.loftRank,
+          club.sortOrder,
+          club.typicalCarryYards,
+        ]);
       }
     }
   } finally {
     insert.finalizeSync();
+  }
+}
+
+/** One-time backfill when the column is added. Later clears stay cleared. */
+function seedTypicalCarryYards(db: SQLiteDatabase): void {
+  for (const club of DEFAULT_BAG) {
+    db.runSync(
+      'UPDATE clubs SET typical_carry_yards = ? WHERE id = ? AND typical_carry_yards IS NULL',
+      [club.typicalCarryYards, club.id],
+    );
   }
 }

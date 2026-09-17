@@ -56,7 +56,9 @@ export default function RoundSummaryScreen() {
       {holes.map((hole) => {
         const shots = listShotsForHole(db, hole.id);
         const penalties = listPenaltiesForHole(db, hole.id);
-        const closedGps = shots.filter((s) => s.source === 'gps' && s.distanceYards != null);
+        const closedGps = shots.filter(
+          (s) => (s.source === 'gps' || s.source === 'placed') && s.distanceYards != null,
+        );
         const yards = closedGps.reduce((sum, h) => sum + (h.distanceYards ?? 0), 0);
         const penStrokes = totalPenaltyStrokes(penalties);
         const mismatch = reconcileHoleScore({

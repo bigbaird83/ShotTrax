@@ -12,6 +12,13 @@ export function QualityBadge({
   open?: boolean;
   source?: ShotSource;
 }) {
+  if (source === 'placed') {
+    return (
+      <View style={[styles.badge, styles.placed]}>
+        <Text style={styles.text}>{COPY.placed}</Text>
+      </View>
+    );
+  }
   if (source === 'no_gps' || quality === 'none') {
     return (
       <View style={[styles.badge, styles.manual]}>
@@ -64,5 +71,6 @@ const styles = StyleSheet.create({
   },
   open: { backgroundColor: colors.line },
   manual: { backgroundColor: '#3A4A5C' },
+  placed: { backgroundColor: '#1C3A24' },
   soft: { backgroundColor: '#5A4A22' },
 });

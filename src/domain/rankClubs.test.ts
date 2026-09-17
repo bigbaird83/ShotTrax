@@ -2,13 +2,16 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DEFAULT_BAG } from './defaultBag';
 import { haversineYards, roundYards } from './haversine';
+import type { Club } from './types';
 import {
   clubToRankInput,
   lastClosedShotYards,
   MIN_CLOSED_SHOTS_FOR_RANK,
+  rankCatchUpClubs,
   rankDistanceYards,
   rankTopClubs,
   resolveDistanceTarget,
+  shotYardsDistanceTarget,
   type RankClubInput,
 } from './rankClubs';
 
@@ -98,12 +101,116 @@ test('lastClosedShotYards skips no_gps / none even if yards were present', () =>
   assert.equal(yards, 240);
 });
 
+test('lastClosedShotYards uses placed yards (no GPS quality) and still skips putter', () => {
+  const yards = lastClosedShotYards([
+    { endedAt: 'a', distanceYards: 155, source: 'gps', fixQuality: 'good', clubId: 'club_7i' },
+    { endedAt: 'b', distanceYards: 168, source: 'placed', fixQuality: null, clubId: 'club_6i' },
+  ]);
+  assert.equal(yards, 168);
+});
+
 test('lastClosedShotYards skips putter shots — they are not a club sample', () => {
   const yards = lastClosedShotYards([
     { endedAt: 'a', distanceYards: 155, source: 'gps', fixQuality: 'good', clubId: 'club_7i' },
     { endedAt: 'b', distanceYards: 8, source: 'gps', fixQuality: 'good', clubId: 'club_putter' },
   ]);
   assert.equal(yards, 155);
+});
+
+test('catch-up club rank uses that shot’s yards, not yards-to-green', () => {
+  const shotTarget = shotYardsDistanceTarget(148);
+  const liveTarget = resolveDistanceTarget({
+    toGreen: { yards: 260, quality: 'good' },
+    lastClosedYards: 148,
+  });
+  assert.deepEqual(shotTarget, { source: 'shot_yards', dYards: 148 });
+  assert.equal(liveTarget?.source, 'yards_to_green');
+  assert.equal(liveTarget?.dYards, 260);
+  assert.deepEqual(
+    rankCatchUpClubs(bag, 148).map((c) => c.id),
+    ['7i', '8i', '6i'],
+  );
+  assert.deepEqual(
+    rankTopClubs(bag, liveTarget).map((c) => c.id),
+    ['Dr', '5i', '6i'],
+  );
+  assert.deepEqual(rankCatchUpClubs(bag, null), []);
+  assert.equal(shotYardsDistanceTarget(null), null);
+  assert.equal(shotYardsDistanceTarget(Number.NaN), null);
+});
+
+test('catch-up top-3 uses seed until ≥5 live shots; putter stays out', () => {
+  const ranked = rankCatchUpClubs(
+    [
+      club({
+        id: 'club_putter',
+        name: 'Putter',
+        shortName: 'Pt',
+        loftRank: 16,
+        avgYards: 8,
+        count: 20,
+        typicalCarryYards: 8,
+      }),
+      club({
+        id: 'club_gw',
+        name: '52°',
+        shortName: '52°',
+        loftRank: 13,
+        avgYards: 0,
+        count: 0,
+        typicalCarryYards: 105,
+      }),
+      club({
+        id: 'club_sw',
+        name: '56°',
+        shortName: '56°',
+        loftRank: 14,
+        avgYards: 0,
+        count: 2,
+        typicalCarryYards: 90,
+      }),
+      club({
+        id: 'club_7i',
+        name: '7 Iron',
+        shortName: '7i',
+        loftRank: 9,
+        avgYards: 150,
+        count: 8,
+      }),
+    ],
+    92,
+  );
+  assert.deepEqual(
+    ranked.map((c) => c.id),
+    ['club_sw', 'club_gw', 'club_7i'],
+  );
+  assert.ok(!ranked.some((c) => c.id === 'club_putter'));
+
+  const live = rankCatchUpClubs(
+    [
+      club({
+        id: 'club_gw',
+        name: '52°',
+        shortName: '52°',
+        loftRank: 13,
+        avgYards: 118,
+        count: 5,
+        typicalCarryYards: 105,
+      }),
+      club({
+        id: 'club_sw',
+        name: '56°',
+        shortName: '56°',
+        loftRank: 14,
+        avgYards: 0,
+        count: 2,
+        typicalCarryYards: 90,
+      }),
+    ],
+    118,
+  );
+  assert.equal(live[0]?.id, 'club_gw');
+  assert.equal(live[0]?.deltaYards, 0);
 });
 
 test('top-3 are the lowest |avgYards − D|; clubs with <5 closed shots are excluded', () => {
@@ -181,7 +288,10 @@ test('clubToRankInput attaches typical-carry seeds; putter has none and is not r
   const putter = DEFAULT_BAG.find((c) => c.id === 'club_putter');
   assert.ok(wedge && putter);
   const wedgeIn = clubToRankInput({ ...wedge, enabled: true }, { avgYards: 0, count: 0 });
-  const putterIn = clubToRankInput({ ...putter, enabled: true }, { avgYards: 8, count: 12 });
+  const putterIn = clubToRankInput(
+    { ...putter, enabled: true, typicalCarryYards: 8 },
+    { avgYards: 8, count: 12 },
+  );
   assert.equal(wedgeIn.typicalCarryYards, 105);
   assert.equal(rankDistanceYards(wedgeIn), 105);
   assert.equal(putterIn.typicalCarryYards, null);
@@ -207,6 +317,29 @@ test('putter is never in Suggested top-3 even with a live average', () => {
   );
   assert.ok(!ranked.some((c) => c.id === 'club_putter'));
   assert.ok(ranked.length > 0);
+});
+
+test('bag-edited typical carry is the seed until 5 GPS shots; live avg then replaces it with no blend', () => {
+  const seven: Club = {
+    id: 'club_7i',
+    name: '7 Iron',
+    shortName: '7i',
+    loftRank: 9,
+    sortOrder: 9,
+    enabled: true,
+    typicalCarryYards: 145,
+  };
+  const seeded = clubToRankInput(seven, { avgYards: 160, count: 4 });
+  assert.equal(seeded.typicalCarryYards, 145);
+  assert.equal(rankDistanceYards(seeded), 145);
+
+  const live = clubToRankInput(seven, { avgYards: 160, count: 5 });
+  assert.equal(rankDistanceYards(live), 160);
+  assert.notEqual(rankDistanceYards(live), (145 + 160) / 2);
+
+  const cleared = clubToRankInput({ ...seven, typicalCarryYards: null }, { avgYards: 150, count: 3 });
+  assert.equal(cleared.typicalCarryYards, null);
+  assert.equal(rankDistanceYards(cleared), null);
 });
 
 test('typical-carry seed ranks a stock club before 5 live shots; live avg takes over after', () => {

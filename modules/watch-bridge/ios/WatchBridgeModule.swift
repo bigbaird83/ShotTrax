@@ -10,7 +10,7 @@ public class WatchBridgeModule: Module {
   public func definition() -> ModuleDefinition {
     Name("WatchBridge")
 
-    Events("onClubPick", "onReachabilityChange")
+    Events("onClubPick", "onPuttPick", "onReachabilityChange")
 
     OnCreate {
       PhoneWatchSession.shared.attach(self)
@@ -27,6 +27,10 @@ public class WatchBridgeModule: Module {
 
     AsyncFunction("pushClubListJson") { (json: String) in
       PhoneWatchSession.shared.pushClubListJson(json)
+    }
+
+    AsyncFunction("pushWatchMessageJson") { (json: String) in
+      PhoneWatchSession.shared.pushWatchMessageJson(json)
     }
 
     AsyncFunction("replyClubPick") { (token: String, json: String) in
@@ -62,6 +66,20 @@ final class PhoneWatchSession: NSObject, WCSessionDelegate {
     guard WCSession.isSupported() else { return }
     let session = WCSession.default
     try? session.updateApplicationContext(safe)
+    if session.isReachable {
+      session.sendMessage(safe, replyHandler: nil, errorHandler: nil)
+    }
+  }
+
+  /// Putt sheet (and other live UI) — send only. Do not overwrite the clubList context.
+  func pushWatchMessageJson(_ json: String) {
+    guard let data = json.data(using: .utf8),
+          let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+      return
+    }
+    let safe = plistSafe(obj)
+    guard WCSession.isSupported() else { return }
+    let session = WCSession.default
     if session.isReachable {
       session.sendMessage(safe, replyHandler: nil, errorHandler: nil)
     }
@@ -111,8 +129,16 @@ final class PhoneWatchSession: NSObject, WCSessionDelegate {
     }
   }
 
-  private func emitClubPick(_ message: [String: Any], replyHandler: (([String: Any]) -> Void)?) {
-    guard (message["type"] as? String) == "clubPick" else { return }
+  private func emitWatchMessage(_ message: [String: Any], replyHandler: (([String: Any]) -> Void)?) {
+    let type = message["type"] as? String
+    let event: String
+    if type == "clubPick" || type == "clubNav" {
+      event = "onClubPick"
+    } else if type == "puttPick" {
+      event = "onPuttPick"
+    } else {
+      return
+    }
     let token = UUID().uuidString
     if let replyHandler {
       lock.lock()
@@ -124,9 +150,9 @@ final class PhoneWatchSession: NSObject, WCSessionDelegate {
        let text = String(data: data, encoding: .utf8) {
       json = text
     } else {
-      json = "{\"type\":\"clubPick\",\"clubId\":\"\",\"at\":\"\"}"
+      json = "{\"type\":\"\(type ?? "")\"}"
     }
-    module?.sendEvent("onClubPick", [
+    module?.sendEvent(event, [
       "token": token,
       "json": json,
     ])
@@ -167,15 +193,15 @@ final class PhoneWatchSession: NSObject, WCSessionDelegate {
   }
 
   func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
-    emitClubPick(message, replyHandler: nil)
+    emitWatchMessage(message, replyHandler: nil)
   }
 
   func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
-    emitClubPick(message, replyHandler: replyHandler)
+    emitWatchMessage(message, replyHandler: replyHandler)
   }
 
   func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
-    emitClubPick(userInfo, replyHandler: nil)
+    emitWatchMessage(userInfo, replyHandler: nil)
   }
 }
 

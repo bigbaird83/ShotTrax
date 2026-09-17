@@ -21,6 +21,17 @@ test('good, soft, and forced shots all stay in the average', () => {
   assert.equal(a.includesForced, true);
 });
 
+test('placed samples count with no GPS quality badges', () => {
+  const a = averageWithBadges([
+    { yards: 150, fixQuality: 'good' },
+    { yards: 170, fixQuality: null },
+  ]);
+  assert.equal(a.count, 2);
+  assert.equal(a.avgYards, 160);
+  assert.equal(a.includesSoft, false);
+  assert.equal(a.includesForced, false);
+});
+
 test('soft-only set still averages and badges soft, not forced', () => {
   const a = averageWithBadges([
     { yards: 100, fixQuality: 'soft' },

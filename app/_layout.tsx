@@ -43,6 +43,7 @@ export default function RootLayout() {
             }}>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="round/[id]" options={{ headerShown: false }} />
+            <Stack.Screen name="settings" options={{ title: 'Settings' }} />
           </Stack>
         </ThemeProvider>
       </DbProvider>

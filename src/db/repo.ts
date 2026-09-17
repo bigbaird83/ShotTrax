@@ -4,12 +4,18 @@ import {
   seedHoleFromCourse,
   type CourseLayoutSeed,
 } from '../course/layout';
-import { DEFAULT_BAG, isPutterClubId, typicalCarryForClub } from '../domain/defaultBag';
+import { DEFAULT_BAG, isPutterClubId, typicalCarrySeedForClub } from '../domain/defaultBag';
+import {
+  COURSE_DISTANCE_SETTING_KEY,
+  parseCourseDistanceUnit,
+  type CourseDistanceUnit,
+} from '../domain/courseDistance';
 import { averageWithBadges, type ClubAverage } from '../domain/averages';
 import { isValidLatLng } from '../domain/latLng';
 import { clampPenaltyStrokes, scoreAfterPenalty } from '../domain/penalty';
-import { clampPutts, parsePuttLengths, serializePuttLengths, type PuttLengthId } from '../domain/putts';
-import { includeInDistanceAverages, planNoGpsShot } from '../domain/shotSource';
+import { clampPutts, planMadeIt, parsePuttLengths, serializePuttLengths, type PuttLengthId } from '../domain/putts';
+import type { ShotEditSnapshot } from '../domain/shotEdit';
+import { includeInDistanceAverages, planNoGpsShot, planPlacedShot } from '../domain/shotSource';
 import { planUndoLastShot } from '../domain/undoLastShot';
 import type {
   Club,
@@ -37,6 +43,7 @@ type ClubRow = {
   loft_rank: number;
   sort_order: number;
   enabled: number;
+  typical_carry_yards: number | null;
 };
 
 type RoundRow = {
@@ -74,6 +81,7 @@ type HoleRow = {
   green_depth_yards: number | null;
   putts: number | null;
   putt_lengths: string | null;
+  putts_done: number | null;
 };
 
 type ShotRow = {
@@ -119,6 +127,7 @@ function mapClub(row: ClubRow): Club {
     loftRank: row.loft_rank,
     sortOrder: row.sort_order,
     enabled: row.enabled === 1,
+    typicalCarryYards: isPutterClubId(row.id) ? null : (row.typical_carry_yards ?? null),
   };
 }
 
@@ -170,14 +179,18 @@ function mapHole(row: HoleRow): Hole {
     greenDepthYards: row.green_depth_yards ?? null,
     putts: clampPutts(row.putts ?? 0),
     puttLengths: parsePuttLengths(row.putt_lengths),
+    puttsDone: (row.putts_done ?? 0) === 1,
   };
 }
 
 function mapSource(value: string | null): ShotSource {
-  return value === 'no_gps' ? 'no_gps' : 'gps';
+  if (value === 'no_gps') return 'no_gps';
+  if (value === 'placed') return 'placed';
+  return 'gps';
 }
 
 function mapFixQuality(value: string | null, source: ShotSource): ShotFixQuality | null {
+  if (source === 'placed') return null;
   if (source === 'no_gps' || value === 'none') return 'none';
   if (value === 'good' || value === 'soft' || value === 'forced') return value;
   return value as FixQuality | null;
@@ -239,7 +252,12 @@ export function setClubEnabled(db: SQLiteDatabase, id: string, enabled: boolean)
   db.runSync('UPDATE clubs SET enabled = ? WHERE id = ?', [enabled ? 1 : 0, id]);
 }
 
-export function addClub(db: SQLiteDatabase, name: string, shortName: string): Club {
+export function addClub(
+  db: SQLiteDatabase,
+  name: string,
+  shortName: string,
+  typicalCarryYards: number | null = null,
+): Club {
   const max = db.getFirstSync<{ n: number }>('SELECT COALESCE(MAX(sort_order), -1) AS n FROM clubs');
   const sortOrder = (max?.n ?? -1) + 1;
   const club: Club = {
@@ -249,10 +267,11 @@ export function addClub(db: SQLiteDatabase, name: string, shortName: string): Cl
     loftRank: sortOrder,
     sortOrder,
     enabled: true,
+    typicalCarryYards,
   };
   db.runSync(
-    'INSERT INTO clubs (id, name, short_name, loft_rank, sort_order, enabled) VALUES (?, ?, ?, ?, ?, 1)',
-    [club.id, club.name, club.shortName, club.loftRank, club.sortOrder],
+    'INSERT INTO clubs (id, name, short_name, loft_rank, sort_order, enabled, typical_carry_yards) VALUES (?, ?, ?, ?, ?, 1, ?)',
+    [club.id, club.name, club.shortName, club.loftRank, club.sortOrder, club.typicalCarryYards],
   );
   return club;
 }
@@ -262,10 +281,30 @@ export function updateClub(
   id: string,
   name: string,
   shortName: string,
+  typicalCarryYards?: number | null,
 ): void {
-  db.runSync('UPDATE clubs SET name = ?, short_name = ? WHERE id = ?', [
-    name.trim(),
-    shortName.trim() || name.trim().slice(0, 3),
+  const trimmedName = name.trim();
+  const trimmedShort = shortName.trim() || trimmedName.slice(0, 3);
+  if (isPutterClubId(id)) {
+    db.runSync('UPDATE clubs SET name = ?, short_name = ?, typical_carry_yards = NULL WHERE id = ?', [
+      trimmedName,
+      trimmedShort,
+      id,
+    ]);
+    return;
+  }
+  if (typicalCarryYards === undefined) {
+    db.runSync('UPDATE clubs SET name = ?, short_name = ? WHERE id = ?', [
+      trimmedName,
+      trimmedShort,
+      id,
+    ]);
+    return;
+  }
+  db.runSync('UPDATE clubs SET name = ?, short_name = ?, typical_carry_yards = ? WHERE id = ?', [
+    trimmedName,
+    trimmedShort,
+    typicalCarryYards,
     id,
   ]);
 }
@@ -286,17 +325,24 @@ export function deleteClub(db: SQLiteDatabase, id: string): 'deleted' | 'disable
 export function restoreDefaultBag(db: SQLiteDatabase): void {
   const existing = new Set(listClubs(db).map((club) => club.id));
   const insert = db.prepareSync(
-    'INSERT INTO clubs (id, name, short_name, loft_rank, sort_order, enabled) VALUES (?, ?, ?, ?, ?, 1)',
+    'INSERT INTO clubs (id, name, short_name, loft_rank, sort_order, enabled, typical_carry_yards) VALUES (?, ?, ?, ?, ?, 1, ?)',
   );
   try {
     for (const club of DEFAULT_BAG) {
       if (existing.has(club.id)) {
         db.runSync(
-          'UPDATE clubs SET name = ?, short_name = ?, loft_rank = ?, sort_order = ?, enabled = 1 WHERE id = ?',
-          [club.name, club.shortName, club.loftRank, club.sortOrder, club.id],
+          'UPDATE clubs SET name = ?, short_name = ?, loft_rank = ?, sort_order = ?, enabled = 1, typical_carry_yards = ? WHERE id = ?',
+          [club.name, club.shortName, club.loftRank, club.sortOrder, club.typicalCarryYards, club.id],
         );
       } else {
-        insert.executeSync([club.id, club.name, club.shortName, club.loftRank, club.sortOrder]);
+        insert.executeSync([
+          club.id,
+          club.name,
+          club.shortName,
+          club.loftRank,
+          club.sortOrder,
+          club.typicalCarryYards,
+        ]);
       }
     }
   } finally {
@@ -511,12 +557,34 @@ export function updateHolePutts(
   holeId: string,
   putts: number,
   lengths: PuttLengthId[],
+  puttsDone = false,
 ): void {
   const next = clampPutts(putts);
-  db.runSync('UPDATE holes SET putts = ?, putt_lengths = ? WHERE id = ?', [
+  db.runSync('UPDATE holes SET putts = ?, putt_lengths = ?, putts_done = ? WHERE id = ?', [
     next,
     serializePuttLengths(lengths.slice(0, next)),
+    puttsDone ? 1 : 0,
     holeId,
+  ]);
+}
+
+/** Made it: persist user-chosen buckets and mark putts entered. Walking off the green never calls this. */
+export function finishHolePutts(
+  db: SQLiteDatabase,
+  holeId: string,
+  putts: number,
+  lengths: PuttLengthId[],
+): void {
+  const planned = planMadeIt({ putts, lengths });
+  if (!planned.ok) return;
+  updateHolePutts(db, holeId, planned.putts, planned.lengths, true);
+}
+
+/** Close an open GPS shot without an end pin — never invents coordinates. */
+export function sealOpenShotWithoutGps(db: SQLiteDatabase, shotId: string): void {
+  db.runSync('UPDATE shots SET ended_at = COALESCE(ended_at, ?) WHERE id = ?', [
+    new Date().toISOString(),
+    shotId,
   ]);
 }
 
@@ -539,6 +607,11 @@ export function listShotsForHole(db: SQLiteDatabase, holeId: string): Shot[] {
   return db
     .getAllSync<ShotRow>('SELECT * FROM shots WHERE hole_id = ? ORDER BY seq ASC', [holeId])
     .map(mapShot);
+}
+
+export function getShot(db: SQLiteDatabase, shotId: string): Shot | null {
+  const row = db.getFirstSync<ShotRow>('SELECT * FROM shots WHERE id = ?', [shotId]);
+  return row ? mapShot(row) : null;
 }
 
 export function getOpenShotForHole(db: SQLiteDatabase, holeId: string): OpenShot | null {
@@ -611,6 +684,70 @@ export function insertOpenShot(
  */
 export function updateShotClub(db: SQLiteDatabase, shotId: string, clubId: string): void {
   db.runSync('UPDATE shots SET club_id = ?, suggested = 0 WHERE id = ?', [clubId, shotId]);
+}
+
+/** Move from/to pins: store as Placed, haversine yards, no GPS quality. Never acceptFix. */
+export function applyShotPlacement(
+  db: SQLiteDatabase,
+  shotId: string,
+  from: { lat: number; lng: number },
+  to: { lat: number; lng: number },
+): boolean {
+  const plan = planPlacedShot(from, to);
+  if (!plan.ok) return false;
+  const now = new Date().toISOString();
+  db.runSync(
+    `UPDATE shots SET
+      start_lat = ?, start_lng = ?, start_accuracy_m = NULL, start_fix_quality = NULL,
+      end_lat = ?, end_lng = ?, end_accuracy_m = NULL, end_fix_quality = NULL,
+      distance_yards = ?, typed_yards = NULL, fix_quality = NULL,
+      impossible_jump = ?, ended_at = COALESCE(ended_at, ?), source = ?, suggested = 0
+     WHERE id = ?`,
+    [
+      plan.startLat,
+      plan.startLng,
+      plan.endLat,
+      plan.endLng,
+      plan.distanceYards,
+      plan.impossibleJump ? 1 : 0,
+      now,
+      plan.source,
+      shotId,
+    ],
+  );
+  return true;
+}
+
+/** Restore a shot after a wrong edit. Writes the snapshot back — never invents GPS. */
+export function restoreShotSnapshot(db: SQLiteDatabase, snap: ShotEditSnapshot): void {
+  db.runSync(
+    `UPDATE shots SET
+      club_id = ?,
+      start_lat = ?, start_lng = ?, start_accuracy_m = ?, start_fix_quality = ?,
+      end_lat = ?, end_lng = ?, end_accuracy_m = ?, end_fix_quality = ?,
+      distance_yards = ?, typed_yards = ?, fix_quality = ?,
+      impossible_jump = ?, ended_at = ?, source = ?, suggested = ?
+     WHERE id = ?`,
+    [
+      snap.clubId,
+      snap.startLat,
+      snap.startLng,
+      snap.startAccuracyM,
+      snap.startFixQuality,
+      snap.endLat,
+      snap.endLng,
+      snap.endAccuracyM,
+      snap.endFixQuality,
+      snap.distanceYards,
+      snap.typedYards,
+      snap.fixQuality,
+      snap.impossibleJump ? 1 : 0,
+      snap.endedAt,
+      snap.source,
+      snap.suggested ? 1 : 0,
+      snap.id,
+    ],
+  );
 }
 
 export function reopenShot(db: SQLiteDatabase, shotId: string): void {
@@ -716,6 +853,47 @@ export function insertNoGpsShot(
   return id;
 }
 
+/** Catch-up Add shot: two player map points. Haversine yards immediately. Never acceptFix. */
+export function insertPlacedShot(
+  db: SQLiteDatabase,
+  args: {
+    holeId: string;
+    clubId: string;
+    seq: number;
+    from: { lat: number; lng: number };
+    to: { lat: number; lng: number };
+  },
+): string | null {
+  const plan = planPlacedShot(args.from, args.to);
+  if (!plan.ok) return null;
+  const id = newId();
+  const now = new Date().toISOString();
+  db.runSync(
+    `INSERT INTO shots (
+      id, hole_id, club_id, seq,
+      start_lat, start_lng, start_accuracy_m, start_fix_quality,
+      end_lat, end_lng, end_accuracy_m, end_fix_quality,
+      distance_yards, typed_yards, fix_quality, impossible_jump, started_at, ended_at, source
+    ) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, NULL, NULL, ?, NULL, NULL, ?, ?, ?, ?)`,
+    [
+      id,
+      args.holeId,
+      args.clubId,
+      args.seq,
+      plan.startLat,
+      plan.startLng,
+      plan.endLat,
+      plan.endLng,
+      plan.distanceYards,
+      plan.impossibleJump ? 1 : 0,
+      now,
+      now,
+      plan.source,
+    ],
+  );
+  return id;
+}
+
 export function listPenaltiesForHole(db: SQLiteDatabase, holeId: string): HolePenalty[] {
   return db
     .getAllSync<PenaltyRow>(
@@ -789,8 +967,10 @@ export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
     `SELECT club_id, distance_yards, fix_quality, source
      FROM shots
      WHERE distance_yards IS NOT NULL AND club_id IS NOT NULL
-       AND IFNULL(source, 'gps') = 'gps'
-       AND fix_quality IN ('good', 'soft', 'forced')`,
+       AND (
+         (IFNULL(source, 'gps') = 'gps' AND fix_quality IN ('good', 'soft', 'forced'))
+         OR IFNULL(source, 'gps') = 'placed'
+       )`,
   );
   return clubs.map((club) => {
     const forClub = shots
@@ -798,22 +978,30 @@ export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
         (s) =>
           s.club_id === club.id &&
           includeInDistanceAverages({
-            source: s.source === 'no_gps' ? 'no_gps' : 'gps',
+            source:
+              s.source === 'no_gps' ? 'no_gps' : s.source === 'placed' ? 'placed' : 'gps',
             distanceYards: s.distance_yards,
             clubId: s.club_id,
             fixQuality:
-              s.fix_quality === 'none'
-                ? 'none'
-                : s.fix_quality === 'soft' || s.fix_quality === 'forced' || s.fix_quality === 'good'
-                  ? s.fix_quality
-                  : 'good',
+              s.source === 'placed'
+                ? null
+                : s.fix_quality === 'none'
+                  ? 'none'
+                  : s.fix_quality === 'soft' || s.fix_quality === 'forced' || s.fix_quality === 'good'
+                    ? s.fix_quality
+                    : 'good',
           }),
       )
-      .map((s) => ({
-        yards: s.distance_yards,
-        fixQuality: s.fix_quality as FixQuality,
-      }));
-    return { club, typicalCarryYards: typicalCarryForClub(club.id), ...averageWithBadges(forClub) };
+      .map((s) => {
+        const quality: FixQuality | null =
+          s.source === 'placed'
+            ? null
+            : s.fix_quality === 'soft' || s.fix_quality === 'forced' || s.fix_quality === 'good'
+              ? s.fix_quality
+              : null;
+        return { yards: s.distance_yards, fixQuality: quality };
+      });
+    return { club, typicalCarryYards: typicalCarrySeedForClub(club), ...averageWithBadges(forClub) };
   });
 }
 
@@ -823,4 +1011,21 @@ export function getClubMap(db: SQLiteDatabase): Record<string, Club> {
     map[club.id] = club;
   }
   return map;
+}
+
+export function getSetting(db: SQLiteDatabase, key: string): string | null {
+  const row = db.getFirstSync<{ value: string }>('SELECT value FROM settings WHERE key = ?', [key]);
+  return row?.value ?? null;
+}
+
+export function setSetting(db: SQLiteDatabase, key: string, value: string): void {
+  db.runSync('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [key, value]);
+}
+
+export function getCourseDistanceUnit(db: SQLiteDatabase): CourseDistanceUnit {
+  return parseCourseDistanceUnit(getSetting(db, COURSE_DISTANCE_SETTING_KEY));
+}
+
+export function setCourseDistanceUnit(db: SQLiteDatabase, unit: CourseDistanceUnit): void {
+  setSetting(db, COURSE_DISTANCE_SETTING_KEY, unit);
 }

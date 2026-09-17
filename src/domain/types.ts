@@ -3,8 +3,8 @@ export type FixQuality = 'good' | 'soft' | 'forced';
 /** Missed-mark / no GPS. Not a GPS quality; never a distance or top-3 sample. */
 export type ShotFixQuality = FixQuality | 'none';
 
-/** How the shot was logged. `no_gps` never stores coordinates. */
-export type ShotSource = 'gps' | 'no_gps';
+/** How the shot was logged. `no_gps` never stores coordinates. `placed` is two player map taps. */
+export type ShotSource = 'gps' | 'no_gps' | 'placed';
 
 export type PenaltyReason = 'water' | 'ob' | 'unplayable' | 'other';
 
@@ -24,6 +24,8 @@ export type Club = {
   loftRank: number;
   sortOrder: number;
   enabled: boolean;
+  /** User-set or stock typical carry in yards. Null on putter, when cleared, or custom-until-set. */
+  typicalCarryYards: number | null;
 };
 
 export type ParSource = 'course' | 'user';
@@ -73,8 +75,10 @@ export type Hole = {
   greenDepthYards: number | null;
   /** 0–5. Stats / scoring only — never a map mark or club-distance sample. */
   putts: number;
-  /** Optional one-tap length buckets, one per putt, same order. */
+  /** One length bucket per putt, same order. Stats only — no green GPS. */
   puttLengths: string[];
+  /** True only after Made it. Walking off the green never sets this. */
+  puttsDone: boolean;
 };
 
 export type Shot = {
@@ -91,10 +95,11 @@ export type Shot = {
   endLng: number | null;
   endAccuracyM: number | null;
   endFixQuality: ShotFixQuality | null;
-  /** GPS haversine yards only. Always null on `no_gps` / `fixQuality: none`. */
+  /** Haversine yards from GPS marks or two placed map points. Always null on `no_gps`. */
   distanceYards: number | null;
   /** Optional typed yards for UI/score notes. Never a club-average sample. */
   typedYards: number | null;
+  /** GPS quality. Null on catch-up `placed` shots — they have no soft/good quality. */
   fixQuality: ShotFixQuality | null;
   impossibleJump: boolean;
   startedAt: string;

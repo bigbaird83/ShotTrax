@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
 import { addClub, deleteClub, listClubs, restoreDefaultBag, setClubEnabled, updateClub } from '@/src/db/repo';
+import { isPutterClubId, parseTypicalCarryYards } from '@/src/domain/defaultBag';
 import { COPY } from '@/src/domain/playerCopy';
 import { BigButton } from '@/src/ui/BigButton';
 import { Screen } from '@/src/ui/Screen';
@@ -12,11 +13,14 @@ export default function BagScreen() {
   const clubs = useMemo(() => listClubs(db), [db, revision]);
   const [name, setName] = useState('');
   const [shortName, setShortName] = useState('');
+  const [carry, setCarry] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const editingPutter = editingId != null && isPutterClubId(editingId);
 
   const resetForm = () => {
     setName('');
     setShortName('');
+    setCarry('');
     setEditingId(null);
   };
 
@@ -31,9 +35,16 @@ export default function BagScreen() {
               setEditingId(club.id);
               setName(club.name);
               setShortName(club.shortName);
+              setCarry(club.typicalCarryYards != null ? String(club.typicalCarryYards) : '');
             }}>
             <Text style={styles.name}>{club.name}</Text>
-            <Text style={styles.short}>{club.shortName}</Text>
+            <Text style={styles.short}>
+              {isPutterClubId(club.id)
+                ? club.shortName
+                : club.typicalCarryYards != null
+                  ? `${club.shortName} · ${club.typicalCarryYards} yd`
+                  : club.shortName}
+            </Text>
           </Pressable>
           <Switch
             value={club.enabled}
@@ -61,15 +72,35 @@ export default function BagScreen() {
         onChangeText={setShortName}
         style={styles.input}
       />
+      {editingPutter ? null : (
+        <>
+          <TextInput
+            placeholder={COPY.typicalCarryYards}
+            placeholderTextColor={colors.muted}
+            value={carry}
+            onChangeText={setCarry}
+            keyboardType="number-pad"
+            style={styles.input}
+          />
+          {carry.trim() ? (
+            <BigButton
+              label={COPY.clearTypicalCarry}
+              variant="ghost"
+              onPress={() => setCarry('')}
+            />
+          ) : null}
+        </>
+      )}
       <BigButton
         label={editingId ? 'Save club' : 'Add to bag'}
         variant="secondary"
         disabled={!name.trim()}
         onPress={() => {
+          const yards = editingPutter ? null : parseTypicalCarryYards(carry);
           if (editingId) {
-            updateClub(db, editingId, name, shortName);
+            updateClub(db, editingId, name, shortName, yards);
           } else {
-            addClub(db, name, shortName);
+            addClub(db, name, shortName, yards);
           }
           resetForm();
           bump();

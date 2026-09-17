@@ -15,10 +15,15 @@ type Props = {
   fmb?: { f: string; m: string; b: string } | null;
   osmOverlay?: OsmOverlay | null;
   onDropGreenEstimate?: (coord: { lat: number; lng: number }) => void;
+  onPlacePoint?: (coord: { lat: number; lng: number }) => void;
+  onShotPress?: (shotId: string) => void;
+  placedFrom?: { lat: number; lng: number } | null;
+  placedTo?: { lat: number; lng: number } | null;
+  placeHint?: string | null;
   fullBleed?: boolean;
 };
 
-export function HoleMap({ holeNumber, userFix, green, yardsToGreen }: Props) {
+export function HoleMap({ holeNumber, userFix, green, yardsToGreen, placeHint }: Props) {
   return (
     <View style={styles.fallback}>
       <Text style={styles.title}>Hole {holeNumber}</Text>
@@ -27,7 +32,9 @@ export function HoleMap({ holeNumber, userFix, green, yardsToGreen }: Props) {
         hasFix={Boolean(userFix)}
         hasGreen={Boolean(green)}
       />
-      <Text style={styles.msg}>{green ? COPY.waitingOnLocation : COPY.longPressGreen}</Text>
+      <Text style={styles.msg}>
+        {placeHint ?? (green ? COPY.waitingOnLocation : COPY.longPressGreen)}
+      </Text>
     </View>
   );
 }

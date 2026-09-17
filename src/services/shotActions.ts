@@ -7,7 +7,12 @@ import {
   insertNoGpsShot,
   insertOpenShot,
   insertPenalty,
+  applyShotPlacement,
+  getShot,
+  insertPlacedShot,
   nextShotSeq,
+  restoreShotSnapshot,
+  sealOpenShotWithoutGps,
   setRoundLastClub,
   undoLastShot as undoLastShotInRepo,
   updateShotClub,
@@ -16,6 +21,10 @@ import { planDrop } from '../domain/drop';
 import { worstFixQuality } from '../domain/fixQuality';
 import type { ClosedShotPlan, MarkPlan } from '../domain/markShot';
 import { preferWatchFix } from '../domain/preferWatchFix';
+import { isPutterClubId } from '../domain/defaultBag';
+import type { LatLng } from '../domain/latLng';
+import { planChangeShotClub, planMoveShotPin, type ShotEditSnapshot } from '../domain/shotEdit';
+import { confirmPlacedShot, placedShotRunsAcceptFix, planPlacedShot } from '../domain/shotSource';
 import type { GpsFix, OpenShot, PenaltyReason } from '../domain/types';
 import { COPY } from '../domain/playerCopy';
 import { acceptFix, forceMark } from '../sensing/api';
@@ -165,6 +174,35 @@ export async function endOpenShot(
   return { plan, fix };
 }
 
+/**
+ * Close the approach before the putt sheet. Never inserts a putter GPS shot and
+ * never invents an end pin. If GPS cannot close the shot, seal it without coords
+ * so the next tee cannot steal the approach's yards.
+ */
+export async function closeApproachBeforePutts(
+  db: SQLiteDatabase,
+  args: { roundId: string; holeNumber: number },
+): Promise<void> {
+  const hole = getHole(db, args.roundId, args.holeNumber);
+  if (!hole) return;
+  const open = getOpenShotForHole(db, hole.id);
+  if (!open) return;
+  try {
+    const { plan } = await endOpenShot(db, { roundId: args.roundId, holeNumber: args.holeNumber });
+    if (plan.status === 'commit') return;
+    const forced = await endOpenShot(db, {
+      roundId: args.roundId,
+      holeNumber: args.holeNumber,
+      force: true,
+    });
+    if (forced.plan.status === 'commit') return;
+  } catch {
+    // fall through to seal without coords
+  }
+  const stillOpen = getOpenShotForHole(db, hole.id);
+  if (stillOpen) sealOpenShotWithoutGps(db, stillOpen.id);
+}
+
 export function addNoGpsShot(
   db: SQLiteDatabase,
   args: { roundId: string; holeNumber: number; clubId: string; typedYards?: number | null },
@@ -183,6 +221,44 @@ export function addNoGpsShot(
   return id;
 }
 
+export type AddPlacedShotResult =
+  | { status: 'commit'; id: string }
+  | { status: 'needs_confirm'; yards: number }
+  | { status: 'rejected' };
+
+export function addPlacedShot(
+  db: SQLiteDatabase,
+  args: {
+    roundId: string;
+    holeNumber: number;
+    clubId: string;
+    from: LatLng;
+    to: LatLng;
+    force?: boolean;
+  },
+): AddPlacedShotResult {
+  if (isPutterClubId(args.clubId)) return { status: 'rejected' };
+  if (placedShotRunsAcceptFix()) return { status: 'rejected' };
+  const plan = planPlacedShot(args.from, args.to);
+  if (!plan.ok) return { status: 'rejected' };
+  const gate = confirmPlacedShot(plan, Boolean(args.force));
+  if (gate.status !== 'commit') return gate;
+  const hole = getHole(db, args.roundId, args.holeNumber);
+  if (!hole) {
+    throw new Error(`Hole ${args.holeNumber} not found`);
+  }
+  const id = insertPlacedShot(db, {
+    holeId: hole.id,
+    clubId: args.clubId,
+    seq: nextShotSeq(db, hole.id),
+    from: args.from,
+    to: args.to,
+  });
+  if (!id) return { status: 'rejected' };
+  setRoundLastClub(db, args.roundId, args.clubId);
+  return { status: 'commit', id };
+}
+
 export function undoLastShot(
   db: SQLiteDatabase,
   args: { roundId: string; holeNumber: number },
@@ -190,12 +266,44 @@ export function undoLastShot(
   return undoLastShotInRepo(db, args.roundId, args.holeNumber).ok;
 }
 
+export type ShotEditResult =
+  | { status: 'commit'; snapshot: ShotEditSnapshot }
+  | { status: 'needs_confirm'; yards: number }
+  | { status: 'rejected' };
+
 export function changeShotClub(
   db: SQLiteDatabase,
   args: { roundId: string; shotId: string; clubId: string },
-): void {
+): ShotEditResult {
+  const shot = getShot(db, args.shotId);
+  if (!shot) return { status: 'rejected' };
+  const plan = planChangeShotClub(shot, args.clubId);
+  if (!plan.ok) return { status: 'rejected' };
   updateShotClub(db, args.shotId, args.clubId);
   setRoundLastClub(db, args.roundId, args.clubId);
+  return { status: 'commit', snapshot: plan.snapshot };
+}
+
+export function moveShotPin(
+  db: SQLiteDatabase,
+  args: { shotId: string; which: 'from' | 'to'; point: LatLng; force?: boolean },
+): ShotEditResult {
+  const shot = getShot(db, args.shotId);
+  if (!shot) return { status: 'rejected' };
+  const planned = planMoveShotPin(shot, args.which, args.point);
+  if (!planned.ok) return { status: 'rejected' };
+  const gate = confirmPlacedShot(planned.plan, Boolean(args.force));
+  if (gate.status !== 'commit') return gate;
+  const ok = applyShotPlacement(db, args.shotId, planned.from, planned.to);
+  if (!ok) return { status: 'rejected' };
+  return { status: 'commit', snapshot: planned.snapshot };
+}
+
+export function undoShotEdit(db: SQLiteDatabase, snapshot: ShotEditSnapshot): boolean {
+  const shot = getShot(db, snapshot.id);
+  if (!shot) return false;
+  restoreShotSnapshot(db, snapshot);
+  return true;
 }
 
 export async function takeDrop(

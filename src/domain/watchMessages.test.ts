@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { MIC_SHOT_ASSIST, WATCH_ASSIST } from '../sensing/assists';
+import { MIC_SHOT_ASSIST, PUTT_ASSIST, WATCH_ASSIST } from '../sensing/assists';
 import { SOFT_GPS_MAX_M, SOFT_GPS_MIN_M } from '../config/sensing';
 import { yardsToGreen } from '../sensing/yardsToGreen';
 import type { GpsFix } from './types';
@@ -10,11 +10,21 @@ import {
   WATCH_MESSAGE_TYPES,
   clubListPayload,
   clubListPushKey,
+  clubNavPayload,
   clubPickPayload,
   formatClubMarkedFeedback,
   isIso8601,
+  MADE_IT_FEEDBACK,
   parseClubList,
+  parseClubNav,
   parseClubPick,
+  parsePuttPick,
+  parsePuttSheet,
+  parseWatchInboundIntent,
+  watchPayloadRunsAcceptFix,
+  puttPickPayload,
+  puttSheetPayload,
+  PUTTS_ON_WATCH,
   toWatchYardsQuality,
 } from './watchMessages';
 
@@ -181,8 +191,54 @@ test('clubPick may carry Watch GPS; phone prefers it only when fresh and at leas
   assert.equal(parsed?.accuracyM, 4);
 });
 
-test('Watch Connectivity this cut is only clubList and clubPick', () => {
-  assert.deepEqual([...WATCH_MESSAGE_TYPES], ['clubList', 'clubPick']);
+test('Watch Connectivity this cut is clubList, clubPick, puttSheet, puttPick, clubNav', () => {
+  assert.deepEqual([...WATCH_MESSAGE_TYPES], ['clubList', 'clubPick', 'puttSheet', 'puttPick', 'clubNav']);
+});
+
+test('Watch Back and Home never parse as a club pick', () => {
+  const back = clubNavPayload({ action: 'back', at: '2026-09-17T22:00:00.000Z' });
+  const home = clubNavPayload({ action: 'home', at: '2026-09-17T22:00:00.000Z' });
+  assert.equal(back.type, 'clubNav');
+  assert.equal(home.action, 'home');
+  assert.deepEqual(parseClubNav(JSON.parse(JSON.stringify(back))), back);
+  assert.equal(parseClubPick(back), null);
+  assert.equal(parseClubPick(home), null);
+  assert.equal(watchPayloadRunsAcceptFix(back), false);
+  assert.equal(watchPayloadRunsAcceptFix(home), false);
+  assert.equal(
+    watchPayloadRunsAcceptFix(clubPickPayload({ clubId: 'club_7i', at: '2026-09-17T22:00:00.000Z' })),
+    true,
+  );
+  assert.equal('lat' in back, false);
+  assert.equal('lng' in home, false);
+  assert.equal(parseClubNav({ type: 'clubNav', action: 'mark', at: '2026-09-17T22:00:00.000Z' }), null);
+});
+
+test('Signal Lab: only a club tap, Watch tap, or Same club runs acceptFix', () => {
+  const at = '2026-09-17T22:00:00.000Z';
+  const back = parseWatchInboundIntent(clubNavPayload({ action: 'back', at }));
+  const home = parseWatchInboundIntent(clubNavPayload({ action: 'home', at }));
+  const club = parseWatchInboundIntent(clubPickPayload({ clubId: 'club_7i', at }));
+  const sameClub = parseWatchInboundIntent(clubPickPayload({ clubId: 'club_8i', at }));
+  const putter = parseWatchInboundIntent(clubPickPayload({ clubId: 'club_putter', at }));
+  assert.equal(back?.kind, 'leave');
+  assert.equal(back?.runsAcceptFix, false);
+  if (back?.kind === 'leave') {
+    assert.equal(back.savesGps, false);
+    assert.equal(back.closesPendingShot, false);
+  }
+  assert.equal(home?.kind, 'leave');
+  assert.equal(home?.runsAcceptFix, false);
+  assert.equal(club?.kind, 'club');
+  assert.equal(club?.runsAcceptFix, true);
+  assert.equal(sameClub?.kind, 'club');
+  assert.equal(sameClub?.runsAcceptFix, true);
+  assert.equal(putter?.kind, 'putter');
+  assert.equal(putter?.runsAcceptFix, false);
+  assert.equal(watchPayloadRunsAcceptFix(clubNavPayload({ action: 'back', at })), false);
+  assert.equal(watchPayloadRunsAcceptFix(clubNavPayload({ action: 'home', at })), false);
+  assert.equal(watchPayloadRunsAcceptFix(clubPickPayload({ clubId: 'club_putter', at })), false);
+  assert.equal(watchPayloadRunsAcceptFix(clubPickPayload({ clubId: 'club_7i', at })), true);
 });
 
 test('Watch feedback is marked ✓ or Phone unavailable — never silent fail', () => {
@@ -190,7 +246,41 @@ test('Watch feedback is marked ✓ or Phone unavailable — never silent fail', 
   assert.equal(PHONE_UNAVAILABLE, 'Phone unavailable');
 });
 
-test('Watch companion is club-pick only — no motion or mic auto-mark', () => {
+test('Watch companion is club-pick only — no motion, mic, or auto-putt', () => {
   assert.equal(WATCH_ASSIST, false);
   assert.equal(MIC_SHOT_ASSIST, false);
+  assert.equal(PUTT_ASSIST, false);
+});
+
+test('puttSheet is buckets plus Made it — never GPS and never invented putts', () => {
+  const msg = puttSheetPayload({ open: true, holeNumber: 4, lengths: ['over_20'] });
+  assert.equal(msg.type, 'puttSheet');
+  assert.equal(msg.open, true);
+  assert.equal(msg.canMake, true);
+  assert.equal(msg.canAdd, true);
+  assert.equal(msg.labels.inside_3, 'Under 3 ft');
+  assert.equal(msg.labels.over_20, '20+');
+  const parsed = parsePuttSheet(JSON.parse(JSON.stringify(msg)));
+  assert.deepEqual(parsed, msg);
+  assert.equal(parsePuttSheet({ type: 'puttSheet', open: true, holeNumber: 0, lengths: [] }), null);
+  assert.equal(puttSheetPayload({ open: false, holeNumber: 4, lengths: [] }).canMake, false);
+});
+
+test('puttPick add needs a bucket; Made it finishes; undo drops the last', () => {
+  const add = puttPickPayload({
+    action: 'add',
+    lengthId: 'inside_3',
+    at: '2026-09-17T22:00:00.000Z',
+  });
+  assert.equal(add.type, 'puttPick');
+  assert.deepEqual(parsePuttPick(JSON.parse(JSON.stringify(add))), add);
+  assert.equal(parsePuttPick({ type: 'puttPick', action: 'add', at: '2026-09-17T22:00:00.000Z' }), null);
+  const made = parsePuttPick({
+    type: 'puttPick',
+    action: 'made',
+    at: '2026-09-17T22:00:00.000Z',
+  });
+  assert.equal(made?.action, 'made');
+  assert.equal(MADE_IT_FEEDBACK, 'Made it ✓');
+  assert.equal(PUTTS_ON_WATCH, 'Putts');
 });
