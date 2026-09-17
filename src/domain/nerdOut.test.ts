@@ -14,6 +14,9 @@ test('nerd out uses stored score and putts only', () => {
   assert.equal(out.putts, 5);
   assert.equal(nerdOutShowsGir(), false);
   assert.equal(nerdOutShowsStrokesGained(), false);
+  assert.deepEqual(Object.keys(out).sort(), ['clubs', 'putts', 'score']);
+  assert.equal('gir' in out, false);
+  assert.equal('strokesGained' in out, false);
 });
 
 test('nerd out leaves score blank when no hole scores are stored', () => {
