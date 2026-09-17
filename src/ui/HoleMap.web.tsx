@@ -16,6 +16,7 @@ type Props = {
   osmOverlay?: OsmOverlay | null;
   onDropGreenEstimate?: (coord: { lat: number; lng: number }) => void;
   onPlacePoint?: (coord: { lat: number; lng: number }) => void;
+  onShotPress?: (shotId: string) => void;
   placedFrom?: { lat: number; lng: number } | null;
   placedTo?: { lat: number; lng: number } | null;
   placeHint?: string | null;

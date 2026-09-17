@@ -7,8 +7,11 @@ import {
   insertNoGpsShot,
   insertOpenShot,
   insertPenalty,
+  applyShotPlacement,
+  getShot,
   insertPlacedShot,
   nextShotSeq,
+  restoreShotSnapshot,
   sealOpenShotWithoutGps,
   setRoundLastClub,
   undoLastShot as undoLastShotInRepo,
@@ -20,6 +23,7 @@ import type { ClosedShotPlan, MarkPlan } from '../domain/markShot';
 import { preferWatchFix } from '../domain/preferWatchFix';
 import { isPutterClubId } from '../domain/defaultBag';
 import type { LatLng } from '../domain/latLng';
+import { planChangeShotClub, planMoveShotPin, type ShotEditSnapshot } from '../domain/shotEdit';
 import { confirmPlacedShot, planPlacedShot } from '../domain/shotSource';
 import type { GpsFix, OpenShot, PenaltyReason } from '../domain/types';
 import { COPY } from '../domain/playerCopy';
@@ -261,12 +265,44 @@ export function undoLastShot(
   return undoLastShotInRepo(db, args.roundId, args.holeNumber).ok;
 }
 
+export type ShotEditResult =
+  | { status: 'commit'; snapshot: ShotEditSnapshot }
+  | { status: 'needs_confirm'; yards: number }
+  | { status: 'rejected' };
+
 export function changeShotClub(
   db: SQLiteDatabase,
   args: { roundId: string; shotId: string; clubId: string },
-): void {
+): ShotEditResult {
+  const shot = getShot(db, args.shotId);
+  if (!shot) return { status: 'rejected' };
+  const plan = planChangeShotClub(shot, args.clubId);
+  if (!plan.ok) return { status: 'rejected' };
   updateShotClub(db, args.shotId, args.clubId);
   setRoundLastClub(db, args.roundId, args.clubId);
+  return { status: 'commit', snapshot: plan.snapshot };
+}
+
+export function moveShotPin(
+  db: SQLiteDatabase,
+  args: { shotId: string; which: 'from' | 'to'; point: LatLng; force?: boolean },
+): ShotEditResult {
+  const shot = getShot(db, args.shotId);
+  if (!shot) return { status: 'rejected' };
+  const planned = planMoveShotPin(shot, args.which, args.point);
+  if (!planned.ok) return { status: 'rejected' };
+  const gate = confirmPlacedShot(planned.plan, Boolean(args.force));
+  if (gate.status !== 'commit') return gate;
+  const ok = applyShotPlacement(db, args.shotId, planned.from, planned.to);
+  if (!ok) return { status: 'rejected' };
+  return { status: 'commit', snapshot: planned.snapshot };
+}
+
+export function undoShotEdit(db: SQLiteDatabase, snapshot: ShotEditSnapshot): boolean {
+  const shot = getShot(db, snapshot.id);
+  if (!shot) return false;
+  restoreShotSnapshot(db, snapshot);
+  return true;
 }
 
 export async function takeDrop(

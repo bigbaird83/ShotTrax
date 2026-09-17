@@ -14,6 +14,7 @@ import { averageWithBadges, type ClubAverage } from '../domain/averages';
 import { isValidLatLng } from '../domain/latLng';
 import { clampPenaltyStrokes, scoreAfterPenalty } from '../domain/penalty';
 import { clampPutts, planMadeIt, parsePuttLengths, serializePuttLengths, type PuttLengthId } from '../domain/putts';
+import type { ShotEditSnapshot } from '../domain/shotEdit';
 import { includeInDistanceAverages, planNoGpsShot, planPlacedShot } from '../domain/shotSource';
 import { planUndoLastShot } from '../domain/undoLastShot';
 import type {
@@ -608,6 +609,11 @@ export function listShotsForHole(db: SQLiteDatabase, holeId: string): Shot[] {
     .map(mapShot);
 }
 
+export function getShot(db: SQLiteDatabase, shotId: string): Shot | null {
+  const row = db.getFirstSync<ShotRow>('SELECT * FROM shots WHERE id = ?', [shotId]);
+  return row ? mapShot(row) : null;
+}
+
 export function getOpenShotForHole(db: SQLiteDatabase, holeId: string): OpenShot | null {
   const row = db.getFirstSync<ShotRow>(
     `SELECT * FROM shots
@@ -678,6 +684,70 @@ export function insertOpenShot(
  */
 export function updateShotClub(db: SQLiteDatabase, shotId: string, clubId: string): void {
   db.runSync('UPDATE shots SET club_id = ?, suggested = 0 WHERE id = ?', [clubId, shotId]);
+}
+
+/** Move from/to pins: store as Placed, haversine yards, no GPS quality. Never acceptFix. */
+export function applyShotPlacement(
+  db: SQLiteDatabase,
+  shotId: string,
+  from: { lat: number; lng: number },
+  to: { lat: number; lng: number },
+): boolean {
+  const plan = planPlacedShot(from, to);
+  if (!plan.ok) return false;
+  const now = new Date().toISOString();
+  db.runSync(
+    `UPDATE shots SET
+      start_lat = ?, start_lng = ?, start_accuracy_m = NULL, start_fix_quality = NULL,
+      end_lat = ?, end_lng = ?, end_accuracy_m = NULL, end_fix_quality = NULL,
+      distance_yards = ?, typed_yards = NULL, fix_quality = NULL,
+      impossible_jump = ?, ended_at = COALESCE(ended_at, ?), source = ?, suggested = 0
+     WHERE id = ?`,
+    [
+      plan.startLat,
+      plan.startLng,
+      plan.endLat,
+      plan.endLng,
+      plan.distanceYards,
+      plan.impossibleJump ? 1 : 0,
+      now,
+      plan.source,
+      shotId,
+    ],
+  );
+  return true;
+}
+
+/** Restore a shot after a wrong edit. Writes the snapshot back — never invents GPS. */
+export function restoreShotSnapshot(db: SQLiteDatabase, snap: ShotEditSnapshot): void {
+  db.runSync(
+    `UPDATE shots SET
+      club_id = ?,
+      start_lat = ?, start_lng = ?, start_accuracy_m = ?, start_fix_quality = ?,
+      end_lat = ?, end_lng = ?, end_accuracy_m = ?, end_fix_quality = ?,
+      distance_yards = ?, typed_yards = ?, fix_quality = ?,
+      impossible_jump = ?, ended_at = ?, source = ?, suggested = ?
+     WHERE id = ?`,
+    [
+      snap.clubId,
+      snap.startLat,
+      snap.startLng,
+      snap.startAccuracyM,
+      snap.startFixQuality,
+      snap.endLat,
+      snap.endLng,
+      snap.endAccuracyM,
+      snap.endFixQuality,
+      snap.distanceYards,
+      snap.typedYards,
+      snap.fixQuality,
+      snap.impossibleJump ? 1 : 0,
+      snap.endedAt,
+      snap.source,
+      snap.suggested ? 1 : 0,
+      snap.id,
+    ],
+  );
 }
 
 export function reopenShot(db: SQLiteDatabase, shotId: string): void {

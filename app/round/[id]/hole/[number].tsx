@@ -47,14 +47,15 @@ import {
   type PuttDraft,
   type PuttLengthId,
 } from '@/src/domain/putts';
-import { clubToRankInput, lastClosedShotYards, rankTopClubs, resolveDistanceTarget } from '@/src/domain/rankClubs';
+import { canMoveFromPin, canMoveToPin, type ShotEditSnapshot } from '@/src/domain/shotEdit';
+import { clubToRankInput, lastClosedShotYards, rankTopClubs, resolveDistanceTarget, shotYardsDistanceTarget } from '@/src/domain/rankClubs';
 import { reconcileHoleScore, scoreMismatchMessage } from '@/src/domain/scoreReconcile';
 import { resolveStickyClub, selectClubForMark } from '@/src/domain/stickyClub';
 import type { Club, PenaltyReason } from '@/src/domain/types';
 import { matchSpokenClub, speechContextualStrings } from '@/src/domain/voiceClub';
 import { yardsToGreen } from '@/src/sensing/api';
 import { describeGpsSource } from '@/src/services/location';
-import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, closeApproachBeforePutts, addPlacedShot } from '@/src/services/shotActions';
+import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, undoShotEdit } from '@/src/services/shotActions';
 import { startClubSpeech, type ClubSpeechSession } from '@/src/services/speechClub';
 import { useLiveFix } from '@/src/services/useLiveFix';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
@@ -87,8 +88,13 @@ export default function HoleScreen() {
   const [placeFrom, setPlaceFrom] = useState<LatLng | null>(null);
   const [placeTo, setPlaceTo] = useState<LatLng | null>(null);
   const [placeClubOpen, setPlaceClubOpen] = useState(false);
-  const [placeMode, setPlaceMode] = useState<'off' | 'from' | 'to'>('off');
-  const placing = placeMode !== 'off' || placeClubOpen;
+  const [placeMode, setPlaceMode] = useState<'off' | 'from' | 'to' | 'edit-from' | 'edit-to'>('off');
+  const [editShotId, setEditShotId] = useState<string | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editClubOpen, setEditClubOpen] = useState(false);
+  const [showAllClubs, setShowAllClubs] = useState(false);
+  const [editUndo, setEditUndo] = useState<ShotEditSnapshot | null>(null);
+  const placing = placeMode !== 'off' || placeClubOpen || editClubOpen;
   const [puttOpen, setPuttOpen] = useState(false);
   const [puttSheetHole, setPuttSheetHole] = useState(holeNumber);
   const [puttDraft, setPuttDraft] = useState<PuttDraft>(emptyPuttDraft());
@@ -153,16 +159,44 @@ export default function HoleScreen() {
   );
   const placedPlan = placeFrom && placeTo ? planPlacedShot(placeFrom, placeTo) : null;
   const placedYards = placedPlan && placedPlan.ok ? placedPlan.distanceYards : null;
+  const editingShot = editShotId ? shots.find((shot) => shot.id === editShotId) ?? null : null;
+  const pickerYards = editClubOpen ? (editingShot?.distanceYards ?? null) : placedYards;
+  const placedRanked = rankTopClubs(
+    averages.map((row) => clubToRankInput(row.club, row)),
+    shotYardsDistanceTarget(pickerYards),
+  );
+  const placeBag = clubs.filter((club) => !isPutterClubId(club.id));
+  const placeRest = placeBag.filter((club) => !placedRanked.some((row) => row.id === club.id));
 
   const resetPlace = () => {
     setPlaceFrom(null);
     setPlaceTo(null);
     setPlaceClubOpen(false);
     setPlaceMode('off');
+    setEditClubOpen(false);
+    setShowAllClubs(false);
+  };
+
+  const closeEdit = () => {
+    setEditOpen(false);
+    setEditClubOpen(false);
+    setEditShotId(null);
+    setShowAllClubs(false);
+    if (placeMode === 'edit-from' || placeMode === 'edit-to') setPlaceMode('off');
+  };
+
+  const openEdit = (shotId: string) => {
+    if (readOnly || placing) return;
+    resetPlace();
+    setScoreOpen(false);
+    setEditShotId(shotId);
+    setEditOpen(true);
   };
 
   const goToHole = (nextNumber: number) => {
     resetPlace();
+    closeEdit();
+    setEditUndo(null);
     router.replace(`/round/${id}/hole/${nextNumber}`);
   };
 
@@ -465,6 +499,7 @@ export default function HoleScreen() {
     const ok = undoLastShot(db, { roundId: id, holeNumber });
     if (!ok) return;
     hapticTap();
+    setEditUndo(null);
     bump();
   };
 
@@ -639,6 +674,55 @@ export default function HoleScreen() {
     bump();
   };
 
+  const rememberUndo = (snapshot: ShotEditSnapshot) => {
+    setEditUndo(snapshot);
+  };
+
+  const commitEditClub = (clubId: string) => {
+    if (!editShotId) return;
+    const result = changeShotClub(db, { roundId: round.id, shotId: editShotId, clubId });
+    if (result.status !== 'commit') {
+      hapticWarn();
+      return;
+    }
+    hapticSelect();
+    rememberUndo(result.snapshot);
+    setEditClubOpen(false);
+    setShowAllClubs(false);
+    setEditOpen(true);
+    bump();
+  };
+
+  const commitMovePin = (point: LatLng, which: 'from' | 'to', force = false) => {
+    if (!editShotId) return;
+    const result = moveShotPin(db, { shotId: editShotId, which, point, force });
+    if (result.status === 'needs_confirm') {
+      Alert.alert(COPY.tooFar, '', [
+        { text: COPY.cancel, style: 'cancel' },
+        { text: COPY.markAnyway, onPress: () => commitMovePin(point, which, true) },
+      ]);
+      return;
+    }
+    if (result.status !== 'commit') {
+      hapticWarn();
+      return;
+    }
+    hapticMark();
+    rememberUndo(result.snapshot);
+    setPlaceMode('off');
+    setEditOpen(true);
+    bump();
+  };
+
+  const onUndoEdit = () => {
+    if (readOnly || !editUndo) return;
+    const ok = undoShotEdit(db, editUndo);
+    if (!ok) return;
+    hapticTap();
+    setEditUndo(null);
+    bump();
+  };
+
   const retryVoice = () => {
     stopListening();
     void startListening();
@@ -670,16 +754,21 @@ export default function HoleScreen() {
           placedFrom={placeFrom}
           placedTo={placeTo}
           placeHint={
-            placing
-              ? placeTo
-                ? `${placedYards ?? '—'} yd · ${COPY.pickClub}`
-                : placeFrom
-                  ? COPY.placeToHint
-                  : COPY.placeFromHint
-              : null
+            placeMode === 'edit-from'
+              ? COPY.editFromHint
+              : placeMode === 'edit-to'
+                ? COPY.editToHint
+                : placing
+                  ? placeTo
+                    ? `${placedYards ?? '—'} yd · ${COPY.pickClub}`
+                    : placeFrom
+                      ? COPY.placeToHint
+                      : COPY.placeFromHint
+                  : null
           }
+          onShotPress={readOnly || placing ? undefined : openEdit}
           onPlacePoint={
-            readOnly || placeMode === 'off' || placeClubOpen
+            readOnly || placeMode === 'off' || placeClubOpen || editClubOpen
               ? undefined
               : (coord) => {
                   if (placeMode === 'from') {
@@ -690,6 +779,14 @@ export default function HoleScreen() {
                   if (placeMode === 'to') {
                     setPlaceTo(coord);
                     setPlaceClubOpen(true);
+                    return;
+                  }
+                  if (placeMode === 'edit-from') {
+                    commitMovePin(coord, 'from');
+                    return;
+                  }
+                  if (placeMode === 'edit-to') {
+                    commitMovePin(coord, 'to');
                   }
                 }
           }
@@ -753,7 +850,21 @@ export default function HoleScreen() {
 
       {placing ? (
         <View style={styles.pendingWrap}>
-          <BigButton label={COPY.cancelPlace} variant="ghost" onPress={resetPlace} />
+          <BigButton
+            label={COPY.cancelPlace}
+            variant="ghost"
+            onPress={() => {
+              const editing = placeMode === 'edit-from' || placeMode === 'edit-to' || editClubOpen;
+              resetPlace();
+              if (editing && editShotId) setEditOpen(true);
+            }}
+          />
+        </View>
+      ) : null}
+
+      {!readOnly && editUndo && !placing ? (
+        <View style={styles.pendingWrap}>
+          <BigButton label={COPY.undoEdit} variant="ghost" onPress={onUndoEdit} />
         </View>
       ) : null}
 
@@ -885,6 +996,7 @@ export default function HoleScreen() {
               variant="ghost"
               style={{ flex: 1 }}
               onPress={() => {
+                closeEdit();
                 resetPlace();
                 setPlaceMode('from');
               }}
@@ -959,23 +1071,114 @@ export default function HoleScreen() {
       </FullSheet>
 
       <FullSheet
-        visible={placeClubOpen}
-        title={placedYards != null ? `${placedYards} yd · ${COPY.pickClub}` : COPY.pickClub}
-        onClose={resetPlace}>
+        visible={placeClubOpen || editClubOpen}
+        title={pickerYards != null ? `${pickerYards} yd · ${COPY.pickClub}` : COPY.pickClub}
+        onClose={() => {
+          if (editClubOpen) {
+            setEditClubOpen(false);
+            setShowAllClubs(false);
+            setEditOpen(true);
+            return;
+          }
+          resetPlace();
+        }}>
         <ScrollView contentContainerStyle={styles.sheetPad}>
           <Text style={styles.muted}>
-            {placedYards != null ? `${placedYards} yd` : COPY.placeToHint}
+            {pickerYards != null ? `${pickerYards} yd` : COPY.placeToHint}
           </Text>
-          <View style={styles.placeGrid}>
-            {clubs.filter((club) => !isPutterClubId(club.id)).map((club) => (
-              <ClubButton
-                key={club.id}
-                shortName={club.shortName}
-                name={club.name}
-                onPress={() => commitPlaced(club.id)}
+          {placedRanked.length > 0 ? (
+            <View style={styles.placeTop3}>
+              {placedRanked.map((club, index) => (
+                <Pressable
+                  key={club.id}
+                  onPress={() => {
+                    const full = clubs.find((row) => row.id === club.id);
+                    if (!full) return;
+                    if (editClubOpen) commitEditClub(full.id);
+                    else commitPlaced(full.id);
+                  }}
+                  style={[styles.top3Chip, index === 0 && styles.top3Primary]}>
+                  <Text style={[styles.top3Text, index === 0 && styles.top3PrimaryText]}>
+                    {club.shortName}
+                  </Text>
+                  {index === 0 ? <Text style={styles.suggest}>{COPY.suggested}</Text> : null}
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+          <BigButton
+            label={COPY.allClubs}
+            variant="secondary"
+            onPress={() => setShowAllClubs((open) => !open)}
+          />
+          {showAllClubs || placedRanked.length === 0 ? (
+            <View style={styles.placeGrid}>
+              {(placedRanked.length === 0 ? placeBag : placeRest).map((club) => (
+                <ClubButton
+                  key={club.id}
+                  shortName={club.shortName}
+                  name={club.name}
+                  onPress={() => {
+                    if (editClubOpen) commitEditClub(club.id);
+                    else commitPlaced(club.id);
+                  }}
+                />
+              ))}
+            </View>
+          ) : null}
+        </ScrollView>
+      </FullSheet>
+
+      <FullSheet
+        visible={editOpen && !editClubOpen}
+        title={
+          editingShot
+            ? `${COPY.editShot} · ${
+                editingShot.clubId ? clubMap[editingShot.clubId]?.shortName ?? COPY.editShot : COPY.editShot
+              }${editingShot.distanceYards != null ? ` · ${editingShot.distanceYards} yd` : ''}`
+            : COPY.editShot
+        }
+        onClose={closeEdit}>
+        <ScrollView contentContainerStyle={styles.sheetPad}>
+          {editingShot ? (
+            <>
+              <QualityBadge
+                quality={editingShot.fixQuality}
+                open={editingShot.endedAt == null && editingShot.source !== 'no_gps'}
+                source={editingShot.source}
               />
-            ))}
-          </View>
+              <BigButton
+                label={COPY.moveFrom}
+                variant="secondary"
+                disabled={!canMoveFromPin(editingShot)}
+                onPress={() => {
+                  setEditOpen(false);
+                  setPlaceMode('edit-from');
+                }}
+              />
+              <BigButton
+                label={COPY.moveTo}
+                variant="secondary"
+                disabled={!canMoveToPin(editingShot)}
+                onPress={() => {
+                  setEditOpen(false);
+                  setPlaceMode('edit-to');
+                }}
+              />
+              <BigButton
+                label={COPY.changeClub}
+                onPress={() => {
+                  setShowAllClubs(false);
+                  setEditClubOpen(true);
+                }}
+              />
+              {editUndo?.id === editingShot.id ? (
+                <BigButton label={COPY.undoEdit} variant="ghost" onPress={onUndoEdit} />
+              ) : null}
+            </>
+          ) : (
+            <Text style={styles.muted}>{COPY.noShots}</Text>
+          )}
         </ScrollView>
       </FullSheet>
 
@@ -1034,10 +1237,7 @@ export default function HoleScreen() {
                 <Pressable
                   key={shot.id}
                   disabled={readOnly}
-                  onPress={() => {
-                    setScoreOpen(false);
-                    router.push(`/round/${id}/club-pick?hole=${holeNumber}&shot=${shot.id}`);
-                  }}
+                  onPress={() => openEdit(shot.id)}
                   style={styles.shot}>
                   <Text style={styles.shotSeq}>{shot.seq}</Text>
                   <View style={{ flex: 1 }}>
@@ -1083,6 +1283,7 @@ export default function HoleScreen() {
                 variant="secondary"
                 onPress={() => {
                   setScoreOpen(false);
+                  closeEdit();
                   resetPlace();
                   setPlaceMode('from');
                 }}
@@ -1274,6 +1475,7 @@ const styles = StyleSheet.create({
   label: { color: colors.cream, fontSize: type.meta, fontWeight: '800', letterSpacing: 0.6 },
   sheetPad: { padding: 16, gap: 12, paddingBottom: 40 },
   placeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  placeTop3: { flexDirection: 'row', gap: 8 },
   chip: {
     minHeight: 56,
     minWidth: 56,

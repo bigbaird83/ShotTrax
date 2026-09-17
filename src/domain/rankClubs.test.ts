@@ -10,6 +10,7 @@ import {
   rankDistanceYards,
   rankTopClubs,
   resolveDistanceTarget,
+  shotYardsDistanceTarget,
   type RankClubInput,
 } from './rankClubs';
 
@@ -113,6 +114,27 @@ test('lastClosedShotYards skips putter shots — they are not a club sample', ()
     { endedAt: 'b', distanceYards: 8, source: 'gps', fixQuality: 'good', clubId: 'club_putter' },
   ]);
   assert.equal(yards, 155);
+});
+
+test('catch-up club rank uses that shot’s yards, not yards-to-green', () => {
+  const shotTarget = shotYardsDistanceTarget(148);
+  const liveTarget = resolveDistanceTarget({
+    toGreen: { yards: 260, quality: 'good' },
+    lastClosedYards: 148,
+  });
+  assert.deepEqual(shotTarget, { source: 'shot_yards', dYards: 148 });
+  assert.equal(liveTarget?.source, 'yards_to_green');
+  assert.equal(liveTarget?.dYards, 260);
+  assert.deepEqual(
+    rankTopClubs(bag, shotTarget).map((c) => c.id),
+    ['7i', '8i', '6i'],
+  );
+  assert.deepEqual(
+    rankTopClubs(bag, liveTarget).map((c) => c.id),
+    ['Dr', '5i', '6i'],
+  );
+  assert.equal(shotYardsDistanceTarget(null), null);
+  assert.equal(shotYardsDistanceTarget(Number.NaN), null);
 });
 
 test('top-3 are the lowest |avgYards − D|; clubs with <5 closed shots are excluded', () => {

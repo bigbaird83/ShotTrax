@@ -23,6 +23,7 @@ type Props = {
   osmOverlay?: OsmOverlay | null;
   onDropGreenEstimate?: (coord: { lat: number; lng: number }) => void;
   onPlacePoint?: (coord: { lat: number; lng: number }) => void;
+  onShotPress?: (shotId: string) => void;
   placedFrom?: { lat: number; lng: number } | null;
   placedTo?: { lat: number; lng: number } | null;
   placeHint?: string | null;
@@ -94,6 +95,7 @@ function NativeHoleMap({
   osmOverlay,
   onDropGreenEstimate,
   onPlacePoint,
+  onShotPress,
   placedFrom,
   placedTo,
   placeHint,
@@ -222,6 +224,18 @@ function NativeHoleMap({
             description={shot.endedAt ? `${shot.distanceYards ?? '—'} yd` : 'In play'}
             pinColor={shot.endedAt ? 'tomato' : 'yellow'}
             anchor={{ x: 0.5, y: 1 }}
+            onPress={() => onShotPress?.(shot.id)}
+          />
+        ))}
+        {closed.map((shot) => (
+          <Marker
+            key={`end-${shot.id}`}
+            coordinate={toCoord(shot.endLat, shot.endLng)}
+            title={`Shot ${shot.seq}`}
+            description={`${shot.distanceYards ?? '—'} yd`}
+            pinColor="green"
+            anchor={{ x: 0.5, y: 1 }}
+            onPress={() => onShotPress?.(shot.id)}
           />
         ))}
         {placedFrom ? (

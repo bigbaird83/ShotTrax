@@ -212,6 +212,25 @@ test('catch-up placed shot is two map points, haversine yards immediately, count
   assert.deepEqual(confirmPlacedShot(plan, false), { status: 'commit' });
 });
 
+test('Signal Lab: placed shots never produce acceptFix quality and still count', () => {
+  const from = { lat: 37.0, lng: -122.0 };
+  const to = { lat: 37.002, lng: -122.0 };
+  const plan = planPlacedShot(from, to);
+  assert.equal(plan.ok, true);
+  if (!plan.ok) return;
+  assert.equal(plan.source, 'placed');
+  assert.equal(plan.fixQuality, null);
+  assert.equal(plan.startFixQuality, null);
+  assert.equal(plan.endFixQuality, null);
+  assert.equal(plan.typedYards, null);
+  assert.notEqual(plan.fixQuality, 'good');
+  assert.notEqual(plan.fixQuality, 'soft');
+  assert.notEqual(plan.fixQuality, 'forced');
+  assert.notEqual(plan.fixQuality, 'none');
+  assert.equal(includeInDistanceAverages(plan), true);
+  assert.equal(includeInDistanceAverages({ ...plan, clubId: 'club_putter' }), false);
+});
+
 test('placed shots have no soft/good quality and never go through acceptFix', () => {
   const from = { lat: 37.0, lng: -122.0 };
   const to = { lat: 37.002, lng: -122.0 };

@@ -36,6 +36,12 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.approximate, 'Approximate');
   assert.equal(COPY.suggested, 'Suggested');
   assert.equal(COPY.changeClub, 'Change club');
+  assert.equal(COPY.editShot, 'Edit shot');
+  assert.equal(COPY.moveFrom, 'Move from');
+  assert.equal(COPY.moveTo, 'Move to');
+  assert.equal(COPY.undoEdit, 'Undo edit');
+  assert.equal(COPY.editFromHint, 'Tap the new from pin.');
+  assert.equal(COPY.editToHint, 'Tap the new landing pin.');
   assert.equal(COPY.bagLede, 'Your bag. Turn off what you don’t carry.');
   assert.equal(COPY.restoreBag, 'Restore stock bag');
   assert.equal(COPY.typicalCarry, 'Typical');

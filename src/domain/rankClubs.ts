@@ -16,9 +16,18 @@ export type RankClubInput = {
 };
 
 export type DistanceTarget = {
-  source: 'yards_to_green' | 'last_closed_shot';
+  source: 'yards_to_green' | 'last_closed_shot' | 'shot_yards';
   dYards: number;
 };
+
+/**
+ * Catch-up / edit club picker D: this shot's haversine yards, never yards-to-green.
+ * Live play still uses `resolveDistanceTarget`.
+ */
+export function shotYardsDistanceTarget(dYards: number | null | undefined): DistanceTarget | null {
+  if (dYards == null || !Number.isFinite(dYards)) return null;
+  return { source: 'shot_yards', dYards };
+}
 
 export type RankedClub = RankClubInput & {
   /** |rank yards − D| (live average or typical-carry seed) */
