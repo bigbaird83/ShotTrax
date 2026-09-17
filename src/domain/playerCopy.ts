@@ -101,6 +101,8 @@ export const COPY = {
   insertShot: 'Insert shot',
   nerdOut: 'Nerd out',
   nerdOutLede: 'Score, putts, and how far you hit each club.',
+  scorecard: 'Scorecard',
+  scorecardPar: 'Par',
   summaryHome: 'Home',
 } as const;
 

@@ -74,6 +74,7 @@ import { HoleMap } from '@/src/ui/HoleMap';
 import { MarkCheck } from '@/src/ui/MarkCheck';
 import { FullSheet } from '@/src/ui/Sheet';
 import { PuttSheetBody } from '@/src/ui/PuttSheetBody';
+import { ScorecardBody } from '@/src/ui/ScorecardBody';
 import { ThumbZone } from '@/src/ui/ThumbZone';
 import { colors, tapTarget, type } from '@/src/ui/theme';
 
@@ -88,6 +89,7 @@ export default function HoleScreen() {
   const [dropOpen, setDropOpen] = useState(false);
   const [penaltyOpen, setPenaltyOpen] = useState(false);
   const [scoreOpen, setScoreOpen] = useState(false);
+  const [scorecardOpen, setScorecardOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [placeFrom, setPlaceFrom] = useState<LatLng | null>(null);
   const [placeTo, setPlaceTo] = useState<LatLng | null>(null);
@@ -1047,6 +1049,13 @@ export default function HoleScreen() {
         </View>
 
         <BigButton
+          label={COPY.scorecard}
+          variant="ghost"
+          disabled={placing}
+          onPress={() => setScorecardOpen(true)}
+        />
+
+        <BigButton
           label={COPY.allClubs}
           variant="secondary"
           disabled={readOnly || placing}
@@ -1150,6 +1159,14 @@ export default function HoleScreen() {
             }}
           />
           <BigButton
+            label={COPY.scorecard}
+            variant="ghost"
+            onPress={() => {
+              setMenuOpen(false);
+              setScorecardOpen(true);
+            }}
+          />
+          <BigButton
             label={COPY.settings}
             variant="ghost"
             onPress={() => {
@@ -1158,6 +1175,23 @@ export default function HoleScreen() {
             }}
           />
         </View>
+      </FullSheet>
+
+      <FullSheet
+        visible={scorecardOpen}
+        title={COPY.scorecard}
+        onClose={() => setScorecardOpen(false)}>
+        <ScrollView contentContainerStyle={styles.sheetPad}>
+          <ScorecardBody
+            holes={holes.map((row) => ({
+              number: row.number,
+              par: row.par,
+              score: row.score,
+              putts: row.putts,
+            }))}
+            onBack={() => setScorecardOpen(false)}
+          />
+        </ScrollView>
       </FullSheet>
 
       <FullSheet
