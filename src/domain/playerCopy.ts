@@ -3,6 +3,7 @@
 export const COPY = {
   homeLede: 'Find a course nearby, pick your tee, start the round.',
   home: 'Home',
+  back: 'Back',
   nearbyHint: 'Courses near you — pull to refresh.',
   nearbyEmpty: 'No courses near you.',
   nearbyUnavailable: 'Courses near you aren’t available. Type a course name to start.',

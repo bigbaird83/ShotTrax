@@ -10,11 +10,13 @@ import {
   WATCH_MESSAGE_TYPES,
   clubListPayload,
   clubListPushKey,
+  clubNavPayload,
   clubPickPayload,
   formatClubMarkedFeedback,
   isIso8601,
   MADE_IT_FEEDBACK,
   parseClubList,
+  parseClubNav,
   parseClubPick,
   parsePuttPick,
   parsePuttSheet,
@@ -187,8 +189,19 @@ test('clubPick may carry Watch GPS; phone prefers it only when fresh and at leas
   assert.equal(parsed?.accuracyM, 4);
 });
 
-test('Watch Connectivity this cut is clubList, clubPick, puttSheet, puttPick', () => {
-  assert.deepEqual([...WATCH_MESSAGE_TYPES], ['clubList', 'clubPick', 'puttSheet', 'puttPick']);
+test('Watch Connectivity this cut is clubList, clubPick, puttSheet, puttPick, clubNav', () => {
+  assert.deepEqual([...WATCH_MESSAGE_TYPES], ['clubList', 'clubPick', 'puttSheet', 'puttPick', 'clubNav']);
+});
+
+test('Watch Back and Home never parse as a club pick', () => {
+  const back = clubNavPayload({ action: 'back', at: '2026-09-17T22:00:00.000Z' });
+  const home = clubNavPayload({ action: 'home', at: '2026-09-17T22:00:00.000Z' });
+  assert.equal(back.type, 'clubNav');
+  assert.equal(home.action, 'home');
+  assert.deepEqual(parseClubNav(JSON.parse(JSON.stringify(back))), back);
+  assert.equal(parseClubPick(back), null);
+  assert.equal(parseClubPick(home), null);
+  assert.equal(parseClubNav({ type: 'clubNav', action: 'mark', at: '2026-09-17T22:00:00.000Z' }), null);
 });
 
 test('Watch feedback is marked ✓ or Phone unavailable — never silent fail', () => {

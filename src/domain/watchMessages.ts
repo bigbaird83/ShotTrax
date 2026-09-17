@@ -1,4 +1,5 @@
-/** Watch Connectivity: clubList + clubPick, plus puttSheet + puttPick for hole finish.
+/** Watch Connectivity: clubList + clubPick, plus puttSheet + puttPick for hole finish,
+ * and clubNav (Back / Home — never a mark).
  * Phone owns undo, averages, Drop/Penalty. Ranking/seeds/avgs stay on phone.
  * Watch UI shows top-3 Suggested by default; All clubs reveals the bag payload.
  * Putter opens the putt sheet (buckets + Made it) — never a GPS mark.
@@ -12,7 +13,7 @@ export type ClubId = string;
 
 export type YardsQuality = 'good' | 'soft' | 'none';
 
-export const WATCH_MESSAGE_TYPES = ['clubList', 'clubPick', 'puttSheet', 'puttPick'] as const;
+export const WATCH_MESSAGE_TYPES = ['clubList', 'clubPick', 'puttSheet', 'puttPick', 'clubNav'] as const;
 export type WatchMessageType = (typeof WATCH_MESSAGE_TYPES)[number];
 
 /** Phone → Watch. Push on hole change / fix quality change / bag rank change.
@@ -51,6 +52,13 @@ export type ClubPickMessage = {
   lat?: number;
   lng?: number;
   accuracyM?: number | null;
+};
+
+/** Watch → Phone Back / Home. Never a club tap and never a mark. */
+export type ClubNavMessage = {
+  type: 'clubNav';
+  action: 'back' | 'home';
+  at: string;
 };
 
 export type ClubPickReply = {
@@ -115,6 +123,23 @@ export function parseClubList(raw: unknown): ClubListMessage | null {
   const lastClubId = typeof row.lastClubId === 'string' && row.lastClubId.trim() ? row.lastClubId : undefined;
   if (lastClubId) msg.lastClubId = lastClubId;
   return msg;
+}
+
+export function parseClubNav(raw: unknown): ClubNavMessage | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as Record<string, unknown>;
+  if (row.type !== 'clubNav') return null;
+  if (row.action !== 'back' && row.action !== 'home') return null;
+  if (typeof row.at !== 'string' || !isIso8601(row.at)) return null;
+  return { type: 'clubNav', action: row.action, at: row.at };
+}
+
+export function clubNavPayload(args: { action: 'back' | 'home'; at?: string }): ClubNavMessage {
+  return {
+    type: 'clubNav',
+    action: args.action,
+    at: args.at ?? new Date().toISOString(),
+  };
 }
 
 export function parseClubPick(raw: unknown): ClubPickMessage | null {

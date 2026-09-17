@@ -10,6 +10,7 @@ import {
   PUTTS_ON_WATCH,
   clubListPayload,
   formatClubMarkedFeedback,
+  parseClubNav,
   parseClubPick,
   parsePuttPick,
   puttSheetPayload,
@@ -32,6 +33,7 @@ export type WatchClubContext = {
   bump: () => void;
   onMarked?: () => void;
   onPutter?: () => void;
+  onLeave?: (action: 'back' | 'home') => void;
   onPuttPick?: (msg: PuttPickMessage) => PuttPickReply | Promise<PuttPickReply>;
   labelForClub: (clubId: string) => string | null;
 };
@@ -122,13 +124,25 @@ async function replyToken(token: string, payload: ClubPickReply | PuttPickReply)
 }
 
 async function handlePick(token: string, json: string): Promise<void> {
-  const pick = (() => {
-    try {
-      return parseClubPick(JSON.parse(json) as unknown);
-    } catch {
-      return null;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(json) as unknown;
+  } catch {
+    await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
+    return;
+  }
+  const nav = parseClubNav(raw);
+  if (nav) {
+    const ctx = context;
+    if (!ctx || ctx.readOnly) {
+      await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
+      return;
     }
-  })();
+    ctx.onLeave?.(nav.action);
+    await replyToken(token, { ok: true, feedback: nav.action === 'home' ? COPY.home : COPY.back });
+    return;
+  }
+  const pick = parseClubPick(raw);
   if (!pick) {
     await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
     return;

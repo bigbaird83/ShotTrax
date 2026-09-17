@@ -348,6 +348,9 @@ export default function HoleScreen() {
       onPutter: () => {
         void openPuttSheet(holeNumber);
       },
+      onLeave: (action) => {
+        if (action === 'home') router.replace('/');
+      },
       onPuttPick: onWatchPuttPick,
       labelForClub: (clubId) => clubMap[clubId]?.shortName ?? clubs.find((club) => club.id === clubId)?.shortName ?? null,
     },

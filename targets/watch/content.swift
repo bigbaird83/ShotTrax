@@ -92,6 +92,23 @@ struct ContentView: View {
 
   @ViewBuilder
   private var clubPick: some View {
+    HStack(spacing: 6) {
+      Button(action: { session.leave("back") }) {
+        Text("Back")
+          .font(.caption.weight(.heavy))
+          .frame(maxWidth: .infinity, minHeight: 36)
+      }
+      .buttonStyle(.bordered)
+      .disabled(session.sending)
+      Button(action: { session.leave("home") }) {
+        Text("Home")
+          .font(.caption.weight(.heavy))
+          .frame(maxWidth: .infinity, minHeight: 36)
+      }
+      .buttonStyle(.bordered)
+      .disabled(session.sending)
+    }
+
     Button(action: { session.pickSameClub() }) {
       Text(sameClubTitle)
         .font(.headline.weight(.black))

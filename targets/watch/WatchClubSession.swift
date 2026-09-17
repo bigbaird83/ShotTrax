@@ -139,15 +139,25 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     pick(clubId: clubId)
   }
 
+  func leave(_ action: String) {
+    sending = true
+    feedback = ""
+    sendPick([
+      "type": "clubNav",
+      "action": action,
+      "at": isoNow(),
+    ], keepPending: false)
+  }
+
   private func isoNow() -> String {
     let fmt = ISO8601DateFormatter()
     fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     return fmt.string(from: Date())
   }
 
-  private func sendPick(_ payload: [String: Any]) {
+  private func sendPick(_ payload: [String: Any], keepPending: Bool = true) {
     guard WCSession.isSupported() else {
-      failUnavailable(payload)
+      failUnavailable(payload, keepPending: keepPending)
       return
     }
     let session = WCSession.default
@@ -159,11 +169,11 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
         }
       }, errorHandler: { [weak self] _ in
         DispatchQueue.main.async {
-          self?.failUnavailable(payload, keepPending: true)
+          self?.failUnavailable(payload, keepPending: keepPending)
         }
       })
     } else {
-      failUnavailable(payload, keepPending: true)
+      failUnavailable(payload, keepPending: keepPending)
     }
   }
 

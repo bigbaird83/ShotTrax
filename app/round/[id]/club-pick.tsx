@@ -4,6 +4,7 @@ import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-nativ
 import { useDb } from '@/src/db/DbProvider';
 import { getHole, listClubAverages, listClubs, listShotsForHole } from '@/src/db/repo';
 import { COPY } from '@/src/domain/playerCopy';
+import { clubPickLeaveHref } from '@/src/domain/clubPickNav';
 import { putterOpensPuttSheet } from '@/src/domain/putts';
 import { clubToRankInput, lastClosedShotYards, rankTopClubs, resolveDistanceTarget } from '@/src/domain/rankClubs';
 import { parseTypedYards } from '@/src/domain/shotSource';
@@ -34,6 +35,11 @@ export default function ClubPickScreen() {
   const relabelId = typeof shotId === 'string' && shotId.length > 0 ? shotId : null;
   const navigation = useNavigation();
   const { db, revision, bump } = useDb();
+
+  const leavePicker = (action: 'back' | 'home') => {
+    if (!id || Number.isNaN(holeNumber)) return;
+    router.replace(clubPickLeaveHref({ action, roundId: id, holeNumber }));
+  };
   const clubs = useMemo(() => listClubs(db, true), [db, revision]);
   const holeRow = useMemo(() => getHole(db, id, holeNumber), [db, id, holeNumber, revision]);
   const shots = useMemo(
@@ -54,8 +60,24 @@ export default function ClubPickScreen() {
   useEffect(() => {
     navigation.setOptions({
       title: withoutGps ? COPY.forgotShot : relabelId ? COPY.changeClub : COPY.pickClub,
+      headerLeft: () => (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => leavePicker('back')}
+          style={styles.headerBtn}>
+          <Text style={styles.headerBtnText}>{COPY.back}</Text>
+        </Pressable>
+      ),
+      headerRight: () => (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => leavePicker('home')}
+          style={styles.headerBtn}>
+          <Text style={styles.headerBtnText}>{COPY.home}</Text>
+        </Pressable>
+      ),
     });
-  }, [navigation, withoutGps, relabelId]);
+  }, [navigation, withoutGps, relabelId, id, holeNumber]);
 
   useEffect(() => {
     return () => {
@@ -99,6 +121,7 @@ export default function ClubPickScreen() {
       onPutter: () => {
         router.replace(`/round/${id}/hole/${holeNumber}?putts=1`);
       },
+      onLeave: (action) => leavePicker(action),
       labelForClub: (clubId) => clubs.find((club) => club.id === clubId)?.shortName ?? null,
     },
     {
@@ -280,6 +303,20 @@ export default function ClubPickScreen() {
             ? 'Where you hit from stays. Only the club changes.'
             : COPY.pickClubLede}
       </Text>
+      <View style={styles.navRow}>
+        <BigButton
+          label={COPY.back}
+          variant="ghost"
+          style={{ flex: 1 }}
+          onPress={() => leavePicker('back')}
+        />
+        <BigButton
+          label={COPY.home}
+          variant="secondary"
+          style={{ flex: 1 }}
+          onPress={() => leavePicker('home')}
+        />
+      </View>
 
       {withoutGps ? (
         <TextInput
@@ -349,6 +386,9 @@ export default function ClubPickScreen() {
 const styles = StyleSheet.create({
   title: { color: colors.cream, fontSize: type.hole, fontWeight: '900' },
   lede: { color: colors.muted, fontSize: type.body, lineHeight: 22 },
+  navRow: { flexDirection: 'row', gap: 10 },
+  headerBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
+  headerBtnText: { color: colors.cream, fontSize: type.body, fontWeight: '800' },
   warn: { color: colors.orange, fontSize: type.meta, fontWeight: '700' },
   heard: { color: colors.cream, fontSize: type.body, fontWeight: '700' },
   unlock: { color: colors.muted, fontSize: type.meta, fontWeight: '700' },

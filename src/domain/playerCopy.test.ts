@@ -47,6 +47,7 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.previousHole, 'Previous hole');
   assert.equal(COPY.settings, 'Settings');
   assert.equal(COPY.home, 'Home');
+  assert.equal(COPY.back, 'Back');
   assert.equal(COPY.courseDistance, 'Course distance');
   assert.equal(COPY.courseDistanceSetting, 'Course distance: Miles / Kilometers');
   assert.equal(COPY.miles, 'Miles');
