@@ -1,6 +1,6 @@
-# ShotTrax / ShotTraxx — P5 part 2
+# ShotTraxx — P5 part 2
 
-Brand mark on the splash is **ShotTraxx**. The app/package name remains ShotTrax.
+User-facing name is **ShotTraxx**. Bundle ID `com.shottrax.app` and Expo slug `shottrax` stay unchanged.
 
 ## Golf Courses API (nearby courses, par, green centroids)
 
@@ -21,14 +21,15 @@ EXPO_PUBLIC_GOLF_COURSES_API_KEY=your_key_here
 GOLF_COURSES_API_KEY=your_key_here
 ```
 
-Without a key, the **Nearby courses** picker is disabled and does not call the network. You can still type a course name and drop a green pin. ShotTrax never invents a nearby-course list, par, or green coordinate.
+Without a key, the **Nearby courses** picker is disabled and does not call the network. You can still type a course name and drop a green pin. ShotTraxx never invents a nearby-course list, par, SI, or green coordinate.
 
 When a key is present:
 
 - Nearby search is `GET https://golfcoursesapi.com/api/v1/courses?lat=&lng=&radius=` (radius km, max 100)
-- Course detail is `GET /api/v1/courses/:id` (scorecard teeboxes → per-hole par)
+- Course detail is `GET /api/v1/courses/:id` (named teeboxes → par, SI/handicap, hole yardage, rating, slope)
+- Flow: nearby → select course → select named tee
 - Green centroids are `GET /api/v1/courses/:id/green-centers` (**Pro/Max**; `403` on free → greens stay blank)
-- Missing par is **par ?**. Missing green stays empty — yards to green shows **— / unavailable**.
+- Missing par is **par ?**. Missing SI is **SI ?**. Missing rating/slope/yardage stay blank. Missing green stays empty — yards to green shows **— / unavailable**.
 
 **Smoke:** `golfcoursesapi.com` may fail TLS on some boxes. Confirm nearby search on a **device or EAS build**, not only CI.
 

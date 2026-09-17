@@ -3,6 +3,8 @@ import { test } from 'node:test';
 import {
   attachHoleFromCourse,
   formatParLabel,
+  formatSiLabel,
+  formatTeeMeta,
   roundHoleCountFromCourse,
   seedHoleFromCourse,
 } from './layout';
@@ -11,12 +13,16 @@ test('seedHoleFromCourse never invents par or green', () => {
   assert.deepEqual(seedHoleFromCourse(null), {
     par: null,
     parSource: null,
+    yards: null,
+    handicap: null,
     green: null,
     greenSource: null,
   });
   assert.deepEqual(seedHoleFromCourse({ par: null, greenCentroid: { lat: 0, lng: 0 } }), {
     par: null,
     parSource: null,
+    yards: null,
+    handicap: null,
     green: null,
     greenSource: null,
   });
@@ -25,6 +31,8 @@ test('seedHoleFromCourse never invents par or green', () => {
     {
       par: 4,
       parSource: 'course',
+      yards: null,
+      handicap: null,
       green: { lat: 37.01, lng: -86.43 },
       greenSource: 'course_centroid',
     },
@@ -65,6 +73,19 @@ test('attachHoleFromCourse fills blanks only and keeps user par/green', () => {
 test('formatParLabel is par ? when missing', () => {
   assert.equal(formatParLabel(null), 'par ?');
   assert.equal(formatParLabel(4), 'Par 4');
+});
+
+test('formatSiLabel is SI ? when missing — never invents a stroke index', () => {
+  assert.equal(formatSiLabel(null), 'SI ?');
+  assert.equal(formatSiLabel(7), 'SI 7');
+});
+
+test('formatTeeMeta omits blank rating/slope/yardage', () => {
+  assert.equal(formatTeeMeta({ name: 'Gold', rating: null, slope: null, totalYards: null }), 'Gold');
+  assert.equal(
+    formatTeeMeta({ name: 'Gold', rating: 73.3, slope: 128, totalYards: 6800 }),
+    'Gold · 73.3 · slope 128 · 6800 yd',
+  );
 });
 
 test('roundHoleCountFromCourse only uses 9 or 18', () => {

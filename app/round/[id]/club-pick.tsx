@@ -176,7 +176,7 @@ export default function ClubPickScreen() {
       <Text style={styles.title}>{withoutGps ? 'Forgotten swing' : 'Pick a club'}</Text>
       <Text style={styles.lede}>
         {withoutGps
-          ? 'Logs a stroke with fixQuality none and no coordinates. Optional typed yards are a score/UI note only — they never enter club averages or top-3. ShotTrax will not invent a GPS fix or call acceptFix.'
+          ? 'Logs a stroke with fixQuality none and no coordinates. Optional typed yards are a score/UI note only — they never enter club averages or top-3. ShotTraxx will not invent a GPS fix or call acceptFix.'
           : 'Tap a club to confirm GPS now as the start (and the previous shot’s end). Voice names a club but still needs Confirm. Watch / mic shot-detect assists are not in this build.'}
       </Text>
 

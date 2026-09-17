@@ -96,6 +96,8 @@ function migrateHolesParNullable(db: SQLiteDatabase): void {
       par INTEGER,
       par_source TEXT,
       score INTEGER,
+      yards INTEGER,
+      handicap INTEGER,
       green_lat REAL,
       green_lng REAL,
       green_source TEXT,
@@ -104,14 +106,18 @@ function migrateHolesParNullable(db: SQLiteDatabase): void {
   `);
   const hasParSource = cols.some((c) => c.name === 'par_source');
   const hasGreenSource = cols.some((c) => c.name === 'green_source');
+  const hasYards = cols.some((c) => c.name === 'yards');
+  const hasHandicap = cols.some((c) => c.name === 'handicap');
   const parSourceExpr = hasParSource ? 'par_source' : 'NULL';
   const greenSourceExpr = hasGreenSource ? 'green_source' : 'NULL';
+  const yardsExpr = hasYards ? 'yards' : 'NULL';
+  const handicapExpr = hasHandicap ? 'handicap' : 'NULL';
   db.execSync(`
     INSERT INTO holes_p5 (
-      id, round_id, number, par, par_source, score, green_lat, green_lng, green_source
+      id, round_id, number, par, par_source, score, yards, handicap, green_lat, green_lng, green_source
     )
     SELECT
-      id, round_id, number, par, ${parSourceExpr}, score, green_lat, green_lng, ${greenSourceExpr}
+      id, round_id, number, par, ${parSourceExpr}, score, ${yardsExpr}, ${handicapExpr}, green_lat, green_lng, ${greenSourceExpr}
     FROM holes;
   `);
   db.execSync('DROP TABLE holes;');
@@ -139,7 +145,11 @@ export function migrate(db: SQLiteDatabase): void {
       hole_count INTEGER NOT NULL,
       course_api_id TEXT,
       course_lat REAL,
-      course_lng REAL
+      course_lng REAL,
+      tee_name TEXT,
+      tee_rating REAL,
+      tee_slope INTEGER,
+      tee_total_yards INTEGER
     );
 
     CREATE TABLE IF NOT EXISTS holes (
@@ -149,6 +159,8 @@ export function migrate(db: SQLiteDatabase): void {
       par INTEGER,
       par_source TEXT,
       score INTEGER,
+      yards INTEGER,
+      handicap INTEGER,
       green_lat REAL,
       green_lng REAL,
       green_source TEXT,
@@ -194,9 +206,15 @@ export function migrate(db: SQLiteDatabase): void {
   ensureColumn(db, 'holes', 'green_lng', 'REAL');
   ensureColumn(db, 'holes', 'green_source', 'TEXT');
   ensureColumn(db, 'holes', 'par_source', 'TEXT');
+  ensureColumn(db, 'holes', 'yards', 'INTEGER');
+  ensureColumn(db, 'holes', 'handicap', 'INTEGER');
   ensureColumn(db, 'rounds', 'course_api_id', 'TEXT');
   ensureColumn(db, 'rounds', 'course_lat', 'REAL');
   ensureColumn(db, 'rounds', 'course_lng', 'REAL');
+  ensureColumn(db, 'rounds', 'tee_name', 'TEXT');
+  ensureColumn(db, 'rounds', 'tee_rating', 'REAL');
+  ensureColumn(db, 'rounds', 'tee_slope', 'INTEGER');
+  ensureColumn(db, 'rounds', 'tee_total_yards', 'INTEGER');
   migrateHolesParNullable(db);
   migrateShotsP3(db);
   ensureColumn(db, 'shots', 'source', "TEXT NOT NULL DEFAULT 'gps'");

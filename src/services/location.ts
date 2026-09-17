@@ -41,10 +41,10 @@ export async function getCurrentFix(): Promise<GpsFix> {
 
 export function describeGpsSource(fix: Pick<GpsFix, 'mocked' | 'isSimulator'>): string | null {
   if (fix.isSimulator) {
-    return 'SIMULATOR GPS — using the location the simulator reports. ShotTrax does not invent coordinates. Move the Simulator GPS pin to get real yards.';
+    return 'SIMULATOR GPS — using the location the simulator reports. ShotTraxx does not invent coordinates. Move the Simulator GPS pin to get real yards.';
   }
   if (fix.mocked) {
-    return 'MOCK GPS — this fix is flagged mocked by the OS. ShotTrax is not synthesizing a location.';
+    return 'MOCK GPS — this fix is flagged mocked by the OS. ShotTraxx is not synthesizing a location.';
   }
   return null;
 }

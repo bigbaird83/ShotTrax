@@ -1,10 +1,10 @@
-# ShotTrax
+# ShotTraxx
 
 Phone GPS golf shot tracker (no club sensors). **This branch is P5 part 2** on top of P1–P5.1 (GPS mark-shot, scores, club averages, hole map trails, voice club pick, top-3, penalties, no-GPS shots, ShotTraxx splash, yards-to-green).
 
-P5.2 wires **nearby courses** from Golf Courses API Pro (EAS secret `GOLF_COURSES_API_KEY`), a course picker that starts or attaches a round, **par from course data only** (`par ?` if missing), **green centroids** into `yardsToGreen(fix, greenCentroid)`, and **OSM** `golf=green/fairway/tee/hole` overlays when mapped. Watch motion, Plays Like, F/M/B pins, auto-detect, and Stracka scrape stay **out of scope**.
+P5.2 wires **nearby courses** from Golf Courses API Pro (EAS secret `GOLF_COURSES_API_KEY`), nearby → course → **named tee**, **par / SI from course data only** (`par ?` / `SI ?` if missing), rating/slope/yardage when present, **green centroids** into `yardsToGreen(fix, greenCentroid)`, and **OSM** `golf=green/fairway/tee/hole` overlays when mapped. Watch motion, Plays Like, F/M/B pins, auto-detect, and Stracka scrape stay **out of scope**.
 
-The splash brand mark is **ShotTraxx**. The app/package name remains ShotTrax.
+User-facing name is **ShotTraxx**. Bundle ID `com.shottrax.app` and Expo slug `shottrax` stay unchanged (App Store ID). Icon at `assets/images/icon.png` is a placeholder — Doc is picking A/B/C separately.
 
 ## Run (iOS first)
 
@@ -45,7 +45,7 @@ Expo client JS only inlines `EXPO_PUBLIC_*`. For local Expo Go, CoS must also se
 EXPO_PUBLIC_GOLF_COURSES_API_KEY=your_key_here
 ```
 
-Without a key the nearby picker is disabled (graceful copy, no network). You can still type a course name and drop a green pin. Missing API par stays **par ?**. Missing greens stay blank — ShotTrax does not invent them.
+Without a key the nearby picker is disabled (graceful copy, no network). You can still type a course name and drop a green pin. Missing API par stays **par ?**. Missing greens stay blank — ShotTraxx does not invent them.
 
 Selecting a nearby course **starts** a new round (Start 9/18) or **attaches** par/greens to a round in progress (blank holes only).
 
@@ -102,7 +102,7 @@ eas submit -p ios
 ### Install on the phone
 
 1. In [App Store Connect](https://appstoreconnect.apple.com), open the app → TestFlight → add yourself as an **internal tester**.
-2. On the iPhone, install the **TestFlight** app from the App Store, accept the invite, install ShotTrax.
+2. On the iPhone, install the **TestFlight** app from the App Store, accept the invite, install ShotTraxx.
 
 ### Profiles in `eas.json`
 
@@ -116,7 +116,7 @@ eas submit -p ios
 
 | Permission | When |
 | --- | --- |
-| **Location When In Use** | Club confirm (shot start) and the next mark (shot end / yards). Green estimate can reuse the current GPS. ShotTrax does not invent coordinates. |
+| **Location When In Use** | Club confirm (shot start) and the next mark (shot end / yards). Green estimate can reuse the current GPS. ShotTraxx does not invent coordinates. |
 | **Microphone** | Only after **Say a club**. Used to capture the utterance. |
 | **Speech Recognition** (iOS) | Maps the utterance to a bag club. You still tap **Confirm**. |
 
@@ -125,11 +125,11 @@ There is no Watch / motion / mic-shot-detect permission. Those assists are stubb
 ## Maps (`react-native-maps`)
 
 - **iOS:** Apple Maps, `mapType="satellite"` (no Google API key).
-- Hole **number comes from the scorecard**, overlaid on the map. OSM `golf=green/fairway/tee/hole` polygons/lines are drawn when Overpass returns them; unmapped holes stay empty (nothing invented).
+- Hole **number comes from the scorecard**, overlaid on the map. OSM `golf=green/fairway/tee/hole` **outlines** are drawn when Overpass returns them; unmapped holes stay empty (nothing invented).
 - Polylines are **closed GPS shots only** (start→end). Penalties are list rows, not trails. `no_gps` shots have no coordinates and never draw.
 - **Yards to green** uses the sensing hook `yardsToGreen(fix, greenCentroid) → { yards, quality }`. Same haversine and good (<15 m) / soft (15–25 m) bands as shot marks. No fix or no green pin → `{ yards: null, quality: 'none' }` (never invents a pin or a range). Poor GPS (>25 m) is also `none`, matching `acceptFix`. Soft GPS shows a **SOFT** badge. When quality is `none`, the map shows **yards to green — / unavailable**.
 - Course API **green centroids** feed that hook. Long-press (or **Mark green (GPS)**) still drops a **user** pin and wins over the centroid.
-- Scorecard **par** is course data only. Missing API par is **par ?** until you tap 3–6. ShotTrax does not default to par 4.
+- Scorecard **par** is course data only. Missing API par is **par ?** until you tap 3–6. ShotTraxx does not default to par 4.
 - **Android** satellite tiles typically need a Google Maps API key in the `react-native-maps` config plugin for store/dev binaries. iOS is the target.
 
 ## On-course flow
@@ -195,7 +195,7 @@ Defined in `src/config/sensing.ts`. Mark path is `getFix` → `acceptFix`, then 
 
 ## Simulator / mock GPS
 
-ShotTrax **does not synthesize a fairway or fake points**.
+ShotTraxx **does not synthesize a fairway or fake points**.
 
 - On the iOS Simulator a **SIMULATOR / MOCK GPS** banner is shown.
 - Marks use whatever location the simulator (or a mock provider) reports.

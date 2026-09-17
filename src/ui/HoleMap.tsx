@@ -40,9 +40,9 @@ function toCoord(lat: number, lng: number): Coord {
 const OSM_DRAW_ORDER: OsmGolfKind[] = ['fairway', 'tee', 'green', 'hole'];
 
 const OSM_STYLE: Record<OsmGolfKind, { fill?: string; stroke: string; width: number }> = {
-  fairway: { fill: 'rgba(200, 245, 66, 0.16)', stroke: 'rgba(200, 245, 66, 0.75)', width: 1 },
-  green: { fill: 'rgba(125, 207, 122, 0.42)', stroke: '#7DCF7A', width: 2 },
-  tee: { fill: 'rgba(245, 197, 66, 0.38)', stroke: '#F5C542', width: 1 },
+  fairway: { fill: 'transparent', stroke: 'rgba(200, 245, 66, 0.85)', width: 2 },
+  green: { fill: 'transparent', stroke: '#7DCF7A', width: 3 },
+  tee: { fill: 'transparent', stroke: '#F5C542', width: 2 },
   hole: { stroke: '#F4F1E8', width: 2 },
 };
 
@@ -151,7 +151,7 @@ function NativeHoleMap({
       <TrailFallback
         holeNumber={holeNumber}
         shots={shots}
-        message="Waiting for a real GPS fix to center the map. ShotTrax does not invent coordinates."
+        message="Waiting for a real GPS fix to center the map. ShotTraxx does not invent coordinates."
         yardsToGreen={yardsToGreen}
         hasFix={Boolean(userFix)}
         hasGreen={Boolean(green)}

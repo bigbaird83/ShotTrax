@@ -44,6 +44,10 @@ type RoundRow = {
   course_api_id: string | null;
   course_lat: number | null;
   course_lng: number | null;
+  tee_name: string | null;
+  tee_rating: number | null;
+  tee_slope: number | null;
+  tee_total_yards: number | null;
 };
 
 type HoleRow = {
@@ -53,6 +57,8 @@ type HoleRow = {
   par: number | null;
   par_source: string | null;
   score: number | null;
+  yards: number | null;
+  handicap: number | null;
   green_lat: number | null;
   green_lng: number | null;
   green_source: string | null;
@@ -120,6 +126,10 @@ function mapRound(row: RoundRow): Round {
     courseApiId: row.course_api_id ?? null,
     courseLat: row.course_lat ?? null,
     courseLng: row.course_lng ?? null,
+    teeName: row.tee_name ?? null,
+    teeRating: row.tee_rating ?? null,
+    teeSlope: row.tee_slope ?? null,
+    teeTotalYards: row.tee_total_yards ?? null,
   };
 }
 
@@ -131,6 +141,8 @@ function mapHole(row: HoleRow): Hole {
     par: row.par,
     parSource: mapParSource(row.par_source),
     score: row.score,
+    yards: row.yards ?? null,
+    handicap: row.handicap ?? null,
     greenLat: row.green_lat,
     greenLng: row.green_lng,
     greenSource: mapGreenSource(row.green_source),
@@ -272,20 +284,34 @@ export function startRound(
   const courseLoc = isValidLatLng(layout?.location ?? null) ? layout?.location ?? null : null;
   db.withTransactionSync(() => {
     db.runSync(
-      'INSERT INTO rounds (id, started_at, finished_at, course_name, hole_count, course_api_id, course_lat, course_lng) VALUES (?, ?, NULL, ?, ?, ?, ?, ?)',
-      [id, startedAt, courseName, holeCount, courseApiId, courseLoc?.lat ?? null, courseLoc?.lng ?? null],
+      'INSERT INTO rounds (id, started_at, finished_at, course_name, hole_count, course_api_id, course_lat, course_lng, tee_name, tee_rating, tee_slope, tee_total_yards) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        id,
+        startedAt,
+        courseName,
+        holeCount,
+        courseApiId,
+        courseLoc?.lat ?? null,
+        courseLoc?.lng ?? null,
+        layout?.teeName ?? null,
+        layout?.teeRating ?? null,
+        layout?.teeSlope ?? null,
+        layout?.teeTotalYards ?? null,
+      ],
     );
     for (let n = 1; n <= holeCount; n += 1) {
       const seed = layout?.holes?.find((hole) => hole.number === n);
       const applied = seedHoleFromCourse(seed ?? null);
       db.runSync(
-        'INSERT INTO holes (id, round_id, number, par, par_source, score, green_lat, green_lng, green_source) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)',
+        'INSERT INTO holes (id, round_id, number, par, par_source, score, yards, handicap, green_lat, green_lng, green_source) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)',
         [
           newId(),
           id,
           n,
           applied.par,
           applied.parSource,
+          applied.yards,
+          applied.handicap,
           applied.green?.lat ?? null,
           applied.green?.lng ?? null,
           applied.greenSource,
@@ -302,6 +328,10 @@ export function startRound(
     courseApiId,
     courseLat: courseLoc?.lat ?? null,
     courseLng: courseLoc?.lng ?? null,
+    teeName: layout?.teeName ?? null,
+    teeRating: layout?.teeRating ?? null,
+    teeSlope: layout?.teeSlope ?? null,
+    teeTotalYards: layout?.teeTotalYards ?? null,
   };
 }
 
@@ -318,8 +348,18 @@ export function attachCourseToRound(
   const courseLoc = isValidLatLng(layout.location ?? null) ? layout.location ?? null : null;
   db.withTransactionSync(() => {
     db.runSync(
-      'UPDATE rounds SET course_name = COALESCE(?, course_name), course_api_id = ?, course_lat = ?, course_lng = ? WHERE id = ?',
-      [courseName, layout.apiId, courseLoc?.lat ?? null, courseLoc?.lng ?? null, roundId],
+      'UPDATE rounds SET course_name = COALESCE(?, course_name), course_api_id = ?, course_lat = ?, course_lng = ?, tee_name = ?, tee_rating = ?, tee_slope = ?, tee_total_yards = ? WHERE id = ?',
+      [
+        courseName,
+        layout.apiId,
+        courseLoc?.lat ?? null,
+        courseLoc?.lng ?? null,
+        layout.teeName ?? null,
+        layout.teeRating ?? null,
+        layout.teeSlope ?? null,
+        layout.teeTotalYards ?? null,
+        roundId,
+      ],
     );
     const holes = db.getAllSync<HoleRow>(
       'SELECT * FROM holes WHERE round_id = ? ORDER BY number ASC',
@@ -338,10 +378,12 @@ export function attachCourseToRound(
         seed ?? null,
       );
       db.runSync(
-        'UPDATE holes SET par = ?, par_source = ?, green_lat = ?, green_lng = ?, green_source = ? WHERE id = ?',
+        'UPDATE holes SET par = ?, par_source = ?, yards = ?, handicap = ?, green_lat = ?, green_lng = ?, green_source = ? WHERE id = ?',
         [
           applied.par,
           applied.parSource,
+          applied.yards,
+          applied.handicap,
           applied.green?.lat ?? null,
           applied.green?.lng ?? null,
           applied.greenSource,

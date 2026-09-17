@@ -3,8 +3,8 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { getCourseDataClient } from '@/src/course/client';
-import { layoutFromCourseDetail } from '@/src/course/layout';
-import type { CourseDetail, CourseSummary } from '@/src/course/types';
+import { layoutFromTee } from '@/src/course/layout';
+import type { CourseDetail, CourseSummary, TeeSet } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
 import {
   attachCourseToRound,
@@ -16,22 +16,26 @@ import {
   type CourseLayoutSeed,
 } from '@/src/db/repo';
 import { BigButton } from '@/src/ui/BigButton';
-import { CoursePicker } from '@/src/ui/CoursePicker';
+import { CoursePicker, type CoursePick } from '@/src/ui/CoursePicker';
 import { GpsBanner } from '@/src/ui/GpsBanner';
 import { Screen } from '@/src/ui/Screen';
 import { colors } from '@/src/ui/theme';
 
-async function loadLayout(course: CourseSummary): Promise<CourseLayoutSeed> {
-  try {
-    const detail: CourseDetail | null = await getCourseDataClient().getCourse(course.id);
-    if (detail) return layoutFromCourseDetail(detail);
-  } catch {
-    // Still attach the name/id; par/green stay blank — never invented.
-  }
+async function loadLayout(
+  course: CourseSummary,
+  detail: CourseDetail | null,
+  tee: TeeSet | null,
+): Promise<CourseLayoutSeed> {
+  const resolved = detail ?? (await getCourseDataClient().getCourse(course.id).catch(() => null));
+  if (resolved) return layoutFromTee(resolved, tee);
   return {
     apiId: course.id,
     name: course.name,
     location: course.location,
+    teeName: tee?.name ?? null,
+    teeRating: tee?.rating ?? null,
+    teeSlope: tee?.slope ?? null,
+    teeTotalYards: tee?.totalYards ?? null,
     holes: [],
   };
 }
@@ -40,43 +44,51 @@ export default function HomeScreen() {
   const { db, revision, bump } = useDb();
   const [courseName, setCourseName] = useState('');
   const [picked, setPicked] = useState<CourseSummary | null>(null);
+  const [pickedTee, setPickedTee] = useState<TeeSet | null>(null);
+  const [pickedDetail, setPickedDetail] = useState<CourseDetail | null>(null);
   const [starting, setStarting] = useState(false);
   const rounds = useMemo(() => listRounds(db), [db, revision]);
   const active = useMemo(() => getActiveRound(db), [db, revision]);
   const isSimulator = Device.isDevice === false;
 
   const applyPickedCourse = async (course: CourseSummary, holeCount: 9 | 18) => {
-    const layout = await loadLayout(course);
+    const layout = await loadLayout(course, pickedDetail, pickedTee);
     const name = course.name;
     const round = startRound(db, holeCount, name, layout);
     bump();
     router.push(`/round/${round.id}/hole/1`);
   };
 
-  const onSelectCourse = (course: CourseSummary | null) => {
-    if (!course) {
-      setPicked(null);
-      return;
-    }
+  const commitPick = async (pick: CoursePick) => {
+    const needsTee = (pick.detail?.tees.length ?? 0) > 1 && !pick.tee;
+    setPicked(pick.course);
+    setPickedTee(pick.tee);
+    setPickedDetail(pick.detail);
+    setCourseName(pick.course.name);
+    if (needsTee) return;
     if (active) {
-      void (async () => {
-        setStarting(true);
-        try {
-          const layout = await loadLayout(course);
-          attachCourseToRound(db, active.id, course.name, layout);
-          bump();
-          setPicked(course);
-          router.push(`/round/${active.id}/hole/1`);
-        } catch (err) {
-          Alert.alert('Could not attach course', err instanceof Error ? err.message : 'Unknown error');
-        } finally {
-          setStarting(false);
-        }
-      })();
+      setStarting(true);
+      try {
+        const layout = await loadLayout(pick.course, pick.detail, pick.tee);
+        attachCourseToRound(db, active.id, pick.course.name, layout);
+        bump();
+        router.push(`/round/${active.id}/hole/1`);
+      } catch (err) {
+        Alert.alert('Could not attach course', err instanceof Error ? err.message : 'Unknown error');
+      } finally {
+        setStarting(false);
+      }
+    }
+  };
+
+  const onSelectCourse = (pick: CoursePick | null) => {
+    if (!pick) {
+      setPicked(null);
+      setPickedTee(null);
+      setPickedDetail(null);
       return;
     }
-    setPicked(course);
-    setCourseName(course.name);
+    void commitPick(pick);
   };
 
   const onStart = (holeCount: 9 | 18) => {
@@ -106,15 +118,15 @@ export default function HomeScreen() {
   return (
     <Screen>
       <Text style={styles.kicker}>P5 · Nearby courses</Text>
-      <Text style={styles.title}>ShotTrax</Text>
+      <Text style={styles.title}>ShotTraxx</Text>
       <Text style={styles.lede}>
-        Find a nearby course, then start or attach a round. Par and green centroids come from
-        Golf Courses API only (blank / “par ?” if missing). Yards to green is phone GPS → that
-        centroid. Confirm a club to mark shots.
+        Find a nearby course, pick a named tee, then start or attach a round. Par, SI, and greens
+        come from Golf Courses API only (blank / “par ?” / “SI ?” if missing). Yards to green is
+        phone GPS → the Pro green centroid.
       </Text>
 
       {isSimulator ? (
-        <GpsBanner message="This is a simulator. ShotTrax uses whatever location the simulator reports and does not invent GPS. Set a GPS pin (Features → Location) and move it between marks or distances will be 0 yd." />
+        <GpsBanner message="This is a simulator. ShotTraxx uses whatever location the simulator reports and does not invent GPS. Set a GPS pin (Features → Location) and move it between marks or distances will be 0 yd." />
       ) : null}
 
       <TextInput
@@ -123,6 +135,8 @@ export default function HomeScreen() {
         value={picked?.name ?? courseName}
         onChangeText={(text) => {
           setPicked(null);
+          setPickedTee(null);
+          setPickedDetail(null);
           setCourseName(text);
         }}
         style={styles.input}
@@ -130,6 +144,7 @@ export default function HomeScreen() {
 
       <CoursePicker
         selected={picked}
+        selectedTee={pickedTee}
         attachMode={Boolean(active)}
         onSelect={onSelectCourse}
       />
@@ -157,14 +172,22 @@ export default function HomeScreen() {
       ) : (
         <View style={{ gap: 10 }}>
           <BigButton
-            label={picked ? `Start 18 at ${picked.name}` : 'Start 18 holes'}
-            disabled={starting}
+            label={
+              picked
+                ? `Start 18 at ${picked.name}${pickedTee ? ` · ${pickedTee.name}` : ''}`
+                : 'Start 18 holes'
+            }
+            disabled={starting || (Boolean(picked) && (pickedDetail?.tees.length ?? 0) > 1 && !pickedTee)}
             onPress={() => onStart(18)}
           />
           <BigButton
-            label={picked ? `Start 9 at ${picked.name}` : 'Start 9 holes'}
+            label={
+              picked
+                ? `Start 9 at ${picked.name}${pickedTee ? ` · ${pickedTee.name}` : ''}`
+                : 'Start 9 holes'
+            }
             variant="secondary"
-            disabled={starting}
+            disabled={starting || (Boolean(picked) && (pickedDetail?.tees.length ?? 0) > 1 && !pickedTee)}
             onPress={() => onStart(9)}
           />
         </View>

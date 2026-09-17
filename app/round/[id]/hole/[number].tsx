@@ -3,6 +3,7 @@ import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { getCourseDataClient } from '@/src/course/client';
+import { formatParLabel, formatSiLabel, formatTeeMeta } from '@/src/course/layout';
 import type { OsmOverlay } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
 import {
@@ -173,9 +174,9 @@ export default function HoleScreen() {
 
   const accClass = fix ? classifyAccuracyM(fix.accuracyM) : null;
   const simBanner = Device.isDevice === false
-    ? 'SIMULATOR GPS — using the location the simulator reports. ShotTrax does not invent coordinates. Move the GPS pin between marks to log yards.'
+    ? 'SIMULATOR GPS — using the location the simulator reports. ShotTraxx does not invent coordinates. Move the GPS pin between marks to log yards.'
     : fix?.mocked
-      ? 'MOCK GPS — the OS flagged this fix as mocked. ShotTrax is not synthesizing a location.'
+      ? 'MOCK GPS — the OS flagged this fix as mocked. ShotTraxx is not synthesizing a location.'
       : null;
 
   const green =
@@ -205,7 +206,8 @@ export default function HoleScreen() {
       <View style={styles.headerRow}>
         <Text style={styles.holeTitle}>Hole {hole.number}</Text>
         <Text style={styles.muted}>
-          {round.courseName ?? 'Round'} · {round.holeCount} holes
+          {round.courseName ?? 'Round'}
+          {round.teeName ? ` · ${round.teeName}` : ''} · {round.holeCount} holes
         </Text>
       </View>
 
@@ -239,20 +241,36 @@ export default function HoleScreen() {
         </Text>
       ) : (
         <Text style={styles.tiny}>
-          No course or green pin yet. Long-press the map or Mark green (GPS). ShotTrax will not invent
+          No course or green pin yet. Long-press the map or Mark green (GPS). ShotTraxx will not invent
           coordinates.
         </Text>
       )}
-      <Text style={styles.label}>{hole.par == null ? 'Par ?' : `Par ${hole.par}`}</Text>
+      <Text style={styles.label}>
+        {formatParLabel(hole.par)} · {formatSiLabel(hole.handicap)}
+        {hole.yards != null ? ` · ${hole.yards} yd` : ''}
+      </Text>
+      {round.teeName ? (
+        <Text style={styles.tiny}>
+          {formatTeeMeta({
+            name: round.teeName,
+            rating: round.teeRating,
+            slope: round.teeSlope,
+            totalYards: round.teeTotalYards,
+          })}
+        </Text>
+      ) : null}
       {hole.par == null ? (
         <Text style={styles.tiny}>
-          No course par for this hole. Pick 3–6 or leave blank — ShotTrax will not invent par.
+          No course par for this hole. Pick 3–6 or leave blank — ShotTraxx will not invent par.
         </Text>
       ) : hole.parSource === 'course' ? (
         <Text style={styles.tiny}>Par from course data (not invented). Tap to override.</Text>
       ) : (
         <Text style={styles.tiny}>Par set on the scorecard.</Text>
       )}
+      {hole.handicap == null ? (
+        <Text style={styles.tiny}>No stroke index from the selected tee — SI ?</Text>
+      ) : null}
       <View style={styles.row}>
         {[3, 4, 5, 6].map((par) => (
           <Pressable

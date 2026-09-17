@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { formatParLabel } from '@/src/course/layout';
+import { formatParLabel, formatSiLabel, formatTeeMeta } from '@/src/course/layout';
 import { useDb } from '@/src/db/DbProvider';
 import { getRound, listHoles, listPenaltiesForHole, listShotsForHole } from '@/src/db/repo';
 import { formatPenaltyRow, totalPenaltyStrokes } from '@/src/domain/penalty';
@@ -36,6 +36,16 @@ export default function RoundSummaryScreen() {
     <Screen>
       <Text style={styles.kicker}>{round.finishedAt ? 'Finished' : 'In progress'}</Text>
       <Text style={styles.title}>{round.courseName ?? 'Round'}</Text>
+      {round.teeName ? (
+        <Text style={styles.muted}>
+          {formatTeeMeta({
+            name: round.teeName,
+            rating: round.teeRating,
+            slope: round.teeSlope,
+            totalYards: round.teeTotalYards,
+          })}
+        </Text>
+      ) : null}
       <Text style={styles.total}>
         {scored.length ? total : '—'}{' '}
         <Text style={styles.toPar}>{toParLabel}</Text>
@@ -70,7 +80,10 @@ export default function RoundSummaryScreen() {
             style={styles.row}>
             <Text style={styles.holeNum}>{hole.number}</Text>
             <View style={{ flex: 1, gap: 4 }}>
-              <Text style={styles.holeTitle}>{formatParLabel(hole.par)}</Text>
+              <Text style={styles.holeTitle}>
+                {formatParLabel(hole.par)} · {formatSiLabel(hole.handicap)}
+                {hole.yards != null ? ` · ${hole.yards} yd` : ''}
+              </Text>
               <Text style={styles.muted}>{shotBits.join(' · ')}</Text>
               {penalties.length > 0 ? (
                 <Text style={styles.penalty}>

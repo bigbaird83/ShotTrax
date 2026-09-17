@@ -115,9 +115,15 @@ export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataCli
         return detail;
       }
       const greens = parseGreenCenters(greensRes.json);
+      const holes = mergeGreenCenters(detail.holes, greens);
+      const tees = detail.tees.map((tee) => ({
+        ...tee,
+        holes: mergeGreenCenters(tee.holes, greens),
+      }));
       return {
         ...detail,
-        holes: mergeGreenCenters(detail.holes, greens),
+        holes,
+        tees,
       };
     },
 

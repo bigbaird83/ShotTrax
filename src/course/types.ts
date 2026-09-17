@@ -16,8 +16,20 @@ export type HoleCourseData = {
   holeNumber: number;
   /** Blank when the API omits par — never invented. */
   par: number | null;
+  /** Tee yardage for this hole. Blank if the API omits it. */
+  yards: number | null;
+  /** Stroke index 1–18. Blank if the API omits it — shown as “SI ?”. */
+  handicap: number | null;
   /** Green centroid when the API provides one — never invented. */
   greenCentroid: LatLng | null;
+};
+
+export type TeeSet = {
+  name: string;
+  rating: number | null;
+  slope: number | null;
+  totalYards: number | null;
+  holes: HoleCourseData[];
 };
 
 export type CourseDetail = {
@@ -26,6 +38,7 @@ export type CourseDetail = {
   holeCount: number | null;
   location: LatLng | null;
   holes: HoleCourseData[];
+  tees: TeeSet[];
   /** Pro/Max flag from course detail. Missing/false → no invented greens. */
   greenCentersAvailable: boolean | null;
 };
