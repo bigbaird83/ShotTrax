@@ -19,7 +19,6 @@ import {
   listPenaltiesForHole,
   listShotsForHole,
   setHoleGreen,
-  setRoundLastClub,
   updateHolePar,
   updateHoleScore,
 } from '@/src/db/repo';
@@ -34,7 +33,7 @@ import { matchSpokenClub, speechContextualStrings } from '@/src/domain/voiceClub
 import { yardsToGreen } from '@/src/sensing/api';
 import { describeGpsSource, getCurrentFix } from '@/src/services/location';
 import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot } from '@/src/services/shotActions';
-import { speechRecognitionAvailable, startClubSpeech, type ClubSpeechSession } from '@/src/services/speechClub';
+import { startClubSpeech, type ClubSpeechSession } from '@/src/services/speechClub';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
 import { QualityBadge } from '@/src/ui/Badge';
 import { BigButton } from '@/src/ui/BigButton';
@@ -66,6 +65,7 @@ export default function HoleScreen() {
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const sessionRef = useRef<ClubSpeechSession | null>(null);
+  const voiceCommitted = useRef(false);
   const autoOpened = useRef<number | null>(null);
 
   const round = useMemo(() => getRound(db, id), [db, id, revision]);
@@ -240,15 +240,6 @@ export default function HoleScreen() {
 
   const simBanner =
     Device.isDevice === false || fix?.mocked ? COPY.simulator : describeGpsSource(fix ?? { mocked: false, isSimulator: false });
-  const voiceReady = speechRecognitionAvailable();
-
-  const selectClub = (club: Club) => {
-    const next = selectClubForMark(club, clubs);
-    if (!next || readOnly) return;
-    hapticSelect();
-    setRoundLastClub(db, id, next.id);
-    bump();
-  };
 
   const markClub = async (club: Club | null, force = false) => {
     const next = club ? selectClubForMark(club, clubs) : null;
@@ -357,13 +348,13 @@ export default function HoleScreen() {
   const applyTranscript = (text: string, isFinal: boolean) => {
     const matched = matchSpokenClub(text, clubs);
     if (matched) {
+      if (voiceCommitted.current) return;
+      voiceCommitted.current = true;
       setVoiceError(null);
-      selectClub(matched);
-      if (isFinal) {
-        sessionRef.current?.stop();
-        sessionRef.current = null;
-        setListening(false);
-      }
+      sessionRef.current?.stop();
+      sessionRef.current = null;
+      setListening(false);
+      void markClub(matched);
       return;
     }
     if (isFinal) {
@@ -378,6 +369,7 @@ export default function HoleScreen() {
       setListening(false);
       return;
     }
+    voiceCommitted.current = false;
     setVoiceError(null);
     setListening(true);
     const session = await startClubSpeech({
@@ -464,7 +456,7 @@ export default function HoleScreen() {
               key={club.id}
               onPress={() => {
                 const full = clubs.find((row) => row.id === club.id);
-                if (full) selectClub(full);
+                if (full) void markClub(full);
               }}
               style={[
                 styles.top3Chip,
@@ -487,15 +479,13 @@ export default function HoleScreen() {
             <Text style={styles.clubName}>{sticky?.name ?? COPY.bag}</Text>
           </Pressable>
           <Pressable onPress={() => void onListen()} style={styles.sideBtn}>
-            <Text style={styles.sideLabel}>
-              {listening ? COPY.listening : voiceReady ? COPY.sayClub : COPY.sayClub}
-            </Text>
+            <Text style={styles.sideLabel}>{listening ? COPY.listening : COPY.sayClub}</Text>
           </Pressable>
         </View>
 
         <View style={styles.markWrap}>
           <BigButton
-            label={sticky ? `${COPY.mark} · ${sticky.shortName}` : COPY.mark}
+            label={sticky ? `${COPY.stickyClub} · ${sticky.shortName}` : COPY.stickyClub}
             disabled={busy || readOnly || !sticky}
             onPress={() => void onMark()}
           />

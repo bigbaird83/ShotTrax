@@ -29,7 +29,7 @@ test('sticky club skips a club that was turned off', () => {
   assert.equal(sticky?.id, 'club_8i');
 });
 
-test('voice selects a club for the next Mark and does not imply a commit', () => {
+test('voice maps a spoken club for an immediate mark', () => {
   const clubs = bag();
   const heard = matchSpokenClub('seven iron', clubs);
   const selected = selectClubForMark(heard, clubs);
@@ -37,7 +37,7 @@ test('voice selects a club for the next Mark and does not imply a commit', () =>
   assert.equal(selectClubForMark(null, clubs), null);
 });
 
-test('sticky after a Mark is that club, so the next Mark needs no club pick', () => {
+test('sticky after a mark is that club, so Same club is one tap', () => {
   const clubs = bag();
   const afterMark = resolveStickyClub({
     enabledClubs: clubs,

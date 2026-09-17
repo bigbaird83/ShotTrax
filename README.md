@@ -136,8 +136,8 @@ Watch Connectivity carries the club list to a paired Apple Watch. Watch motion /
 
 1. Find a nearby course (GPS) or type a name, then start a 9- or 18-hole round (or attach a course to a round in progress).
 2. On a hole, par comes from the course when present; otherwise **Par unknown**. Set par and score (large +/− targets).
-3. **Mark shot** → optional **Say a club** (confirm still required) and/or **top-3**, or expand **Full bag** and tap.
-4. GPS at confirm = shot **start**. If this hole already had an open GPS shot, that same fix is its **end** and yards are logged (haversine).
+3. Hole advance opens **Pick a club**. Say or tap a club — that **marks GPS immediately** (start now; closes the prior shot’s end). On-screen: “Picking a club marks where you hit from.” No Confirm sheet.
+4. **Same club** is the one-tap escape after that. **Undo last** if the club was wrong (or pick another before you walk). **Mark without club**, no-GPS, and Drop / Penalty stay available. GPS at the club pick = shot **start**; if this hole already had an open GPS shot, that same fix is its **end** and yards are logged (haversine).
 5. **End last shot** closes an open GPS shot without starting a new one.
 6. **+ Penalty** adds 1–5 penalty strokes to the hole score, with reason water / OB / unplayable / other (optional note). Shown as a penalty row — not a map polyline. A penalty is **not a Shot for distance**: it never hits `acceptFix`, haversine, club averages, or top-3.
 7. **Add shot without GPS** (forgotten swing / no fix): pick a club and optionally type yards (or leave blank). Stored as `source = no_gps`, `fixQuality = none`, **null** lat/lng, **null** `distance_yards`. Typed yards live in `typed_yards` (score/UI only) and are **excluded from distance averages and top-3**. No include-typed-yards toggle in MVP. Never invents a coordinate and never calls `acceptFix`.

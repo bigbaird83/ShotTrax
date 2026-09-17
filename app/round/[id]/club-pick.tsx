@@ -48,6 +48,7 @@ export default function ClubPickScreen() {
   const [selected, setSelected] = useState<Club | null>(null);
   const [typedYards, setTypedYards] = useState('');
   const sessionRef = useRef<ClubSpeechSession | null>(null);
+  const voiceCommitted = useRef(false);
 
   useEffect(() => {
     navigation.setOptions({
@@ -217,14 +218,21 @@ export default function ClubPickScreen() {
     const matched = matchSpokenClub(text, clubs);
     if (matched) {
       setVoiceError(null);
-      if (isFinal) {
-        sessionRef.current?.stop();
-        sessionRef.current = null;
-        setListening(false);
-        void markClub(matched);
-      } else {
+      if (withoutGps) {
         setSelected(matched);
+        if (isFinal) {
+          sessionRef.current?.stop();
+          sessionRef.current = null;
+          setListening(false);
+        }
+        return;
       }
+      if (voiceCommitted.current) return;
+      voiceCommitted.current = true;
+      sessionRef.current?.stop();
+      sessionRef.current = null;
+      setListening(false);
+      void markClub(matched);
       return;
     }
     if (isFinal) {
@@ -239,6 +247,7 @@ export default function ClubPickScreen() {
       setListening(false);
       return;
     }
+    voiceCommitted.current = false;
     setVoiceError(null);
     setHeard(null);
     setListening(true);
