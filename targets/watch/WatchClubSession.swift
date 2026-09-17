@@ -22,6 +22,7 @@ struct ClubListState {
     return "Hole \(holeNumber) · —"
   }
 
+  /// Player-voice chip is Approximate (never SOFT).
   var showSoft: Bool { yardsQuality == "soft" }
 
   func label(for clubId: String) -> String {

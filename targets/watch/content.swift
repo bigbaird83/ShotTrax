@@ -11,7 +11,7 @@ struct ContentView: View {
             .font(.headline)
             .foregroundStyle(Color("cream"))
           if session.list.showSoft {
-            Text("SOFT")
+            Text("Approximate")
               .font(.system(size: 10, weight: .heavy))
               .padding(.horizontal, 5)
               .padding(.vertical, 2)
