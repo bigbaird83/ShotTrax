@@ -233,12 +233,14 @@ export function migrate(db: SQLiteDatabase): void {
   ensureColumn(db, 'shots', 'source', "TEXT NOT NULL DEFAULT 'gps'");
   ensureColumn(db, 'shots', 'typed_yards', 'INTEGER');
   ensureColumn(db, 'shots', 'suggested', 'INTEGER NOT NULL DEFAULT 0');
+  ensureColumn(db, 'holes', 'putts', 'INTEGER NOT NULL DEFAULT 0');
+  ensureColumn(db, 'holes', 'putt_lengths', 'TEXT');
   migrateNoGpsSensingLock(db);
 
   ensureStockBag(db);
 }
 
-/** First-run seed plus insert any stock clubs missing from an older bag (2i / 3i / 4i). */
+/** First-run seed plus insert any stock clubs missing from an older bag (2i / 3i / 4i / 52° / 56° / 60°). */
 function ensureStockBag(db: SQLiteDatabase): void {
   const existing = new Set(
     db.getAllSync<{ id: string }>('SELECT id FROM clubs').map((row) => row.id),

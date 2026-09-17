@@ -64,6 +64,12 @@ test('score mismatch when posted score ≠ shots + penalties', () => {
   const ok = reconcileHoleScore({ score: 5, shotCount: 4, penaltyStrokes: 1 });
   assert.equal(ok.mismatch, false);
 
+  const withPutts = reconcileHoleScore({ score: 5, shotCount: 3, penaltyStrokes: 0, puttCount: 2 });
+  assert.equal(withPutts.mismatch, false);
+  assert.equal(withPutts.logged, 5);
+  const puttMismatch = reconcileHoleScore({ score: 6, shotCount: 3, penaltyStrokes: 0, puttCount: 2 });
+  assert.equal(puttMismatch.mismatch, true);
+
   const scoreOnly = reconcileHoleScore({ score: 4, shotCount: 0, penaltyStrokes: 0 });
   assert.equal(scoreOnly.mismatch, false);
 

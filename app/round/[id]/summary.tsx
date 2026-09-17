@@ -62,10 +62,12 @@ export default function RoundSummaryScreen() {
         const mismatch = reconcileHoleScore({
           score: hole.score,
           shotCount: shots.length,
+          puttCount: hole.putts,
           penaltyStrokes: penStrokes,
         }).mismatch;
         const shotBits = [
           `${shots.length} shot${shots.length === 1 ? '' : 's'}`,
+          hole.putts ? `${hole.putts} putt${hole.putts === 1 ? '' : 's'}` : null,
           closedGps.length ? `${yards} yd` : null,
         ].filter(Boolean);
         return (

@@ -19,11 +19,19 @@ export default function AveragesScreen() {
             <Text style={styles.name}>{row.club.name}</Text>
             <Text style={styles.meta}>
               {row.count === 0
-                ? COPY.noClosedShots
+                ? row.typicalCarryYards != null
+                  ? COPY.typicalCarry
+                  : COPY.noClosedShots
                 : `${row.count} shot${row.count === 1 ? '' : 's'}`}
             </Text>
           </View>
-          <Text style={styles.yards}>{row.count ? `${Math.round(row.avgYards)} yd` : '—'}</Text>
+          <Text style={styles.yards}>
+            {row.count
+              ? `${Math.round(row.avgYards)} yd`
+              : row.typicalCarryYards != null
+                ? `${Math.round(row.typicalCarryYards)} yd`
+                : '—'}
+          </Text>
         </View>
       ))}
     </Screen>

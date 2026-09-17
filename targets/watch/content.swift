@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
   @EnvironmentObject private var session: WatchClubSession
+  @State private var showAllClubs = false
 
   var body: some View {
     ScrollView {
@@ -37,25 +38,35 @@ struct ContentView: View {
         .disabled(session.sending)
 
         if !session.list.top3.isEmpty {
-          HStack(spacing: 6) {
+          VStack(alignment: .leading, spacing: 6) {
             ForEach(Array(session.list.top3.enumerated()), id: \.element) { index, clubId in
-              Button(session.list.label(for: clubId)) {
-                session.pick(clubId: clubId)
+              Button(action: { session.pick(clubId: clubId) }) {
+                Text(session.list.label(for: clubId))
+                  .frame(maxWidth: .infinity, minHeight: index == 0 ? 48 : 36)
               }
               .buttonStyle(.bordered)
               .font(index == 0 ? .title3.weight(.black) : .caption.weight(.bold))
-              .frame(minHeight: index == 0 ? 44 : 32)
+              .tint(index == 0 ? Color("accent") : Color("cream"))
             }
           }
         }
 
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 52), spacing: 6)], spacing: 6) {
-          ForEach(session.list.bag, id: \.self) { clubId in
-            Button(session.list.label(for: clubId)) {
-              session.pick(clubId: clubId)
+        Button(action: { showAllClubs.toggle() }) {
+          Text("All clubs")
+            .font(.headline.weight(.heavy))
+            .frame(maxWidth: .infinity, minHeight: 40)
+        }
+        .buttonStyle(.bordered)
+
+        if showAllClubs {
+          LazyVGrid(columns: [GridItem(.adaptive(minimum: 52), spacing: 6)], spacing: 6) {
+            ForEach(session.list.bag, id: \.self) { clubId in
+              Button(session.list.label(for: clubId)) {
+                session.pick(clubId: clubId)
+              }
+              .buttonStyle(.bordered)
+              .font(.caption.weight(.heavy))
             }
-            .buttonStyle(.bordered)
-            .font(.caption.weight(.heavy))
           }
         }
       }

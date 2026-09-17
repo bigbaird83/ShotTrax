@@ -44,6 +44,8 @@ export const COPY = {
   endShot: 'End last shot',
   prevHole: 'Prev',
   nextHole: 'Next',
+  holeDone: 'Hole done',
+  putts: 'Putts',
   forgotShot: 'Log a missed shot',
   score: 'Score',
   shots: 'Shots',
@@ -64,6 +66,7 @@ export const COPY = {
   bagLede: 'Your bag. Turn off what you don’t carry.',
   averagesLede: 'How far you hit each club — from marked shots.',
   noClosedShots: 'No marked shots yet',
+  typicalCarry: 'Typical',
   summaryHome: 'Home',
 } as const;
 
@@ -130,6 +133,7 @@ export function scoreMismatchPlayerMessage(args: {
   score: number | null;
   shotCount: number;
   penaltyStrokes: number;
+  puttCount?: number;
 }): string {
-  return `Score ${args.score} doesn’t match ${args.shotCount} shots + ${args.penaltyStrokes} penalties.`;
+  return `Score ${args.score} doesn’t match ${args.shotCount} shots + ${args.puttCount ?? 0} putts + ${args.penaltyStrokes} penalties.`;
 }

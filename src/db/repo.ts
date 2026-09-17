@@ -4,10 +4,11 @@ import {
   seedHoleFromCourse,
   type CourseLayoutSeed,
 } from '../course/layout';
-import { DEFAULT_BAG } from '../domain/defaultBag';
+import { DEFAULT_BAG, isPutterClubId, typicalCarryForClub } from '../domain/defaultBag';
 import { averageWithBadges, type ClubAverage } from '../domain/averages';
 import { isValidLatLng } from '../domain/latLng';
 import { clampPenaltyStrokes, scoreAfterPenalty } from '../domain/penalty';
+import { clampPutts, parsePuttLengths, serializePuttLengths, type PuttLengthId } from '../domain/putts';
 import { includeInDistanceAverages, planNoGpsShot } from '../domain/shotSource';
 import { planUndoLastShot } from '../domain/undoLastShot';
 import type {
@@ -71,6 +72,8 @@ type HoleRow = {
   green_back_lat: number | null;
   green_back_lng: number | null;
   green_depth_yards: number | null;
+  putts: number | null;
+  putt_lengths: string | null;
 };
 
 type ShotRow = {
@@ -165,6 +168,8 @@ function mapHole(row: HoleRow): Hole {
     greenBackLat: row.green_back_lat ?? null,
     greenBackLng: row.green_back_lng ?? null,
     greenDepthYards: row.green_depth_yards ?? null,
+    putts: clampPutts(row.putts ?? 0),
+    puttLengths: parsePuttLengths(row.putt_lengths),
   };
 }
 
@@ -501,6 +506,20 @@ export function updateHoleScore(db: SQLiteDatabase, holeId: string, score: numbe
   db.runSync('UPDATE holes SET score = ? WHERE id = ?', [score, holeId]);
 }
 
+export function updateHolePutts(
+  db: SQLiteDatabase,
+  holeId: string,
+  putts: number,
+  lengths: PuttLengthId[],
+): void {
+  const next = clampPutts(putts);
+  db.runSync('UPDATE holes SET putts = ?, putt_lengths = ? WHERE id = ?', [
+    next,
+    serializePuttLengths(lengths.slice(0, next)),
+    holeId,
+  ]);
+}
+
 /** Green pin from current GPS, a map long-press, or a course centroid. Never invented. */
 export function setHoleGreen(
   db: SQLiteDatabase,
@@ -756,10 +775,11 @@ export function insertPenalty(
 
 export type ClubAverageRow = ClubAverage & {
   club: Club;
+  typicalCarryYards: number | null;
 };
 
 export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
-  const clubs = listClubs(db, false);
+  const clubs = listClubs(db, false).filter((club) => !isPutterClubId(club.id));
   const shots = db.getAllSync<{
     club_id: string;
     distance_yards: number;
@@ -780,6 +800,7 @@ export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
           includeInDistanceAverages({
             source: s.source === 'no_gps' ? 'no_gps' : 'gps',
             distanceYards: s.distance_yards,
+            clubId: s.club_id,
             fixQuality:
               s.fix_quality === 'none'
                 ? 'none'
@@ -792,7 +813,7 @@ export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
         yards: s.distance_yards,
         fixQuality: s.fix_quality as FixQuality,
       }));
-    return { club, ...averageWithBadges(forClub) };
+    return { club, typicalCarryYards: typicalCarryForClub(club.id), ...averageWithBadges(forClub) };
   });
 }
 

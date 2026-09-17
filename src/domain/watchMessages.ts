@@ -1,5 +1,6 @@
 /** Watch Connectivity club-pick messages. Only two types this cut: clubList and clubPick.
- * Phone owns undo, averages, Drop/Penalty. Ranking/seeds/avgs stay on phone.
+ * Phone owns undo, averages, Drop/Penalty, Hole done / putts. Ranking/seeds/avgs stay on phone.
+ * Watch UI shows top-3 Suggested by default; All clubs reveals the bag payload.
  * Stretch: prefer a fresh Watch GPS fix; else phone GPS. Same acceptFix bands.
  * Watch never marks alone, never silent-forces, no motion/mic.
  */

@@ -20,11 +20,21 @@ import {
   listShotsForHole,
   setHoleGreen,
   updateHolePar,
+  updateHolePutts,
   updateHoleScore,
 } from '@/src/db/repo';
 import { pinOrNull, formatFmbRow, hasApiFmb, yardsToGreenDepth } from '@/src/domain/greenDepth';
 import { COPY, formatHoleHeader, markedSuggestedMessage, voiceFailRecovery } from '@/src/domain/playerCopy';
 import { formatPenaltyRow, PENALTY_REASONS, totalPenaltyStrokes } from '@/src/domain/penalty';
+import {
+  addPuttLength,
+  holeAfterDone,
+  isNearOrOnGreen,
+  isPuttLengthId,
+  PUTT_LENGTHS,
+  setPuttCount,
+  type PuttLengthId,
+} from '@/src/domain/putts';
 import { clubToRankInput, lastClosedShotYards, rankTopClubs, resolveDistanceTarget } from '@/src/domain/rankClubs';
 import { reconcileHoleScore, scoreMismatchMessage } from '@/src/domain/scoreReconcile';
 import { resolveStickyClub, selectClubForMark } from '@/src/domain/stickyClub';
@@ -88,6 +98,7 @@ export default function HoleScreen() {
   const reconcile = reconcileHoleScore({
     score: hole?.score ?? null,
     shotCount: shots.length,
+    puttCount: hole?.putts ?? 0,
     penaltyStrokes: penaltyTotal,
   });
 
@@ -311,6 +322,24 @@ export default function HoleScreen() {
     }
   };
 
+  const savePutts = (next: { putts: number; lengths: PuttLengthId[] }) => {
+    if (readOnly || !hole) return;
+    updateHolePutts(db, hole.id, next.putts, next.lengths);
+    hapticTap();
+    bump();
+  };
+
+  const onHoleDone = () => {
+    if (readOnly || !round) return;
+    hapticSelect();
+    const dest = holeAfterDone(holeNumber, round.holeCount);
+    if (dest.kind === 'summary') {
+      router.replace(`/round/${id}/summary`);
+      return;
+    }
+    router.replace(`/round/${id}/hole/${dest.holeNumber}`);
+  };
+
   const onAddPenalty = () => {
     if (readOnly) return;
     insertPenalty(db, {
@@ -530,6 +559,71 @@ export default function HoleScreen() {
           />
           <MarkCheck nonce={checkNonce} />
         </View>
+
+        <View style={[styles.puttBlock, isNearOrOnGreen(toGreen) && styles.puttBlockNear]}>
+          <Text style={styles.puttLabel}>{COPY.putts}</Text>
+          <View style={styles.puttStepRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Fewer putts"
+              disabled={readOnly}
+              onPress={() =>
+                savePutts(
+                  setPuttCount(
+                    { putts: hole.putts, lengths: hole.puttLengths.filter(isPuttLengthId) },
+                    hole.putts - 1,
+                  ),
+                )
+              }
+              style={styles.puttStep}>
+              <Text style={styles.puttStepText}>−</Text>
+            </Pressable>
+            <Text style={styles.puttCount}>{hole.putts}</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="More putts"
+              disabled={readOnly}
+              onPress={() =>
+                savePutts(
+                  setPuttCount(
+                    { putts: hole.putts, lengths: hole.puttLengths.filter(isPuttLengthId) },
+                    hole.putts + 1,
+                  ),
+                )
+              }
+              style={styles.puttStep}>
+              <Text style={styles.puttStepText}>+</Text>
+            </Pressable>
+          </View>
+          <View style={styles.puttBuckets}>
+            {PUTT_LENGTHS.map((bucket) => (
+              <Pressable
+                key={bucket.id}
+                accessibilityRole="button"
+                disabled={readOnly || hole.putts >= 5}
+                onPress={() =>
+                  savePutts(
+                    addPuttLength(
+                      { putts: hole.putts, lengths: hole.puttLengths.filter(isPuttLengthId) },
+                      bucket.id,
+                    ),
+                  )
+                }
+                style={[
+                  styles.puttBucket,
+                  hole.puttLengths.includes(bucket.id) && styles.puttBucketOn,
+                ]}>
+                <Text style={styles.puttBucketText}>{bucket.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
+        <BigButton
+          label={COPY.holeDone}
+          disabled={readOnly}
+          onPress={onHoleDone}
+        />
 
         {!readOnly ? (
           <View style={styles.row}>
@@ -846,6 +940,47 @@ const styles = StyleSheet.create({
   },
   sideLabel: { color: colors.cream, fontWeight: '800', fontSize: type.meta, textAlign: 'center' },
   markWrap: { position: 'relative' },
+  puttBlock: {
+    backgroundColor: colors.bgElevated,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.line,
+    padding: 12,
+    gap: 10,
+  },
+  puttBlockNear: {
+    borderColor: colors.lime,
+    borderWidth: 2,
+  },
+  puttLabel: { color: colors.cream, fontSize: type.button, fontWeight: '900' },
+  puttStepRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  puttStep: {
+    minHeight: tapTarget,
+    minWidth: tapTarget,
+    borderRadius: 16,
+    backgroundColor: colors.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  puttStepText: { color: colors.lime, fontSize: 36, fontWeight: '900' },
+  puttCount: { color: colors.lime, fontSize: 44, fontWeight: '900', minWidth: 56, textAlign: 'center' },
+  puttBuckets: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  puttBucket: {
+    flexGrow: 1,
+    minHeight: 48,
+    minWidth: 72,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: colors.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bg,
+  },
+  puttBucketOn: { borderColor: colors.lime, backgroundColor: '#1C3A24' },
+  puttBucketText: { color: colors.cream, fontSize: type.meta, fontWeight: '800' },
   row: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   warn: { color: colors.orange, fontSize: type.meta, fontWeight: '700' },
   voiceFail: { paddingHorizontal: 16, paddingTop: 8, gap: 8 },

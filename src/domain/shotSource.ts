@@ -1,3 +1,4 @@
+import { clubCountsTowardDistanceSamples } from './defaultBag';
 import type { Shot, ShotFixQuality, ShotSource } from './types';
 
 export type NoGpsShotPlan = {
@@ -55,13 +56,16 @@ export function isNoGpsShot(shot: { source: ShotSource; fixQuality?: ShotFixQual
 /**
  * Distance averages and top-3 samples: closed GPS shots with haversine yards.
  * `good` / `soft` / `forced` stay in. Penalties are not shots. `none` / `no_gps`
- * are excluded even if typed yards exist. No include-typed-yards toggle in MVP.
+ * are excluded even if typed yards exist. Putter shots never count — scoring /
+ * green play only. No include-typed-yards toggle in MVP.
  */
 export function includeInDistanceAverages(shot: {
   source: ShotSource;
   distanceYards: number | null;
   fixQuality?: ShotFixQuality | null;
+  clubId?: string | null;
 }): boolean {
+  if (shot.clubId != null && !clubCountsTowardDistanceSamples(shot.clubId)) return false;
   if (shot.source !== 'gps' || shot.fixQuality === 'none') return false;
   return shot.distanceYards != null;
 }
@@ -71,6 +75,7 @@ export function includeInTop3Samples(shot: {
   source: ShotSource;
   distanceYards: number | null;
   fixQuality?: ShotFixQuality | null;
+  clubId?: string | null;
 }): boolean {
   return includeInDistanceAverages(shot);
 }

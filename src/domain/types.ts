@@ -71,6 +71,10 @@ export type Hole = {
   greenBackLat: number | null;
   greenBackLng: number | null;
   greenDepthYards: number | null;
+  /** 0–5. Stats / scoring only — never a map mark or club-distance sample. */
+  putts: number;
+  /** Optional one-tap length buckets, one per putt, same order. */
+  puttLengths: string[];
 };
 
 export type Shot = {
