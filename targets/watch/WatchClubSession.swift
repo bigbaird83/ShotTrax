@@ -15,14 +15,7 @@ struct ClubListState {
   var yardsQuality: String = "none"
   var lastClubId: String? = nil
 
-  var statusLine: String {
-    if yardsQuality != "none", let yards = yardsToGreen {
-      return "Hole \(holeNumber) · \(yards) yd"
-    }
-    return "Hole \(holeNumber) · —"
-  }
-
-  var showSoft: Bool { yardsQuality == "soft" }
+  var statusLine: String { "Hole \(holeNumber)" }
 
   func label(for clubId: String) -> String {
     labels[clubId] ?? clubId

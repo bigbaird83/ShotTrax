@@ -10,13 +10,13 @@ export type YardsQuality = 'good' | 'soft' | 'none';
 export const WATCH_MESSAGE_TYPES = ['clubList', 'clubPick'] as const;
 export type WatchMessageType = (typeof WATCH_MESSAGE_TYPES)[number];
 
-/** Phone → Watch on open / bag or rank change. Extra fields are optional. */
+/** Phone → Watch on open / bag or rank change. holeNumber is required this cut. */
 export type ClubListMessage = {
   type: 'clubList';
   top3: ClubId[];
   bag: ClubId[];
   labels: Record<ClubId, string>;
-  holeNumber?: number;
+  holeNumber: number;
   yardsToGreen?: number | null;
   yardsQuality?: YardsQuality;
   lastClubId?: ClubId | null;
@@ -61,20 +61,18 @@ export function parseClubList(raw: unknown): ClubListMessage | null {
   for (const [key, value] of Object.entries(row.labels as Record<string, unknown>)) {
     if (typeof value === 'string') labels[key] = value;
   }
+  const holeNumber =
+    typeof row.holeNumber === 'number' && Number.isFinite(row.holeNumber)
+      ? Math.round(row.holeNumber)
+      : NaN;
+  if (!Number.isFinite(holeNumber) || holeNumber < 1) return null;
   const msg: ClubListMessage = {
     type: 'clubList',
     top3: row.top3 as string[],
     bag: row.bag as string[],
     labels,
+    holeNumber,
   };
-  if (row.holeNumber != null) {
-    const holeNumber =
-      typeof row.holeNumber === 'number' && Number.isFinite(row.holeNumber)
-        ? Math.round(row.holeNumber)
-        : NaN;
-    if (!Number.isFinite(holeNumber) || holeNumber < 1) return null;
-    msg.holeNumber = holeNumber;
-  }
   if ('yardsToGreen' in row) {
     if (row.yardsToGreen == null) {
       msg.yardsToGreen = null;
@@ -118,7 +116,7 @@ export function clubListPayload(args: {
   top3: ClubId[];
   bag: ClubId[];
   labels: Record<ClubId, string>;
-  holeNumber?: number;
+  holeNumber: number;
   yardsToGreen?: number | null;
   yardsQuality?: YardsQuality;
   lastClubId?: ClubId | null;
@@ -128,7 +126,7 @@ export function clubListPayload(args: {
     top3: args.top3,
     bag: args.bag,
     labels: args.labels,
-    ...(args.holeNumber != null ? { holeNumber: args.holeNumber } : {}),
+    holeNumber: args.holeNumber,
     ...(args.yardsToGreen !== undefined ? { yardsToGreen: args.yardsToGreen } : {}),
     ...(args.yardsQuality ? { yardsQuality: args.yardsQuality } : {}),
     ...(args.lastClubId ? { lastClubId: args.lastClubId } : {}),
