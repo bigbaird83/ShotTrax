@@ -4,6 +4,7 @@ import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-nativ
 import { useDb } from '@/src/db/DbProvider';
 import { getHole, listClubAverages, listClubs, listShotsForHole } from '@/src/db/repo';
 import { COPY } from '@/src/domain/playerCopy';
+import { putterOpensPuttSheet } from '@/src/domain/putts';
 import { clubToRankInput, lastClosedShotYards, rankTopClubs, resolveDistanceTarget } from '@/src/domain/rankClubs';
 import { parseTypedYards } from '@/src/domain/shotSource';
 import { selectClubForMark } from '@/src/domain/stickyClub';
@@ -95,6 +96,9 @@ export default function ClubPickScreen() {
       onMarked: () => {
         if (!withoutGps) router.back();
       },
+      onPutter: () => {
+        router.replace(`/round/${id}/hole/${holeNumber}?putts=1`);
+      },
       labelForClub: (clubId) => clubs.find((club) => club.id === clubId)?.shortName ?? null,
     },
     {
@@ -116,6 +120,10 @@ export default function ClubPickScreen() {
     if (!next || !id || Number.isNaN(holeNumber)) return;
     hapticSelect();
     setSelected(next);
+    if (putterOpensPuttSheet({ clubId: next.id, relabel: Boolean(relabelId) })) {
+      router.replace(`/round/${id}/hole/${holeNumber}?putts=1`);
+      return;
+    }
     if (relabelId) {
       changeShotClub(db, { roundId: id, shotId: relabelId, clubId: next.id });
       bump();

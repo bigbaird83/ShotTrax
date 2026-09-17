@@ -4,6 +4,7 @@ export type WatchBridgeNative = {
   isSupported: () => boolean;
   isReachable: () => boolean;
   pushClubListJson: (json: string) => Promise<void>;
+  pushWatchMessageJson?: (json: string) => Promise<void>;
   replyClubPick: (token: string, json: string) => Promise<void>;
   addListener: (
     event: string,

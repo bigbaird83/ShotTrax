@@ -1,18 +1,27 @@
 import { Alert } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getWatchBridgeNative } from '@/modules/watch-bridge';
+import { isPutterClubId } from '../domain/defaultBag';
 import { COPY } from '../domain/playerCopy';
 import { watchFixFromPick } from '../domain/preferWatchFix';
 import {
+  MADE_IT_FEEDBACK,
   PHONE_UNAVAILABLE,
+  PUTTS_ON_WATCH,
   clubListPayload,
   formatClubMarkedFeedback,
   parseClubPick,
+  parsePuttPick,
+  puttSheetPayload,
   toWatchYardsQuality,
   type ClubListMessage,
   type ClubPickReply,
+  type PuttPickMessage,
+  type PuttPickReply,
+  type PuttSheetMessage,
 } from '../domain/watchMessages';
-import { hapticMark, hapticWarn } from '../ui/haptics';
+import type { PuttLengthId } from '../domain/putts';
+import { hapticMark, hapticSelect, hapticWarn } from '../ui/haptics';
 import { markShotWithClub, promptForPlan } from './shotActions';
 
 export type WatchClubContext = {
@@ -22,12 +31,15 @@ export type WatchClubContext = {
   readOnly: boolean;
   bump: () => void;
   onMarked?: () => void;
+  onPutter?: () => void;
+  onPuttPick?: (msg: PuttPickMessage) => PuttPickReply | Promise<PuttPickReply>;
   labelForClub: (clubId: string) => string | null;
 };
 
 let context: WatchClubContext | null = null;
 let started = false;
 let lastJson = '';
+let lastPuttJson = '';
 
 function native() {
   return getWatchBridgeNative();
@@ -49,6 +61,28 @@ export async function pushWatchClubList(msg: ClubListMessage): Promise<void> {
   try {
     await mod.pushClubListJson(json);
     lastJson = json;
+  } catch {
+    // Watch is best-effort on Simulator / Android / web.
+  }
+}
+
+export async function pushWatchPuttSheet(args: {
+  open: boolean;
+  holeNumber: number;
+  lengths: PuttLengthId[];
+}): Promise<void> {
+  const msg: PuttSheetMessage = puttSheetPayload(args);
+  const json = JSON.stringify(msg);
+  if (json === lastPuttJson) return;
+  const mod = native();
+  if (!mod) return;
+  lastPuttJson = json;
+  try {
+    if (typeof mod.pushWatchMessageJson === 'function') {
+      await mod.pushWatchMessageJson(json);
+    } else {
+      await mod.pushClubListJson(json);
+    }
   } catch {
     // Watch is best-effort on Simulator / Android / web.
   }
@@ -77,17 +111,17 @@ export function buildClubList(args: {
   });
 }
 
-async function handlePick(token: string, json: string): Promise<void> {
+async function replyToken(token: string, payload: ClubPickReply | PuttPickReply): Promise<void> {
   const mod = native();
-  const reply = async (payload: ClubPickReply) => {
-    if (!mod) return;
-    try {
-      await mod.replyClubPick(token, JSON.stringify(payload));
-    } catch {
-      // reply is best-effort
-    }
-  };
+  if (!mod) return;
+  try {
+    await mod.replyClubPick(token, JSON.stringify(payload));
+  } catch {
+    // reply is best-effort
+  }
+}
 
+async function handlePick(token: string, json: string): Promise<void> {
   const pick = (() => {
     try {
       return parseClubPick(JSON.parse(json) as unknown);
@@ -96,12 +130,19 @@ async function handlePick(token: string, json: string): Promise<void> {
     }
   })();
   if (!pick) {
-    await reply({ ok: false, feedback: PHONE_UNAVAILABLE });
+    await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
     return;
   }
   const ctx = context;
   if (!ctx || ctx.readOnly) {
-    await reply({ ok: false, feedback: PHONE_UNAVAILABLE });
+    await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
+    return;
+  }
+
+  if (isPutterClubId(pick.clubId)) {
+    hapticSelect();
+    ctx.onPutter?.();
+    await replyToken(token, { ok: true, feedback: PUTTS_ON_WATCH });
     return;
   }
 
@@ -137,21 +178,54 @@ async function handlePick(token: string, json: string): Promise<void> {
     });
     if (waiting) {
       hapticWarn();
-      await reply({ ok: false, feedback: PHONE_UNAVAILABLE });
+      await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
       return;
     }
     if (plan.status === 'commit') {
       hapticMark();
       ctx.bump();
       ctx.onMarked?.();
-      await reply({ ok: true, feedback: formatClubMarkedFeedback(label) });
+      await replyToken(token, { ok: true, feedback: formatClubMarkedFeedback(label) });
       return;
     }
-    await reply({ ok: false, feedback: PHONE_UNAVAILABLE });
+    await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
   } catch {
     hapticWarn();
     Alert.alert(COPY.waitingOnLocation, COPY.locationOff, [{ text: COPY.cancel, style: 'cancel' }]);
-    await reply({ ok: false, feedback: PHONE_UNAVAILABLE });
+    await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
+  }
+}
+
+async function handlePuttPick(token: string, json: string): Promise<void> {
+  const pick = (() => {
+    try {
+      return parsePuttPick(JSON.parse(json) as unknown);
+    } catch {
+      return null;
+    }
+  })();
+  if (!pick) {
+    await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
+    return;
+  }
+  const ctx = context;
+  if (!ctx || ctx.readOnly || !ctx.onPuttPick) {
+    await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
+    return;
+  }
+  try {
+    const result = await ctx.onPuttPick(pick);
+    if (result.ok && pick.action === 'made') {
+      hapticMark();
+    } else if (result.ok) {
+      hapticSelect();
+    } else {
+      hapticWarn();
+    }
+    await replyToken(token, result.ok ? result : { ok: false, feedback: result.feedback || PHONE_UNAVAILABLE });
+  } catch {
+    hapticWarn();
+    await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
   }
 }
 
@@ -164,4 +238,10 @@ export function startWatchClubBridge(): void {
     if (!event?.json || !event.token) return;
     void handlePick(event.token, event.json);
   });
+  mod.addListener('onPuttPick', (event) => {
+    if (!event?.json || !event.token) return;
+    void handlePuttPick(event.token, event.json);
+  });
 }
+
+export { MADE_IT_FEEDBACK, PUTTS_ON_WATCH };

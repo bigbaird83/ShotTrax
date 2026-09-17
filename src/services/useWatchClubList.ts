@@ -55,6 +55,8 @@ export function useWatchClubList(
       },
       bump: () => ctxRef.current.bump(),
       onMarked: () => ctxRef.current.onMarked?.(),
+      onPutter: () => ctxRef.current.onPutter?.(),
+      onPuttPick: (msg) => ctxRef.current.onPuttPick?.(msg) ?? { ok: false, feedback: 'Phone unavailable' },
       labelForClub: (clubId) => ctxRef.current.labelForClub(clubId),
     };
     pushCtx(adapter);

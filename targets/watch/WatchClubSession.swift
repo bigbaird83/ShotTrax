@@ -30,8 +30,27 @@ struct ClubListState {
   }
 }
 
+struct PuttSheetState {
+  var open: Bool = false
+  var holeNumber: Int = 1
+  var lengths: [String] = []
+  var labels: [String: String] = [
+    "inside_3": "Under 3 ft",
+    "3_to_10": "3–10",
+    "10_to_20": "10–20",
+    "over_20": "20+",
+  ]
+  var canAdd: Bool = true
+  var canMake: Bool = false
+
+  func label(for lengthId: String) -> String {
+    labels[lengthId] ?? lengthId
+  }
+}
+
 final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLLocationManagerDelegate {
   @Published var list = ClubListState()
+  @Published var putt = PuttSheetState()
   @Published var feedback: String = ""
   @Published var sending = false
 
@@ -66,6 +85,37 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     ]
     attachWatchFix(&payload)
     sendPick(payload)
+  }
+
+  func addPutt(lengthId: String) {
+    sending = true
+    feedback = ""
+    sendPick([
+      "type": "puttPick",
+      "action": "add",
+      "lengthId": lengthId,
+      "at": isoNow(),
+    ])
+  }
+
+  func undoPutt() {
+    sending = true
+    feedback = ""
+    sendPick([
+      "type": "puttPick",
+      "action": "undo",
+      "at": isoNow(),
+    ])
+  }
+
+  func madeIt() {
+    sending = true
+    feedback = ""
+    sendPick([
+      "type": "puttPick",
+      "action": "made",
+      "at": isoNow(),
+    ])
   }
 
   /// Stretch: attach Watch GPS only when the sample is fresh and accurate. Never invent.
@@ -128,9 +178,20 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
     feedback = text
     haptic(ok ? .success : .failure)
-    if ok, let clubId = fallbackClubId {
+    if ok, let clubId = fallbackClubId, clubId != "club_putter" {
       list.lastClubId = clubId
       UserDefaults.standard.set(clubId, forKey: "lastClubId")
+    }
+    if ok, text == "Putts" {
+      var next = putt
+      next.open = true
+      next.holeNumber = list.holeNumber
+      next.canMake = next.lengths.count > 0
+      next.canAdd = next.lengths.count < 5
+      putt = next
+    }
+    if ok, (reply["feedback"] as? String)?.contains("Made it") == true {
+      putt.open = false
     }
   }
 
@@ -162,7 +223,12 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   private func applyClubList(_ message: [String: Any]) {
-    guard (message["type"] as? String) == "clubList" else { return }
+    let type = message["type"] as? String
+    if type == "puttSheet" {
+      applyPuttSheet(message)
+      return
+    }
+    guard type == "clubList" else { return }
     var next = ClubListState()
     next.top3 = message["top3"] as? [String] ?? []
     next.bag = message["bag"] as? [String] ?? []
@@ -183,6 +249,23 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     next.lastClubId = message["lastClubId"] as? String ?? list.lastClubId
     list = next
     persist(next)
+  }
+
+  private func applyPuttSheet(_ message: [String: Any]) {
+    var next = PuttSheetState()
+    next.open = message["open"] as? Bool ?? false
+    if let hole = message["holeNumber"] as? Int {
+      next.holeNumber = hole
+    } else if let hole = message["holeNumber"] as? NSNumber {
+      next.holeNumber = hole.intValue
+    }
+    next.lengths = message["lengths"] as? [String] ?? []
+    if let labels = message["labels"] as? [String: String] {
+      next.labels = labels
+    }
+    next.canAdd = message["canAdd"] as? Bool ?? (next.lengths.count < 5)
+    next.canMake = message["canMake"] as? Bool ?? (next.lengths.count > 0)
+    putt = next
   }
 
   private func persist(_ state: ClubListState) {

@@ -74,6 +74,7 @@ type HoleRow = {
   green_depth_yards: number | null;
   putts: number | null;
   putt_lengths: string | null;
+  putts_done: number | null;
 };
 
 type ShotRow = {
@@ -170,6 +171,7 @@ function mapHole(row: HoleRow): Hole {
     greenDepthYards: row.green_depth_yards ?? null,
     putts: clampPutts(row.putts ?? 0),
     puttLengths: parsePuttLengths(row.putt_lengths),
+    puttsDone: (row.putts_done ?? 0) === 1,
   };
 }
 
@@ -511,12 +513,32 @@ export function updateHolePutts(
   holeId: string,
   putts: number,
   lengths: PuttLengthId[],
+  puttsDone = false,
 ): void {
   const next = clampPutts(putts);
-  db.runSync('UPDATE holes SET putts = ?, putt_lengths = ? WHERE id = ?', [
+  db.runSync('UPDATE holes SET putts = ?, putt_lengths = ?, putts_done = ? WHERE id = ?', [
     next,
     serializePuttLengths(lengths.slice(0, next)),
+    puttsDone ? 1 : 0,
     holeId,
+  ]);
+}
+
+/** Made it: persist buckets and mark putts entered. Walking off the green never calls this. */
+export function finishHolePutts(
+  db: SQLiteDatabase,
+  holeId: string,
+  putts: number,
+  lengths: PuttLengthId[],
+): void {
+  updateHolePutts(db, holeId, putts, lengths, true);
+}
+
+/** Close an open GPS shot without an end pin — never invents coordinates. */
+export function sealOpenShotWithoutGps(db: SQLiteDatabase, shotId: string): void {
+  db.runSync('UPDATE shots SET ended_at = COALESCE(ended_at, ?) WHERE id = ?', [
+    new Date().toISOString(),
+    shotId,
   ]);
 }
 

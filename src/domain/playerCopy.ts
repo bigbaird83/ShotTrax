@@ -2,6 +2,7 @@
 
 export const COPY = {
   homeLede: 'Find a course nearby, pick your tee, start the round.',
+  home: 'Home',
   nearbyHint: 'Courses near you — pull to refresh.',
   nearbyEmpty: 'No courses near you.',
   nearbyUnavailable: 'Courses near you aren’t available. Type a course name to start.',
@@ -44,8 +45,15 @@ export const COPY = {
   endShot: 'End last shot',
   prevHole: 'Prev',
   nextHole: 'Next',
-  holeDone: 'Hole done',
+  previousHole: 'Previous hole',
+  menu: 'Menu',
+  settings: 'Settings',
+  settingsStub: 'Nothing here yet.',
+  madeIt: 'Made it',
   putts: 'Putts',
+  puttSheetLede: 'How long was the putt?',
+  addPutt: 'Add a putt',
+  undoPutt: 'Undo putt',
   forgotShot: 'Log a missed shot',
   score: 'Score',
   shots: 'Shots',
@@ -69,6 +77,10 @@ export const COPY = {
   typicalCarry: 'Typical',
   summaryHome: 'Home',
 } as const;
+
+export function finishPuttsChip(holeNumber: number): string {
+  return `Finish putts · Hole ${holeNumber}`;
+}
 
 export function markedSuggestedMessage(shortName: string): string {
   return `Marked ${shortName} (suggested) · Change club.`;

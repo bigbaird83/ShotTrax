@@ -73,8 +73,10 @@ export type Hole = {
   greenDepthYards: number | null;
   /** 0–5. Stats / scoring only — never a map mark or club-distance sample. */
   putts: number;
-  /** Optional one-tap length buckets, one per putt, same order. */
+  /** One length bucket per putt, same order. Stats only — no green GPS. */
   puttLengths: string[];
+  /** True only after Made it. Walking off the green never sets this. */
+  puttsDone: boolean;
 };
 
 export type Shot = {

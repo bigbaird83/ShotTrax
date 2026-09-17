@@ -1,11 +1,11 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { DEFAULT_BAG } from '../domain/defaultBag';
 
-function ensureColumn(db: SQLiteDatabase, table: string, column: string, ddl: string): void {
+function ensureColumn(db: SQLiteDatabase, table: string, column: string, ddl: string): boolean {
   const cols = db.getAllSync<{ name: string }>(`PRAGMA table_info(${table})`);
-  if (!cols.some((c) => c.name === column)) {
-    db.execSync(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
-  }
+  if (cols.some((c) => c.name === column)) return false;
+  db.execSync(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+  return true;
 }
 
 /**
@@ -235,6 +235,10 @@ export function migrate(db: SQLiteDatabase): void {
   ensureColumn(db, 'shots', 'suggested', 'INTEGER NOT NULL DEFAULT 0');
   ensureColumn(db, 'holes', 'putts', 'INTEGER NOT NULL DEFAULT 0');
   ensureColumn(db, 'holes', 'putt_lengths', 'TEXT');
+  if (ensureColumn(db, 'holes', 'putts_done', 'INTEGER NOT NULL DEFAULT 0')) {
+    // Existing stepper putts from the prior cut already count as entered.
+    db.execSync('UPDATE holes SET putts_done = 1 WHERE IFNULL(putts, 0) > 0');
+  }
   migrateNoGpsSensingLock(db);
 
   ensureStockBag(db);

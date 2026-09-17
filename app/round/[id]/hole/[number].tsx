@@ -1,6 +1,6 @@
 import * as Device from 'expo-device';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCourseDataClient } from '@/src/course/client';
@@ -16,23 +16,29 @@ import {
   insertPenalty,
   listClubAverages,
   listClubs,
+  listHoles,
   listPenaltiesForHole,
   listShotsForHole,
   setHoleGreen,
   updateHolePar,
   updateHolePutts,
+  finishHolePutts,
   updateHoleScore,
 } from '@/src/db/repo';
 import { pinOrNull, formatFmbRow, hasApiFmb, yardsToGreenDepth } from '@/src/domain/greenDepth';
-import { COPY, formatHoleHeader, markedSuggestedMessage, voiceFailRecovery } from '@/src/domain/playerCopy';
+import { COPY, finishPuttsChip, formatHoleHeader, markedSuggestedMessage, voiceFailRecovery } from '@/src/domain/playerCopy';
 import { formatPenaltyRow, PENALTY_REASONS, totalPenaltyStrokes } from '@/src/domain/penalty';
 import {
   addPuttLength,
+  canMakePutt,
+  emptyPuttDraft,
   holeAfterDone,
-  isNearOrOnGreen,
+  holesNeedingPutts,
   isPuttLengthId,
-  PUTT_LENGTHS,
-  setPuttCount,
+  madeItAdvancesHole,
+  putterOpensPuttSheet,
+  undoLastPutt,
+  type PuttDraft,
   type PuttLengthId,
 } from '@/src/domain/putts';
 import { clubToRankInput, lastClosedShotYards, rankTopClubs, resolveDistanceTarget } from '@/src/domain/rankClubs';
@@ -42,10 +48,12 @@ import type { Club, PenaltyReason } from '@/src/domain/types';
 import { matchSpokenClub, speechContextualStrings } from '@/src/domain/voiceClub';
 import { yardsToGreen } from '@/src/sensing/api';
 import { describeGpsSource } from '@/src/services/location';
-import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot } from '@/src/services/shotActions';
+import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, closeApproachBeforePutts } from '@/src/services/shotActions';
 import { startClubSpeech, type ClubSpeechSession } from '@/src/services/speechClub';
 import { useLiveFix } from '@/src/services/useLiveFix';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
+import { pushWatchPuttSheet } from '@/src/services/watchClub';
+import { MADE_IT_FEEDBACK, PHONE_UNAVAILABLE } from '@/src/domain/watchMessages';
 import { QualityBadge } from '@/src/ui/Badge';
 import { BigButton } from '@/src/ui/BigButton';
 import { GpsBanner } from '@/src/ui/GpsBanner';
@@ -53,11 +61,12 @@ import { hapticMark, hapticSelect, hapticTap, hapticWarn } from '@/src/ui/haptic
 import { HoleMap } from '@/src/ui/HoleMap';
 import { MarkCheck } from '@/src/ui/MarkCheck';
 import { FullSheet } from '@/src/ui/Sheet';
+import { PuttSheetBody } from '@/src/ui/PuttSheetBody';
 import { ThumbZone } from '@/src/ui/ThumbZone';
 import { colors, tapTarget, type } from '@/src/ui/theme';
 
 export default function HoleScreen() {
-  const { id, number } = useLocalSearchParams<{ id: string; number: string }>();
+  const { id, number, putts: puttsParam } = useLocalSearchParams<{ id: string; number: string; putts?: string }>();
   const holeNumber = Number(number);
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -67,6 +76,10 @@ export default function HoleScreen() {
   const [dropOpen, setDropOpen] = useState(false);
   const [penaltyOpen, setPenaltyOpen] = useState(false);
   const [scoreOpen, setScoreOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [puttOpen, setPuttOpen] = useState(false);
+  const [puttSheetHole, setPuttSheetHole] = useState(holeNumber);
+  const [puttDraft, setPuttDraft] = useState<PuttDraft>(emptyPuttDraft());
   const [penaltyStrokes, setPenaltyStrokes] = useState(1);
   const [penaltyReason, setPenaltyReason] = useState<PenaltyReason>('water');
   const [penaltyNote, setPenaltyNote] = useState('');
@@ -81,6 +94,7 @@ export default function HoleScreen() {
 
   const round = useMemo(() => getRound(db, id), [db, id, revision]);
   const hole = useMemo(() => getHole(db, id, holeNumber), [db, id, holeNumber, revision]);
+  const holes = useMemo(() => (round ? listHoles(db, round.id) : []), [db, round, revision]);
   const shots = useMemo(() => (hole ? listShotsForHole(db, hole.id) : []), [db, hole, revision]);
   const penalties = useMemo(
     () => (hole ? listPenaltiesForHole(db, hole.id) : []),
@@ -101,6 +115,19 @@ export default function HoleScreen() {
     puttCount: hole?.putts ?? 0,
     penaltyStrokes: penaltyTotal,
   });
+  const pendingPutts = useMemo(
+    () =>
+      holesNeedingPutts(
+        holes.map((row) => ({
+          number: row.number,
+          puttsDone: row.puttsDone,
+          shotCount: listShotsForHole(db, row.id).length,
+          puttCount: row.putts,
+        })),
+        holeNumber,
+      ),
+    [db, holes, holeNumber, revision],
+  );
 
   const lastShotClubId = [...shots].reverse().find((shot) => shot.clubId)?.clubId ?? null;
   const sticky = useMemo(
@@ -113,6 +140,12 @@ export default function HoleScreen() {
     [clubs, round?.lastClubId, lastShotClubId],
   );
   const toastedRef = useRef<string | null>(null);
+  const puttDraftRef = useRef(puttDraft);
+  puttDraftRef.current = puttDraft;
+  const puttSheetHoleRef = useRef(puttSheetHole);
+  puttSheetHoleRef.current = puttSheetHole;
+  const puttOpenRef = useRef(puttOpen);
+  puttOpenRef.current = puttOpen;
 
   useEffect(() => {
     const last = shots[shots.length - 1];
@@ -170,11 +203,11 @@ export default function HoleScreen() {
   }, []);
 
   useEffect(() => {
-    if (!round || !hole || readOnly || shots.length > 0 || Number.isNaN(holeNumber)) return;
+    if (puttsParam === '1' || !round || !hole || readOnly || shots.length > 0 || Number.isNaN(holeNumber)) return;
     if (autoOpened.current === holeNumber) return;
     autoOpened.current = holeNumber;
     router.push(`/round/${id}/club-pick?hole=${holeNumber}`);
-  }, [round, hole, readOnly, shots.length, holeNumber, id]);
+  }, [round, hole, readOnly, shots.length, holeNumber, id, puttsParam]);
 
   const green =
     hole?.greenLat != null && hole.greenLng != null
@@ -206,6 +239,93 @@ export default function HoleScreen() {
     target,
   );
 
+  const openPuttSheet = useCallback(
+    async (targetHole: number) => {
+      if (readOnly) return;
+      const row = getHole(db, id, targetHole);
+      if (!row) return;
+      const lengths = row.puttLengths.filter(isPuttLengthId);
+      const draft: PuttDraft = { putts: lengths.length, lengths };
+      setPuttSheetHole(targetHole);
+      setPuttDraft(draft);
+      setPuttOpen(true);
+      await closeApproachBeforePutts(db, { roundId: id, holeNumber: targetHole });
+      bump();
+      void pushWatchPuttSheet({ open: true, holeNumber: targetHole, lengths: draft.lengths });
+    },
+    [readOnly, db, id, bump],
+  );
+
+  const saveDraft = useCallback(
+    (targetHole: number, draft: PuttDraft, done: boolean) => {
+      const row = getHole(db, id, targetHole);
+      if (!row) return;
+      if (done) finishHolePutts(db, row.id, draft.putts, draft.lengths);
+      else updateHolePutts(db, row.id, draft.putts, draft.lengths, false);
+      bump();
+    },
+    [db, id, bump],
+  );
+
+  const applyMadeIt = useCallback(
+    (targetHole: number, draft: PuttDraft) => {
+      if (readOnly || !canMakePutt(draft) || !round) return false;
+      saveDraft(targetHole, draft, true);
+      setPuttOpen(false);
+      void pushWatchPuttSheet({ open: false, holeNumber: targetHole, lengths: draft.lengths });
+      if (!madeItAdvancesHole({ sheetHoleNumber: targetHole, currentHoleNumber: holeNumber })) {
+        return true;
+      }
+      const dest = holeAfterDone(targetHole, round.holeCount);
+      if (dest.kind === 'summary') {
+        router.replace(`/round/${id}/summary`);
+        return true;
+      }
+      router.replace(`/round/${id}/hole/${dest.holeNumber}`);
+      return true;
+    },
+    [readOnly, round, saveDraft, holeNumber, id],
+  );
+
+  useEffect(() => {
+    if (puttsParam !== '1' || readOnly) return;
+    void openPuttSheet(holeNumber);
+    router.setParams({ putts: undefined });
+  }, [puttsParam, holeNumber, readOnly, openPuttSheet]);
+
+  useEffect(() => {
+    if (!puttOpen) return;
+    void pushWatchPuttSheet({ open: true, holeNumber: puttSheetHole, lengths: puttDraft.lengths });
+  }, [puttOpen, puttSheetHole, puttDraft]);
+
+  const onWatchPuttPick = useCallback(
+    async (msg: { action: 'add' | 'undo' | 'made'; lengthId?: PuttLengthId }) => {
+      if (readOnly) return { ok: false, feedback: PHONE_UNAVAILABLE };
+      if (!puttOpenRef.current) {
+        await openPuttSheet(holeNumber);
+      }
+      const target = puttSheetHoleRef.current || holeNumber;
+      if (msg.action === 'add' && msg.lengthId) {
+        const next = addPuttLength(puttDraftRef.current, msg.lengthId);
+        setPuttDraft(next);
+        saveDraft(target, next, false);
+        return { ok: true, feedback: COPY.putts };
+      }
+      if (msg.action === 'undo') {
+        const next = undoLastPutt(puttDraftRef.current);
+        setPuttDraft(next);
+        saveDraft(target, next, false);
+        return { ok: true, feedback: COPY.undoPutt };
+      }
+      if (msg.action === 'made') {
+        const ok = applyMadeIt(target, puttDraftRef.current);
+        return ok ? { ok: true, feedback: MADE_IT_FEEDBACK } : { ok: false, feedback: COPY.puttSheetLede };
+      }
+      return { ok: false, feedback: PHONE_UNAVAILABLE };
+    },
+    [readOnly, openPuttSheet, holeNumber, saveDraft, applyMadeIt],
+  );
+
   useWatchClubList(
     {
       db,
@@ -214,6 +334,10 @@ export default function HoleScreen() {
       readOnly,
       bump,
       onMarked: () => setCheckNonce((n) => n + 1),
+      onPutter: () => {
+        void openPuttSheet(holeNumber);
+      },
+      onPuttPick: onWatchPuttPick,
       labelForClub: (clubId) => clubMap[clubId]?.shortName ?? clubs.find((club) => club.id === clubId)?.shortName ?? null,
     },
     {
@@ -241,6 +365,11 @@ export default function HoleScreen() {
     const next = club ? selectClubForMark(club, clubs) : null;
     if (readOnly) return;
     if (club && !next) return;
+    if (next && putterOpensPuttSheet({ clubId: next.id })) {
+      hapticSelect();
+      void openPuttSheet(holeNumber);
+      return;
+    }
     if (club) hapticSelect();
     setBusy(true);
     try {
@@ -322,22 +451,26 @@ export default function HoleScreen() {
     }
   };
 
-  const savePutts = (next: { putts: number; lengths: PuttLengthId[] }) => {
-    if (readOnly || !hole) return;
-    updateHolePutts(db, hole.id, next.putts, next.lengths);
+  const onAddPutt = (bucket: PuttLengthId) => {
+    if (readOnly) return;
+    const next = addPuttLength(puttDraft, bucket);
+    setPuttDraft(next);
+    saveDraft(puttSheetHole, next, false);
     hapticTap();
-    bump();
   };
 
-  const onHoleDone = () => {
-    if (readOnly || !round) return;
+  const onUndoPutt = () => {
+    if (readOnly) return;
+    const next = undoLastPutt(puttDraft);
+    setPuttDraft(next);
+    saveDraft(puttSheetHole, next, false);
+    hapticTap();
+  };
+
+  const onMadeIt = () => {
+    if (readOnly) return;
     hapticSelect();
-    const dest = holeAfterDone(holeNumber, round.holeCount);
-    if (dest.kind === 'summary') {
-      router.replace(`/round/${id}/summary`);
-      return;
-    }
-    router.replace(`/round/${id}/hole/${dest.holeNumber}`);
+    applyMadeIt(puttSheetHole, puttDraft);
   };
 
   const onAddPenalty = () => {
@@ -457,8 +590,8 @@ export default function HoleScreen() {
         />
         <View pointerEvents="box-none" style={[styles.sticky, { paddingTop: insets.top + 6 }]}>
           <View style={styles.stickyInner}>
-            <Pressable onPress={() => router.back()} style={styles.back} accessibilityRole="button">
-              <Text style={styles.backLabel}>Back</Text>
+            <Pressable onPress={() => setMenuOpen(true)} style={styles.back} accessibilityRole="button">
+              <Text style={styles.backLabel}>{COPY.menu}</Text>
             </Pressable>
             <View style={{ flex: 1 }}>
               <Text style={styles.holeTitle}>{formatHoleHeader(hole.number, hole.par)}</Text>
@@ -503,6 +636,21 @@ export default function HoleScreen() {
         </View>
       ) : null}
       {toast ? <Text style={styles.toast}>{toast}</Text> : null}
+
+      {pendingPutts.length > 0 ? (
+        <View style={styles.pendingWrap}>
+          {pendingPutts.map((row) => (
+            <Pressable
+              key={row.number}
+              accessibilityRole="button"
+              disabled={readOnly}
+              onPress={() => void openPuttSheet(row.number)}
+              style={styles.pendingChip}>
+              <Text style={styles.pendingText}>{finishPuttsChip(row.number)}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
 
       {!readOnly && ranked.length > 0 ? (
         <View style={styles.top3}>
@@ -560,71 +708,6 @@ export default function HoleScreen() {
           <MarkCheck nonce={checkNonce} />
         </View>
 
-        <View style={[styles.puttBlock, isNearOrOnGreen(toGreen) && styles.puttBlockNear]}>
-          <Text style={styles.puttLabel}>{COPY.putts}</Text>
-          <View style={styles.puttStepRow}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Fewer putts"
-              disabled={readOnly}
-              onPress={() =>
-                savePutts(
-                  setPuttCount(
-                    { putts: hole.putts, lengths: hole.puttLengths.filter(isPuttLengthId) },
-                    hole.putts - 1,
-                  ),
-                )
-              }
-              style={styles.puttStep}>
-              <Text style={styles.puttStepText}>−</Text>
-            </Pressable>
-            <Text style={styles.puttCount}>{hole.putts}</Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="More putts"
-              disabled={readOnly}
-              onPress={() =>
-                savePutts(
-                  setPuttCount(
-                    { putts: hole.putts, lengths: hole.puttLengths.filter(isPuttLengthId) },
-                    hole.putts + 1,
-                  ),
-                )
-              }
-              style={styles.puttStep}>
-              <Text style={styles.puttStepText}>+</Text>
-            </Pressable>
-          </View>
-          <View style={styles.puttBuckets}>
-            {PUTT_LENGTHS.map((bucket) => (
-              <Pressable
-                key={bucket.id}
-                accessibilityRole="button"
-                disabled={readOnly || hole.putts >= 5}
-                onPress={() =>
-                  savePutts(
-                    addPuttLength(
-                      { putts: hole.putts, lengths: hole.puttLengths.filter(isPuttLengthId) },
-                      bucket.id,
-                    ),
-                  )
-                }
-                style={[
-                  styles.puttBucket,
-                  hole.puttLengths.includes(bucket.id) && styles.puttBucketOn,
-                ]}>
-                <Text style={styles.puttBucketText}>{bucket.label}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-
-        <BigButton
-          label={COPY.holeDone}
-          disabled={readOnly}
-          onPress={onHoleDone}
-        />
-
         {!readOnly ? (
           <View style={styles.row}>
             <BigButton
@@ -648,24 +731,66 @@ export default function HoleScreen() {
             />
           </View>
         ) : null}
+      </ThumbZone>
 
-        <View style={styles.row}>
+      <FullSheet
+        visible={menuOpen}
+        title={COPY.menu}
+        onClose={() => setMenuOpen(false)}>
+        <View style={styles.sheetPad}>
           <BigButton
-            label={COPY.prevHole}
+            label={COPY.home}
+            variant="secondary"
+            onPress={() => {
+              setMenuOpen(false);
+              router.replace('/');
+            }}
+          />
+          <BigButton
+            label={COPY.previousHole}
             variant="ghost"
             disabled={holeNumber <= 1}
-            style={{ flex: 1 }}
-            onPress={() => router.replace(`/round/${id}/hole/${holeNumber - 1}`)}
+            onPress={() => {
+              setMenuOpen(false);
+              router.replace(`/round/${id}/hole/${holeNumber - 1}`);
+            }}
           />
           <BigButton
             label={COPY.nextHole}
             variant="ghost"
             disabled={holeNumber >= round.holeCount}
-            style={{ flex: 1 }}
-            onPress={() => router.replace(`/round/${id}/hole/${holeNumber + 1}`)}
+            onPress={() => {
+              setMenuOpen(false);
+              router.replace(`/round/${id}/hole/${holeNumber + 1}`);
+            }}
+          />
+          <BigButton
+            label={COPY.settings}
+            variant="ghost"
+            onPress={() => {
+              setMenuOpen(false);
+              router.push('/settings');
+            }}
           />
         </View>
-      </ThumbZone>
+      </FullSheet>
+
+      <FullSheet
+        visible={puttOpen}
+        title={`${COPY.putts} · Hole ${puttSheetHole}`}
+        onClose={() => {
+          setPuttOpen(false);
+          void pushWatchPuttSheet({ open: false, holeNumber: puttSheetHole, lengths: puttDraft.lengths });
+        }}>
+        <PuttSheetBody
+          holeNumber={puttSheetHole}
+          draft={puttDraft}
+          disabled={readOnly}
+          onAdd={onAddPutt}
+          onUndo={onUndoPutt}
+          onMadeIt={onMadeIt}
+        />
+      </FullSheet>
 
       <FullSheet visible={scoreOpen} title={`Hole ${hole.number}`} onClose={() => setScoreOpen(false)}>
         <ScrollView contentContainerStyle={styles.sheetPad}>
@@ -940,47 +1065,18 @@ const styles = StyleSheet.create({
   },
   sideLabel: { color: colors.cream, fontWeight: '800', fontSize: type.meta, textAlign: 'center' },
   markWrap: { position: 'relative' },
-  puttBlock: {
-    backgroundColor: colors.bgElevated,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.line,
-    padding: 12,
-    gap: 10,
-  },
-  puttBlockNear: {
-    borderColor: colors.lime,
-    borderWidth: 2,
-  },
-  puttLabel: { color: colors.cream, fontSize: type.button, fontWeight: '900' },
-  puttStepRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  puttStep: {
-    minHeight: tapTarget,
-    minWidth: tapTarget,
-    borderRadius: 16,
-    backgroundColor: colors.bg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  puttStepText: { color: colors.lime, fontSize: 36, fontWeight: '900' },
-  puttCount: { color: colors.lime, fontSize: 44, fontWeight: '900', minWidth: 56, textAlign: 'center' },
-  puttBuckets: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  puttBucket: {
-    flexGrow: 1,
+  pendingWrap: { paddingHorizontal: 16, paddingTop: 8, gap: 8 },
+  pendingChip: {
     minHeight: 48,
-    minWidth: 72,
-    paddingHorizontal: 8,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: colors.line,
+    borderColor: colors.lime,
+    backgroundColor: '#1C3A24',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.bg,
+    paddingHorizontal: 12,
   },
-  puttBucketOn: { borderColor: colors.lime, backgroundColor: '#1C3A24' },
-  puttBucketText: { color: colors.cream, fontSize: type.meta, fontWeight: '800' },
+  pendingText: { color: colors.lime, fontSize: type.body, fontWeight: '900' },
   row: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   warn: { color: colors.orange, fontSize: type.meta, fontWeight: '700' },
   voiceFail: { paddingHorizontal: 16, paddingTop: 8, gap: 8 },

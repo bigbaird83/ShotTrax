@@ -13,8 +13,14 @@ import {
   clubPickPayload,
   formatClubMarkedFeedback,
   isIso8601,
+  MADE_IT_FEEDBACK,
   parseClubList,
   parseClubPick,
+  parsePuttPick,
+  parsePuttSheet,
+  puttPickPayload,
+  puttSheetPayload,
+  PUTTS_ON_WATCH,
   toWatchYardsQuality,
 } from './watchMessages';
 
@@ -181,8 +187,8 @@ test('clubPick may carry Watch GPS; phone prefers it only when fresh and at leas
   assert.equal(parsed?.accuracyM, 4);
 });
 
-test('Watch Connectivity this cut is only clubList and clubPick', () => {
-  assert.deepEqual([...WATCH_MESSAGE_TYPES], ['clubList', 'clubPick']);
+test('Watch Connectivity this cut is clubList, clubPick, puttSheet, puttPick', () => {
+  assert.deepEqual([...WATCH_MESSAGE_TYPES], ['clubList', 'clubPick', 'puttSheet', 'puttPick']);
 });
 
 test('Watch feedback is marked ✓ or Phone unavailable — never silent fail', () => {
@@ -193,4 +199,37 @@ test('Watch feedback is marked ✓ or Phone unavailable — never silent fail', 
 test('Watch companion is club-pick only — no motion or mic auto-mark', () => {
   assert.equal(WATCH_ASSIST, false);
   assert.equal(MIC_SHOT_ASSIST, false);
+});
+
+test('puttSheet is buckets plus Made it — never GPS and never invented putts', () => {
+  const msg = puttSheetPayload({ open: true, holeNumber: 4, lengths: ['over_20'] });
+  assert.equal(msg.type, 'puttSheet');
+  assert.equal(msg.open, true);
+  assert.equal(msg.canMake, true);
+  assert.equal(msg.canAdd, true);
+  assert.equal(msg.labels.inside_3, 'Under 3 ft');
+  assert.equal(msg.labels.over_20, '20+');
+  const parsed = parsePuttSheet(JSON.parse(JSON.stringify(msg)));
+  assert.deepEqual(parsed, msg);
+  assert.equal(parsePuttSheet({ type: 'puttSheet', open: true, holeNumber: 0, lengths: [] }), null);
+  assert.equal(puttSheetPayload({ open: false, holeNumber: 4, lengths: [] }).canMake, false);
+});
+
+test('puttPick add needs a bucket; Made it finishes; undo drops the last', () => {
+  const add = puttPickPayload({
+    action: 'add',
+    lengthId: 'inside_3',
+    at: '2026-09-17T22:00:00.000Z',
+  });
+  assert.equal(add.type, 'puttPick');
+  assert.deepEqual(parsePuttPick(JSON.parse(JSON.stringify(add))), add);
+  assert.equal(parsePuttPick({ type: 'puttPick', action: 'add', at: '2026-09-17T22:00:00.000Z' }), null);
+  const made = parsePuttPick({
+    type: 'puttPick',
+    action: 'made',
+    at: '2026-09-17T22:00:00.000Z',
+  });
+  assert.equal(made?.action, 'made');
+  assert.equal(MADE_IT_FEEDBACK, 'Made it ✓');
+  assert.equal(PUTTS_ON_WATCH, 'Putts');
 });

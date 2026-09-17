@@ -8,6 +8,7 @@ import {
   insertOpenShot,
   insertPenalty,
   nextShotSeq,
+  sealOpenShotWithoutGps,
   setRoundLastClub,
   undoLastShot as undoLastShotInRepo,
   updateShotClub,
@@ -163,6 +164,35 @@ export async function endOpenShot(
   }
   applyClosedShot(db, plan.closePrior);
   return { plan, fix };
+}
+
+/**
+ * Close the approach before the putt sheet. Never inserts a putter GPS shot and
+ * never invents an end pin. If GPS cannot close the shot, seal it without coords
+ * so the next tee cannot steal the approach's yards.
+ */
+export async function closeApproachBeforePutts(
+  db: SQLiteDatabase,
+  args: { roundId: string; holeNumber: number },
+): Promise<void> {
+  const hole = getHole(db, args.roundId, args.holeNumber);
+  if (!hole) return;
+  const open = getOpenShotForHole(db, hole.id);
+  if (!open) return;
+  try {
+    const { plan } = await endOpenShot(db, { roundId: args.roundId, holeNumber: args.holeNumber });
+    if (plan.status === 'commit') return;
+    const forced = await endOpenShot(db, {
+      roundId: args.roundId,
+      holeNumber: args.holeNumber,
+      force: true,
+    });
+    if (forced.plan.status === 'commit') return;
+  } catch {
+    // fall through to seal without coords
+  }
+  const stillOpen = getOpenShotForHole(db, hole.id);
+  if (stillOpen) sealOpenShotWithoutGps(db, stillOpen.id);
 }
 
 export function addNoGpsShot(

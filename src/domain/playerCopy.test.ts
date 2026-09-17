@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   COPY,
+  finishPuttsChip,
   formatHoleHeader,
   formatParLabel,
   formatSiLabel,
@@ -38,7 +39,13 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.restoreBag, 'Restore stock bag');
   assert.equal(COPY.typicalCarry, 'Typical');
   assert.equal(COPY.putts, 'Putts');
-  assert.equal(COPY.holeDone, 'Hole done');
+  assert.equal(COPY.madeIt, 'Made it');
+  assert.equal(COPY.puttSheetLede, 'How long was the putt?');
+  assert.equal(COPY.menu, 'Menu');
+  assert.equal(COPY.previousHole, 'Previous hole');
+  assert.equal(COPY.settings, 'Settings');
+  assert.equal(COPY.home, 'Home');
+  assert.equal(finishPuttsChip(4), 'Finish putts · Hole 4');
   assert.equal(markedSuggestedMessage('7i'), 'Marked 7i (suggested) · Change club.');
 });
 
