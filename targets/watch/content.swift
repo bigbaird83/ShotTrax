@@ -6,9 +6,19 @@ struct ContentView: View {
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 8) {
-        Text(session.list.statusLine)
-          .font(.headline)
-          .foregroundStyle(Color("cream"))
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+          Text(session.list.statusLine)
+            .font(.headline)
+            .foregroundStyle(Color("cream"))
+          if session.list.showSoft {
+            Text("SOFT")
+              .font(.system(size: 10, weight: .heavy))
+              .padding(.horizontal, 5)
+              .padding(.vertical, 2)
+              .background(Color.orange.opacity(0.25))
+              .clipShape(Capsule())
+          }
+        }
 
         if !session.feedback.isEmpty {
           Text(session.feedback)

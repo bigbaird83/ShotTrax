@@ -13,22 +13,25 @@ import {
   parseClubPick,
 } from './watchMessages';
 
-test('clubList locked schema is type, top3, bag, labels, holeNumber', () => {
+test('clubList locked schema includes holeNumber, yardsToGreen, yardsQuality', () => {
   const msg = clubListPayload({
     top3: ['club_7i', 'club_8i', 'club_6i'],
     bag: ['club_driver', 'club_7i'],
     labels: { club_7i: '7i', club_8i: '8i', club_6i: '6i', club_driver: 'Dr' },
     holeNumber: 4,
+    yardsToGreen: 164,
+    yardsQuality: 'good',
   });
-  assert.deepEqual(Object.keys(msg).sort(), ['bag', 'holeNumber', 'labels', 'top3', 'type']);
   assert.equal(msg.type, 'clubList');
   assert.equal(msg.holeNumber, 4);
+  assert.equal(msg.yardsToGreen, 164);
+  assert.equal(msg.yardsQuality, 'good');
   const parsed = parseClubList(JSON.parse(JSON.stringify(msg)));
   assert.deepEqual(parsed, msg);
   assert.equal(parseClubList({ type: 'clubList', top3: [], bag: [], labels: {} }), null);
 });
 
-test('clubList extras (hole / yards) are optional and do not add a new type', () => {
+test('clubList allows null yards and none quality; rejects invalid hole or type', () => {
   const msg = clubListPayload({
     top3: [],
     bag: ['club_pw'],

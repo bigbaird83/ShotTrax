@@ -10,15 +10,15 @@ export type YardsQuality = 'good' | 'soft' | 'none';
 export const WATCH_MESSAGE_TYPES = ['clubList', 'clubPick'] as const;
 export type WatchMessageType = (typeof WATCH_MESSAGE_TYPES)[number];
 
-/** Phone → Watch on open / bag or rank change. holeNumber is required this cut. */
+/** Phone → Watch on open / bag / hole / rank change. */
 export type ClubListMessage = {
   type: 'clubList';
   top3: ClubId[];
   bag: ClubId[];
   labels: Record<ClubId, string>;
   holeNumber: number;
-  yardsToGreen?: number | null;
-  yardsQuality?: YardsQuality;
+  yardsToGreen: number | null;
+  yardsQuality: YardsQuality;
   lastClubId?: ClubId | null;
 };
 
@@ -66,26 +66,24 @@ export function parseClubList(raw: unknown): ClubListMessage | null {
       ? Math.round(row.holeNumber)
       : NaN;
   if (!Number.isFinite(holeNumber) || holeNumber < 1) return null;
+  let yardsToGreen: number | null = null;
+  if (row.yardsToGreen == null) {
+    yardsToGreen = null;
+  } else if (typeof row.yardsToGreen === 'number' && Number.isFinite(row.yardsToGreen)) {
+    yardsToGreen = Math.round(row.yardsToGreen);
+  } else {
+    return null;
+  }
+  if (!isYardsQuality(row.yardsQuality)) return null;
   const msg: ClubListMessage = {
     type: 'clubList',
     top3: row.top3 as string[],
     bag: row.bag as string[],
     labels,
     holeNumber,
+    yardsToGreen,
+    yardsQuality: row.yardsQuality,
   };
-  if ('yardsToGreen' in row) {
-    if (row.yardsToGreen == null) {
-      msg.yardsToGreen = null;
-    } else if (typeof row.yardsToGreen === 'number' && Number.isFinite(row.yardsToGreen)) {
-      msg.yardsToGreen = Math.round(row.yardsToGreen);
-    } else {
-      return null;
-    }
-  }
-  if (row.yardsQuality != null) {
-    if (!isYardsQuality(row.yardsQuality)) return null;
-    msg.yardsQuality = row.yardsQuality;
-  }
   const lastClubId = typeof row.lastClubId === 'string' && row.lastClubId.trim() ? row.lastClubId : undefined;
   if (lastClubId) msg.lastClubId = lastClubId;
   return msg;
@@ -117,8 +115,8 @@ export function clubListPayload(args: {
   bag: ClubId[];
   labels: Record<ClubId, string>;
   holeNumber: number;
-  yardsToGreen?: number | null;
-  yardsQuality?: YardsQuality;
+  yardsToGreen: number | null;
+  yardsQuality: YardsQuality;
   lastClubId?: ClubId | null;
 }): ClubListMessage {
   return {
@@ -127,8 +125,8 @@ export function clubListPayload(args: {
     bag: args.bag,
     labels: args.labels,
     holeNumber: args.holeNumber,
-    ...(args.yardsToGreen !== undefined ? { yardsToGreen: args.yardsToGreen } : {}),
-    ...(args.yardsQuality ? { yardsQuality: args.yardsQuality } : {}),
+    yardsToGreen: args.yardsToGreen,
+    yardsQuality: args.yardsQuality,
     ...(args.lastClubId ? { lastClubId: args.lastClubId } : {}),
   };
 }
