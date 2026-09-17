@@ -21,22 +21,24 @@ export function ScorecardBody({
   const rows: ScorecardHole[] = planScorecard(holes);
   return (
     <View style={styles.wrap}>
-      <View style={styles.head}>
-        <Text style={[styles.cell, styles.num]}>#</Text>
-        <Text style={styles.cell}>{COPY.scorecardPar}</Text>
-        <Text style={styles.cell}>{COPY.score}</Text>
-        <Text style={styles.cell}>{COPY.putts}</Text>
-        <Text style={[styles.cell, styles.mark]} />
-      </View>
-      {rows.map((row) => (
-        <View key={row.number} style={styles.row}>
-          <Text style={[styles.val, styles.num]}>{row.number}</Text>
-          <Text style={styles.val}>{row.par ?? ''}</Text>
-          <Text style={styles.val}>{row.score ?? ''}</Text>
-          <Text style={styles.val}>{row.putts}</Text>
-          <Text style={[styles.val, styles.mark]}>{scorecardMarkGlyph(row.mark)}</Text>
+      <View pointerEvents="none" style={styles.table}>
+        <View style={styles.head}>
+          <Text style={[styles.cell, styles.num]}>#</Text>
+          <Text style={styles.cell}>{COPY.scorecardPar}</Text>
+          <Text style={styles.cell}>{COPY.score}</Text>
+          <Text style={styles.cell}>{COPY.putts}</Text>
+          <Text style={[styles.cell, styles.mark]} />
         </View>
-      ))}
+        {rows.map((row) => (
+          <View key={row.number} style={styles.row}>
+            <Text style={[styles.val, styles.num]}>{row.number}</Text>
+            <Text style={styles.val}>{row.par ?? ''}</Text>
+            <Text style={styles.val}>{row.score ?? ''}</Text>
+            <Text style={styles.val}>{row.putts}</Text>
+            <Text style={[styles.val, styles.mark]}>{scorecardMarkGlyph(row.mark)}</Text>
+          </View>
+        ))}
+      </View>
       <BigButton label={COPY.back} variant="secondary" onPress={onBack} />
     </View>
   );
@@ -44,6 +46,7 @@ export function ScorecardBody({
 
 const styles = StyleSheet.create({
   wrap: { gap: 8 },
+  table: { gap: 8 },
   head: { flexDirection: 'row', paddingHorizontal: 8 },
   row: {
     flexDirection: 'row',

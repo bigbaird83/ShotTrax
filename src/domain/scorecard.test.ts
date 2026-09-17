@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   planScorecard,
+  planScorecardDismiss,
   scorecardClosesShot,
   scorecardMark,
   scorecardMarkGlyph,
@@ -22,6 +23,9 @@ test('scorecard marks only when both score and par exist', () => {
   assert.equal(scorecardMark(4, null), null);
   assert.equal(scorecardMark(null, 4), null);
   assert.equal(scorecardMark(null, null), null);
+  assert.equal(scorecardMark(4, 0), null);
+  assert.equal(scorecardMark(4, 2), null);
+  assert.equal(scorecardMark(4, 7), null);
 });
 
 test('scorecard rows keep stored par/score/putts and never invent par', () => {
@@ -29,19 +33,35 @@ test('scorecard rows keep stored par/score/putts and never invent par', () => {
     { number: 2, par: null, score: 4, putts: 2 },
     { number: 1, par: 4, score: 3, putts: 1 },
     { number: 3, par: 4, score: 5, putts: 2 },
+    { number: 4, par: 5, score: 3, putts: 1 },
+    { number: 5, par: 3, score: 3, putts: 2 },
+    { number: 6, par: 4, score: 6, putts: 2 },
+    { number: 7, par: 4, score: null, putts: 0 },
   ]);
   assert.deepEqual(rows, [
     { number: 1, par: 4, score: 3, putts: 1, mark: 'birdie' },
     { number: 2, par: null, score: 4, putts: 2, mark: null },
     { number: 3, par: 4, score: 5, putts: 2, mark: 'bogey' },
+    { number: 4, par: 5, score: 3, putts: 1, mark: 'eagle' },
+    { number: 5, par: 3, score: 3, putts: 2, mark: 'par' },
+    { number: 6, par: 4, score: 6, putts: 2, mark: 'double' },
+    { number: 7, par: 4, score: null, putts: 0, mark: null },
   ]);
   assert.deepEqual(Object.keys(rows[0]!).sort(), ['mark', 'number', 'par', 'putts', 'score']);
   assert.equal('gir' in rows[0]!, false);
   assert.equal('strokesGained' in rows[0]!, false);
   assert.equal(rows[1]!.par, null);
+  assert.equal(scorecardMarkGlyph(rows[4]!.mark), '');
 });
 
-test('scorecard is view-only and has no GIR or strokes gained', () => {
+test('opening scorecard and Back never mark or close a shot', () => {
+  const back = planScorecardDismiss();
+  assert.deepEqual(back, {
+    markShot: false,
+    closeShot: false,
+    leaveHole: false,
+    finishRound: false,
+  });
   assert.equal(scorecardRunsAcceptFix(), false);
   assert.equal(scorecardMarksShot(), false);
   assert.equal(scorecardClosesShot(), false);

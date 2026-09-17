@@ -53,6 +53,7 @@ import {
 } from '@/src/domain/putts';
 import { canMoveFromPin, canMoveToPin, type ShotEditSnapshot } from '@/src/domain/shotEdit';
 import { clubToRankInput, lastClosedShotYards, rankCatchUpClubs, rankDistanceYards, rankTopClubs, resolveDistanceTarget } from '@/src/domain/rankClubs';
+import { planScorecardDismiss } from '@/src/domain/scorecard';
 import { reconcileHoleScore, scoreMismatchMessage } from '@/src/domain/scoreReconcile';
 import { resolveStickyClub, selectClubForMark } from '@/src/domain/stickyClub';
 import type { Club, PenaltyReason } from '@/src/domain/types';
@@ -529,6 +530,14 @@ export default function HoleScreen() {
   const onMark = (force = false) => {
     if (!sticky) return Promise.resolve();
     return markClub(sticky, force);
+  };
+
+  const dismissScorecard = () => {
+    const action = planScorecardDismiss();
+    if (action.markShot || action.closeShot || action.leaveHole || action.finishRound) {
+      return;
+    }
+    setScorecardOpen(false);
   };
 
   const onUndo = () => {
@@ -1179,7 +1188,7 @@ export default function HoleScreen() {
       <FullSheet
         visible={scorecardOpen}
         title={COPY.scorecard}
-        onClose={() => setScorecardOpen(false)}>
+        onClose={dismissScorecard}>
         <ScrollView contentContainerStyle={styles.sheetPad}>
           <ScorecardBody
             holes={holes.map((row) => ({
@@ -1188,7 +1197,7 @@ export default function HoleScreen() {
               score: row.score,
               putts: row.putts,
             }))}
-            onBack={() => setScorecardOpen(false)}
+            onBack={dismissScorecard}
           />
         </ScrollView>
       </FullSheet>

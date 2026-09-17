@@ -8,12 +8,23 @@ export type ScorecardHole = {
   mark: ScorecardMark;
 };
 
+export type ScorecardDismiss = {
+  markShot: false;
+  closeShot: false;
+  leaveHole: false;
+  finishRound: false;
+};
+
 /**
- * Marks only when both score and par exist. Missing par stays blank — never invented.
+ * Marks only from score versus par, and only when both numbers exist.
+ * Missing or non-course par (not 3–6) stays unmarked — never invented.
  * eagle ≤ −2, birdie −1, par 0, bogey +1, double +2 or worse.
  */
 export function scorecardMark(score: number | null, par: number | null): ScorecardMark {
   if (score == null || par == null || !Number.isFinite(score) || !Number.isFinite(par)) {
+    return null;
+  }
+  if (!Number.isInteger(score) || !Number.isInteger(par) || score < 1 || par < 3 || par > 6) {
     return null;
   }
   const diff = score - par;
@@ -40,6 +51,11 @@ export function planScorecard(holes: {
       putts: hole.putts,
       mark: scorecardMark(hole.score, hole.par),
     }));
+}
+
+/** Back / Done: view only. Never marks or closes a shot, never leaves the hole, never finishes the round. */
+export function planScorecardDismiss(): ScorecardDismiss {
+  return { markShot: false, closeShot: false, leaveHole: false, finishRound: false };
 }
 
 export function scorecardRunsAcceptFix(): false {
