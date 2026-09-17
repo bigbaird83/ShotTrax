@@ -86,14 +86,41 @@ export const COPY = {
   locationOff: 'Turn on location to mark.',
   simulator: 'Simulator — move the location pin between shots.',
   restoreBag: 'Restore stock bag',
-  bagLede: 'Your bag. Turn off what you don’t carry.',
+  bagLede: 'Your bag. Turn off what you don’t carry. Carry is on each row.',
+  bagCustomizeTitle: 'Your bag',
+  bagCustomizeLede:
+    'Set the clubs you carry and each club’s typical carry. That helps narrow club selection during the round.',
+  bagCustomizeSkip: 'Skip',
+  bagCustomizeDone: 'Done',
   averagesLede: 'How far you hit each club — from marked shots.',
   noClosedShots: 'No marked shots yet',
   typicalCarry: 'Typical',
-  typicalCarryYards: 'Typical carry (yd)',
-  clearTypicalCarry: 'Clear typical carry',
+  typicalCarryYards: 'Carry (yd)',
+  clearTypicalCarry: 'Clear carry',
+  estimated: 'Estimated',
+  insertShot: 'Insert shot',
+  nerdOut: 'Nerd out',
+  nerdOutLede: 'Score, putts, and how far you hit each club.',
+  scorecard: 'Scorecard',
+  scorecardPar: 'Par',
   summaryHome: 'Home',
 } as const;
+
+/** Suggested chip: that club's carry, not yards-to-green. */
+export function formatSuggestedClubChip(shortName: string, carryYards: number | null | undefined): string {
+  return carryYards != null && Number.isFinite(carryYards) ? `${shortName} · ${Math.round(carryYards)}` : `${shortName} · —`;
+}
+
+/** Picker remaining yards. Only when yards-to-green quality is good or soft. Never invent. */
+export function formatPickerLeftYards(result: {
+  yards: number | null;
+  quality: string;
+}): string {
+  if ((result.quality === 'good' || result.quality === 'soft') && result.yards != null && Number.isFinite(result.yards)) {
+    return `${Math.round(result.yards)} left`;
+  }
+  return '—';
+}
 
 export function finishPuttsChip(holeNumber: number): string {
   return `Finish putts · Hole ${holeNumber}`;

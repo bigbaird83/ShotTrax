@@ -1,3 +1,4 @@
+import { isValidLatLng, type LatLng } from './latLng';
 import type { Shot } from './types';
 
 export type UndoPlan = {
@@ -5,6 +6,28 @@ export type UndoPlan = {
   reopenShotId: string | null;
   nextLastClubId: string | null;
 };
+
+export type PlacePinState = {
+  from: LatLng | null;
+  to: LatLng | null;
+};
+
+export type UndoPlacePinsPlan = {
+  from: LatLng | null;
+  to: LatLng | null;
+  mode: 'from' | 'to';
+};
+
+/** Undo the last placed from/to pin while catch-up is still open. */
+export function planUndoPlacePins(state: PlacePinState): UndoPlacePinsPlan | null {
+  if (state.to && isValidLatLng(state.to)) {
+    return { from: state.from && isValidLatLng(state.from) ? state.from : null, to: null, mode: 'to' };
+  }
+  if (state.from && isValidLatLng(state.from)) {
+    return { from: null, to: null, mode: 'from' };
+  }
+  return null;
+}
 
 /**
  * Undo the last shot on a hole.

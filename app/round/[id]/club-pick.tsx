@@ -3,10 +3,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
 import { getHole, listClubAverages, listClubs, listShotsForHole } from '@/src/db/repo';
-import { COPY } from '@/src/domain/playerCopy';
+import { COPY, formatPickerLeftYards, formatSuggestedClubChip } from '@/src/domain/playerCopy';
 import { clubPickLeaveHref, clubPickLeaveRunsAcceptFix, planClubPickLeave } from '@/src/domain/clubPickNav';
 import { putterOpensPuttSheet } from '@/src/domain/putts';
-import { clubToRankInput, lastClosedShotYards, rankTopClubs, resolveDistanceTarget } from '@/src/domain/rankClubs';
+import { clubToRankInput, lastClosedShotYards, rankDistanceYards, rankTopClubs, resolveDistanceTarget } from '@/src/domain/rankClubs';
 import { parseTypedYards } from '@/src/domain/shotSource';
 import { selectClubForMark } from '@/src/domain/stickyClub';
 import { matchSpokenClub, speechContextualStrings } from '@/src/domain/voiceClub';
@@ -153,8 +153,15 @@ export default function ClubPickScreen() {
       labelForClub: (clubId) => clubs.find((club) => club.id === clubId)?.shortName ?? null,
     },
     {
-      top3: ranked.map((club) => ({ id: club.id, shortName: club.shortName })),
-      bag: clubs.map((club) => ({ id: club.id, shortName: club.shortName })),
+      top3: ranked.map((club) => ({
+        id: club.id,
+        shortName: formatSuggestedClubChip(club.shortName, rankDistanceYards(club)),
+      })),
+      bag: clubs.map((club) => {
+        const row = averages.find((item) => item.club.id === club.id);
+        const carry = row ? rankDistanceYards(clubToRankInput(row.club, row)) : null;
+        return { id: club.id, shortName: formatSuggestedClubChip(club.shortName, carry) };
+      }),
       holeNumber,
       yardsToGreen: toGreen.yards,
       yardsQuality: toGreen.quality,
@@ -335,6 +342,7 @@ export default function ClubPickScreen() {
             ? 'Where you hit from stays. Only the club changes.'
             : COPY.pickClubLede}
       </Text>
+      {withoutGps ? null : <Text style={styles.left}>{formatPickerLeftYards(toGreen)}</Text>}
       <View style={styles.navRow}>
         <BigButton
           label={COPY.back}
@@ -386,7 +394,9 @@ export default function ClubPickScreen() {
                 index === 0 && styles.chipPrimary,
                 selected?.id === club.id && styles.chipOn,
               ]}>
-              <Text style={[styles.chipText, index === 0 && styles.chipPrimaryText]}>{club.shortName}</Text>
+              <Text style={[styles.chipText, index === 0 && styles.chipPrimaryText]}>
+                {formatSuggestedClubChip(club.shortName, rankDistanceYards(club))}
+              </Text>
               {index === 0 ? <Text style={styles.suggest}>{COPY.suggested}</Text> : null}
             </Pressable>
           ))}
@@ -418,6 +428,7 @@ export default function ClubPickScreen() {
 const styles = StyleSheet.create({
   title: { color: colors.cream, fontSize: type.hole, fontWeight: '900' },
   lede: { color: colors.muted, fontSize: type.body, lineHeight: 22 },
+  left: { color: colors.lime, fontSize: type.body, fontWeight: '800' },
   navRow: { flexDirection: 'row', gap: 10 },
   headerBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
   headerBtnText: { color: colors.cream, fontSize: type.body, fontWeight: '800' },

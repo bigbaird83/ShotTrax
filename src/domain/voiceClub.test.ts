@@ -46,6 +46,12 @@ test('woods, hybrid, wedges, putter', () => {
   assert.equal(idFor('52°'), 'club_gw');
   assert.equal(idFor('52 degree'), 'club_gw');
   assert.equal(idFor('fifty two'), 'club_gw');
+  assert.equal(idFor('gap wedge'), 'club_gw');
+  assert.equal(idFor('gw'), 'club_gw');
+  assert.equal(idFor('48'), 'club_48');
+  assert.equal(idFor('48 degree'), 'club_48');
+  assert.equal(idFor('50'), 'club_50');
+  assert.equal(idFor('50 degree'), 'club_50');
   assert.equal(idFor('putter'), 'club_putter');
   assert.equal(idFor('flat stick'), 'club_putter');
 });

@@ -1,5 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
-import { DEFAULT_BAG } from '../domain/defaultBag';
+import { DEFAULT_BAG, isLegacyStockCarry, LEGACY_STOCK_CARRY_YARDS } from '../domain/defaultBag';
 
 function ensureColumn(db: SQLiteDatabase, table: string, column: string, ddl: string): boolean {
   const cols = db.getAllSync<{ name: string }>(`PRAGMA table_info(${table})`);
@@ -247,14 +247,12 @@ export function migrate(db: SQLiteDatabase): void {
   }
   migrateNoGpsSensingLock(db);
 
-  const addedTypicalCarry = ensureColumn(db, 'clubs', 'typical_carry_yards', 'INTEGER');
+  ensureColumn(db, 'clubs', 'typical_carry_yards', 'INTEGER');
   ensureStockBag(db);
-  if (addedTypicalCarry) {
-    seedTypicalCarryYards(db);
-  }
+  clearLegacyStockCarry(db);
 }
 
-/** First-run seed plus insert any stock clubs missing from an older bag (2i / 3i / 4i / 52° / 56° / 60°). */
+/** First-run seed plus insert any stock clubs missing from an older bag (2i / 3i / 4i / 48° / 50° / GW / 56° / 60°). */
 function ensureStockBag(db: SQLiteDatabase): void {
   const existing = new Set(
     db.getAllSync<{ id: string }>('SELECT id FROM clubs').map((row) => row.id),
@@ -285,12 +283,13 @@ function ensureStockBag(db: SQLiteDatabase): void {
   }
 }
 
-/** One-time backfill when the column is added. Later clears stay cleared. */
-function seedTypicalCarryYards(db: SQLiteDatabase): void {
-  for (const club of DEFAULT_BAG) {
-    db.runSync(
-      'UPDATE clubs SET typical_carry_yards = ? WHERE id = ? AND typical_carry_yards IS NULL',
-      [club.typicalCarryYards, club.id],
-    );
+/** Drop Build 19 invented seeds. A typed number that differs from stock stays. */
+function clearLegacyStockCarry(db: SQLiteDatabase): void {
+  for (const [id, yards] of Object.entries(LEGACY_STOCK_CARRY_YARDS)) {
+    if (!isLegacyStockCarry(id, yards)) continue;
+    db.runSync('UPDATE clubs SET typical_carry_yards = NULL WHERE id = ? AND typical_carry_yards = ?', [
+      id,
+      yards,
+    ]);
   }
 }

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
 import { listClubAverages } from '@/src/db/repo';
+import { clubBookCarry } from '@/src/domain/nerdOut';
 import { COPY } from '@/src/domain/playerCopy';
 import { Screen } from '@/src/ui/Screen';
 import { colors, tapTarget, type } from '@/src/ui/theme';
@@ -13,27 +14,31 @@ export default function AveragesScreen() {
   return (
     <Screen>
       <Text style={styles.lede}>{COPY.averagesLede}</Text>
-      {rows.map((row) => (
-        <View key={row.club.id} style={styles.row}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.name}>{row.club.name}</Text>
-            <Text style={styles.meta}>
-              {row.count === 0
-                ? row.typicalCarryYards != null
-                  ? COPY.typicalCarry
-                  : COPY.noClosedShots
-                : `${row.count} shot${row.count === 1 ? '' : 's'}`}
-            </Text>
+      {rows.map((row) => {
+        const book = clubBookCarry({
+          count: row.count,
+          avgYards: row.avgYards,
+          typicalCarryYards: row.typicalCarryYards,
+          carrySource: row.carrySource,
+        });
+        return (
+          <View key={row.club.id} style={styles.row}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.name}>{row.club.name}</Text>
+              <Text style={styles.meta}>
+                {book.kind === 'live'
+                  ? `${book.count} shot${book.count === 1 ? '' : 's'}`
+                  : book.kind === 'estimated'
+                    ? COPY.estimated
+                    : book.kind === 'typed'
+                      ? COPY.typicalCarry
+                      : COPY.noClosedShots}
+              </Text>
+            </View>
+            <Text style={styles.yards}>{book.yards != null ? `${book.yards} yd` : '—'}</Text>
           </View>
-          <Text style={styles.yards}>
-            {row.count
-              ? `${Math.round(row.avgYards)} yd`
-              : row.typicalCarryYards != null
-                ? `${Math.round(row.typicalCarryYards)} yd`
-                : '—'}
-          </Text>
-        </View>
-      ))}
+        );
+      })}
     </Screen>
   );
 }

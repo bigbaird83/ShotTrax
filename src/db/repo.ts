@@ -4,7 +4,10 @@ import {
   seedHoleFromCourse,
   type CourseLayoutSeed,
 } from '../course/layout';
-import { DEFAULT_BAG, isPutterClubId, typicalCarrySeedForClub } from '../domain/defaultBag';
+import { fillEstimatedCarries, type CarrySource } from '../domain/carryFill';
+import { DEFAULT_BAG, isPutterClubId } from '../domain/defaultBag';
+import { bagCustomizeSeenValue, BAG_CUSTOMIZE_SETTING_KEY, shouldPromptBagCustomize } from '../domain/bagCustomize';
+import { planInsertPlacedShot } from '../domain/insertShot';
 import {
   COURSE_DISTANCE_SETTING_KEY,
   parseCourseDistanceUnit,
@@ -274,6 +277,14 @@ export function addClub(
     [club.id, club.name, club.shortName, club.loftRank, club.sortOrder, club.typicalCarryYards],
   );
   return club;
+}
+
+export function updateClubCarry(db: SQLiteDatabase, id: string, typicalCarryYards: number | null): void {
+  if (isPutterClubId(id)) {
+    db.runSync('UPDATE clubs SET typical_carry_yards = NULL WHERE id = ?', [id]);
+    return;
+  }
+  db.runSync('UPDATE clubs SET typical_carry_yards = ? WHERE id = ?', [typicalCarryYards, id]);
 }
 
 export function updateClub(
@@ -894,6 +905,42 @@ export function insertPlacedShot(
   return id;
 }
 
+/** Insert or append a Placed shot at `seq`. Renumbers later shots. Neighbors keep pins. */
+export function insertPlacedShotAtSeq(
+  db: SQLiteDatabase,
+  args: {
+    holeId: string;
+    clubId: string;
+    seq: number;
+    from: { lat: number; lng: number };
+    to: { lat: number; lng: number };
+  },
+): string | null {
+  const shots = listShotsForHole(db, args.holeId);
+  const planned = planInsertPlacedShot({
+    shots,
+    seq: args.seq,
+    from: args.from,
+    to: args.to,
+    clubId: args.clubId,
+  });
+  if (!planned.ok) return null;
+  let id: string | null = null;
+  db.withTransactionSync(() => {
+    for (const row of planned.renumber) {
+      db.runSync('UPDATE shots SET seq = ? WHERE id = ?', [row.seq, row.id]);
+    }
+    id = insertPlacedShot(db, {
+      holeId: args.holeId,
+      clubId: args.clubId,
+      seq: planned.seq,
+      from: args.from,
+      to: args.to,
+    });
+  });
+  return id;
+}
+
 export function listPenaltiesForHole(db: SQLiteDatabase, holeId: string): HolePenalty[] {
   return db
     .getAllSync<PenaltyRow>(
@@ -954,10 +1001,12 @@ export function insertPenalty(
 export type ClubAverageRow = ClubAverage & {
   club: Club;
   typicalCarryYards: number | null;
+  carrySource: CarrySource;
 };
 
 export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
   const clubs = listClubs(db, false).filter((club) => !isPutterClubId(club.id));
+  const filled = fillEstimatedCarries(clubs);
   const shots = db.getAllSync<{
     club_id: string;
     distance_yards: number;
@@ -1001,7 +1050,12 @@ export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
               : null;
         return { yards: s.distance_yards, fixQuality: quality };
       });
-    return { club, typicalCarryYards: typicalCarrySeedForClub(club), ...averageWithBadges(forClub) };
+    return {
+      club,
+      typicalCarryYards: filled.get(club.id)?.yards ?? null,
+      carrySource: filled.get(club.id)?.source ?? null,
+      ...averageWithBadges(forClub),
+    };
   });
 }
 
@@ -1028,4 +1082,12 @@ export function getCourseDistanceUnit(db: SQLiteDatabase): CourseDistanceUnit {
 
 export function setCourseDistanceUnit(db: SQLiteDatabase, unit: CourseDistanceUnit): void {
   setSetting(db, COURSE_DISTANCE_SETTING_KEY, unit);
+}
+
+export function hasSeenBagCustomize(db: SQLiteDatabase): boolean {
+  return !shouldPromptBagCustomize(getSetting(db, BAG_CUSTOMIZE_SETTING_KEY));
+}
+
+export function markBagCustomizeSeen(db: SQLiteDatabase): void {
+  setSetting(db, BAG_CUSTOMIZE_SETTING_KEY, bagCustomizeSeenValue());
 }
