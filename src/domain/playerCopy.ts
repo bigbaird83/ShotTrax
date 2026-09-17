@@ -21,6 +21,7 @@ export const COPY = {
   clearCourse: 'Clear course',
   waitingOnGreen: 'Waiting on green location.',
   waitingOnLocation: 'Waiting on your location.',
+  approximate: 'Approximate',
   longPressGreen: 'Long-press to set the green',
   toGreen: 'To green',
   mark: 'Mark',

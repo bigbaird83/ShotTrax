@@ -1,5 +1,7 @@
+import { Alert } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getWatchBridgeNative } from '@/modules/watch-bridge';
+import { COPY } from '../domain/playerCopy';
 import {
   CHECK_PHONE,
   PHONE_UNAVAILABLE,
@@ -9,7 +11,6 @@ import {
   type ClubListMessage,
   type ClubPickReply,
 } from '../domain/watchMessages';
-import { watchFixFromPick } from '../domain/preferWatchFix';
 import { hapticMark, hapticWarn } from '../ui/haptics';
 import { markShotWithClub, promptForPlan } from './shotActions';
 
@@ -106,11 +107,11 @@ async function handlePick(token: string, json: string): Promise<void> {
 
   const label = ctx.labelForClub(pick.clubId) ?? pick.clubId;
   try {
+    // Phone owns GPS. Same club=mark as a phone tap: acceptFix now, never silent-force.
     const { plan } = await markShotWithClub(ctx.db, {
       roundId: ctx.roundId,
       holeNumber: ctx.holeNumber,
       clubId: pick.clubId,
-      watchFix: watchFixFromPick(pick),
     });
     const waiting = promptForPlan(plan, () => {
       void (async () => {
@@ -120,7 +121,6 @@ async function handlePick(token: string, json: string): Promise<void> {
             holeNumber: ctx.holeNumber,
             clubId: pick.clubId,
             force: true,
-            watchFix: watchFixFromPick(pick),
           });
           if (forced.plan.status === 'commit') {
             hapticMark();
@@ -147,6 +147,7 @@ async function handlePick(token: string, json: string): Promise<void> {
     await reply({ ok: false, feedback: CHECK_PHONE });
   } catch {
     hapticWarn();
+    Alert.alert(COPY.waitingOnLocation, COPY.locationOff, [{ text: COPY.cancel, style: 'cancel' }]);
     await reply({ ok: false, feedback: CHECK_PHONE });
   }
 }

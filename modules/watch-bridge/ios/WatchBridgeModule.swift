@@ -112,6 +112,7 @@ final class PhoneWatchSession: NSObject, WCSessionDelegate {
   }
 
   private func emitClubPick(_ message: [String: Any], replyHandler: (([String: Any]) -> Void)?) {
+    guard (message["type"] as? String) == "clubPick" else { return }
     let token = UUID().uuidString
     if let replyHandler {
       lock.lock()

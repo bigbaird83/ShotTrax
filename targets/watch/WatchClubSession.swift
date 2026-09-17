@@ -35,6 +35,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   @Published var sending = false
 
   private var pendingPick: [String: Any]?
+  private let pendingKey = "pendingClubPick"
   private let location = CLLocationManager()
   private var lastFix: CLLocation?
 
@@ -51,21 +52,17 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       session.activate()
     }
     loadFromDefaults()
+    loadPending()
   }
 
   func pick(clubId: String) {
     sending = true
     feedback = ""
-    var payload: [String: Any] = [
+    let payload: [String: Any] = [
       "type": "clubPick",
       "clubId": clubId,
       "at": isoNow(),
     ]
-    if let fix = lastFix, Date().timeIntervalSince(fix.timestamp) <= 3, fix.horizontalAccuracy > 0 {
-      payload["lat"] = fix.coordinate.latitude
-      payload["lng"] = fix.coordinate.longitude
-      payload["accuracyM"] = fix.horizontalAccuracy
-    }
     sendPick(payload)
   }
 
@@ -94,15 +91,15 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     if session.isReachable {
       session.sendMessage(payload, replyHandler: { [weak self] reply in
         DispatchQueue.main.async {
+          self?.clearPending()
           self?.handleReply(reply, fallbackClubId: payload["clubId"] as? String)
         }
       }, errorHandler: { [weak self] _ in
         DispatchQueue.main.async {
-          self?.failUnavailable(payload)
+          self?.failUnavailable(payload, keepPending: true)
         }
       })
     } else {
-      pendingPick = payload
       failUnavailable(payload, keepPending: true)
     }
   }
@@ -124,8 +121,22 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     feedback = "Phone unavailable"
     haptic(.failure)
     if keepPending {
-      pendingPick = payload
+      storePending(payload)
     }
+  }
+
+  private func storePending(_ payload: [String: Any]) {
+    pendingPick = payload
+    UserDefaults.standard.set(payload, forKey: pendingKey)
+  }
+
+  private func clearPending() {
+    pendingPick = nil
+    UserDefaults.standard.removeObject(forKey: pendingKey)
+  }
+
+  private func loadPending() {
+    pendingPick = UserDefaults.standard.dictionary(forKey: pendingKey)
   }
 
   private func haptic(_ type: WKHapticType) {
@@ -188,8 +199,10 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
 
   private func flushPending() {
     guard let pendingPick, WCSession.default.isReachable else { return }
-    self.pendingPick = nil
-    sendPick(pendingPick)
+    let payload = pendingPick
+    clearPending()
+    sending = true
+    sendPick(payload)
   }
 
   func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {

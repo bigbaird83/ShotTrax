@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { COPY } from '../domain/playerCopy';
 import type { ShotFixQuality, ShotSource } from '../domain/types';
 import { colors, type } from './theme';
 
@@ -21,7 +22,14 @@ export function QualityBadge({
   if (open) {
     return (
       <View style={[styles.badge, styles.open]}>
-        <Text style={styles.text}>In play</Text>
+        <Text style={styles.text}>{COPY.inPlay}</Text>
+      </View>
+    );
+  }
+  if (quality === 'soft') {
+    return (
+      <View style={[styles.badge, styles.soft]}>
+        <Text style={styles.text}>{COPY.approximate}</Text>
       </View>
     );
   }
@@ -56,4 +64,5 @@ const styles = StyleSheet.create({
   },
   open: { backgroundColor: colors.line },
   manual: { backgroundColor: '#3A4A5C' },
+  soft: { backgroundColor: '#5A4A22' },
 });

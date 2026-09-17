@@ -124,10 +124,11 @@ eas submit -p ios
 
 Companion via `@bacons/apple-targets` (`targets/watch`, bundle `com.shottrax.app.watch`) plus a local Expo module (`modules/watch-bridge`) so EAS iOS prebuild links Watch Connectivity.
 
-- Watch shows **top-3 + full bag** and sticky **Same club**
-- Tap a club on Watch → phone applies the same **club=mark GPS** as a phone tap/voice (start now, close prior)
-- **Undo** stays on the phone
-- **No** Watch motion, mic, or sensor auto-mark
+- Watch Connectivity only two types this cut:
+  - Phone → Watch `clubList`: `{ type, top3, bag, labels }` on open / bag or rank change (ranking stays on phone)
+  - Watch → Phone `clubPick`: `{ type, clubId, at: ISO8601 }` — phone runs the same **club=mark** (`acceptFix`). Soft → Approximate. Quality none → phone Waiting / Mark anyway / no-GPS. Watch never silent-forces.
+- Offline: Watch queues **one** pending `clubPick` until reachable, then flushes
+- **Undo** stays on the phone. **No** Watch motion, mic, or sensor auto-mark
 
 EAS credentials for `com.shottrax.app.watch` and `com.shottrax.app.watch.widget` are declared under `extra.eas.build.experimental.ios.appExtensions`.
 
