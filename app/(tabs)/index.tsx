@@ -3,14 +3,38 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { getCourseDataClient } from '@/src/course/client';
-import type { CourseSummary } from '@/src/course/types';
+import { layoutFromCourseDetail } from '@/src/course/layout';
+import type { CourseDetail, CourseSummary } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
-import { finishRound, getActiveRound, listHoles, listRounds, startRound, type CourseLayoutSeed } from '@/src/db/repo';
+import {
+  attachCourseToRound,
+  finishRound,
+  getActiveRound,
+  listHoles,
+  listRounds,
+  startRound,
+  type CourseLayoutSeed,
+} from '@/src/db/repo';
 import { BigButton } from '@/src/ui/BigButton';
 import { CoursePicker } from '@/src/ui/CoursePicker';
 import { GpsBanner } from '@/src/ui/GpsBanner';
 import { Screen } from '@/src/ui/Screen';
 import { colors } from '@/src/ui/theme';
+
+async function loadLayout(course: CourseSummary): Promise<CourseLayoutSeed> {
+  try {
+    const detail: CourseDetail | null = await getCourseDataClient().getCourse(course.id);
+    if (detail) return layoutFromCourseDetail(detail);
+  } catch {
+    // Still attach the name/id; par/green stay blank — never invented.
+  }
+  return {
+    apiId: course.id,
+    name: course.name,
+    location: course.location,
+    holes: [],
+  };
+}
 
 export default function HomeScreen() {
   const { db, revision, bump } = useDb();
@@ -21,6 +45,40 @@ export default function HomeScreen() {
   const active = useMemo(() => getActiveRound(db), [db, revision]);
   const isSimulator = Device.isDevice === false;
 
+  const applyPickedCourse = async (course: CourseSummary, holeCount: 9 | 18) => {
+    const layout = await loadLayout(course);
+    const name = course.name;
+    const round = startRound(db, holeCount, name, layout);
+    bump();
+    router.push(`/round/${round.id}/hole/1`);
+  };
+
+  const onSelectCourse = (course: CourseSummary | null) => {
+    if (!course) {
+      setPicked(null);
+      return;
+    }
+    if (active) {
+      void (async () => {
+        setStarting(true);
+        try {
+          const layout = await loadLayout(course);
+          attachCourseToRound(db, active.id, course.name, layout);
+          bump();
+          setPicked(course);
+          router.push(`/round/${active.id}/hole/1`);
+        } catch (err) {
+          Alert.alert('Could not attach course', err instanceof Error ? err.message : 'Unknown error');
+        } finally {
+          setStarting(false);
+        }
+      })();
+      return;
+    }
+    setPicked(course);
+    setCourseName(course.name);
+  };
+
   const onStart = (holeCount: 9 | 18) => {
     if (active) {
       router.push(`/round/${active.id}/hole/1`);
@@ -29,26 +87,12 @@ export default function HomeScreen() {
     void (async () => {
       setStarting(true);
       try {
-        let layout: CourseLayoutSeed | undefined = picked ? { apiId: picked.id } : undefined;
         if (picked) {
-          try {
-            const detail = await getCourseDataClient().getCourse(picked.id);
-            if (detail) {
-              layout = {
-                apiId: detail.id,
-                holes: detail.holes.map((hole) => ({
-                  number: hole.holeNumber,
-                  par: hole.par,
-                  greenCentroid: hole.greenCentroid,
-                })),
-              };
-            }
-          } catch {
-            layout = { apiId: picked.id };
-          }
+          await applyPickedCourse(picked, holeCount);
+          return;
         }
-        const name = (picked?.name ?? courseName.trim()) || null;
-        const round = startRound(db, holeCount, name, layout);
+        const name = courseName.trim() || null;
+        const round = startRound(db, holeCount, name);
         bump();
         router.push(`/round/${round.id}/hole/1`);
       } catch (err) {
@@ -61,12 +105,12 @@ export default function HomeScreen() {
 
   return (
     <Screen>
-      <Text style={styles.kicker}>P5 · GPS shot tracker</Text>
+      <Text style={styles.kicker}>P5 · Nearby courses</Text>
       <Text style={styles.title}>ShotTrax</Text>
       <Text style={styles.lede}>
-        Confirm a club to mark the shot start. The next mark is the end and logs yards. Yards to green
-        uses phone GPS → a real green pin (never invented). Add a penalty or a no-GPS stroke when you
-        forget a swing.
+        Find a nearby course, then start or attach a round. Par and green centroids come from
+        Golf Courses API only (blank / “par ?” if missing). Yards to green is phone GPS → that
+        centroid. Confirm a club to mark shots.
       </Text>
 
       {isSimulator ? (
@@ -86,10 +130,8 @@ export default function HomeScreen() {
 
       <CoursePicker
         selected={picked}
-        onSelect={(course) => {
-          setPicked(course);
-          if (course) setCourseName(course.name);
-        }}
+        attachMode={Boolean(active)}
+        onSelect={onSelectCourse}
       />
 
       {active ? (
@@ -114,8 +156,17 @@ export default function HomeScreen() {
         </View>
       ) : (
         <View style={{ gap: 10 }}>
-          <BigButton label="Start 18 holes" disabled={starting} onPress={() => onStart(18)} />
-          <BigButton label="Start 9 holes" variant="secondary" disabled={starting} onPress={() => onStart(9)} />
+          <BigButton
+            label={picked ? `Start 18 at ${picked.name}` : 'Start 18 holes'}
+            disabled={starting}
+            onPress={() => onStart(18)}
+          />
+          <BigButton
+            label={picked ? `Start 9 at ${picked.name}` : 'Start 9 holes'}
+            variant="secondary"
+            disabled={starting}
+            onPress={() => onStart(9)}
+          />
         </View>
       )}
 

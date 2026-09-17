@@ -26,6 +26,8 @@ export type Club = {
   enabled: boolean;
 };
 
+export type ParSource = 'course' | 'user';
+
 export type Round = {
   id: string;
   startedAt: string;
@@ -34,6 +36,9 @@ export type Round = {
   holeCount: number;
   /** Golf Courses API id when a course was picked. Null if unnamed / typed. */
   courseApiId: string | null;
+  /** Course pin from the API — used for OSM overlay, never invented. */
+  courseLat: number | null;
+  courseLng: number | null;
 };
 
 export type GreenSource = 'user_estimate' | 'course_centroid';
@@ -42,7 +47,9 @@ export type Hole = {
   id: string;
   roundId: string;
   number: number;
-  par: number;
+  /** Null when the course API omitted par — never invented. Shown as "par ?". */
+  par: number | null;
+  parSource: ParSource | null;
   score: number | null;
   /** User GPS/map pin or course centroid — never invented. */
   greenLat: number | null;

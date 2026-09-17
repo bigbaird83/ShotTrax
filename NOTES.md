@@ -1,43 +1,42 @@
-# ShotTrax / ShotTraxx — P5 part 1
+# ShotTrax / ShotTraxx — P5 part 2
 
 Brand mark on the splash is **ShotTraxx**. The app/package name remains ShotTrax.
 
-## Golf Courses API (course picker)
+## Golf Courses API (nearby courses, par, green centroids)
 
-Nearby courses, hole par, and green centroids come from [Golf Courses API](https://golfcoursesapi.com/). **Do not hardcode the key.**
+Nearby courses, hole par, and green centroids come from [Golf Courses API](https://golfcoursesapi.com/) (Pro green-centers). **Do not hardcode the key.**
 
-Set one of:
+### EAS secret (the only secret name)
+
+Create **one** EAS secret named `GOLF_COURSES_API_KEY` for **production**, **preview**, and **development**.
+
+`app.config.js` copies that value into `expo.extra.golfCoursesApiKey` at EAS build time. The app reads it with `expo-constants`. Do **not** add a second secret name in git.
+
+Expo Go / Metro only inlines `EXPO_PUBLIC_*` into client JS. For local dev without EAS, CoS should **also** set `EXPO_PUBLIC_GOLF_COURSES_API_KEY` in `.env` (same key value — not a second EAS secret). Optional: map `EXPO_PUBLIC_GOLF_COURSES_API_KEY` from the existing `GOLF_COURSES_API_KEY` secret in the Expo dashboard env UI, not by committing a key.
 
 ```bash
-# local / Expo Go (inlined at bundle time)
+# local / Expo Go (copy .env.example → .env; .env is gitignored)
 EXPO_PUBLIC_GOLF_COURSES_API_KEY=your_key_here
+# optional: same name EAS uses (app.config.js copies it into extra)
+GOLF_COURSES_API_KEY=your_key_here
 ```
 
-or Expo extra (EAS secrets / `app.json`):
+Without a key, the **Nearby courses** picker is disabled and does not call the network. You can still type a course name and drop a green pin. ShotTrax never invents a nearby-course list, par, or green coordinate.
 
-```json
-{
-  "expo": {
-    "extra": {
-      "golfCoursesApiKey": null
-    }
-  }
-}
-```
+When a key is present:
 
-Copy `.env.example` to `.env` for local use. `.env` is gitignored.
+- Nearby search is `GET https://golfcoursesapi.com/api/v1/courses?lat=&lng=&radius=` (radius km, max 100)
+- Course detail is `GET /api/v1/courses/:id` (scorecard teeboxes → per-hole par)
+- Green centroids are `GET /api/v1/courses/:id/green-centers` (**Pro/Max**; `403` on free → greens stay blank)
+- Missing par is **par ?**. Missing green stays empty — yards to green shows **— / unavailable**.
 
-Without a key, the **Nearby courses** picker is disabled and does not call the network. You can still type a course name and drop a green pin on the hole map. ShotTrax never invents a nearby-course list, par, or green coordinate.
+**Smoke:** `golfcoursesapi.com` may fail TLS on some boxes. Confirm nearby search on a **device or EAS build**, not only CI.
 
-When a key is present (P5 part 2):
+Auth: `Authorization: Bearer <key>` and `Accept: application/json`.
 
-- Nearby search is `GET https://golfcoursesapi.com/api/v1/courses?lat=&lng=&radius=`
-- Course detail is `GET /api/v1/courses/:id`
-- Par and green centroid are applied **only if the API returns them**. Missing par stays the scorecard default (not labeled as course par). Missing green stays empty — yards to green shows **— / unavailable**.
+## OSM overlay
 
-OSM fairway/green overlay is a stub hook in `src/course/osmOverlay.ts` (`fetchOsmOverlay` always returns `null` in part 1).
-
-Client interface: `src/course/types.ts` (`CourseDataClient`).
+`src/course/osmOverlay.ts` queries Overpass for `golf=green|fairway|tee|hole` around a real green pin or course coordinate. Empty / timeout / unmapped → no overlay (never invented). OSM `par=*` tags are **not** used for scorecard par.
 
 ## Yards to green (sensing)
 
@@ -46,4 +45,3 @@ Client interface: `src/course/types.ts` (`CourseDataClient`).
 - Same haversine + good/soft bands as shot marks
 - No fix or no green → `{ yards: null, quality: 'none' }` (never invents a pin or range)
 - Top-3 `D` uses this yards value **only when `quality !== none`**
-

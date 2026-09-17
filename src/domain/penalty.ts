@@ -17,18 +17,19 @@ export function clampPenaltyStrokes(n: number): number {
 
 /**
  * Hole score is the scorecard source of truth. Adding a penalty bumps it by N
- * strokes (same base as the hole +/− control: current score, or par if unset).
+ * strokes (same base as the hole +/− control: current score, or course par if
+ * unset). If par is also unknown (`par ?`), the bump starts from 0 — never invent par.
  *
  * A penalty is NOT a Shot for distance: it never goes through acceptFix,
  * haversine, club averages, or top-3 samples.
  */
 export function scoreAfterPenalty(
   currentScore: number | null,
-  par: number,
+  par: number | null,
   strokes: number,
 ): number {
   const n = clampPenaltyStrokes(strokes);
-  return (currentScore ?? par) + n;
+  return (currentScore ?? par ?? 0) + n;
 }
 
 export function totalPenaltyStrokes(penalties: { strokes: number }[]): number {

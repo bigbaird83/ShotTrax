@@ -95,13 +95,23 @@ export default function HoleScreen() {
   }, [revision]);
 
   useEffect(() => {
-    if (!round?.courseApiId) {
+    const location =
+      hole?.greenLat != null && hole.greenLng != null
+        ? { lat: hole.greenLat, lng: hole.greenLng }
+        : round?.courseLat != null && round.courseLng != null
+          ? { lat: round.courseLat, lng: round.courseLng }
+          : null;
+    if (!location) {
       setOsmOverlay(null);
       return;
     }
     let live = true;
     void getCourseDataClient()
-      .fetchOsmOverlay(round.courseApiId)
+      .fetchOsmOverlay({
+        courseId: round?.courseApiId,
+        location,
+        holeNumber,
+      })
       .then((overlay) => {
         if (live) setOsmOverlay(overlay);
       })
@@ -111,7 +121,14 @@ export default function HoleScreen() {
     return () => {
       live = false;
     };
-  }, [round?.courseApiId]);
+  }, [
+    round?.courseApiId,
+    round?.courseLat,
+    round?.courseLng,
+    hole?.greenLat,
+    hole?.greenLng,
+    holeNumber,
+  ]);
 
   if (!round || !hole) {
     return (
@@ -226,9 +243,18 @@ export default function HoleScreen() {
           coordinates.
         </Text>
       )}
-      <Text style={styles.label}>Par</Text>
+      <Text style={styles.label}>{hole.par == null ? 'Par ?' : `Par ${hole.par}`}</Text>
+      {hole.par == null ? (
+        <Text style={styles.tiny}>
+          No course par for this hole. Pick 3–6 or leave blank — ShotTrax will not invent par.
+        </Text>
+      ) : hole.parSource === 'course' ? (
+        <Text style={styles.tiny}>Par from course data (not invented). Tap to override.</Text>
+      ) : (
+        <Text style={styles.tiny}>Par set on the scorecard.</Text>
+      )}
       <View style={styles.row}>
-        {[3, 4, 5].map((par) => (
+        {[3, 4, 5, 6].map((par) => (
           <Pressable
             key={par}
             disabled={readOnly}
@@ -247,7 +273,7 @@ export default function HoleScreen() {
         <Pressable
           disabled={readOnly}
           onPress={() => {
-            const next = Math.max(1, (hole.score ?? hole.par) - 1);
+            const next = Math.max(1, (hole.score ?? hole.par ?? 1) - 1);
             updateHoleScore(db, hole.id, next);
             bump();
           }}
@@ -258,7 +284,7 @@ export default function HoleScreen() {
         <Pressable
           disabled={readOnly}
           onPress={() => {
-            const next = (hole.score ?? hole.par) + 1;
+            const next = (hole.score ?? hole.par ?? 0) + 1;
             updateHoleScore(db, hole.id, next);
             bump();
           }}

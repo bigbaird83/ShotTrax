@@ -30,7 +30,7 @@ export function HoleMap({ holeNumber, shots, userFix, green, yardsToGreen }: Pro
       />
       <Text style={styles.msg}>
         Satellite map is iOS/Android (react-native-maps, Apple Maps). Trails still list closed shots.
-        OSM overlay is not loaded in this build.
+        OSM golf overlays render on device, not on web.
       </Text>
       {closed.length === 0 ? (
         <Text style={styles.meta}>No closed-shot trails yet.</Text>

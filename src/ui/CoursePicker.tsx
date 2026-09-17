@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { isGolfCoursesApiConfigured } from '@/src/course/config';
 import { getCourseDataClient } from '@/src/course/client';
@@ -10,18 +10,34 @@ import { colors } from './theme';
 type Props = {
   selected: CourseSummary | null;
   onSelect: (course: CourseSummary | null) => void;
+  /** When set, picking a course attaches it to the in-progress round. */
+  attachMode?: boolean;
+  autoFind?: boolean;
 };
 
+function formatDistance(meters: number | null): string | null {
+  if (meters == null || !Number.isFinite(meters) || meters < 0) return null;
+  if (meters < 950) return `${Math.round(meters)} m`;
+  return `${(meters / 1000).toFixed(1)} km`;
+}
+
+function placeLine(course: CourseSummary): string {
+  const place = [course.city, course.state].filter(Boolean).join(', ');
+  const dist = formatDistance(course.distanceMeters);
+  return [place || course.club || 'Course', dist].filter(Boolean).join(' · ');
+}
+
 /**
- * Nearby course picker. Disabled and graceful when the Golf Courses API key is missing.
+ * Nearby course picker (Golf Courses API Pro).
+ * Disabled and graceful when the EAS secret / local key is missing.
  */
-export function CoursePicker({ selected, onSelect }: Props) {
+export function CoursePicker({ selected, onSelect, attachMode = false, autoFind = true }: Props) {
   const configured = isGolfCoursesApiConfigured();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<CourseSummary[] | null>(null);
 
-  const onFind = async () => {
+  const onFind = useCallback(async () => {
     if (!configured) return;
     setBusy(true);
     setError(null);
@@ -38,18 +54,33 @@ export function CoursePicker({ selected, onSelect }: Props) {
     } finally {
       setBusy(false);
     }
-  };
+  }, [configured]);
+
+  useEffect(() => {
+    if (!configured || !autoFind) return;
+    void onFind();
+  }, [configured, autoFind, onFind]);
 
   return (
     <View style={styles.box}>
       <Text style={styles.label}>Nearby courses</Text>
       <Text style={styles.meta}>
         {configured
-          ? 'Uses Golf Courses API for name, par (if present), and green centroid. Missing par/green stay blank.'
-          : 'Add EXPO_PUBLIC_GOLF_COURSES_API_KEY (or expo extra golfCoursesApiKey) to enable the picker. Yards to green still works from a GPS or map green pin.'}
+          ? attachMode
+            ? 'Pick a course to attach par (if present) and green centroids to this round. Missing par stays “par ?”; missing greens stay blank.'
+            : 'GPS nearby search. Selecting a course starts a round (or attach if one is in progress). Par and greens come from the API only — never invented.'
+          : 'Nearby picker needs the Golf Courses API key. CoS: EAS secret GOLF_COURSES_API_KEY (prod/preview/dev). Local: EXPO_PUBLIC_GOLF_COURSES_API_KEY in .env. You can still type a course name and drop a green pin.'}
       </Text>
       <BigButton
-        label={configured ? (busy ? 'Finding…' : 'Find nearby courses') : 'Nearby courses — needs API key'}
+        label={
+          configured
+            ? busy
+              ? 'Finding…'
+              : results
+                ? 'Refresh nearby'
+                : 'Find nearby courses'
+            : 'Nearby courses — needs API key'
+        }
         variant="secondary"
         disabled={!configured || busy}
         onPress={() => void onFind()}
@@ -58,7 +89,7 @@ export function CoursePicker({ selected, onSelect }: Props) {
       {selected ? (
         <View style={styles.selected}>
           <Text style={styles.selectedName}>{selected.name}</Text>
-          <Text style={styles.meta}>{[selected.city, selected.state].filter(Boolean).join(', ') || 'Selected'}</Text>
+          <Text style={styles.meta}>{placeLine(selected)}</Text>
           <BigButton label="Clear course" variant="ghost" onPress={() => onSelect(null)} />
         </View>
       ) : null}
@@ -68,9 +99,7 @@ export function CoursePicker({ selected, onSelect }: Props) {
           onPress={() => onSelect(course)}
           style={[styles.row, selected?.id === course.id && styles.rowOn]}>
           <Text style={styles.rowTitle}>{course.name}</Text>
-          <Text style={styles.meta}>
-            {[course.city, course.state].filter(Boolean).join(', ') || 'Course'}
-          </Text>
+          <Text style={styles.meta}>{placeLine(course)}</Text>
         </Pressable>
       ))}
     </View>

@@ -1,8 +1,8 @@
 # ShotTrax
 
-Phone GPS golf shot tracker (no club sensors). **This branch is P5 part 1** on top of P1–P3 (GPS mark-shot, scores, club averages, hole map trails, voice club pick, top-3, penalties, no-GPS shots).
+Phone GPS golf shot tracker (no club sensors). **This branch is P5 part 2** on top of P1–P5.1 (GPS mark-shot, scores, club averages, hole map trails, voice club pick, top-3, penalties, no-GPS shots, ShotTraxx splash, yards-to-green).
 
-P5.1 adds a short **ShotTraxx** branded splash and **yards to green** on the hole map (haversine phone GPS → green pin). A Golf Courses API client is stubbed for nearby courses / par / green centroid; the picker stays disabled until `EXPO_PUBLIC_GOLF_COURSES_API_KEY` (or `expo.extra.golfCoursesApiKey`) is set. Watch motion, Plays Like, F/M/B pins, auto-detect, and Stracka scrape stay **out of scope**.
+P5.2 wires **nearby courses** from Golf Courses API Pro (EAS secret `GOLF_COURSES_API_KEY`), a course picker that starts or attaches a round, **par from course data only** (`par ?` if missing), **green centroids** into `yardsToGreen(fix, greenCentroid)`, and **OSM** `golf=green/fairway/tee/hole` overlays when mapped. Watch motion, Plays Like, F/M/B pins, auto-detect, and Stracka scrape stay **out of scope**.
 
 The splash brand mark is **ShotTraxx**. The app/package name remains ShotTrax.
 
@@ -35,13 +35,25 @@ Cold start shows the native Expo splash, then a short JS branded open (**ShotTra
 
 ## Golf Courses API (course picker)
 
-Nearby course search, hole par, and green centroids are behind [Golf Courses API](https://golfcoursesapi.com/). See `NOTES.md` and `.env.example`.
+Nearby course search, hole par, and green centroids are behind [Golf Courses API](https://golfcoursesapi.com/) Pro. See `NOTES.md` and `.env.example`.
+
+**EAS secret name:** `GOLF_COURSES_API_KEY` (set for production, preview, and development). `app.config.js` copies it into `expo.extra.golfCoursesApiKey` so the app can read it on EAS builds via `expo-constants`. **Never commit a key. Do not invent a second secret name in git.**
+
+Expo client JS only inlines `EXPO_PUBLIC_*`. For local Expo Go, CoS must also set `EXPO_PUBLIC_GOLF_COURSES_API_KEY` in `.env` **or** map that public name from the existing `GOLF_COURSES_API_KEY` secret in the Expo dashboard (same value).
 
 ```bash
 EXPO_PUBLIC_GOLF_COURSES_API_KEY=your_key_here
 ```
 
-Or set `expo.extra.golfCoursesApiKey` (EAS). **Never commit a key.** Without a key the nearby picker is disabled; you can still type a course name and drop a green pin. Missing API par/green stay blank — ShotTrax does not invent them. OSM overlay is a no-op hook until part 2.
+Without a key the nearby picker is disabled (graceful copy, no network). You can still type a course name and drop a green pin. Missing API par stays **par ?**. Missing greens stay blank — ShotTrax does not invent them.
+
+Selecting a nearby course **starts** a new round (Start 9/18) or **attaches** par/greens to a round in progress (blank holes only).
+
+`golfcoursesapi.com` may need **device / EAS smoke** — TLS fails on some boxes even when the client is correct.
+
+## OSM overlays
+
+Hole map draws Overpass `golf=green`, `golf=fairway`, `golf=tee`, and `golf=hole` around a real green pin or course coordinate. Unmapped / timeout / empty → no overlay. OSM par tags are ignored.
 
 ## Install on your iPhone (TestFlight)
 
@@ -113,16 +125,17 @@ There is no Watch / motion / mic-shot-detect permission. Those assists are stubb
 ## Maps (`react-native-maps`)
 
 - **iOS:** Apple Maps, `mapType="satellite"` (no Google API key).
-- Hole **number comes from the scorecard**, overlaid on the map. OSM fairway polygons are a stub hook (always empty in P5.1).
+- Hole **number comes from the scorecard**, overlaid on the map. OSM `golf=green/fairway/tee/hole` polygons/lines are drawn when Overpass returns them; unmapped holes stay empty (nothing invented).
 - Polylines are **closed GPS shots only** (start→end). Penalties are list rows, not trails. `no_gps` shots have no coordinates and never draw.
 - **Yards to green** uses the sensing hook `yardsToGreen(fix, greenCentroid) → { yards, quality }`. Same haversine and good (<15 m) / soft (15–25 m) bands as shot marks. No fix or no green pin → `{ yards: null, quality: 'none' }` (never invents a pin or a range). Poor GPS (>25 m) is also `none`, matching `acceptFix`. Soft GPS shows a **SOFT** badge. When quality is `none`, the map shows **yards to green — / unavailable**.
-- Long-press (or **Mark green (GPS)**) drops a **green pin** for yards-to-green. That pin is user-placed unless a course centroid was applied from the API.
+- Course API **green centroids** feed that hook. Long-press (or **Mark green (GPS)**) still drops a **user** pin and wins over the centroid.
+- Scorecard **par** is course data only. Missing API par is **par ?** until you tap 3–6. ShotTrax does not default to par 4.
 - **Android** satellite tiles typically need a Google Maps API key in the `react-native-maps` config plugin for store/dev binaries. iOS is the target.
 
 ## On-course flow
 
-1. Start a 9- or 18-hole round (optional course name).
-2. On a hole, set par and score (large +/− targets).
+1. Find a nearby course (GPS) or type a name, then start a 9- or 18-hole round (or attach a course to a round in progress).
+2. On a hole, par comes from the course when present; otherwise **par ?**. Set par and score (large +/− targets).
 3. **Mark shot** → optional **Say a club** (confirm still required) and/or **top-3**, or expand **Full bag** and tap.
 4. GPS at confirm = shot **start**. If this hole already had an open GPS shot, that same fix is its **end** and yards are logged (haversine).
 5. **End last shot** closes an open GPS shot without starting a new one.
@@ -192,15 +205,15 @@ ShotTrax **does not synthesize a fairway or fake points**.
 
 ## Limitations
 
-- No licensed course polygons / OSM fairways (overlay hook is stubbed).
+- OSM overlays only where mapped; unmapped holes stay empty.
 - No Watch motion, Plays Like, F/M/B pins, auto-detect, or mic-based shot detect (stubs only).
 - Local SQLite only (no account / cloud).
 - iOS is the target; Android location is wired but maps may need a Google key.
-- Nearby course picker requires a Golf Courses API key (see `NOTES.md`).
+- Nearby course picker requires Golf Courses API key `GOLF_COURSES_API_KEY` (see `NOTES.md`). Smoke nearby search on a device/EAS build if this environment cannot TLS to golfcoursesapi.com.
 
 ## Tests
 
 ```bash
-npm test          # domain tests + sensing smoke + course client, including yards-to-green, penalties, no-gps exclusion, top-3, voice
+npm test          # domain tests + sensing smoke + course client/OSM, including yards-to-green, par ?, penalties, no-gps exclusion, top-3, voice
 npm run typecheck
 ```

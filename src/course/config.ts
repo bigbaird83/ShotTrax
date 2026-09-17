@@ -23,12 +23,20 @@ function extraKey(): string | null {
 
 /**
  * Golf Courses API key. Never hardcode a secret.
- * Reads `EXPO_PUBLIC_GOLF_COURSES_API_KEY`, then `expo.extra.golfCoursesApiKey`.
+ *
+ * Resolution order:
+ * 1. `EXPO_PUBLIC_GOLF_COURSES_API_KEY` (local Expo / Metro inline)
+ * 2. `expo.extra.golfCoursesApiKey` (EAS: `app.config.js` copies the
+ *    `GOLF_COURSES_API_KEY` secret at build time)
+ * 3. `GOLF_COURSES_API_KEY` (Node tests / config evaluation — not inlined
+ *    into the Expo client bundle unless mapped)
  */
 export function getGolfCoursesApiKey(): string | null {
-  const fromEnv = trimKey(process.env.EXPO_PUBLIC_GOLF_COURSES_API_KEY);
-  if (fromEnv) return fromEnv;
-  return extraKey();
+  const fromPublic = trimKey(process.env.EXPO_PUBLIC_GOLF_COURSES_API_KEY);
+  if (fromPublic) return fromPublic;
+  const fromExtra = extraKey();
+  if (fromExtra) return fromExtra;
+  return trimKey(process.env.GOLF_COURSES_API_KEY);
 }
 
 export function isGolfCoursesApiConfigured(): boolean {
