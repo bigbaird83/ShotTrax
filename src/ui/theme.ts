@@ -11,4 +11,24 @@ export const colors = {
   good: '#7DCF7A',
 };
 
+/** Layout L — type scale. Keep in sync across home, hole, sheets. */
+export const type = {
+  kicker: 12,
+  title: 34,
+  hole: 28,
+  yards: 44,
+  body: 16,
+  meta: 14,
+  tiny: 12,
+  button: 20,
+  chip: 16,
+} as const;
+
 export const tapTarget = 64;
+export const thumbZoneMin = 72;
+export const space = {
+  xs: 6,
+  sm: 10,
+  md: 16,
+  lg: 24,
+} as const;

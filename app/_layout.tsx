@@ -1,8 +1,9 @@
 import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { DbProvider } from '@/src/db/DbProvider';
+import { startWatchClubBridge } from '@/src/services/watchClub';
 import { BrandedSplash } from '@/src/ui/BrandedSplash';
 import { colors } from '@/src/ui/theme';
 
@@ -23,6 +24,10 @@ const theme = {
 export default function RootLayout() {
   const [splashDone, setSplashDone] = useState(false);
   const onSplashDone = useCallback(() => setSplashDone(true), []);
+
+  useEffect(() => {
+    startWatchClubBridge();
+  }, []);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>

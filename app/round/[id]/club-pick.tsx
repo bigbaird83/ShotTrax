@@ -1,25 +1,36 @@
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
 import { getHole, listClubAverages, listClubs, listShotsForHole } from '@/src/db/repo';
+import { COPY } from '@/src/domain/playerCopy';
 import { clubToRankInput, lastClosedShotYards, rankTopClubs, resolveDistanceTarget } from '@/src/domain/rankClubs';
 import { parseTypedYards } from '@/src/domain/shotSource';
+import { selectClubForMark } from '@/src/domain/stickyClub';
 import { matchSpokenClub, speechContextualStrings } from '@/src/domain/voiceClub';
+import { emptyWalkAway, stepWalkAway, walkAwayEligible } from '@/src/domain/walkAway';
 import type { Club, GpsFix } from '@/src/domain/types';
 import { yardsToGreen } from '@/src/sensing/api';
-import { speechRecognitionAvailable, startClubSpeech, type ClubSpeechSession } from '@/src/services/speechClub';
-import { getCurrentFix } from '@/src/services/location';
-import { addNoGpsShot, markShotWithClub, promptForPlan } from '@/src/services/shotActions';
+import { startClubSpeech, type ClubSpeechSession } from '@/src/services/speechClub';
+import { addNoGpsShot, changeShotClub, markShotWithClub, promptForPlan } from '@/src/services/shotActions';
+import { useLiveFix } from '@/src/services/useLiveFix';
+import { useWatchClubList } from '@/src/services/useWatchClubList';
 import { BigButton } from '@/src/ui/BigButton';
 import { ClubButton } from '@/src/ui/ClubButton';
+import { hapticMark, hapticSelect, hapticWarn } from '@/src/ui/haptics';
 import { Screen } from '@/src/ui/Screen';
-import { colors } from '@/src/ui/theme';
+import { colors, tapTarget, type } from '@/src/ui/theme';
 
 export default function ClubPickScreen() {
-  const { id, hole, noGps } = useLocalSearchParams<{ id: string; hole: string; noGps?: string }>();
+  const { id, hole, noGps, shot: shotId } = useLocalSearchParams<{
+    id: string;
+    hole: string;
+    noGps?: string;
+    shot?: string;
+  }>();
   const holeNumber = Number(hole);
   const withoutGps = noGps === '1';
+  const relabelId = typeof shotId === 'string' && shotId.length > 0 ? shotId : null;
   const navigation = useNavigation();
   const { db, revision, bump } = useDb();
   const clubs = useMemo(() => listClubs(db, true), [db, revision]);
@@ -31,34 +42,19 @@ export default function ClubPickScreen() {
   const averages = useMemo(() => listClubAverages(db).filter((row) => row.club.enabled), [db, revision]);
 
   const [busy, setBusy] = useState(false);
-  const [fix, setFix] = useState<GpsFix | null>(null);
-  const [bagOpen, setBagOpen] = useState(false);
   const [listening, setListening] = useState(false);
   const [heard, setHeard] = useState<string | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
-  const [proposed, setProposed] = useState<Club | null>(null);
+  const [selected, setSelected] = useState<Club | null>(null);
   const [typedYards, setTypedYards] = useState('');
   const sessionRef = useRef<ClubSpeechSession | null>(null);
-  const voiceReady = speechRecognitionAvailable();
+  const voiceCommitted = useRef(false);
 
   useEffect(() => {
-    navigation.setOptions({ title: withoutGps ? 'No GPS shot' : 'Pick club' });
-  }, [navigation, withoutGps]);
-
-  useEffect(() => {
-    if (withoutGps) return undefined;
-    let live = true;
-    getCurrentFix()
-      .then((next) => {
-        if (live) setFix(next);
-      })
-      .catch(() => {
-        if (live) setFix(null);
-      });
-    return () => {
-      live = false;
-    };
-  }, [revision, withoutGps]);
+    navigation.setOptions({
+      title: withoutGps ? COPY.forgotShot : relabelId ? COPY.changeClub : COPY.pickClub,
+    });
+  }, [navigation, withoutGps, relabelId]);
 
   useEffect(() => {
     return () => {
@@ -71,6 +67,8 @@ export default function ClubPickScreen() {
     holeRow?.greenLat != null && holeRow.greenLng != null
       ? { lat: holeRow.greenLat, lng: holeRow.greenLng }
       : null;
+  const fix = useLiveFix(!withoutGps);
+
   const toGreen = yardsToGreen(withoutGps ? null : fix, green);
   const target = resolveDistanceTarget({
     toGreen,
@@ -80,41 +78,130 @@ export default function ClubPickScreen() {
     averages.map((row) => clubToRankInput(row.club, row)),
     target,
   );
-  const showBag = bagOpen || ranked.length === 0;
+  const lastLie = useMemo(() => {
+    const last = [...shots].reverse().find((shot) => shot.startLat != null && shot.startLng != null);
+    return last?.startLat != null && last.startLng != null
+      ? { lat: last.startLat, lng: last.startLng }
+      : null;
+  }, [shots]);
 
-  const onPick = async (clubId: string, force = false) => {
-    if (!id || Number.isNaN(holeNumber)) return;
+  useWatchClubList(
+    {
+      db,
+      roundId: id,
+      holeNumber,
+      readOnly: false,
+      bump,
+      onMarked: () => {
+        if (!withoutGps) router.back();
+      },
+      labelForClub: (clubId) => clubs.find((club) => club.id === clubId)?.shortName ?? null,
+    },
+    {
+      top3: ranked.map((club) => ({ id: club.id, shortName: club.shortName })),
+      bag: clubs.map((club) => ({ id: club.id, shortName: club.shortName })),
+      holeNumber,
+      yardsToGreen: toGreen.yards,
+      yardsQuality: toGreen.quality,
+      lastClubId: selected?.id ?? null,
+    },
+  );
+
+  const markClub = async (
+    club: Club,
+    force = false,
+    opts: { fixOverride?: GpsFix; suggested?: boolean } = {},
+  ) => {
+    const next = selectClubForMark(club, clubs);
+    if (!next || !id || Number.isNaN(holeNumber)) return;
+    hapticSelect();
+    setSelected(next);
+    if (relabelId) {
+      changeShotClub(db, { roundId: id, shotId: relabelId, clubId: next.id });
+      bump();
+      router.back();
+      return;
+    }
+    if (withoutGps) return;
     setBusy(true);
     try {
-      if (withoutGps) {
-        const parsed = parseTypedYards(typedYards);
-        if (!parsed.ok) {
-          Alert.alert('Yards', 'Leave yards blank or type a whole number from 0–999. This is not GPS.');
-          return;
-        }
-        addNoGpsShot(db, { roundId: id, holeNumber, clubId, typedYards: parsed.yards });
-        bump();
-        router.back();
-        return;
-      }
       const { plan } = await markShotWithClub(db, {
         roundId: id,
         holeNumber,
-        clubId,
+        clubId: next.id,
         force,
+        fixOverride: opts.fixOverride,
+        suggested: opts.suggested,
       });
       const waiting = promptForPlan(plan, () => {
-        void onPick(clubId, true);
+        void markClub(next, true, opts);
       });
       if (!waiting && plan.status === 'commit') {
+        hapticMark();
         bump();
         router.back();
       }
     } catch (err) {
-      Alert.alert(
-        withoutGps ? 'Could not add shot' : 'Could not mark shot',
-        err instanceof Error ? err.message : 'Unknown error',
-      );
+      hapticWarn();
+      Alert.alert('Couldn’t mark', err instanceof Error ? err.message : 'Try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const rankedRef = useRef(ranked);
+  rankedRef.current = ranked;
+  const clubsRef = useRef(clubs);
+  clubsRef.current = clubs;
+  const markRef = useRef(markClub);
+  markRef.current = markClub;
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+  const walkStateRef = useRef(emptyWalkAway());
+
+  useEffect(() => {
+    walkStateRef.current = emptyWalkAway();
+  }, [withoutGps, relabelId, holeNumber, lastLie]);
+
+  useEffect(() => {
+    if (
+      !fix ||
+      !walkAwayEligible({
+        awaitingClub: !withoutGps && !relabelId,
+        lastLie,
+        fix,
+      }) ||
+      busyRef.current ||
+      selectedRef.current
+    ) {
+      return;
+    }
+    const top = rankedRef.current[0];
+    if (!top) return;
+    const stepped = stepWalkAway(walkStateRef.current, fix);
+    walkStateRef.current = stepped.state;
+    if (!stepped.firePin) return;
+    const full = clubsRef.current.find((row) => row.id === top.id);
+    if (!full) return;
+    void markRef.current(full, false, { fixOverride: stepped.firePin, suggested: true });
+  }, [fix, withoutGps, relabelId, lastLie]);
+
+  const onLogMissed = () => {
+    if (!selected || !id || Number.isNaN(holeNumber)) return;
+    const parsed = parseTypedYards(typedYards);
+    if (!parsed.ok) {
+      Alert.alert('Yards', 'Leave blank or type a whole number.');
+      return;
+    }
+    setBusy(true);
+    try {
+      addNoGpsShot(db, { roundId: id, holeNumber, clubId: selected.id, typedYards: parsed.yards });
+      bump();
+      router.back();
+    } catch (err) {
+      Alert.alert('Couldn’t log shot', err instanceof Error ? err.message : 'Try again.');
     } finally {
       setBusy(false);
     }
@@ -124,18 +211,26 @@ export default function ClubPickScreen() {
     setHeard(text);
     const matched = matchSpokenClub(text, clubs);
     if (matched) {
-      setProposed(matched);
       setVoiceError(null);
-      if (isFinal) {
-        sessionRef.current?.stop();
-        sessionRef.current = null;
-        setListening(false);
+      if (withoutGps) {
+        setSelected(matched);
+        if (isFinal) {
+          sessionRef.current?.stop();
+          sessionRef.current = null;
+          setListening(false);
+        }
+        return;
       }
+      if (voiceCommitted.current) return;
+      voiceCommitted.current = true;
+      sessionRef.current?.stop();
+      sessionRef.current = null;
+      setListening(false);
+      void markClub(matched);
       return;
     }
     if (isFinal) {
-      setProposed(null);
-      setVoiceError('Didn’t catch a club. Try “seven iron” or tap below. Confirm is still required.');
+      setVoiceError(COPY.didntCatchClub);
     }
   };
 
@@ -146,6 +241,7 @@ export default function ClubPickScreen() {
       setListening(false);
       return;
     }
+    voiceCommitted.current = false;
     setVoiceError(null);
     setHeard(null);
     setListening(true);
@@ -164,138 +260,90 @@ export default function ClubPickScreen() {
     if (!session) setListening(false);
   };
 
-  const targetLabel = !target
-    ? 'No green pin and no closed shot on this hole yet — full bag.'
-    : target.source === 'yards_to_green'
-      ? `${target.dYards} yd to green${toGreen.quality === 'soft' ? ' · SOFT GPS' : ''}`
-      : `Last closed shot ${target.dYards} yd`;
-
   return (
     <Screen>
-      <Text style={styles.kicker}>{withoutGps ? 'No GPS' : 'Mark shot'}</Text>
-      <Text style={styles.title}>{withoutGps ? 'Forgotten swing' : 'Pick a club'}</Text>
+      <Text style={styles.title}>
+        {withoutGps ? COPY.forgotShot : relabelId ? COPY.changeClub : COPY.pickClub}
+      </Text>
       <Text style={styles.lede}>
         {withoutGps
-          ? 'Logs a stroke with fixQuality none and no coordinates. Optional typed yards are a score/UI note only — they never enter club averages or top-3. ShotTraxx will not invent a GPS fix or call acceptFix.'
-          : 'Tap a club to confirm GPS now as the start (and the previous shot’s end). Voice names a club but still needs Confirm. Watch / mic shot-detect assists are not in this build.'}
+          ? 'Pick a club, then log it. This doesn’t mark a distance.'
+          : relabelId
+            ? 'Where you hit from stays. Only the club changes.'
+            : COPY.pickClubLede}
       </Text>
 
       {withoutGps ? (
-        <View style={styles.voiceBox}>
-          <Text style={styles.label}>Optional yards (typed)</Text>
-          <TextInput
-            placeholder="Blank = no yards"
-            placeholderTextColor={colors.muted}
-            value={typedYards}
-            onChangeText={setTypedYards}
-            keyboardType="number-pad"
-            inputMode="numeric"
-            style={styles.yardsInput}
-          />
-          <Text style={styles.tiny}>
-            Typed yards are score/UI only. They are not GPS distance and are excluded from averages
-            and top-3. There is no toggle to include them.
-          </Text>
-        </View>
+        <TextInput
+          placeholder="Yards (optional)"
+          placeholderTextColor={colors.muted}
+          value={typedYards}
+          onChangeText={setTypedYards}
+          keyboardType="number-pad"
+          inputMode="numeric"
+          style={styles.yardsInput}
+        />
       ) : null}
 
-      <View style={styles.voiceBox}>
-        <BigButton
-          label={listening ? 'Listening… tap to stop' : voiceReady ? 'Say a club' : 'Say a club (needs dev build)'}
-          variant="secondary"
-          disabled={busy}
-          onPress={() => void onListen()}
-        />
-        {heard ? <Text style={styles.heard}>Heard: “{heard}”</Text> : null}
-        {voiceError ? <Text style={styles.warn}>{voiceError}</Text> : null}
-        {proposed ? (
-          <View style={{ gap: 8 }}>
-            <Text style={styles.propose}>
-              {proposed.shortName} · {proposed.name} — confirm to mark
-            </Text>
-            <BigButton
-              label={`Confirm ${proposed.shortName}${withoutGps ? ' (no GPS)' : ''}`}
-              disabled={busy}
-              onPress={() => void onPick(proposed.id)}
-            />
-          </View>
-        ) : (
-          <Text style={styles.tiny}>
-            Examples: “seven iron”, “driver”, “sand wedge”. Big tap targets stay below if speech misses.
-          </Text>
-        )}
-      </View>
-
-      <Text style={styles.label}>Top 3</Text>
-      <Text style={styles.meta}>{targetLabel}</Text>
-      {ranked.length === 0 ? (
-        <Text style={styles.muted}>
-          Ranking needs a distance D and ≥5 closed GPS shots with yards on a club. Soft and forced
-          count; no-GPS shots and penalties do not. Full bag is one tap away.
-        </Text>
-      ) : (
-        <View style={{ gap: 8 }}>
-          {ranked.map((club) => (
-            <ClubButton
-              key={club.id}
-              featured
-              disabled={busy}
-              shortName={club.shortName}
-              name={club.name}
-              meta={`${Math.round(club.avgYards)} yd avg · ${Math.round(club.deltaYards)} yd off`}
-              onPress={() => void onPick(club.id)}
-            />
-          ))}
-        </View>
-      )}
+      <BigButton
+        label={listening ? COPY.listening : COPY.sayClub}
+        variant="secondary"
+        disabled={busy}
+        onPress={() => void onListen()}
+      />
+      {heard ? <Text style={styles.heard}>“{heard}”</Text> : null}
+      {voiceError ? <Text style={styles.warn}>{voiceError}</Text> : null}
 
       {ranked.length > 0 ? (
-        <BigButton
-          label={showBag ? 'Hide full bag' : 'Full bag'}
-          variant="ghost"
-          onPress={() => setBagOpen((open) => !open)}
-        />
-      ) : null}
+        <View style={styles.top3}>
+          {ranked.map((club, index) => (
+            <Pressable
+              key={club.id}
+              disabled={busy}
+              onPress={() => {
+                const full = clubs.find((row) => row.id === club.id);
+                if (full) void markClub(full);
+              }}
+              style={[
+                styles.chip,
+                index === 0 && styles.chipPrimary,
+                selected?.id === club.id && styles.chipOn,
+              ]}>
+              <Text style={[styles.chipText, index === 0 && styles.chipPrimaryText]}>{club.shortName}</Text>
+              {index === 0 ? <Text style={styles.suggest}>{COPY.suggested}</Text> : null}
+            </Pressable>
+          ))}
+        </View>
+      ) : (
+        <Text style={styles.unlock}>{COPY.top3Unlock}</Text>
+      )}
 
-      {showBag ? (
-        <>
-          <Text style={styles.label}>Full bag</Text>
-          <View style={styles.grid}>
-            {clubs.map((club) => (
-              <ClubButton
-                key={club.id}
-                disabled={busy}
-                shortName={club.shortName}
-                name={club.name}
-                onPress={() => void onPick(club.id)}
-              />
-            ))}
-          </View>
-        </>
+      <View style={styles.grid}>
+        {clubs.map((club) => (
+          <ClubButton
+            key={club.id}
+            selected={selected?.id === club.id}
+            disabled={busy}
+            shortName={club.shortName}
+            name={club.name}
+            onPress={() => void markClub(club)}
+          />
+        ))}
+      </View>
+
+      {withoutGps ? (
+        <BigButton label="Log shot" disabled={busy || !selected} onPress={onLogMissed} />
       ) : null}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  kicker: { color: colors.amber, fontWeight: '800', letterSpacing: 1 },
-  title: { color: colors.cream, fontSize: 28, fontWeight: '900' },
-  lede: { color: colors.muted, fontSize: 16, lineHeight: 22 },
-  label: { color: colors.cream, fontSize: 14, fontWeight: '800', letterSpacing: 0.6, marginTop: 4 },
-  meta: { color: colors.muted, fontSize: 14 },
-  muted: { color: colors.muted, fontSize: 15, lineHeight: 20 },
-  tiny: { color: colors.muted, fontSize: 13, lineHeight: 18 },
-  warn: { color: colors.orange, fontSize: 15, fontWeight: '700' },
-  heard: { color: colors.cream, fontSize: 16, fontWeight: '700' },
-  propose: { color: colors.lime, fontSize: 18, fontWeight: '800' },
-  voiceBox: {
-    backgroundColor: colors.bgElevated,
-    borderRadius: 14,
-    padding: 12,
-    gap: 10,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
+  title: { color: colors.cream, fontSize: type.hole, fontWeight: '900' },
+  lede: { color: colors.muted, fontSize: type.body, lineHeight: 22 },
+  warn: { color: colors.orange, fontSize: type.meta, fontWeight: '700' },
+  heard: { color: colors.cream, fontSize: type.body, fontWeight: '700' },
+  unlock: { color: colors.muted, fontSize: type.meta, fontWeight: '700' },
   yardsInput: {
     minHeight: 56,
     borderWidth: 1,
@@ -304,7 +352,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     color: colors.cream,
     fontSize: 18,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.bgElevated,
   },
+  top3: { flexDirection: 'row', gap: 8 },
+  chip: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bgElevated,
+  },
+  chipOn: { borderColor: colors.lime, backgroundColor: '#1C3A24' },
+  chipPrimary: {
+    flex: 2.2,
+    minHeight: tapTarget,
+    borderColor: colors.lime,
+    borderWidth: 2,
+    backgroundColor: '#1C3A24',
+  },
+  chipPrimaryText: { fontSize: type.button, color: colors.lime, fontWeight: '900' },
+  suggest: { color: colors.lime, fontSize: type.tiny, fontWeight: '800' },
+  chipText: { color: colors.cream, fontWeight: '800', fontSize: type.chip },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
 });

@@ -1,8 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import type { YardsToGreenResult } from '@/src/sensing/yardsToGreen';
-import { yardsToGreenLabel } from '@/src/domain/yardsToGreen';
-import { QualityBadge } from './Badge';
-import { colors } from './theme';
+import { yardsToGreenPlayerLabel } from '@/src/domain/playerCopy';
+import { colors, type } from './theme';
 
 export function YardsToGreenBadge({
   result,
@@ -15,14 +14,11 @@ export function YardsToGreenBadge({
   hasGreen?: boolean;
   compact?: boolean;
 }) {
-  const copy = yardsToGreenLabel(result, { hasFix, hasGreen });
+  const copy = yardsToGreenPlayerLabel(result, { hasFix, hasGreen });
   return (
     <View style={[styles.wrap, compact && styles.compact]} accessibilityLabel={`${copy.heading} ${copy.value}`}>
       <Text style={styles.heading}>{copy.heading}</Text>
-      <View style={styles.valueRow}>
-        <Text style={styles.value}>{copy.value}</Text>
-        {result.quality === 'soft' ? <QualityBadge quality="soft" /> : null}
-      </View>
+      <Text style={[styles.value, compact && styles.valueCompact]}>{copy.value}</Text>
       <Text style={styles.detail}>{copy.detail}</Text>
     </View>
   );
@@ -35,22 +31,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.line,
     padding: 12,
-    gap: 4,
+    gap: 2,
   },
   compact: {
     backgroundColor: 'rgba(11,26,18,0.86)',
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 10,
+    alignItems: 'flex-end',
   },
   heading: {
     color: colors.lime,
-    fontSize: 10,
+    fontSize: type.tiny,
     fontWeight: '800',
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
-  valueRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  value: { color: colors.cream, fontSize: 22, fontWeight: '900' },
-  detail: { color: colors.muted, fontSize: 12, fontWeight: '600' },
+  value: { color: colors.cream, fontSize: type.yards, fontWeight: '900', lineHeight: 48 },
+  valueCompact: { fontSize: 32, lineHeight: 36 },
+  detail: { color: colors.muted, fontSize: type.tiny, fontWeight: '600' },
 });

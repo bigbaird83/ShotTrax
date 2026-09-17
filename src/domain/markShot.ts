@@ -70,7 +70,7 @@ export function planCloseOpenShot(
 }
 
 /**
- * Confirm-club mark: GPS now is the new shot start.
+ * Club-pick mark: GPS now is the new shot start.
  * If a shot is still open on this hole, that shot's end is this same fix
  * (end = next mark) after the 400 yd / accuracy gates.
  */

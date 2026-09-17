@@ -30,9 +30,9 @@ export class GolfCoursesApiError extends Error {
 function networkHint(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err);
   if (/tls|ssl|cert|network request failed|failed to fetch|econnreset|enotfound/i.test(raw)) {
-    return 'Golf Courses API could not be reached (TLS/network). Try on a device or EAS build — golfcoursesapi.com has TLS issues on some boxes.';
+    return 'Couldn’t reach courses nearby. Try again.';
   }
-  return raw || 'Golf Courses API request failed.';
+  return raw || 'Couldn’t load courses.';
 }
 
 async function apiGet(
@@ -52,7 +52,7 @@ async function apiGet(
     throw new GolfCoursesApiError(networkHint(err));
   }
   if (res.status === 401) {
-    throw new GolfCoursesApiError('Golf Courses API key was rejected.', 401);
+    throw new GolfCoursesApiError('Couldn’t sign in to courses.', 401);
   }
   let json: unknown = null;
   try {
@@ -87,10 +87,10 @@ export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataCli
       });
       const { status, json } = await apiGet(`/courses?${query.toString()}`, key, fetchImpl);
       if (status === 403) {
-        throw new GolfCoursesApiError('Golf Courses API denied nearby search.', 403);
+        throw new GolfCoursesApiError('Courses near you aren’t available.', 403);
       }
       if (status < 200 || status >= 300) {
-        throw new GolfCoursesApiError(`Golf Courses API error (${status}).`, status);
+        throw new GolfCoursesApiError('Couldn’t load courses nearby.', status);
       }
       return parseNearbyCourses(json);
     },
@@ -102,7 +102,7 @@ export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataCli
       const detailRes = await apiGet(`/courses/${encoded}`, key, fetchImpl);
       if (detailRes.status === 404) return null;
       if (detailRes.status < 200 || detailRes.status >= 300) {
-        throw new GolfCoursesApiError(`Golf Courses API error (${detailRes.status}).`, detailRes.status);
+        throw new GolfCoursesApiError('Couldn’t load that course.', detailRes.status);
       }
       const detail = parseCourseDetail(detailRes.json);
       if (!detail) return null;

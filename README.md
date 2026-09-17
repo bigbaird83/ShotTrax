@@ -1,8 +1,8 @@
 # ShotTraxx
 
-Phone GPS golf shot tracker (no club sensors). **This branch is P5 part 2** on top of P1–P5.1 (GPS mark-shot, scores, club averages, hole map trails, voice club pick, top-3, penalties, no-GPS shots, ShotTraxx splash, yards-to-green).
+Phone GPS golf shot tracker (no club sensors). **This branch is P5.x** on P1–P5.2 (GPS mark-shot, scores, club averages, hole map trails, voice club pick, top-3, penalties, nearby courses, OSM outlines).
 
-P5.2 wires **nearby courses** from Golf Courses API Pro (EAS secret `GOLF_COURSES_API_KEY`), nearby → course → **named tee**, **par / SI from course data only** (`par ?` / `SI ?` if missing), rating/slope/yardage when present, **green centroids** into `yardsToGreen(fix, greenCentroid)`, and **OSM** `golf=green/fairway/tee/hole` overlays when mapped. Watch motion, Plays Like, F/M/B pins, auto-detect, and Stracka scrape stay **out of scope**.
+P5.x is the on-course hero: **pick a club to mark GPS**, sticky **Same club** one-tap, voice applies immediately (no confirm), Drop vs Penalty, delete round, haptics, and a thumb-zone layout. **Player voice only** on screen — no API/OSM/GPS-meter footnotes. F/M/B distances show only when course data includes front and back pins (never invented from a single green). Rating and slope sit on the tee. An Apple Watch companion picks clubs (top-3 + bag + Same club). Putts (P5.y), StoreKit, and Photos stay out of scope.
 
 User-facing name is **ShotTraxx** (`app.json` `expo.name`, iOS `CFBundleDisplayName`, Android `label` / home screen). Bundle ID `com.shottrax.app` and Expo slug `shottrax` stay unchanged (App Store ID). Home-screen icon is the Doc + Lead locked mark at `assets/images/icon.png` (see `assets/images/README.md`).
 
@@ -45,7 +45,7 @@ Expo client JS only inlines `EXPO_PUBLIC_*`. For local Expo Go, CoS must also se
 EXPO_PUBLIC_GOLF_COURSES_API_KEY=your_key_here
 ```
 
-Without a key the nearby picker is disabled (graceful copy, no network). You can still type a course name and drop a green pin. Missing API par stays **par ?**. Missing greens stay blank — ShotTraxx does not invent them.
+Without a key the nearby picker is disabled (graceful copy, no network). You can still type a course name and drop a green pin. Missing par stays **Par unknown**. Missing greens stay blank.
 
 Selecting a nearby course **starts** a new round (Start 9/18) or **attaches** par/greens to a round in progress (blank holes only).
 
@@ -116,11 +116,28 @@ eas submit -p ios
 
 | Permission | When |
 | --- | --- |
-| **Location When In Use** | Club confirm (shot start) and the next mark (shot end / yards). Green estimate can reuse the current GPS. ShotTraxx does not invent coordinates. |
-| **Microphone** | Only after **Say a club**. Used to capture the utterance. |
-| **Speech Recognition** (iOS) | Maps the utterance to a bag club. You still tap **Confirm**. |
+| **Location When In Use** | Picking a club marks where you hit from. The next club pick closes the prior shot. Green estimate can reuse the current GPS. ShotTraxx does not invent coordinates. Watch location is the same purpose, used only when Watch GPS is more accurate than the phone. |
+| **Photo Library** (iOS) | Not used. `NSPhotoLibraryUsageDescription` is in the plist so App Store review (ITMS-90683) can ship. Photos prompts stay out of scope. No add/save key — we do not write to the library. |
+| **Microphone** | Only after **Say a club**. Used to capture the utterance. Not on Watch. |
+| **Speech Recognition** (iOS) | Maps the utterance to a bag club and applies it immediately. |
 
-There is no Watch / motion / mic-shot-detect permission. Those assists are stubbed off. **Add shot without GPS** does not request location and does not store lat/lng.
+Not in this IPA (and not in the plist): Always location, Bluetooth, motion, Watch mic. Watch Connectivity does not need Bluetooth purpose strings.
+
+## Apple Watch (ships in this IPA)
+
+Companion via `@bacons/apple-targets` (`targets/watch`, bundle `com.shottrax.app.watch`) plus a local Expo module (`modules/watch-bridge`) so EAS iOS prebuild links Watch Connectivity.
+
+- Watch Connectivity only two types this cut:
+  - Phone → Watch `clubList`: `{ type, top3, bag, labels, holeNumber, yardsToGreen, yardsQuality }` pushed on hole change / fix quality change / bag rank change (ranking stays on phone). `yardsToGreen` is `yardsToGreen().yards` (`null` when quality is none). `yardsQuality` is `good | soft | none` — same bands as the phone, never invent.
+  - Watch → Phone `clubPick`: `{ type, clubId, at: ISO8601 }` plus optional Watch GPS (`lat`, `lng`, `accuracyM`) when the sample is ≤3 s old and accuracy > 0. Stretch prefer lock: `preferWatch = watchFix && ageSec <= 3 && watch.accuracyM > 0 && (phoneFix == null || watch.accuracyM <= phone.accuracyM)`; `markFix = preferWatch ? watchFix : phoneFix`. Then same `acceptFix` bands. Soft → Approximate. Quality none → wait / Mark anyway. Never invent / silent fail.
+- Watch status: **Hole N · XXX yd** (same yardsToGreen as phone); **—** when quality is none; tiny **Approximate** chip when soft (never SOFT on the wrist).
+- **Same club** is the big 1-tap mark on the wrist. Haptic on a successful mark (phone + Watch).
+- Watch feedback is **`7i marked ✓`** or **`Phone unavailable`** — never a silent fail.
+- Complication (stretch): **Hole N · XXX yd** (`—` when none), via the `ShotTraxxHole` widget.
+- Offline: Watch queues **one** pending `clubPick` until reachable, then flushes
+- **Undo** stays on the phone. **No** Watch motion, mic, or sensor auto-mark
+
+EAS credentials for `com.shottrax.app.watch` and `com.shottrax.app.watch.widget` are declared under `extra.eas.build.experimental.ios.appExtensions`.
 
 ## Maps (`react-native-maps`)
 
@@ -129,19 +146,21 @@ There is no Watch / motion / mic-shot-detect permission. Those assists are stubb
 - Polylines are **closed GPS shots only** (start→end). Penalties are list rows, not trails. `no_gps` shots have no coordinates and never draw.
 - **Yards to green** uses the sensing hook `yardsToGreen(fix, greenCentroid) → { yards, quality }`. Same haversine and good (<15 m) / soft (15–25 m) bands as shot marks. No fix or no green pin → `{ yards: null, quality: 'none' }` (never invents a pin or a range). Poor GPS (>25 m) is also `none`, matching `acceptFix`. Soft GPS shows a **SOFT** badge. When quality is `none`, the map shows **yards to green — / unavailable**.
 - Course API **green centroids** feed that hook. Long-press (or **Mark green (GPS)**) still drops a **user** pin and wins over the centroid.
-- Scorecard **par** is course data only. Missing API par is **par ?** until you tap 3–6. ShotTraxx does not default to par 4.
+- Scorecard **par** is course data only. Missing par is **Par unknown** until you tap 3–6.
 - **Android** satellite tiles typically need a Google Maps API key in the `react-native-maps` config plugin for store/dev binaries. iOS is the target.
 
 ## On-course flow
 
 1. Find a nearby course (GPS) or type a name, then start a 9- or 18-hole round (or attach a course to a round in progress).
-2. On a hole, par comes from the course when present; otherwise **par ?**. Set par and score (large +/− targets).
-3. **Mark shot** → optional **Say a club** (confirm still required) and/or **top-3**, or expand **Full bag** and tap.
-4. GPS at confirm = shot **start**. If this hole already had an open GPS shot, that same fix is its **end** and yards are logged (haversine).
-5. **End last shot** closes an open GPS shot without starting a new one.
-6. **+ Penalty** adds 1–5 penalty strokes to the hole score, with reason water / OB / unplayable / other (optional note). Shown as a penalty row — not a map polyline. A penalty is **not a Shot for distance**: it never hits `acceptFix`, haversine, club averages, or top-3.
-7. **Add shot without GPS** (forgotten swing / no fix): pick a club and optionally type yards (or leave blank). Stored as `source = no_gps`, `fixQuality = none`, **null** lat/lng, **null** `distance_yards`. Typed yards live in `typed_yards` (score/UI only) and are **excluded from distance averages and top-3**. No include-typed-yards toggle in MVP. Never invents a coordinate and never calls `acceptFix`.
-8. Finish the round for a scorecard. Club averages live on the Averages tab.
+2. On a hole, par comes from the course when present; otherwise **Par unknown**. Set par and score (large +/− targets).
+3. Hole advance opens **Pick a club**. Say or tap a club — that **marks GPS immediately** (start now; closes the prior shot’s end). On-screen: “Picking a club marks where you hit from.” No Confirm sheet. Top-3 **#1 suggested** is larger/highlighted; #2–3 are secondary.
+4. **Walk-away assist** (Pick a club only — shot pending, no club tap yet this lie): dwell ≥10 s inside 8 yd, then leave ≥20 yd for 2 consecutive fixes → auto-mark **#1** at the lie pin (not the cart). Badge **Suggested**. Toast: **“Marked 7i (suggested) · Change club.”** Soft dwell → Approximate + Suggested. Poor/none dwell never silent-marks. Already-marked lie / Drop-Penalty / Change club / no-GPS skip. Re-arm only after the next dwell. Club tap / Watch stay primary.
+5. **Change club** on any logged shot later — GPS start/end and yards stay; club averages follow the new club.
+6. **Same club** is the one-tap escape after that. **Undo last** if the club was wrong (or pick another before you walk). **Mark without club**, no-GPS, and Drop / Penalty stay available. GPS at the club pick = shot **start**; if this hole already had an open GPS shot, that same fix is its **end** and yards are logged (haversine).
+7. **End last shot** closes an open GPS shot without starting a new one.
+8. **+ Penalty** adds 1–5 penalty strokes to the hole score, with reason water / OB / unplayable / other (optional note). Shown as a penalty row — not a map polyline. A penalty is **not a Shot for distance**: it never hits `acceptFix`, haversine, club averages, or top-3.
+9. **Add shot without GPS** (forgotten swing / no fix): pick a club and optionally type yards (or leave blank). Stored as `source = no_gps`, `fixQuality = none`, **null** lat/lng, **null** `distance_yards`. Typed yards live in `typed_yards` (score/UI only) and are **excluded from distance averages and top-3**. No include-typed-yards toggle in MVP. Never invents a coordinate and never calls `acceptFix`.
+10. Finish the round for a scorecard. Club averages live on the Averages tab.
 
 Hole **score remains the source of truth**. If you also logged shots and/or penalties, the hole screen and round summary warn when `score ≠ shots + penalty strokes`.
 
@@ -206,7 +225,8 @@ ShotTraxx **does not synthesize a fairway or fake points**.
 ## Limitations
 
 - OSM overlays only where mapped; unmapped holes stay empty.
-- No Watch motion, Plays Like, F/M/B pins, auto-detect, or mic-based shot detect (stubs only).
+- No Watch motion, Plays Like invented from a single centroid, auto-detect, or mic-based shot detect.
+- Watch club-pick (top-3 + bag + Same club) ships with this IPA. Crown / double-tap stay out.
 - Local SQLite only (no account / cloud).
 - iOS is the target; Android location is wired but maps may need a Google key.
 - Nearby course picker requires Golf Courses API key `GOLF_COURSES_API_KEY` (see `NOTES.md`). Smoke nearby search on a device/EAS build if this environment cannot TLS to golfcoursesapi.com.
@@ -214,6 +234,6 @@ ShotTraxx **does not synthesize a fairway or fake points**.
 ## Tests
 
 ```bash
-npm test          # domain tests + sensing smoke + course client/OSM, including yards-to-green, par ?, penalties, no-gps exclusion, top-3, voice
+npm test          # domain tests + sensing smoke + course client, including yards-to-green, sticky club, F/M/B, drop, voice
 npm run typecheck
 ```

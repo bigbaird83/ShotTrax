@@ -33,11 +33,10 @@ test('yardsToGreenLabel shows — when quality is none', () => {
     { hasFix: true, hasGreen: false },
   );
   assert.equal(copy.value, '—');
-  assert.match(copy.detail, /unavailable/i);
+  assert.equal(copy.detail, 'Waiting on green location.');
 });
 
-test('yardsToGreenLabel badges soft when quality is soft', () => {
+test('yardsToGreenLabel shows yards without GPS preaching', () => {
   const copy = yardsToGreenLabel({ yards: 164, quality: 'soft' });
   assert.equal(copy.value, '164 yd');
-  assert.match(copy.detail, /SOFT/);
 });

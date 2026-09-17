@@ -1,0 +1,10 @@
+{
+  "name": "watch-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Watch Connectivity bridge: Watch club tap is phone club=mark GPS.",
+  "main": "index.ts",
+  "license": "UNLICENSED",
+  "homepage": "https://github.com/bigbaird83/ShotTrax",
+  "author": "ShotTraxx"
+}

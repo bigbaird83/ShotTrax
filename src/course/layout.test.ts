@@ -11,22 +11,19 @@ import {
 } from './layout';
 
 test('seedHoleFromCourse never invents par or green', () => {
-  assert.deepEqual(seedHoleFromCourse(null), {
+  const blank = {
     par: null,
     parSource: null,
     yards: null,
     handicap: null,
     green: null,
     greenSource: null,
-  });
-  assert.deepEqual(seedHoleFromCourse({ par: null, greenCentroid: { lat: 0, lng: 0 } }), {
-    par: null,
-    parSource: null,
-    yards: null,
-    handicap: null,
-    green: null,
-    greenSource: null,
-  });
+    greenFront: null,
+    greenBack: null,
+    greenDepthYards: null,
+  };
+  assert.deepEqual(seedHoleFromCourse(null), blank);
+  assert.deepEqual(seedHoleFromCourse({ par: null, greenCentroid: { lat: 0, lng: 0 } }), blank);
   assert.deepEqual(
     seedHoleFromCourse({ par: 4, greenCentroid: { lat: 37.01, lng: -86.43 } }),
     {
@@ -36,6 +33,9 @@ test('seedHoleFromCourse never invents par or green', () => {
       handicap: null,
       green: { lat: 37.01, lng: -86.43 },
       greenSource: 'course_centroid',
+      greenFront: null,
+      greenBack: null,
+      greenDepthYards: null,
     },
   );
 });
@@ -71,21 +71,21 @@ test('attachHoleFromCourse fills blanks only and keeps user par/green', () => {
   assert.equal(kept.greenSource, 'user_estimate');
 });
 
-test('formatParLabel is par ? when missing', () => {
-  assert.equal(formatParLabel(null), 'par ?');
+test('formatParLabel is Par unknown when missing — never ?', () => {
+  assert.equal(formatParLabel(null), 'Par unknown');
   assert.equal(formatParLabel(4), 'Par 4');
 });
 
-test('formatSiLabel is SI ? when missing — never invents a stroke index', () => {
-  assert.equal(formatSiLabel(null), 'SI ?');
+test('formatSiLabel is SI unknown when missing — never SI ?', () => {
+  assert.equal(formatSiLabel(null), 'SI unknown');
   assert.equal(formatSiLabel(7), 'SI 7');
 });
 
-test('formatTeeMeta omits blank rating/slope/yardage', () => {
+test('formatTeeMeta shows rating and slope in player voice', () => {
   assert.equal(formatTeeMeta({ name: 'Gold', rating: null, slope: null, totalYards: null }), 'Gold');
   assert.equal(
     formatTeeMeta({ name: 'Gold', rating: 73.3, slope: 128, totalYards: 6800 }),
-    'Gold · 73.3 · slope 128 · 6800 yd',
+    'Gold · Rating 73.3 · Slope 128 · 6800 yd',
   );
 });
 

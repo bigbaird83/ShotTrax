@@ -102,7 +102,7 @@ function scoreAlias(utterance: string, alias: string): number {
 /**
  * Map a speech transcript to an enabled bag club.
  * Returns null when nothing distinctive matches (caller keeps tap targets).
- * Never marks a shot — the UI must still confirm.
+ * Matching does not mark; the UI applies the club immediately (no confirm sheet).
  */
 export function matchSpokenClub(transcript: string, clubs: Club[]): Club | null {
   const utterance = normalizeUtterance(transcript);

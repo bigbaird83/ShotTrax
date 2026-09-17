@@ -1,6 +1,14 @@
+import { pinOrNull, type GreenDepthPins } from '../domain/greenDepth';
 import { isValidLatLng, type LatLng } from '../domain/latLng';
 import type { GreenSource } from '../domain/types';
 import type { CourseDetail, HoleCourseData, TeeSet } from './types';
+
+export {
+  formatHoleHeader,
+  formatParLabel,
+  formatSiLabel,
+  formatTeeMeta,
+} from '../domain/playerCopy';
 
 export type CourseLayoutSeed = {
   apiId: string | null;
@@ -16,6 +24,9 @@ export type CourseLayoutSeed = {
     yards: number | null;
     handicap: number | null;
     greenCentroid: LatLng | null;
+    greenFront?: LatLng | null;
+    greenBack?: LatLng | null;
+    greenDepthYards?: number | null;
   }>;
 };
 
@@ -26,6 +37,9 @@ export type AppliedHoleLayout = {
   handicap: number | null;
   green: LatLng | null;
   greenSource: GreenSource | null;
+  greenFront: LatLng | null;
+  greenBack: LatLng | null;
+  greenDepthYards: number | null;
 };
 
 /** Round length from course hole_count when it is 9 or 18. Never invents par/green. */
@@ -45,15 +59,21 @@ export function layoutFromTee(detail: CourseDetail, tee: TeeSet | null): CourseL
     teeRating: tee?.rating ?? null,
     teeSlope: tee?.slope ?? null,
     teeTotalYards: tee?.totalYards ?? null,
-    holes: holes.map((hole) => ({
-      number: hole.holeNumber,
-      par: hole.par,
-      yards: hole.yards,
-      handicap: hole.handicap,
-      greenCentroid: isValidLatLng(hole.greenCentroid)
-        ? hole.greenCentroid
-        : detail.holes.find((row) => row.holeNumber === hole.holeNumber)?.greenCentroid ?? null,
-    })),
+    holes: holes.map((hole) => {
+      const fromDetail = detail.holes.find((row) => row.holeNumber === hole.holeNumber);
+      return {
+        number: hole.holeNumber,
+        par: hole.par,
+        yards: hole.yards,
+        handicap: hole.handicap,
+        greenCentroid: isValidLatLng(hole.greenCentroid)
+          ? hole.greenCentroid
+          : fromDetail?.greenCentroid ?? null,
+        greenFront: pinOrNull(hole.greenFront) ?? pinOrNull(fromDetail?.greenFront),
+        greenBack: pinOrNull(hole.greenBack) ?? pinOrNull(fromDetail?.greenBack),
+        greenDepthYards: hole.greenDepthYards ?? fromDetail?.greenDepthYards ?? null,
+      };
+    }),
   };
 }
 
@@ -76,6 +96,9 @@ export function layoutFromHoles(
       yards: hole.yards,
       handicap: hole.handicap,
       greenCentroid: hole.greenCentroid,
+      greenFront: hole.greenFront,
+      greenBack: hole.greenBack,
+      greenDepthYards: hole.greenDepthYards,
     })),
   };
 }
@@ -86,6 +109,9 @@ export function seedHoleFromCourse(seed?: {
   yards?: number | null;
   handicap?: number | null;
   greenCentroid: LatLng | null;
+  greenFront?: LatLng | null;
+  greenBack?: LatLng | null;
+  greenDepthYards?: number | null;
 } | null): AppliedHoleLayout {
   const par = seed?.par ?? null;
   const green = isValidLatLng(seed?.greenCentroid) ? seed.greenCentroid : null;
@@ -96,6 +122,9 @@ export function seedHoleFromCourse(seed?: {
     handicap: seed?.handicap ?? null,
     green,
     greenSource: green ? 'course_centroid' : null,
+    greenFront: pinOrNull(seed?.greenFront),
+    greenBack: pinOrNull(seed?.greenBack),
+    greenDepthYards: seed?.greenDepthYards ?? null,
   };
 }
 
@@ -117,6 +146,9 @@ export function attachHoleFromCourse(
     yards?: number | null;
     handicap?: number | null;
     greenCentroid: LatLng | null;
+    greenFront?: LatLng | null;
+    greenBack?: LatLng | null;
+    greenDepthYards?: number | null;
   } | null,
 ): AppliedHoleLayout {
   const incoming = seedHoleFromCourse(seed);
@@ -140,29 +172,24 @@ export function attachHoleFromCourse(
     greenSource: keepGreen
       ? 'user_estimate'
       : incoming.greenSource ?? (existingGreen ? existing.greenSource : null),
+    greenFront: incoming.greenFront,
+    greenBack: incoming.greenBack,
+    greenDepthYards: incoming.greenDepthYards,
   };
 }
 
-export function formatParLabel(par: number | null): string {
-  return par == null ? 'par ?' : `Par ${par}`;
-}
-
-export function formatSiLabel(handicap: number | null): string {
-  return handicap == null ? 'SI ?' : `SI ${handicap}`;
-}
-
-export function formatTeeMeta(tee: {
-  name: string;
-  rating: number | null;
-  slope: number | null;
-  totalYards: number | null;
-}): string {
-  const bits = [
-    tee.rating != null ? String(tee.rating) : null,
-    tee.slope != null ? `slope ${tee.slope}` : null,
-    tee.totalYards != null ? `${tee.totalYards} yd` : null,
-  ].filter(Boolean);
-  return bits.length ? `${tee.name} · ${bits.join(' · ')}` : tee.name;
+export function holeGreenDepth(seed: {
+  greenCentroid?: LatLng | null;
+  greenFront?: LatLng | null;
+  greenBack?: LatLng | null;
+  greenDepthYards?: number | null;
+}): GreenDepthPins {
+  return {
+    front: pinOrNull(seed.greenFront),
+    middle: pinOrNull(seed.greenCentroid),
+    back: pinOrNull(seed.greenBack),
+    depthYards: seed.greenDepthYards ?? null,
+  };
 }
 
 /** Per-hole tee yardage. Missing holes are “—”; omit the line if none have yards. Never sums a total. */

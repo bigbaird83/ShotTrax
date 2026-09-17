@@ -4,10 +4,12 @@ import {
   seedHoleFromCourse,
   type CourseLayoutSeed,
 } from '../course/layout';
+import { DEFAULT_BAG } from '../domain/defaultBag';
 import { averageWithBadges, type ClubAverage } from '../domain/averages';
 import { isValidLatLng } from '../domain/latLng';
 import { clampPenaltyStrokes, scoreAfterPenalty } from '../domain/penalty';
 import { includeInDistanceAverages, planNoGpsShot } from '../domain/shotSource';
+import { planUndoLastShot } from '../domain/undoLastShot';
 import type {
   Club,
   FixQuality,
@@ -16,6 +18,7 @@ import type {
   HolePenalty,
   OpenShot,
   ParSource,
+  PenaltyKind,
   PenaltyReason,
   Round,
   Shot,
@@ -48,6 +51,7 @@ type RoundRow = {
   tee_rating: number | null;
   tee_slope: number | null;
   tee_total_yards: number | null;
+  last_club_id: string | null;
 };
 
 type HoleRow = {
@@ -62,6 +66,11 @@ type HoleRow = {
   green_lat: number | null;
   green_lng: number | null;
   green_source: string | null;
+  green_front_lat: number | null;
+  green_front_lng: number | null;
+  green_back_lat: number | null;
+  green_back_lng: number | null;
+  green_depth_yards: number | null;
 };
 
 type ShotRow = {
@@ -84,6 +93,7 @@ type ShotRow = {
   started_at: string;
   ended_at: string | null;
   source: string | null;
+  suggested: number | null;
 };
 
 type PenaltyRow = {
@@ -93,6 +103,9 @@ type PenaltyRow = {
   reason: string;
   note: string | null;
   created_at: string;
+  kind: string | null;
+  lat: number | null;
+  lng: number | null;
 };
 
 function mapClub(row: ClubRow): Club {
@@ -130,6 +143,7 @@ function mapRound(row: RoundRow): Round {
     teeRating: row.tee_rating ?? null,
     teeSlope: row.tee_slope ?? null,
     teeTotalYards: row.tee_total_yards ?? null,
+    lastClubId: row.last_club_id ?? null,
   };
 }
 
@@ -146,6 +160,11 @@ function mapHole(row: HoleRow): Hole {
     greenLat: row.green_lat,
     greenLng: row.green_lng,
     greenSource: mapGreenSource(row.green_source),
+    greenFrontLat: row.green_front_lat ?? null,
+    greenFrontLng: row.green_front_lng ?? null,
+    greenBackLat: row.green_back_lat ?? null,
+    greenBackLng: row.green_back_lng ?? null,
+    greenDepthYards: row.green_depth_yards ?? null,
   };
 }
 
@@ -181,11 +200,13 @@ function mapShot(row: ShotRow): Shot {
     startedAt: row.started_at,
     endedAt: row.ended_at,
     source,
+    suggested: row.suggested === 1,
   };
 }
 
 function mapPenalty(row: PenaltyRow): HolePenalty {
   const reason = row.reason;
+  const kind: PenaltyKind = row.kind === 'drop' ? 'drop' : 'penalty';
   return {
     id: row.id,
     holeId: row.hole_id,
@@ -196,6 +217,9 @@ function mapPenalty(row: PenaltyRow): HolePenalty {
         : 'other',
     note: row.note,
     createdAt: row.created_at,
+    kind,
+    lat: row.lat ?? null,
+    lng: row.lng ?? null,
   };
 }
 
@@ -254,6 +278,27 @@ export function deleteClub(db: SQLiteDatabase, id: string): 'deleted' | 'disable
   return 'deleted';
 }
 
+export function restoreDefaultBag(db: SQLiteDatabase): void {
+  const existing = new Set(listClubs(db).map((club) => club.id));
+  const insert = db.prepareSync(
+    'INSERT INTO clubs (id, name, short_name, loft_rank, sort_order, enabled) VALUES (?, ?, ?, ?, ?, 1)',
+  );
+  try {
+    for (const club of DEFAULT_BAG) {
+      if (existing.has(club.id)) {
+        db.runSync(
+          'UPDATE clubs SET name = ?, short_name = ?, loft_rank = ?, sort_order = ?, enabled = 1 WHERE id = ?',
+          [club.name, club.shortName, club.loftRank, club.sortOrder, club.id],
+        );
+      } else {
+        insert.executeSync([club.id, club.name, club.shortName, club.loftRank, club.sortOrder]);
+      }
+    }
+  } finally {
+    insert.finalizeSync();
+  }
+}
+
 export function listRounds(db: SQLiteDatabase): Round[] {
   return db
     .getAllSync<RoundRow>('SELECT * FROM rounds ORDER BY started_at DESC')
@@ -282,9 +327,13 @@ export function startRound(
   const startedAt = new Date().toISOString();
   const courseApiId = layout?.apiId ?? null;
   const courseLoc = isValidLatLng(layout?.location ?? null) ? layout?.location ?? null : null;
+  const previous = db.getFirstSync<RoundRow>(
+    'SELECT * FROM rounds ORDER BY started_at DESC LIMIT 1',
+  );
+  const lastClubId = previous?.last_club_id ?? null;
   db.withTransactionSync(() => {
     db.runSync(
-      'INSERT INTO rounds (id, started_at, finished_at, course_name, hole_count, course_api_id, course_lat, course_lng, tee_name, tee_rating, tee_slope, tee_total_yards) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO rounds (id, started_at, finished_at, course_name, hole_count, course_api_id, course_lat, course_lng, tee_name, tee_rating, tee_slope, tee_total_yards, last_club_id) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         id,
         startedAt,
@@ -297,13 +346,14 @@ export function startRound(
         layout?.teeRating ?? null,
         layout?.teeSlope ?? null,
         layout?.teeTotalYards ?? null,
+        lastClubId,
       ],
     );
     for (let n = 1; n <= holeCount; n += 1) {
       const seed = layout?.holes?.find((hole) => hole.number === n);
       const applied = seedHoleFromCourse(seed ?? null);
       db.runSync(
-        'INSERT INTO holes (id, round_id, number, par, par_source, score, yards, handicap, green_lat, green_lng, green_source) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)',
+        'INSERT INTO holes (id, round_id, number, par, par_source, score, yards, handicap, green_lat, green_lng, green_source, green_front_lat, green_front_lng, green_back_lat, green_back_lng, green_depth_yards) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
           newId(),
           id,
@@ -315,6 +365,11 @@ export function startRound(
           applied.green?.lat ?? null,
           applied.green?.lng ?? null,
           applied.greenSource,
+          applied.greenFront?.lat ?? null,
+          applied.greenFront?.lng ?? null,
+          applied.greenBack?.lat ?? null,
+          applied.greenBack?.lng ?? null,
+          applied.greenDepthYards,
         ],
       );
     }
@@ -332,6 +387,7 @@ export function startRound(
     teeRating: layout?.teeRating ?? null,
     teeSlope: layout?.teeSlope ?? null,
     teeTotalYards: layout?.teeTotalYards ?? null,
+    lastClubId,
   };
 }
 
@@ -378,7 +434,7 @@ export function attachCourseToRound(
         seed ?? null,
       );
       db.runSync(
-        'UPDATE holes SET par = ?, par_source = ?, yards = ?, handicap = ?, green_lat = ?, green_lng = ?, green_source = ? WHERE id = ?',
+        'UPDATE holes SET par = ?, par_source = ?, yards = ?, handicap = ?, green_lat = ?, green_lng = ?, green_source = ?, green_front_lat = ?, green_front_lng = ?, green_back_lat = ?, green_back_lng = ?, green_depth_yards = ? WHERE id = ?',
         [
           applied.par,
           applied.parSource,
@@ -387,6 +443,11 @@ export function attachCourseToRound(
           applied.green?.lat ?? null,
           applied.green?.lng ?? null,
           applied.greenSource,
+          applied.greenFront?.lat ?? null,
+          applied.greenFront?.lng ?? null,
+          applied.greenBack?.lat ?? null,
+          applied.greenBack?.lng ?? null,
+          applied.greenDepthYards,
           row.id,
         ],
       );
@@ -396,6 +457,22 @@ export function attachCourseToRound(
 
 export function finishRound(db: SQLiteDatabase, id: string): void {
   db.runSync('UPDATE rounds SET finished_at = ? WHERE id = ?', [new Date().toISOString(), id]);
+}
+
+export function deleteRound(db: SQLiteDatabase, id: string): void {
+  db.withTransactionSync(() => {
+    const holes = db.getAllSync<{ id: string }>('SELECT id FROM holes WHERE round_id = ?', [id]);
+    for (const hole of holes) {
+      db.runSync('DELETE FROM shots WHERE hole_id = ?', [hole.id]);
+      db.runSync('DELETE FROM hole_penalties WHERE hole_id = ?', [hole.id]);
+    }
+    db.runSync('DELETE FROM holes WHERE round_id = ?', [id]);
+    db.runSync('DELETE FROM rounds WHERE id = ?', [id]);
+  });
+}
+
+export function setRoundLastClub(db: SQLiteDatabase, roundId: string, clubId: string | null): void {
+  db.runSync('UPDATE rounds SET last_club_id = ? WHERE id = ?', [clubId, roundId]);
 }
 
 export function listHoles(db: SQLiteDatabase, roundId: string): Hole[] {
@@ -477,12 +554,13 @@ export function insertOpenShot(
   db: SQLiteDatabase,
   args: {
     holeId: string;
-    clubId: string;
+    clubId: string | null;
     seq: number;
     lat: number;
     lng: number;
     accuracyM: number | null;
     startFixQuality: FixQuality;
+    suggested?: boolean;
   },
 ): string {
   const id = newId();
@@ -490,8 +568,8 @@ export function insertOpenShot(
     `INSERT INTO shots (
       id, hole_id, club_id, seq,
       start_lat, start_lng, start_accuracy_m, start_fix_quality,
-      distance_yards, fix_quality, impossible_jump, started_at, source
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 0, ?, 'gps')`,
+      distance_yards, fix_quality, impossible_jump, started_at, source, suggested
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 0, ?, 'gps', ?)`,
     [
       id,
       args.holeId,
@@ -503,9 +581,51 @@ export function insertOpenShot(
       args.startFixQuality,
       args.startFixQuality,
       new Date().toISOString(),
+      args.suggested ? 1 : 0,
     ],
   );
   return id;
+}
+
+/** Change club only. GPS start/end and distance_yards stay; suggested badge clears.
+ * Club averages follow `club_id` on the next listClubAverages() read.
+ */
+export function updateShotClub(db: SQLiteDatabase, shotId: string, clubId: string): void {
+  db.runSync('UPDATE shots SET club_id = ?, suggested = 0 WHERE id = ?', [clubId, shotId]);
+}
+
+export function reopenShot(db: SQLiteDatabase, shotId: string): void {
+  db.runSync(
+    `UPDATE shots SET
+      end_lat = NULL, end_lng = NULL, end_accuracy_m = NULL, end_fix_quality = NULL,
+      distance_yards = NULL, impossible_jump = 0, ended_at = NULL,
+      fix_quality = start_fix_quality
+     WHERE id = ?`,
+    [shotId],
+  );
+}
+
+export function deleteShot(db: SQLiteDatabase, shotId: string): void {
+  db.runSync('DELETE FROM shots WHERE id = ?', [shotId]);
+}
+
+export function undoLastShot(
+  db: SQLiteDatabase,
+  roundId: string,
+  holeNumber: number,
+): { ok: true } | { ok: false; reason: 'empty' } {
+  const hole = getHole(db, roundId, holeNumber);
+  if (!hole) return { ok: false, reason: 'empty' };
+  const plan = planUndoLastShot(listShotsForHole(db, hole.id));
+  if (!plan) return { ok: false, reason: 'empty' };
+  db.withTransactionSync(() => {
+    deleteShot(db, plan.deleteShotId);
+    if (plan.reopenShotId) {
+      reopenShot(db, plan.reopenShotId);
+    }
+    setRoundLastClub(db, roundId, plan.nextLastClubId);
+  });
+  return { ok: true };
 }
 
 export function applyClosedShot(
@@ -596,6 +716,9 @@ export function insertPenalty(
     strokes: number;
     reason: PenaltyReason;
     note: string | null;
+    kind?: PenaltyKind;
+    lat?: number | null;
+    lng?: number | null;
   },
 ): { penalty: HolePenalty; score: number } {
   const strokes = clampPenaltyStrokes(args.strokes);
@@ -607,11 +730,24 @@ export function insertPenalty(
     reason: args.reason,
     note: args.note?.trim() || null,
     createdAt: new Date().toISOString(),
+    kind: args.kind ?? 'penalty',
+    lat: args.lat ?? null,
+    lng: args.lng ?? null,
   };
   db.withTransactionSync(() => {
     db.runSync(
-      'INSERT INTO hole_penalties (id, hole_id, strokes, reason, note, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-      [penalty.id, penalty.holeId, penalty.strokes, penalty.reason, penalty.note, penalty.createdAt],
+      'INSERT INTO hole_penalties (id, hole_id, strokes, reason, note, created_at, kind, lat, lng) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        penalty.id,
+        penalty.holeId,
+        penalty.strokes,
+        penalty.reason,
+        penalty.note,
+        penalty.createdAt,
+        penalty.kind,
+        penalty.lat,
+        penalty.lng,
+      ],
     );
     db.runSync('UPDATE holes SET score = ? WHERE id = ?', [score, args.holeId]);
   });

@@ -1,0 +1,196 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { MIC_SHOT_ASSIST, WATCH_ASSIST } from '../sensing/assists';
+import { SOFT_GPS_MAX_M, SOFT_GPS_MIN_M } from '../config/sensing';
+import { yardsToGreen } from '../sensing/yardsToGreen';
+import type { GpsFix } from './types';
+import {
+  CLUB_LIST_KEYS,
+  PHONE_UNAVAILABLE,
+  WATCH_MESSAGE_TYPES,
+  clubListPayload,
+  clubListPushKey,
+  clubPickPayload,
+  formatClubMarkedFeedback,
+  isIso8601,
+  parseClubList,
+  parseClubPick,
+  toWatchYardsQuality,
+} from './watchMessages';
+
+function fixAt(lat: number, lng: number, accuracyM: number | null): GpsFix {
+  return {
+    lat,
+    lng,
+    accuracyM,
+    mocked: false,
+    isSimulator: false,
+    timestamp: 0,
+  };
+}
+
+const origin = { lat: 37, lng: -122 };
+const green = { lat: 37 + 150 / 111_320, lng: -122 };
+
+const listBase = {
+  top3: ['club_7i', 'club_8i', 'club_6i'],
+  bag: ['club_driver', 'club_7i'],
+  labels: { club_7i: '7i', club_8i: '8i', club_6i: '6i', club_driver: 'Dr' },
+};
+
+test('clubList locked schema is type, top3, bag, labels, holeNumber, yardsToGreen, yardsQuality', () => {
+  const msg = clubListPayload({
+    ...listBase,
+    holeNumber: 4,
+    yardsToGreen: 164,
+    yardsQuality: 'good',
+  });
+  assert.deepEqual(Object.keys(msg).sort(), [...CLUB_LIST_KEYS].sort());
+  assert.equal(msg.type, 'clubList');
+  assert.equal(msg.holeNumber, 4);
+  assert.equal(msg.yardsToGreen, 164);
+  assert.equal(msg.yardsQuality, 'good');
+  const parsed = parseClubList(JSON.parse(JSON.stringify(msg)));
+  assert.deepEqual(parsed, msg);
+  assert.equal(parseClubList({ type: 'clubList', top3: [], bag: [], labels: {} }), null);
+});
+
+test('clubList yardsToGreen is yardsToGreen().yards with the same good/soft/none bands as phone', () => {
+  const good = yardsToGreen(fixAt(origin.lat, origin.lng, SOFT_GPS_MIN_M - 0.1), green);
+  const soft = yardsToGreen(fixAt(origin.lat, origin.lng, SOFT_GPS_MIN_M), green);
+  const poor = yardsToGreen(fixAt(origin.lat, origin.lng, SOFT_GPS_MAX_M + 0.1), green);
+  assert.equal(good.quality, 'good');
+  assert.equal(soft.quality, 'soft');
+  assert.equal(poor.quality, 'none');
+  assert.equal(poor.yards, null);
+
+  const goodMsg = clubListPayload({
+    ...listBase,
+    holeNumber: 4,
+    yardsToGreen: good.yards,
+    yardsQuality: toWatchYardsQuality(good.quality),
+  });
+  assert.equal(goodMsg.yardsToGreen, good.yards);
+  assert.equal(goodMsg.yardsQuality, 'good');
+
+  const softMsg = clubListPayload({
+    ...listBase,
+    holeNumber: 4,
+    yardsToGreen: soft.yards,
+    yardsQuality: toWatchYardsQuality(soft.quality),
+  });
+  assert.equal(softMsg.yardsQuality, 'soft');
+  assert.equal(softMsg.yardsToGreen, soft.yards);
+
+  const noneMsg = clubListPayload({
+    ...listBase,
+    holeNumber: 4,
+    yardsToGreen: poor.yards,
+    yardsQuality: toWatchYardsQuality(poor.quality),
+  });
+  assert.equal(noneMsg.yardsToGreen, null);
+  assert.equal(noneMsg.yardsQuality, 'none');
+  assert.equal(toWatchYardsQuality('forced'), 'none');
+  assert.equal(toWatchYardsQuality('none'), 'none');
+});
+
+test('clubList allows null yards and none quality; rejects invalid hole, type, or forced quality', () => {
+  const msg = clubListPayload({
+    top3: [],
+    bag: ['club_pw'],
+    labels: { club_pw: 'PW' },
+    holeNumber: 1,
+    yardsToGreen: null,
+    yardsQuality: 'none',
+  });
+  assert.equal(msg.type, 'clubList');
+  assert.equal(
+    clubListPayload({ ...msg, yardsToGreen: 90, yardsQuality: 'none' }).yardsToGreen,
+    null,
+  );
+  assert.equal(parseClubList(msg)?.yardsToGreen, null);
+  assert.equal(parseClubList({ ...msg, yardsToGreen: 90, yardsQuality: 'none' })?.yardsToGreen, null);
+  assert.equal(parseClubList({ ...msg, holeNumber: 0 }), null);
+  assert.equal(parseClubList({ ...msg, type: 'nope' }), null);
+  assert.equal(parseClubList({ ...msg, yardsQuality: 'forced' }), null);
+  assert.equal(parseClubList({ type: 'status', top3: [], bag: [], labels: {} }), null);
+});
+
+test('clubList push key changes on hole, fix quality, and bag rank', () => {
+  const base = clubListPayload({
+    ...listBase,
+    holeNumber: 4,
+    yardsToGreen: 164,
+    yardsQuality: 'good',
+  });
+  const hole = clubListPayload({ ...listBase, holeNumber: 5, yardsToGreen: 164, yardsQuality: 'good' });
+  const quality = clubListPayload({ ...listBase, holeNumber: 4, yardsToGreen: 164, yardsQuality: 'soft' });
+  const none = clubListPayload({
+    ...listBase,
+    holeNumber: 4,
+    yardsToGreen: null,
+    yardsQuality: 'none',
+  });
+  const rank = clubListPayload({
+    ...listBase,
+    top3: ['club_8i', 'club_7i', 'club_6i'],
+    holeNumber: 4,
+    yardsToGreen: 164,
+    yardsQuality: 'good',
+  });
+  const sameYardsLastClub = clubListPayload({
+    ...listBase,
+    holeNumber: 4,
+    yardsToGreen: 164,
+    yardsQuality: 'good',
+    lastClubId: 'club_7i',
+  });
+  assert.notEqual(clubListPushKey(base), clubListPushKey(hole));
+  assert.notEqual(clubListPushKey(base), clubListPushKey(quality));
+  assert.notEqual(clubListPushKey(base), clubListPushKey(none));
+  assert.notEqual(clubListPushKey(base), clubListPushKey(rank));
+  assert.equal(clubListPushKey(base), clubListPushKey(sameYardsLastClub));
+});
+
+test('clubPick required keys are type, clubId, ISO8601 at; Watch GPS is optional stretch', () => {
+  const pick = clubPickPayload({
+    clubId: 'club_7i',
+    at: '2026-09-17T18:00:00.000Z',
+  });
+  assert.deepEqual(Object.keys(pick).sort(), ['at', 'clubId', 'type']);
+  assert.equal(pick.type, 'clubPick');
+  assert.equal(isIso8601(pick.at), true);
+  const parsed = parseClubPick(JSON.parse(JSON.stringify(pick)));
+  assert.deepEqual(parsed, pick);
+  assert.equal(parseClubPick({ type: 'clubPick', clubId: '', at: '2026-09-17T18:00:00.000Z' }), null);
+  assert.equal(parseClubPick({ type: 'clubPick', clubId: 'club_7i', at: 'x' }), null);
+  assert.equal(parseClubPick({ type: 'mark', clubId: 'club_7i', at: '2026-09-17T18:00:00.000Z' }), null);
+});
+
+test('clubPick may carry Watch GPS; phone prefers it only when fresh and at least as accurate', () => {
+  const parsed = parseClubPick({
+    type: 'clubPick',
+    clubId: 'club_7i',
+    at: '2026-09-17T18:00:00.000Z',
+    lat: 37.1,
+    lng: -122.2,
+    accuracyM: 4,
+  });
+  assert.equal(parsed?.lat, 37.1);
+  assert.equal(parsed?.lng, -122.2);
+  assert.equal(parsed?.accuracyM, 4);
+});
+
+test('Watch Connectivity this cut is only clubList and clubPick', () => {
+  assert.deepEqual([...WATCH_MESSAGE_TYPES], ['clubList', 'clubPick']);
+});
+
+test('Watch feedback is marked ✓ or Phone unavailable — never silent fail', () => {
+  assert.equal(formatClubMarkedFeedback('7i'), '7i marked ✓');
+  assert.equal(PHONE_UNAVAILABLE, 'Phone unavailable');
+});
+
+test('Watch companion is club-pick only — no motion or mic auto-mark', () => {
+  assert.equal(WATCH_ASSIST, false);
+  assert.equal(MIC_SHOT_ASSIST, false);
+});

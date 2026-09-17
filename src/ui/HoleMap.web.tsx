@@ -2,9 +2,9 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { GpsFix, Shot } from '@/src/domain/types';
 import type { YardsToGreenResult } from '@/src/sensing/yardsToGreen';
 import type { OsmOverlay } from '@/src/course/types';
-import { hasClosedGpsTrail } from '@/src/domain/shotSource';
+import { COPY } from '@/src/domain/playerCopy';
 import { YardsToGreenBadge } from './YardsToGreenBadge';
-import { colors } from './theme';
+import { colors, type } from './theme';
 
 type Props = {
   holeNumber: number;
@@ -12,52 +12,35 @@ type Props = {
   userFix: GpsFix | null;
   green: { lat: number; lng: number } | null;
   yardsToGreen: YardsToGreenResult;
+  fmb?: { f: string; m: string; b: string } | null;
   osmOverlay?: OsmOverlay | null;
   onDropGreenEstimate?: (coord: { lat: number; lng: number }) => void;
+  fullBleed?: boolean;
 };
 
-/** Web has no Apple Maps / react-native-maps. List closed-shot GPS instead of inventing a map. */
-export function HoleMap({ holeNumber, shots, userFix, green, yardsToGreen }: Props) {
-  const closed = shots.filter(hasClosedGpsTrail);
+export function HoleMap({ holeNumber, userFix, green, yardsToGreen }: Props) {
   return (
     <View style={styles.fallback}>
-      <Text style={styles.kicker}>SCORECARD</Text>
-      <Text style={styles.title}>HOLE {holeNumber}</Text>
+      <Text style={styles.title}>Hole {holeNumber}</Text>
       <YardsToGreenBadge
         result={yardsToGreen}
         hasFix={Boolean(userFix)}
         hasGreen={Boolean(green)}
       />
-      <Text style={styles.msg}>
-        Satellite map is iOS/Android (react-native-maps, Apple Maps). Trails still list closed shots.
-        OSM golf overlays render on device, not on web.
-      </Text>
-      {closed.length === 0 ? (
-        <Text style={styles.meta}>No closed-shot trails yet.</Text>
-      ) : (
-        closed.map((shot) => (
-          <Text key={shot.id} style={styles.meta}>
-            {shot.seq}: {shot.startLat.toFixed(5)}, {shot.startLng.toFixed(5)} → {shot.endLat.toFixed(5)},{' '}
-            {shot.endLng.toFixed(5)}
-          </Text>
-        ))
-      )}
+      <Text style={styles.msg}>{green ? COPY.waitingOnLocation : COPY.longPressGreen}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   fallback: {
+    flex: 1,
     minHeight: 160,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.line,
     backgroundColor: colors.bgElevated,
     padding: 12,
     gap: 6,
+    justifyContent: 'center',
   },
-  kicker: { color: colors.lime, fontSize: 10, fontWeight: '800', letterSpacing: 1 },
-  title: { color: colors.cream, fontSize: 18, fontWeight: '900' },
-  msg: { color: colors.muted, fontSize: 14, lineHeight: 20 },
-  meta: { color: colors.cream, fontSize: 13 },
+  title: { color: colors.cream, fontSize: type.hole, fontWeight: '900' },
+  msg: { color: colors.muted, fontSize: type.meta, lineHeight: 20 },
 });

@@ -149,7 +149,8 @@ export function migrate(db: SQLiteDatabase): void {
       tee_name TEXT,
       tee_rating REAL,
       tee_slope INTEGER,
-      tee_total_yards INTEGER
+      tee_total_yards INTEGER,
+      last_club_id TEXT
     );
 
     CREATE TABLE IF NOT EXISTS holes (
@@ -198,6 +199,9 @@ export function migrate(db: SQLiteDatabase): void {
       reason TEXT NOT NULL,
       note TEXT,
       created_at TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'penalty',
+      lat REAL,
+      lng REAL,
       FOREIGN KEY (hole_id) REFERENCES holes(id) ON DELETE CASCADE
     );
   `);
@@ -215,10 +219,20 @@ export function migrate(db: SQLiteDatabase): void {
   ensureColumn(db, 'rounds', 'tee_rating', 'REAL');
   ensureColumn(db, 'rounds', 'tee_slope', 'INTEGER');
   ensureColumn(db, 'rounds', 'tee_total_yards', 'INTEGER');
+  ensureColumn(db, 'rounds', 'last_club_id', 'TEXT');
+  ensureColumn(db, 'holes', 'green_front_lat', 'REAL');
+  ensureColumn(db, 'holes', 'green_front_lng', 'REAL');
+  ensureColumn(db, 'holes', 'green_back_lat', 'REAL');
+  ensureColumn(db, 'holes', 'green_back_lng', 'REAL');
+  ensureColumn(db, 'holes', 'green_depth_yards', 'INTEGER');
+  ensureColumn(db, 'hole_penalties', 'kind', "TEXT NOT NULL DEFAULT 'penalty'");
+  ensureColumn(db, 'hole_penalties', 'lat', 'REAL');
+  ensureColumn(db, 'hole_penalties', 'lng', 'REAL');
   migrateHolesParNullable(db);
   migrateShotsP3(db);
   ensureColumn(db, 'shots', 'source', "TEXT NOT NULL DEFAULT 'gps'");
   ensureColumn(db, 'shots', 'typed_yards', 'INTEGER');
+  ensureColumn(db, 'shots', 'suggested', 'INTEGER NOT NULL DEFAULT 0');
   migrateNoGpsSensingLock(db);
 
   const clubCount = db.getFirstSync<{ n: number }>('SELECT COUNT(*) AS n FROM clubs');

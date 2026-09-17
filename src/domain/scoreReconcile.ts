@@ -31,7 +31,5 @@ export function reconcileHoleScore(args: {
 }
 
 export function scoreMismatchMessage(row: HoleScoreReconcile): string {
-  const shotWord = row.shotCount === 1 ? 'shot' : 'shots';
-  const penWord = row.penaltyStrokes === 1 ? 'penalty' : 'penalties';
-  return `Score ${row.score} ≠ ${row.shotCount} ${shotWord} + ${row.penaltyStrokes} ${penWord}. Scorecard score is the source of truth.`;
+  return `Score ${row.score} doesn’t match ${row.shotCount} shots + ${row.penaltyStrokes} penalties.`;
 }
