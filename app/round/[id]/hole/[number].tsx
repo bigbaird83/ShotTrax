@@ -213,6 +213,7 @@ export default function HoleScreen() {
         }
       />
 
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollBody} keyboardShouldPersistTaps="handled">
       <YardsToGreenBadge result={yardsToGreen} />
       {green ? (
         <Text style={styles.tiny}>
@@ -225,8 +226,6 @@ export default function HoleScreen() {
           coordinates.
         </Text>
       )}
-
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollBody} keyboardShouldPersistTaps="handled">
       <Text style={styles.label}>Par</Text>
       <View style={styles.row}>
         {[3, 4, 5].map((par) => (
