@@ -1,14 +1,14 @@
-# App icons (placeholder)
+# App icons (Doc + Lead locked)
 
-These PNGs are **placeholders**, not final art. Doc is picking icon A/B/C separately — do not invent a replacement on this branch.
+Fairway diorama, dotted drive→approach, ShotTraxx wordmark in a squircle. Same art at every path — no alternate mark.
 
 | File | Wired from |
 | --- | --- |
-| `icon.png` | `app.json` `expo.icon` (iOS / home screen) |
-| `splash-icon.png` | `expo-splash-screen` plugin |
-| `android-icon-foreground.png` | Android adaptive icon |
-| `android-icon-background.png` | Android adaptive icon |
-| `android-icon-monochrome.png` | Android adaptive icon |
-| `favicon.png` | Web favicon |
+| `icon.png` | `app.json` `expo.icon` (iOS / home screen), 1024² |
+| `splash-icon.png` | `expo-splash-screen` plugin, 1024² |
+| `android-icon-foreground.png` | Android adaptive foreground (same art, 66% safe-zone inset) |
+| `android-icon-background.png` | Android adaptive background (`#05190D` field) |
+| `android-icon-monochrome.png` | Themed icon luminance of the locked art |
+| `favicon.png` | Web favicon, 48² |
 
 Bundle ID `com.shottrax.app` and slug `shottrax` stay unchanged. User-facing name is **ShotTraxx**.

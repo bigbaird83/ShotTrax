@@ -1,6 +1,6 @@
 # ShotTraxx — P5 part 2
 
-User-facing name is **ShotTraxx** (`expo.name`, iOS `CFBundleDisplayName`, Android `label`). Bundle ID `com.shottrax.app` and Expo slug `shottrax` stay unchanged. Icon files under `assets/images/` are placeholders (Doc picking A/B/C).
+User-facing name is **ShotTraxx** (`expo.name`, iOS `CFBundleDisplayName`, Android `label`). Bundle ID `com.shottrax.app` and Expo slug `shottrax` stay unchanged. Icon files under `assets/images/` are the Doc + Lead locked mark.
 
 ## Golf Courses API (nearby courses, par, green centroids)
 

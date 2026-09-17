@@ -4,7 +4,7 @@ Phone GPS golf shot tracker (no club sensors). **This branch is P5 part 2** on t
 
 P5.2 wires **nearby courses** from Golf Courses API Pro (EAS secret `GOLF_COURSES_API_KEY`), nearby → course → **named tee**, **par / SI from course data only** (`par ?` / `SI ?` if missing), rating/slope/yardage when present, **green centroids** into `yardsToGreen(fix, greenCentroid)`, and **OSM** `golf=green/fairway/tee/hole` overlays when mapped. Watch motion, Plays Like, F/M/B pins, auto-detect, and Stracka scrape stay **out of scope**.
 
-User-facing name is **ShotTraxx** (`app.json` `expo.name`, iOS `CFBundleDisplayName`, Android `label` / home screen). Bundle ID `com.shottrax.app` and Expo slug `shottrax` stay unchanged (App Store ID). Icon at `assets/images/icon.png` is a **placeholder** — Doc is picking A/B/C separately; see `assets/images/README.md`.
+User-facing name is **ShotTraxx** (`app.json` `expo.name`, iOS `CFBundleDisplayName`, Android `label` / home screen). Bundle ID `com.shottrax.app` and Expo slug `shottrax` stay unchanged (App Store ID). Home-screen icon is the Doc + Lead locked mark at `assets/images/icon.png` (see `assets/images/README.md`).
 
 ## Run (iOS first)
 
