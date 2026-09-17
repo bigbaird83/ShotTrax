@@ -70,7 +70,7 @@ test('getCourse loads scorecard then Pro green-centers', async () => {
               coordinates: { latitude: 37.0132, longitude: -86.43378 },
               scorecard: {
                 hole_count: 18,
-                teeboxes: [{ holes: [{ hole: 1, par: 4 }, { hole: 2, par: 5 }] }],
+                teeboxes: [{ name: 'Gold', holes: [{ hole: 1, par: 4, yards: 437, handicap: 7 }, { hole: 2, par: 5 }] }],
               },
               green_centers_available: true,
             },
@@ -95,7 +95,12 @@ test('getCourse loads scorecard then Pro green-centers', async () => {
   const detail = await client.getCourse('4');
   assert.ok(detail);
   assert.equal(detail?.holes[0].par, 4);
+  assert.equal(detail?.holes[0].yards, 437);
+  assert.equal(detail?.holes[0].handicap, 7);
   assert.deepEqual(detail?.holes[0].greenCentroid, { lat: 37.01744, lng: -86.43135 });
+  assert.equal(detail?.tees[0].name, 'Gold');
+  assert.equal(detail?.tees[0].holes[0].handicap, 7);
+  assert.deepEqual(detail?.tees[0].holes[0].greenCentroid, { lat: 37.01744, lng: -86.43135 });
   assert.equal(detail?.holes[1].par, 5);
   assert.equal(detail?.holes[1].greenCentroid, null);
   assert.ok(urls[0]?.startsWith(GOLF_COURSES_API_BASE));

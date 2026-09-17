@@ -224,7 +224,7 @@ export function parseCourseHoles(raw: unknown): HoleCourseData[] {
   return holes;
 }
 
-export function parseTeeSet(raw: unknown, index = 0): TeeSet | null {
+export function parseTeeSet(raw: unknown): TeeSet | null {
   const record = asRecord(raw);
   if (!record) return null;
   const holes: HoleCourseData[] = [];
@@ -234,8 +234,7 @@ export function parseTeeSet(raw: unknown, index = 0): TeeSet | null {
     if (parsed) holes.push(parsed);
   }
   holes.sort((a, b) => a.holeNumber - b.holeNumber);
-  const name =
-    asString(pick(record, ['name', 'tee_name', 'teeName', 'color', 'tee'])) ?? (holes.length ? `Tee ${index + 1}` : null);
+  const name = asString(pick(record, ['name', 'tee_name', 'teeName', 'color', 'tee']));
   if (!name) return null;
   const rating = asFiniteNumber(pick(record, ['rating', 'rating_men', 'course_rating', 'courseRating']));
   const slopeRaw = asFiniteNumber(pick(record, ['slope', 'slope_men', 'slopeRating', 'slope_rating']));
@@ -244,8 +243,8 @@ export function parseTeeSet(raw: unknown, index = 0): TeeSet | null {
     totalRaw != null && Number.isInteger(totalRaw) && totalRaw >= 1 && totalRaw <= 9999 ? totalRaw : null;
   return {
     name,
-    rating: rating != null && Number.isFinite(rating) ? rating : null,
-    slope: slopeRaw != null && Number.isInteger(slopeRaw) ? slopeRaw : null,
+    rating: rating != null && rating > 0 ? rating : null,
+    slope: slopeRaw != null && Number.isInteger(slopeRaw) && slopeRaw > 0 ? slopeRaw : null,
     totalYards,
     holes,
   };
@@ -253,8 +252,8 @@ export function parseTeeSet(raw: unknown, index = 0): TeeSet | null {
 
 export function parseTeeSets(raw: unknown): TeeSet[] {
   const out: TeeSet[] = [];
-  findTeeboxArray(raw).forEach((box, index) => {
-    const parsed = parseTeeSet(box, index);
+  findTeeboxArray(raw).forEach((box) => {
+    const parsed = parseTeeSet(box);
     if (parsed) out.push(parsed);
   });
   return out;

@@ -66,7 +66,7 @@ test('parseCourseDetail reads teeboxes scorecard and keeps missing par/green bla
           {
             name: 'Gold',
             holes: [
-              { hole: 1, par: 4, yards: 437 },
+              { hole: 1, par: 4, yards: 437, handicap: 7 },
               { hole: 2 },
             ],
           },
@@ -82,7 +82,7 @@ test('parseCourseDetail reads teeboxes scorecard and keeps missing par/green bla
   assert.equal(detail?.greenCentersAvailable, true);
   assert.equal(detail?.holes[0].par, 4);
   assert.equal(detail?.holes[0].yards, 437);
-  assert.equal(detail?.holes[0].handicap, null);
+  assert.equal(detail?.holes[0].handicap, 7);
   assert.equal(detail?.tees.length, 1);
   assert.equal(detail?.tees[0].name, 'Gold');
   assert.equal(detail?.holes[0].greenCentroid, null);
@@ -163,4 +163,42 @@ test('parseTeeSets keeps rating/slope/yards when present and blank otherwise', (
   assert.equal(tees[0].holes[1].handicap, null);
   assert.equal(tees[1].rating, null);
   assert.equal(tees[1].slope, null);
+});
+
+test('parseTeeSets skips unnamed teeboxes and does not invent Tee 1', () => {
+  const tees = parseTeeSets({
+    scorecard: {
+      teeboxes: [{ holes: [{ hole: 1, par: 4, yards: 400 }] }, { name: 'White', holes: [{ hole: 1, par: 4 }] }],
+    },
+  });
+  assert.equal(tees.length, 1);
+  assert.equal(tees[0].name, 'White');
+});
+
+test('parseTeeSets does not copy women fields into men rating/slope/SI', () => {
+  const tees = parseTeeSets({
+    scorecard: {
+      teeboxes: [
+        {
+          name: 'Red',
+          rating_women: 71.2,
+          slope_women: 120,
+          holes: [{ hole: 1, par: 4, handicap_women: 9 }],
+        },
+      ],
+    },
+  });
+  assert.equal(tees[0].rating, null);
+  assert.equal(tees[0].slope, null);
+  assert.equal(tees[0].holes[0].handicap, null);
+});
+
+test('parseTeeSets blanks non-positive rating/slope — never invents', () => {
+  const tees = parseTeeSets({
+    scorecard: {
+      teeboxes: [{ name: 'Gold', rating: 0, slope: 0, holes: [{ hole: 1, par: 4 }] }],
+    },
+  });
+  assert.equal(tees[0].rating, null);
+  assert.equal(tees[0].slope, null);
 });

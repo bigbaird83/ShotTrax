@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { isGolfCoursesApiConfigured } from '@/src/course/config';
 import { getCourseDataClient } from '@/src/course/client';
-import { formatTeeMeta } from '@/src/course/layout';
+import { formatTeeHoleYards, formatTeeMeta } from '@/src/course/layout';
 import type { CourseDetail, CourseSummary, TeeSet } from '@/src/course/types';
 import { getCurrentFix } from '@/src/services/location';
 import { BigButton } from './BigButton';
@@ -107,8 +107,8 @@ export function CoursePicker({
       <Text style={styles.meta}>
         {configured
           ? attachMode
-            ? 'Pick a course, then a named tee to attach par / SI / yardage (if present) and green centroids. Missing values stay blank (“par ?”, “SI ?”).'
-            : 'GPS nearby → course → named tee. Par, SI, yardage, rating, and slope come from the API only — never invented.'
+            ? 'Pick a course, then a named tee. Rating, slope, and per-hole yardage show when the API has them (blank if missing). Par / SI stay “par ?” / “SI ?” until course data exists.'
+            : 'GPS nearby → named tee. Par, SI, yardage, rating, and slope come from the API only — never invented.'
           : 'Nearby picker needs the Golf Courses API key. CoS: EAS secret GOLF_COURSES_API_KEY (prod/preview/dev). Local: EXPO_PUBLIC_GOLF_COURSES_API_KEY in .env. You can still type a course name and drop a green pin.'}
       </Text>
       <BigButton
@@ -130,7 +130,14 @@ export function CoursePicker({
         <View style={styles.selected}>
           <Text style={styles.selectedName}>{selected.name}</Text>
           <Text style={styles.meta}>{placeLine(selected)}</Text>
-          {selectedTee ? <Text style={styles.meta}>{formatTeeMeta(selectedTee)}</Text> : null}
+          {selectedTee ? (
+            <>
+              <Text style={styles.meta}>{formatTeeMeta(selectedTee)}</Text>
+              {formatTeeHoleYards(selectedTee.holes) ? (
+                <Text style={styles.meta}>{formatTeeHoleYards(selectedTee.holes)}</Text>
+              ) : null}
+            </>
+          ) : null}
           <BigButton
             label="Clear course"
             variant="ghost"
@@ -165,6 +172,9 @@ export function CoursePicker({
               style={[styles.row, selectedTee?.name === tee.name && styles.rowOn]}>
               <Text style={styles.rowTitle}>{tee.name}</Text>
               <Text style={styles.meta}>{formatTeeMeta(tee)}</Text>
+              {formatTeeHoleYards(tee.holes) ? (
+                <Text style={styles.meta}>{formatTeeHoleYards(tee.holes)}</Text>
+              ) : null}
             </Pressable>
           ))}
         </View>

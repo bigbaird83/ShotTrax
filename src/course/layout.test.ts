@@ -4,6 +4,7 @@ import {
   attachHoleFromCourse,
   formatParLabel,
   formatSiLabel,
+  formatTeeHoleYards,
   formatTeeMeta,
   roundHoleCountFromCourse,
   seedHoleFromCourse,
@@ -85,6 +86,25 @@ test('formatTeeMeta omits blank rating/slope/yardage', () => {
   assert.equal(
     formatTeeMeta({ name: 'Gold', rating: 73.3, slope: 128, totalYards: 6800 }),
     'Gold · 73.3 · slope 128 · 6800 yd',
+  );
+});
+
+test('formatTeeHoleYards shows per-hole yards and blanks missing — never invents a total', () => {
+  assert.equal(formatTeeHoleYards([]), null);
+  assert.equal(
+    formatTeeHoleYards([
+      { holeNumber: 1, yards: null },
+      { holeNumber: 2, yards: null },
+    ]),
+    null,
+  );
+  assert.equal(
+    formatTeeHoleYards([
+      { holeNumber: 1, yards: 437 },
+      { holeNumber: 2, yards: null },
+      { holeNumber: 3, yards: 185 },
+    ]),
+    '1 437 · 2 — · 3 185',
   );
 });
 

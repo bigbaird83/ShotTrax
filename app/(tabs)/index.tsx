@@ -153,7 +153,8 @@ export default function HomeScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Round in progress</Text>
           <Text style={styles.cardMeta}>
-            {active.courseName ?? 'Unnamed'} · {active.holeCount} holes
+            {active.courseName ?? 'Unnamed'}
+            {active.teeName ? ` · ${active.teeName}` : ''} · {active.holeCount} holes
           </Text>
           <BigButton
             label="Continue round"
@@ -212,7 +213,8 @@ export default function HomeScreen() {
               <View>
                 <Text style={styles.rowTitle}>{round.courseName ?? 'Round'}</Text>
                 <Text style={styles.cardMeta}>
-                  {new Date(round.startedAt).toLocaleString()} · {round.holeCount} holes
+                  {new Date(round.startedAt).toLocaleString()}
+                  {round.teeName ? ` · ${round.teeName}` : ''} · {round.holeCount} holes
                   {open ? ' · in progress' : ''}
                 </Text>
               </View>

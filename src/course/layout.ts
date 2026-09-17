@@ -164,3 +164,11 @@ export function formatTeeMeta(tee: {
   ].filter(Boolean);
   return bits.length ? `${tee.name} · ${bits.join(' · ')}` : tee.name;
 }
+
+/** Per-hole tee yardage. Missing holes are “—”; omit the line if none have yards. Never sums a total. */
+export function formatTeeHoleYards(
+  holes: Array<{ holeNumber: number; yards: number | null }>,
+): string | null {
+  if (!holes.some((hole) => hole.yards != null)) return null;
+  return holes.map((hole) => `${hole.holeNumber} ${hole.yards ?? '—'}`).join(' · ');
+}
