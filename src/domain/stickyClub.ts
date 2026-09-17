@@ -1,8 +1,8 @@
 import type { Club } from './types';
 
 /**
- * Last marked club stays selected so the next Mark needs no club pick.
- * Voice / top-3 / bag only change the selection — they never mark.
+ * Last marked club stays selected so Same club is one tap.
+ * Voice / top-3 / bag apply the club immediately; the UI marks GPS.
  */
 export function resolveStickyClub(args: {
   enabledClubs: Club[];
@@ -23,7 +23,7 @@ export function resolveStickyClub(args: {
   return [...enabled].sort((a, b) => a.sortOrder - b.sortOrder)[0] ?? null;
 }
 
-/** Voice / tap sets the club for the next Mark. Never commits a shot. */
+/** Resolve a tapped or spoken club against the enabled bag. */
 export function selectClubForMark(club: Club | null, enabledClubs: Club[]): Club | null {
   if (!club || !club.enabled) return null;
   return enabledClubs.some((row) => row.id === club.id && row.enabled) ? club : null;

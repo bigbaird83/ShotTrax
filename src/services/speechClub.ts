@@ -36,7 +36,7 @@ export type ClubSpeechSession = {
 };
 
 /**
- * Listen for a club name. Does not mark a shot — caller must still confirm.
+ * Listen for a club name. Matching applies immediately in the UI (no confirm sheet).
  * Missing native module (Expo Go without the speech plugin) degrades to a message.
  */
 export async function startClubSpeech(args: {

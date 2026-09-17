@@ -28,7 +28,7 @@ const openGood: OpenShot = {
   startFixQuality: 'good',
 };
 
-test('confirm mark with good GPS and no open shot commits start only', () => {
+test('club-pick mark with good GPS and no open shot commits start only', () => {
   const plan = planMarkShot(fix({ ...origin, accuracyM: 8 }), null);
   assert.equal(plan.status, 'commit');
   if (plan.status === 'commit') {

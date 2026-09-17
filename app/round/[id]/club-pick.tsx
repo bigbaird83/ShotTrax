@@ -1,8 +1,8 @@
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
-import { getHole, listClubAverages, listClubs, listShotsForHole, setRoundLastClub } from '@/src/db/repo';
+import { getHole, listClubAverages, listClubs, listShotsForHole } from '@/src/db/repo';
 import { COPY } from '@/src/domain/playerCopy';
 import { clubToRankInput, lastClosedShotYards, rankTopClubs, resolveDistanceTarget } from '@/src/domain/rankClubs';
 import { parseTypedYards } from '@/src/domain/shotSource';
@@ -10,25 +10,24 @@ import { selectClubForMark } from '@/src/domain/stickyClub';
 import { matchSpokenClub, speechContextualStrings } from '@/src/domain/voiceClub';
 import type { Club } from '@/src/domain/types';
 import { yardsToGreen } from '@/src/sensing/api';
-import { speechRecognitionAvailable, startClubSpeech, type ClubSpeechSession } from '@/src/services/speechClub';
+import { startClubSpeech, type ClubSpeechSession } from '@/src/services/speechClub';
 import { getCurrentFix } from '@/src/services/location';
-import { addNoGpsShot } from '@/src/services/shotActions';
+import { addNoGpsShot, markShotWithClub, promptForPlan } from '@/src/services/shotActions';
+import { useWatchClubList } from '@/src/services/useWatchClubList';
 import { BigButton } from '@/src/ui/BigButton';
 import { ClubButton } from '@/src/ui/ClubButton';
-import { hapticSelect } from '@/src/ui/haptics';
+import { hapticMark, hapticSelect, hapticWarn } from '@/src/ui/haptics';
 import { Screen } from '@/src/ui/Screen';
 import { colors, type } from '@/src/ui/theme';
 
 export default function ClubPickScreen() {
-  const { id, hole, noGps, mode } = useLocalSearchParams<{
+  const { id, hole, noGps } = useLocalSearchParams<{
     id: string;
     hole: string;
     noGps?: string;
-    mode?: string;
   }>();
   const holeNumber = Number(hole);
   const withoutGps = noGps === '1';
-  const selectOnly = mode === 'select' || !withoutGps;
   const navigation = useNavigation();
   const { db, revision, bump } = useDb();
   const clubs = useMemo(() => listClubs(db, true), [db, revision]);
@@ -46,10 +45,9 @@ export default function ClubPickScreen() {
   const [selected, setSelected] = useState<Club | null>(null);
   const [typedYards, setTypedYards] = useState('');
   const sessionRef = useRef<ClubSpeechSession | null>(null);
-  const voiceReady = speechRecognitionAvailable();
 
   useEffect(() => {
-    navigation.setOptions({ title: withoutGps ? COPY.forgotShot : COPY.bag });
+    navigation.setOptions({ title: withoutGps ? COPY.forgotShot : COPY.pickClub });
   }, [navigation, withoutGps]);
 
   useEffect(() => {
@@ -89,15 +87,55 @@ export default function ClubPickScreen() {
     target,
   );
 
-  const choose = (club: Club) => {
+  useWatchClubList(
+    {
+      db,
+      roundId: id,
+      holeNumber,
+      readOnly: false,
+      bump,
+      onMarked: () => {
+        if (!withoutGps) router.back();
+      },
+      labelForClub: (clubId) => clubs.find((club) => club.id === clubId)?.shortName ?? null,
+    },
+    {
+      top3: ranked.map((club) => ({ id: club.id, shortName: club.shortName })),
+      bag: clubs.map((club) => ({ id: club.id, shortName: club.shortName })),
+      holeNumber,
+      yardsToGreen: toGreen.yards,
+      yardsQuality: toGreen.quality,
+      lastClubId: selected?.id ?? null,
+    },
+  );
+
+  const markClub = async (club: Club, force = false) => {
     const next = selectClubForMark(club, clubs);
-    if (!next || !id) return;
+    if (!next || !id || Number.isNaN(holeNumber)) return;
     hapticSelect();
     setSelected(next);
-    setRoundLastClub(db, id, next.id);
-    bump();
-    if (selectOnly && !withoutGps) {
-      router.back();
+    if (withoutGps) return;
+    setBusy(true);
+    try {
+      const { plan } = await markShotWithClub(db, {
+        roundId: id,
+        holeNumber,
+        clubId: next.id,
+        force,
+      });
+      const waiting = promptForPlan(plan, () => {
+        void markClub(next, true);
+      });
+      if (!waiting && plan.status === 'commit') {
+        hapticMark();
+        bump();
+        router.back();
+      }
+    } catch (err) {
+      hapticWarn();
+      Alert.alert('Couldn’t mark', err instanceof Error ? err.message : 'Try again.');
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -129,7 +167,7 @@ export default function ClubPickScreen() {
         sessionRef.current?.stop();
         sessionRef.current = null;
         setListening(false);
-        choose(matched);
+        void markClub(matched);
       } else {
         setSelected(matched);
       }
@@ -167,11 +205,9 @@ export default function ClubPickScreen() {
 
   return (
     <Screen>
-      <Text style={styles.title}>{withoutGps ? COPY.forgotShot : COPY.fullBag}</Text>
+      <Text style={styles.title}>{withoutGps ? COPY.forgotShot : COPY.pickClub}</Text>
       <Text style={styles.lede}>
-        {withoutGps
-          ? 'Pick a club, then log it. This doesn’t mark a distance.'
-          : 'Tap a club to use it. Mark still happens on the hole.'}
+        {withoutGps ? 'Pick a club, then log it. This doesn’t mark a distance.' : COPY.pickClubLede}
       </Text>
 
       {withoutGps ? (
@@ -187,7 +223,7 @@ export default function ClubPickScreen() {
       ) : null}
 
       <BigButton
-        label={listening ? COPY.listening : voiceReady ? COPY.sayClub : COPY.sayClub}
+        label={listening ? COPY.listening : COPY.sayClub}
         variant="secondary"
         disabled={busy}
         onPress={() => void onListen()}
@@ -196,27 +232,24 @@ export default function ClubPickScreen() {
       {voiceError ? <Text style={styles.warn}>{voiceError}</Text> : null}
 
       {ranked.length > 0 ? (
-        <>
-          <Text style={styles.label}>{COPY.top3}</Text>
+        <View style={styles.top3}>
           {ranked.map((club) => (
-            <ClubButton
+            <Pressable
               key={club.id}
-              featured
-              selected={selected?.id === club.id}
               disabled={busy}
-              shortName={club.shortName}
-              name={club.name}
-              meta={`${Math.round(club.avgYards)} yd`}
               onPress={() => {
                 const full = clubs.find((row) => row.id === club.id);
-                if (full) choose(full);
+                if (full) void markClub(full);
               }}
-            />
+              style={[styles.chip, selected?.id === club.id && styles.chipOn]}>
+              <Text style={styles.chipText}>{club.shortName}</Text>
+            </Pressable>
           ))}
-        </>
-      ) : null}
+        </View>
+      ) : (
+        <Text style={styles.unlock}>{COPY.top3Unlock}</Text>
+      )}
 
-      <Text style={styles.label}>{COPY.fullBag}</Text>
       <View style={styles.grid}>
         {clubs.map((club) => (
           <ClubButton
@@ -225,17 +258,13 @@ export default function ClubPickScreen() {
             disabled={busy}
             shortName={club.shortName}
             name={club.name}
-            onPress={() => choose(club)}
+            onPress={() => void markClub(club)}
           />
         ))}
       </View>
 
       {withoutGps ? (
-        <BigButton
-          label="Log shot"
-          disabled={busy || !selected}
-          onPress={onLogMissed}
-        />
+        <BigButton label="Log shot" disabled={busy || !selected} onPress={onLogMissed} />
       ) : null}
     </Screen>
   );
@@ -244,9 +273,9 @@ export default function ClubPickScreen() {
 const styles = StyleSheet.create({
   title: { color: colors.cream, fontSize: type.hole, fontWeight: '900' },
   lede: { color: colors.muted, fontSize: type.body, lineHeight: 22 },
-  label: { color: colors.cream, fontSize: type.meta, fontWeight: '800', marginTop: 4 },
   warn: { color: colors.orange, fontSize: type.meta, fontWeight: '700' },
   heard: { color: colors.cream, fontSize: type.body, fontWeight: '700' },
+  unlock: { color: colors.muted, fontSize: type.meta, fontWeight: '700' },
   yardsInput: {
     minHeight: 56,
     borderWidth: 1,
@@ -257,5 +286,18 @@ const styles = StyleSheet.create({
     fontSize: 18,
     backgroundColor: colors.bgElevated,
   },
+  top3: { flexDirection: 'row', gap: 8 },
+  chip: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bgElevated,
+  },
+  chipOn: { borderColor: colors.lime, backgroundColor: '#1C3A24' },
+  chipText: { color: colors.cream, fontWeight: '800', fontSize: type.chip },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
 });

@@ -44,7 +44,7 @@ export type Round = {
   teeRating: number | null;
   teeSlope: number | null;
   teeTotalYards: number | null;
-  /** Last club used with Mark. Sticky for the next Mark. */
+  /** Last club used on a mark. Sticky for Same club. */
   lastClubId: string | null;
 };
 

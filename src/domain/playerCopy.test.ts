@@ -20,6 +20,12 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.nearbyHint, 'Courses near you — pull to refresh.');
   assert.equal(COPY.waitingOnGreen, 'Waiting on green location.');
   assert.equal(COPY.longPressGreen, 'Long-press to set the green');
+  assert.equal(COPY.pickClub, 'Pick a club');
+  assert.equal(COPY.pickClubLede, 'Picking a club marks where you hit from.');
+  assert.equal(COPY.sayClub, 'Say a club');
+  assert.equal(COPY.top3Unlock, 'Top clubs unlock after a few shots');
+  assert.equal(COPY.stickyClub, 'Same club');
+  assert.equal(COPY.undoLast, 'Undo last');
 });
 
 test('player copy never mentions API, OSM, invent, centroid, or meters', () => {

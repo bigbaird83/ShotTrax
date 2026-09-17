@@ -29,7 +29,7 @@ test('sticky club skips a club that was turned off', () => {
   assert.equal(sticky?.id, 'club_8i');
 });
 
-test('voice selects a club for the next Mark and does not imply a commit', () => {
+test('voice maps to a bag club without inventing a match', () => {
   const clubs = bag();
   const heard = matchSpokenClub('seven iron', clubs);
   const selected = selectClubForMark(heard, clubs);

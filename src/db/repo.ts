@@ -9,6 +9,7 @@ import { averageWithBadges, type ClubAverage } from '../domain/averages';
 import { isValidLatLng } from '../domain/latLng';
 import { clampPenaltyStrokes, scoreAfterPenalty } from '../domain/penalty';
 import { includeInDistanceAverages, planNoGpsShot } from '../domain/shotSource';
+import { planUndoLastShot } from '../domain/undoLastShot';
 import type {
   Club,
   FixQuality,
@@ -551,7 +552,7 @@ export function insertOpenShot(
   db: SQLiteDatabase,
   args: {
     holeId: string;
-    clubId: string;
+    clubId: string | null;
     seq: number;
     lat: number;
     lng: number;
@@ -580,6 +581,40 @@ export function insertOpenShot(
     ],
   );
   return id;
+}
+
+export function reopenShot(db: SQLiteDatabase, shotId: string): void {
+  db.runSync(
+    `UPDATE shots SET
+      end_lat = NULL, end_lng = NULL, end_accuracy_m = NULL, end_fix_quality = NULL,
+      distance_yards = NULL, impossible_jump = 0, ended_at = NULL,
+      fix_quality = start_fix_quality
+     WHERE id = ?`,
+    [shotId],
+  );
+}
+
+export function deleteShot(db: SQLiteDatabase, shotId: string): void {
+  db.runSync('DELETE FROM shots WHERE id = ?', [shotId]);
+}
+
+export function undoLastShot(
+  db: SQLiteDatabase,
+  roundId: string,
+  holeNumber: number,
+): { ok: true } | { ok: false; reason: 'empty' } {
+  const hole = getHole(db, roundId, holeNumber);
+  if (!hole) return { ok: false, reason: 'empty' };
+  const plan = planUndoLastShot(listShotsForHole(db, hole.id));
+  if (!plan) return { ok: false, reason: 'empty' };
+  db.withTransactionSync(() => {
+    deleteShot(db, plan.deleteShotId);
+    if (plan.reopenShotId) {
+      reopenShot(db, plan.reopenShotId);
+    }
+    setRoundLastClub(db, roundId, plan.nextLastClubId);
+  });
+  return { ok: true };
 }
 
 export function applyClosedShot(

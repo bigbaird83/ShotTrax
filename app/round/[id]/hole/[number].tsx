@@ -19,7 +19,6 @@ import {
   listPenaltiesForHole,
   listShotsForHole,
   setHoleGreen,
-  setRoundLastClub,
   updateHolePar,
   updateHoleScore,
 } from '@/src/db/repo';
@@ -33,8 +32,9 @@ import type { Club, GpsFix, PenaltyReason } from '@/src/domain/types';
 import { matchSpokenClub, speechContextualStrings } from '@/src/domain/voiceClub';
 import { yardsToGreen } from '@/src/sensing/api';
 import { describeGpsSource, getCurrentFix } from '@/src/services/location';
-import { endOpenShot, markShotWithClub, promptForPlan, takeDrop } from '@/src/services/shotActions';
+import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot } from '@/src/services/shotActions';
 import { speechRecognitionAvailable, startClubSpeech, type ClubSpeechSession } from '@/src/services/speechClub';
+import { useWatchClubList } from '@/src/services/useWatchClubList';
 import { QualityBadge } from '@/src/ui/Badge';
 import { BigButton } from '@/src/ui/BigButton';
 import { GpsBanner } from '@/src/ui/GpsBanner';
@@ -64,6 +64,7 @@ export default function HoleScreen() {
   const [listening, setListening] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const sessionRef = useRef<ClubSpeechSession | null>(null);
+  const autoOpened = useRef<number | null>(null);
 
   const round = useMemo(() => getRound(db, id), [db, id, revision]);
   const hole = useMemo(() => getHole(db, id, holeNumber), [db, id, holeNumber, revision]);
@@ -161,31 +162,30 @@ export default function HoleScreen() {
     };
   }, []);
 
-  if (!round || !hole) {
-    return (
-      <View style={styles.fill}>
-        <Text style={styles.muted}>Round or hole not found.</Text>
-      </View>
-    );
-  }
+  useEffect(() => {
+    if (!round || !hole || readOnly || shots.length > 0 || Number.isNaN(holeNumber)) return;
+    if (autoOpened.current === holeNumber) return;
+    autoOpened.current = holeNumber;
+    router.push(`/round/${id}/club-pick?hole=${holeNumber}`);
+  }, [round, hole, readOnly, shots.length, holeNumber, id]);
 
   const green =
-    hole.greenLat != null && hole.greenLng != null
+    hole?.greenLat != null && hole.greenLng != null
       ? { lat: hole.greenLat, lng: hole.greenLng }
       : null;
   const pins = {
     front: pinOrNull(
-      hole.greenFrontLat != null && hole.greenFrontLng != null
+      hole?.greenFrontLat != null && hole.greenFrontLng != null
         ? { lat: hole.greenFrontLat, lng: hole.greenFrontLng }
         : null,
     ),
     middle: pinOrNull(green),
     back: pinOrNull(
-      hole.greenBackLat != null && hole.greenBackLng != null
+      hole?.greenBackLat != null && hole.greenBackLng != null
         ? { lat: hole.greenBackLat, lng: hole.greenBackLng }
         : null,
     ),
-    depthYards: hole.greenDepthYards,
+    depthYards: hole?.greenDepthYards ?? null,
   };
   const yardsToGreenResult = yardsToGreen(fix, green);
   const fmb = hasApiFmb(pins) ? formatFmbRow(yardsToGreenDepth(fix, pins)) : null;
@@ -198,30 +198,54 @@ export default function HoleScreen() {
     averages.map((row) => clubToRankInput(row.club, row)),
     target,
   );
+
+  useWatchClubList(
+    {
+      db,
+      roundId: id,
+      holeNumber,
+      readOnly,
+      bump,
+      onMarked: () => setCheckNonce((n) => n + 1),
+      labelForClub: (clubId) => clubMap[clubId]?.shortName ?? clubs.find((club) => club.id === clubId)?.shortName ?? null,
+    },
+    {
+      top3: ranked.map((club) => ({ id: club.id, shortName: club.shortName })),
+      bag: clubs.map((club) => ({ id: club.id, shortName: club.shortName })),
+      holeNumber,
+      yardsToGreen: toGreen.yards,
+      yardsQuality: toGreen.quality,
+      lastClubId: sticky?.id ?? null,
+    },
+  );
+
+  if (!round || !hole) {
+    return (
+      <View style={styles.fill}>
+        <Text style={styles.muted}>Round or hole not found.</Text>
+      </View>
+    );
+  }
+
   const simBanner =
     Device.isDevice === false || fix?.mocked ? COPY.simulator : describeGpsSource(fix ?? { mocked: false, isSimulator: false });
   const voiceReady = speechRecognitionAvailable();
 
-  const selectClub = (club: Club) => {
-    const next = selectClubForMark(club, clubs);
-    if (!next) return;
-    hapticSelect();
-    setRoundLastClub(db, id, next.id);
-    bump();
-  };
-
-  const onMark = async (force = false) => {
-    if (readOnly || !sticky) return;
+  const markClub = async (club: Club | null, force = false) => {
+    const next = club ? selectClubForMark(club, clubs) : null;
+    if (readOnly) return;
+    if (club && !next) return;
+    if (club) hapticSelect();
     setBusy(true);
     try {
       const { plan } = await markShotWithClub(db, {
         roundId: id,
         holeNumber,
-        clubId: sticky.id,
+        clubId: next?.id ?? null,
         force,
       });
       const waiting = promptForPlan(plan, () => {
-        void onMark(true);
+        void markClub(club, true);
       });
       if (!waiting && plan.status === 'commit') {
         hapticMark();
@@ -234,6 +258,19 @@ export default function HoleScreen() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const onMark = (force = false) => {
+    if (!sticky) return Promise.resolve();
+    return markClub(sticky, force);
+  };
+
+  const onUndo = () => {
+    if (readOnly) return;
+    const ok = undoLastShot(db, { roundId: id, holeNumber });
+    if (!ok) return;
+    hapticTap();
+    bump();
   };
 
   const onEndShot = async (force = false) => {
@@ -302,7 +339,7 @@ export default function HoleScreen() {
     const matched = matchSpokenClub(text, clubs);
     if (matched) {
       setVoiceError(null);
-      selectClub(matched);
+      void markClub(matched);
       if (isFinal) {
         sessionRef.current?.stop();
         sessionRef.current = null;
@@ -407,7 +444,7 @@ export default function HoleScreen() {
               key={club.id}
               onPress={() => {
                 const full = clubs.find((row) => row.id === club.id);
-                if (full) selectClub(full);
+                if (full) void markClub(full);
               }}
               style={[styles.top3Chip, sticky?.id === club.id && styles.chipOn]}>
               <Text style={styles.top3Text}>{club.shortName}</Text>
@@ -419,7 +456,7 @@ export default function HoleScreen() {
       <ThumbZone>
         <View style={styles.clubRow}>
           <Pressable
-            onPress={() => router.push(`/round/${id}/club-pick?hole=${holeNumber}&mode=select`)}
+            onPress={() => router.push(`/round/${id}/club-pick?hole=${holeNumber}`)}
             style={styles.clubChip}>
             <Text style={styles.clubShort}>{sticky?.shortName ?? 'Club'}</Text>
             <Text style={styles.clubName}>{sticky?.name ?? COPY.bag}</Text>
@@ -433,7 +470,7 @@ export default function HoleScreen() {
 
         <View style={styles.markWrap}>
           <BigButton
-            label={COPY.mark}
+            label={sticky ? `${COPY.stickyClub} · ${sticky.shortName}` : COPY.stickyClub}
             disabled={busy || readOnly || !sticky}
             onPress={() => void onMark()}
           />
@@ -442,7 +479,19 @@ export default function HoleScreen() {
 
         {!readOnly ? (
           <View style={styles.row}>
+            <BigButton
+              label={COPY.undoLast}
+              variant="ghost"
+              style={{ flex: 1 }}
+              disabled={busy || shots.length === 0}
+              onPress={onUndo}
+            />
             <BigButton label={COPY.drop} variant="secondary" style={{ flex: 1 }} onPress={() => setDropOpen(true)} />
+          </View>
+        ) : null}
+
+        {!readOnly ? (
+          <View style={styles.row}>
             <BigButton
               label={COPY.penalty}
               variant="ghost"
@@ -552,12 +601,27 @@ export default function HoleScreen() {
           {!readOnly ? (
             <>
               <BigButton
+                label={COPY.markWithoutClub}
+                variant="secondary"
+                disabled={busy}
+                onPress={() => {
+                  setScoreOpen(false);
+                  void markClub(null);
+                }}
+              />
+              <BigButton
                 label={COPY.forgotShot}
                 variant="secondary"
                 onPress={() => {
                   setScoreOpen(false);
                   router.push(`/round/${id}/club-pick?hole=${holeNumber}&noGps=1`);
                 }}
+              />
+              <BigButton
+                label={COPY.undoLast}
+                variant="ghost"
+                disabled={shots.length === 0}
+                onPress={onUndo}
               />
               <BigButton
                 label={COPY.endShot}

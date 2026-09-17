@@ -2,7 +2,7 @@
 
 Phone GPS golf shot tracker (no club sensors). **This branch is P5.x** on P1–P5.2 (GPS mark-shot, scores, club averages, hole map trails, voice club pick, top-3, penalties, nearby courses, OSM outlines).
 
-P5.x is the on-course hero: **sticky last club + one Mark**, voice sets the club immediately (no confirm), Drop vs Penalty, delete round, haptics, and a thumb-zone layout. **Player voice only** on screen — no API/OSM/GPS-meter footnotes. F/M/B distances show only when course data includes front and back pins (never invented from a single green). Rating and slope sit on the tee. Watch, putts (P5.y), StoreKit, and Photos stay out of scope.
+P5.x is the on-course hero: **pick a club to mark GPS**, sticky **Same club** one-tap, voice applies immediately (no confirm), Drop vs Penalty, delete round, haptics, and a thumb-zone layout. **Player voice only** on screen — no API/OSM/GPS-meter footnotes. F/M/B distances show only when course data includes front and back pins (never invented from a single green). Rating and slope sit on the tee. An Apple Watch companion picks clubs (top-3 + bag + Same club). Putts (P5.y), StoreKit, and Photos stay out of scope.
 
 User-facing name is **ShotTraxx** (`app.json` `expo.name`, iOS `CFBundleDisplayName`, Android `label` / home screen). Bundle ID `com.shottrax.app` and Expo slug `shottrax` stay unchanged (App Store ID). Home-screen icon is the Doc + Lead locked mark at `assets/images/icon.png` (see `assets/images/README.md`).
 
@@ -116,11 +116,11 @@ eas submit -p ios
 
 | Permission | When |
 | --- | --- |
-| **Location When In Use** | Club confirm (shot start) and the next mark (shot end / yards). Green estimate can reuse the current GPS. ShotTraxx does not invent coordinates. |
+| **Location When In Use** | Picking a club marks where you hit from. The next club pick closes the prior shot. Green estimate can reuse the current GPS. ShotTraxx does not invent coordinates. |
 | **Microphone** | Only after **Say a club**. Used to capture the utterance. |
-| **Speech Recognition** (iOS) | Maps the utterance to a bag club. You still tap **Confirm**. |
+| **Speech Recognition** (iOS) | Maps the utterance to a bag club and applies it immediately. |
 
-There is no Watch / motion / mic-shot-detect permission. Those assists are stubbed off. **Add shot without GPS** does not request location and does not store lat/lng.
+Watch Connectivity carries the club list to a paired Apple Watch. Watch motion / mic-shot-detect stay off. **Add shot without GPS** does not request location and does not store lat/lng.
 
 ## Maps (`react-native-maps`)
 
@@ -206,7 +206,8 @@ ShotTraxx **does not synthesize a fairway or fake points**.
 ## Limitations
 
 - OSM overlays only where mapped; unmapped holes stay empty.
-- No Watch motion, Plays Like, F/M/B pins, auto-detect, or mic-based shot detect (stubs only).
+- No Watch motion, Plays Like invented from a single centroid, auto-detect, or mic-based shot detect.
+- Watch club-pick (top-3 + bag + Same club) ships with this IPA. Crown / double-tap stay out.
 - Local SQLite only (no account / cloud).
 - iOS is the target; Android location is wired but maps may need a Google key.
 - Nearby course picker requires Golf Courses API key `GOLF_COURSES_API_KEY` (see `NOTES.md`). Smoke nearby search on a device/EAS build if this environment cannot TLS to golfcoursesapi.com.

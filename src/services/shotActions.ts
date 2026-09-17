@@ -9,13 +9,16 @@ import {
   insertPenalty,
   nextShotSeq,
   setRoundLastClub,
+  undoLastShot as undoLastShotInRepo,
 } from '../db/repo';
 import { planDrop } from '../domain/drop';
 import { worstFixQuality } from '../domain/fixQuality';
 import type { ClosedShotPlan, MarkPlan } from '../domain/markShot';
+import { preferWatchFix } from '../domain/preferWatchFix';
 import type { GpsFix, OpenShot, PenaltyReason } from '../domain/types';
 import { COPY } from '../domain/playerCopy';
-import { acceptFix, forceMark, getFix } from '../sensing/api';
+import { acceptFix, forceMark } from '../sensing/api';
+import { getCurrentFix } from './location';
 
 export function promptForPlan(plan: MarkPlan, onForce: () => void): boolean {
   if (plan.status === 'needs_force_poor_gps') {
@@ -78,15 +81,39 @@ function decide(fix: GpsFix, open: OpenShot | null, force: boolean): MarkPlan {
   };
 }
 
+export async function resolveMarkFix(watchFix?: GpsFix | null): Promise<GpsFix> {
+  let phoneFix: GpsFix | null = null;
+  let phoneError: unknown = null;
+  try {
+    phoneFix = await getCurrentFix();
+  } catch (err) {
+    phoneError = err;
+  }
+  const chosen = preferWatchFix({
+    watchFix: watchFix ?? null,
+    phoneFix,
+    nowMs: Date.now(),
+  });
+  if (chosen.fix) return chosen.fix;
+  if (phoneError instanceof Error) throw phoneError;
+  throw new Error(COPY.locationOff);
+}
+
 export async function markShotWithClub(
   db: SQLiteDatabase,
-  args: { roundId: string; holeNumber: number; clubId: string; force?: boolean },
+  args: {
+    roundId: string;
+    holeNumber: number;
+    clubId: string | null;
+    force?: boolean;
+    watchFix?: GpsFix | null;
+  },
 ): Promise<{ plan: MarkPlan; fix: GpsFix }> {
   const hole = getHole(db, args.roundId, args.holeNumber);
   if (!hole) {
     throw new Error(`Hole ${args.holeNumber} not found`);
   }
-  const fix = await getFix();
+  const fix = await resolveMarkFix(args.watchFix);
   const open = getOpenShotForHole(db, hole.id);
   const plan = decide(fix, open, Boolean(args.force));
   if (plan.status !== 'commit') {
@@ -106,7 +133,9 @@ export async function markShotWithClub(
       accuracyM: fix.accuracyM,
       startFixQuality: plan.startFixQuality,
     });
-    setRoundLastClub(db, args.roundId, args.clubId);
+    if (args.clubId) {
+      setRoundLastClub(db, args.roundId, args.clubId);
+    }
   });
   return { plan, fix };
 }
@@ -123,7 +152,7 @@ export async function endOpenShot(
   if (!open) {
     throw new Error('No open shot to close. Mark a shot first.');
   }
-  const fix = await getFix();
+  const fix = await resolveMarkFix();
   const plan = decide(fix, open, Boolean(args.force));
   if (plan.status !== 'commit' || !plan.closePrior) {
     return { plan, fix };
@@ -150,6 +179,13 @@ export function addNoGpsShot(
   return id;
 }
 
+export function undoLastShot(
+  db: SQLiteDatabase,
+  args: { roundId: string; holeNumber: number },
+): boolean {
+  return undoLastShotInRepo(db, args.roundId, args.holeNumber).ok;
+}
+
 export async function takeDrop(
   db: SQLiteDatabase,
   args: {
@@ -165,7 +201,7 @@ export async function takeDrop(
     throw new Error(`Hole ${args.holeNumber} not found`);
   }
   const drop = planDrop({ reason: args.reason, note: args.note });
-  const fix = await getFix();
+  const fix = await resolveMarkFix();
   const open = getOpenShotForHole(db, hole.id);
   const plan = decide(fix, open, Boolean(args.force));
   if (open && plan.status !== 'commit') {
