@@ -3,7 +3,7 @@ export type FixQuality = 'good' | 'soft' | 'forced';
 /** Missed-mark / no GPS. Not a GPS quality; never a distance or top-3 sample. */
 export type ShotFixQuality = FixQuality | 'none';
 
-/** How the shot was logged. `no_gps` never stores coordinates. `placed` is a player map tap (catch-up). */
+/** How the shot was logged. `no_gps` never stores coordinates. `placed` is two player map taps. */
 export type ShotSource = 'gps' | 'no_gps' | 'placed';
 
 export type PenaltyReason = 'water' | 'ob' | 'unplayable' | 'other';
@@ -95,7 +95,7 @@ export type Shot = {
   endLng: number | null;
   endAccuracyM: number | null;
   endFixQuality: ShotFixQuality | null;
-  /** Haversine yards from GPS marks or consecutive placed map points. Always null on `no_gps`. */
+  /** Haversine yards from GPS marks or two placed map points. Always null on `no_gps`. */
   distanceYards: number | null;
   /** Optional typed yards for UI/score notes. Never a club-average sample. */
   typedYards: number | null;

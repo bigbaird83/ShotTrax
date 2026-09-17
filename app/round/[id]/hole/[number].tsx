@@ -30,7 +30,7 @@ import { clubPickLeaveHref, clubPickLeaveRunsAcceptFix, planClubPickLeave } from
 import { COPY, finishPuttsChip, finishShotChip, formatHoleHeader, markedSuggestedMessage, voiceFailRecovery } from '@/src/domain/playerCopy';
 import { canAdvanceHole, holesNeedingOpenShots } from '@/src/domain/holeAdvance';
 import { isPutterClubId } from '@/src/domain/defaultBag';
-import { planPlacedMark } from '@/src/domain/shotSource';
+import { planPlacedShot } from '@/src/domain/shotSource';
 import type { LatLng } from '@/src/domain/latLng';
 import { formatPenaltyRow, PENALTY_REASONS, totalPenaltyStrokes } from '@/src/domain/penalty';
 import {
@@ -85,8 +85,9 @@ export default function HoleScreen() {
   const [scoreOpen, setScoreOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [placeFrom, setPlaceFrom] = useState<LatLng | null>(null);
+  const [placeTo, setPlaceTo] = useState<LatLng | null>(null);
   const [placeClubOpen, setPlaceClubOpen] = useState(false);
-  const [placeMode, setPlaceMode] = useState<'off' | 'from'>('off');
+  const [placeMode, setPlaceMode] = useState<'off' | 'from' | 'to'>('off');
   const placing = placeMode !== 'off' || placeClubOpen;
   const [puttOpen, setPuttOpen] = useState(false);
   const [puttSheetHole, setPuttSheetHole] = useState(holeNumber);
@@ -150,15 +151,12 @@ export default function HoleScreen() {
       ),
     [db, holes, holeNumber, revision],
   );
-  const openCoord = useMemo(() => {
-    const row = [...shots].reverse().find((shot) => shot.endedAt == null && shot.startLat != null && shot.startLng != null);
-    return row?.startLat != null && row.startLng != null ? { lat: row.startLat, lng: row.startLng } : null;
-  }, [shots]);
-  const placedMark = placeFrom ? planPlacedMark(placeFrom, openCoord) : null;
-  const placedYards = placedMark && placedMark.ok ? placedMark.closePrior?.distanceYards ?? null : null;
+  const placedPlan = placeFrom && placeTo ? planPlacedShot(placeFrom, placeTo) : null;
+  const placedYards = placedPlan && placedPlan.ok ? placedPlan.distanceYards : null;
 
   const resetPlace = () => {
     setPlaceFrom(null);
+    setPlaceTo(null);
     setPlaceClubOpen(false);
     setPlaceMode('off');
   };
@@ -616,12 +614,13 @@ export default function HoleScreen() {
   };
 
   const commitPlaced = (clubId: string, force = false) => {
-    if (!placeFrom) return;
+    if (!placeFrom || !placeTo) return;
     const result = addPlacedShot(db, {
       roundId: round.id,
       holeNumber,
       clubId,
       from: placeFrom,
+      to: placeTo,
       force,
     });
     if (result.status === 'needs_confirm') {
@@ -636,9 +635,7 @@ export default function HoleScreen() {
       return;
     }
     hapticMark();
-    setPlaceFrom(null);
-    setPlaceClubOpen(false);
-    setPlaceMode('from');
+    resetPlace();
     bump();
   };
 
@@ -671,14 +668,29 @@ export default function HoleScreen() {
           fmb={fmb}
           osmOverlay={osmOverlay}
           placedFrom={placeFrom}
-          placedTo={null}
-          placeHint={placing ? COPY.placeFromHint : null}
+          placedTo={placeTo}
+          placeHint={
+            placing
+              ? placeTo
+                ? `${placedYards ?? '—'} yd · ${COPY.pickClub}`
+                : placeFrom
+                  ? COPY.placeToHint
+                  : COPY.placeFromHint
+              : null
+          }
           onPlacePoint={
             readOnly || placeMode === 'off' || placeClubOpen
               ? undefined
               : (coord) => {
-                  setPlaceFrom(coord);
-                  setPlaceClubOpen(true);
+                  if (placeMode === 'from') {
+                    setPlaceFrom(coord);
+                    setPlaceMode('to');
+                    return;
+                  }
+                  if (placeMode === 'to') {
+                    setPlaceTo(coord);
+                    setPlaceClubOpen(true);
+                  }
                 }
           }
           onDropGreenEstimate={
@@ -952,7 +964,7 @@ export default function HoleScreen() {
         onClose={resetPlace}>
         <ScrollView contentContainerStyle={styles.sheetPad}>
           <Text style={styles.muted}>
-            {placedYards != null ? `${placedYards} yd` : COPY.placeFromHint}
+            {placedYards != null ? `${placedYards} yd` : COPY.placeToHint}
           </Text>
           <View style={styles.placeGrid}>
             {clubs.filter((club) => !isPutterClubId(club.id)).map((club) => (

@@ -3,14 +3,13 @@ import { test } from 'node:test';
 import { MAX_SHOT_YD } from '../config/sensing';
 import { averageWithBadges } from './averages';
 import {
-  confirmPlacedMark,
+  confirmPlacedShot,
   hasClosedGpsTrail,
   includeInDistanceAverages,
   includeInTop3Samples,
   isNoGpsShot,
   parseTypedYards,
   planNoGpsShot,
-  planPlacedMark,
   planPlacedShot,
 } from './shotSource';
 import type { Shot } from './types';
@@ -187,34 +186,30 @@ test('P1 sensing lock: MAX_SHOT_YD is 400; good/soft/forced still average', () =
   assert.equal(a.includesForced, true);
 });
 
-test('catch-up placed mark is one map point then club; consecutive points haversine like a live mark', () => {
-  const tee = { lat: 37.0, lng: -122.0 };
-  const fairway = { lat: 37.0 + 150 / 111_320, lng: -122.0 };
-  const first = planPlacedMark(tee, null);
-  assert.equal(first.ok, true);
-  if (!first.ok) return;
-  assert.equal(first.source, 'placed');
-  assert.equal(first.closePrior, null);
-  assert.equal(first.fixQuality, null);
-  assert.equal(first.startFixQuality, null);
-  assert.equal(first.typedYards, null);
-  assert.equal(includeInDistanceAverages({ source: 'placed', distanceYards: null }), false);
-
-  const second = planPlacedMark(fairway, tee);
-  assert.equal(second.ok, true);
-  if (!second.ok) return;
-  assert.ok(second.closePrior);
-  assert.equal(second.closePrior?.source, 'placed');
-  assert.ok(second.closePrior && second.closePrior.distanceYards > 0);
-  assert.equal(second.closePrior?.typedYards, null);
-  assert.equal(second.closePrior?.fixQuality, null);
-  assert.equal(includeInDistanceAverages(second.closePrior!), true);
-  assert.equal(includeInTop3Samples(second.closePrior!), true);
-  assert.equal(includeInDistanceAverages({ ...second.closePrior!, clubId: 'club_putter' }), false);
-  assert.equal(hasClosedGpsTrail({ ...second.closePrior!, endedAt: 't' }), true);
-  assert.equal(isNoGpsShot(second.closePrior!), false);
-  assert.equal(planPlacedMark({ lat: 0, lng: 0 }, null).ok, false);
-  assert.deepEqual(confirmPlacedMark(first, false), { status: 'commit' });
+test('catch-up placed shot is two map points, haversine yards immediately, counts in averages', () => {
+  const from = { lat: 37.0, lng: -122.0 };
+  const to = { lat: 37.0 + 150 / 111_320, lng: -122.0 };
+  const plan = planPlacedShot(from, to);
+  assert.equal(plan.ok, true);
+  if (!plan.ok) return;
+  assert.equal(plan.source, 'placed');
+  assert.equal(plan.typedYards, null);
+  assert.equal(plan.fixQuality, null);
+  assert.equal(plan.startFixQuality, null);
+  assert.equal(plan.endFixQuality, null);
+  assert.equal(plan.startAccuracyM, null);
+  assert.equal(plan.endAccuracyM, null);
+  assert.ok(plan.distanceYards != null && plan.distanceYards > 0);
+  assert.equal(plan.impossibleJump, false);
+  assert.equal(plan.startLat, from.lat);
+  assert.equal(plan.endLat, to.lat);
+  assert.equal(includeInDistanceAverages(plan), true);
+  assert.equal(includeInTop3Samples(plan), true);
+  assert.equal(includeInDistanceAverages({ ...plan, clubId: 'club_putter' }), false);
+  assert.equal(isNoGpsShot(plan), false);
+  assert.equal(hasClosedGpsTrail({ ...plan, endedAt: 't' }), true);
+  assert.equal(planPlacedShot({ lat: 0, lng: 0 }, to).ok, false);
+  assert.deepEqual(confirmPlacedShot(plan, false), { status: 'commit' });
 });
 
 test('placed shots have no soft/good quality and never go through acceptFix', () => {
@@ -233,19 +228,19 @@ test('placed shots have no soft/good quality and never go through acceptFix', ()
   assert.equal(a.includesForced, false);
 });
 
-test('placed 400-yard cap asks before a silent save when closing the prior shot', () => {
+test('placed 400-yard cap asks before a silent save; confirm still has no GPS quality', () => {
   const from = { lat: 37.0, lng: -122.0 };
   const to = { lat: 37.01, lng: -122.0 };
-  const mark = planPlacedMark(to, from);
-  assert.equal(mark.ok, true);
-  if (!mark.ok) return;
-  assert.equal(mark.closePrior?.impossibleJump, true);
-  assert.ok(mark.closePrior && mark.closePrior.distanceYards > MAX_SHOT_YD);
-  assert.deepEqual(confirmPlacedMark(mark, false), {
+  const plan = planPlacedShot(from, to);
+  assert.equal(plan.ok, true);
+  if (!plan.ok) return;
+  assert.equal(plan.impossibleJump, true);
+  assert.ok(plan.distanceYards > MAX_SHOT_YD);
+  assert.deepEqual(confirmPlacedShot(plan, false), {
     status: 'needs_confirm',
-    yards: mark.closePrior!.distanceYards,
+    yards: plan.distanceYards,
   });
-  assert.deepEqual(confirmPlacedMark(mark, true), { status: 'commit' });
-  assert.equal(mark.fixQuality, null);
-  assert.equal(mark.source, 'placed');
+  assert.deepEqual(confirmPlacedShot(plan, true), { status: 'commit' });
+  assert.equal(plan.fixQuality, null);
+  assert.equal(plan.source, 'placed');
 });

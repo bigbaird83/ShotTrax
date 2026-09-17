@@ -14,7 +14,7 @@ import { averageWithBadges, type ClubAverage } from '../domain/averages';
 import { isValidLatLng } from '../domain/latLng';
 import { clampPenaltyStrokes, scoreAfterPenalty } from '../domain/penalty';
 import { clampPutts, planMadeIt, parsePuttLengths, serializePuttLengths, type PuttLengthId } from '../domain/putts';
-import { includeInDistanceAverages, planNoGpsShot, planPlacedMark } from '../domain/shotSource';
+import { includeInDistanceAverages, planNoGpsShot, planPlacedShot } from '../domain/shotSource';
 import { planUndoLastShot } from '../domain/undoLastShot';
 import type {
   Club,
@@ -628,24 +628,6 @@ export function getOpenShotForHole(db: SQLiteDatabase, holeId: string): OpenShot
   };
 }
 
-/** Latest open shot with a start pin — GPS or Placed. Catch-up consecutive marks. */
-export function getOpenCoordShotForHole(
-  db: SQLiteDatabase,
-  holeId: string,
-): { id: string; startLat: number; startLng: number } | null {
-  const row = db.getFirstSync<ShotRow>(
-    `SELECT * FROM shots
-     WHERE hole_id = ?
-       AND ended_at IS NULL
-       AND start_lat IS NOT NULL
-       AND start_lng IS NOT NULL
-     ORDER BY seq DESC LIMIT 1`,
-    [holeId],
-  );
-  if (!row || row.start_lat == null || row.start_lng == null) return null;
-  return { id: row.id, startLat: row.start_lat, startLng: row.start_lng };
-}
-
 export function nextShotSeq(db: SQLiteDatabase, holeId: string): number {
   const row = db.getFirstSync<{ n: number }>(
     'SELECT COALESCE(MAX(seq), 0) AS n FROM shots WHERE hole_id = ?',
@@ -801,25 +783,28 @@ export function insertNoGpsShot(
   return id;
 }
 
-/** Catch-up Add shot: map point is the start. Open until the next point. Never acceptFix. */
-export function insertPlacedOpenShot(
+/** Catch-up Add shot: two player map points. Haversine yards immediately. Never acceptFix. */
+export function insertPlacedShot(
   db: SQLiteDatabase,
   args: {
     holeId: string;
     clubId: string;
     seq: number;
     from: { lat: number; lng: number };
+    to: { lat: number; lng: number };
   },
 ): string | null {
-  const plan = planPlacedMark(args.from, null);
+  const plan = planPlacedShot(args.from, args.to);
   if (!plan.ok) return null;
   const id = newId();
+  const now = new Date().toISOString();
   db.runSync(
     `INSERT INTO shots (
       id, hole_id, club_id, seq,
       start_lat, start_lng, start_accuracy_m, start_fix_quality,
+      end_lat, end_lng, end_accuracy_m, end_fix_quality,
       distance_yards, typed_yards, fix_quality, impossible_jump, started_at, ended_at, source
-    ) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, 0, ?, NULL, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, NULL, NULL, ?, NULL, NULL, ?, ?, ?, ?)`,
     [
       id,
       args.holeId,
@@ -827,39 +812,16 @@ export function insertPlacedOpenShot(
       args.seq,
       plan.startLat,
       plan.startLng,
-      new Date().toISOString(),
+      plan.endLat,
+      plan.endLng,
+      plan.distanceYards,
+      plan.impossibleJump ? 1 : 0,
+      now,
+      now,
       plan.source,
     ],
   );
   return id;
-}
-
-export function applyPlacedClose(
-  db: SQLiteDatabase,
-  close: {
-    shotId: string;
-    endLat: number;
-    endLng: number;
-    distanceYards: number;
-    impossibleJump: boolean;
-  },
-): void {
-  db.runSync(
-    `UPDATE shots SET
-      end_lat = ?, end_lng = ?, end_accuracy_m = NULL, end_fix_quality = NULL,
-      distance_yards = ?, typed_yards = NULL,
-      fix_quality = CASE WHEN IFNULL(source, 'gps') = 'placed' THEN NULL ELSE fix_quality END,
-      impossible_jump = ?, ended_at = ?
-     WHERE id = ?`,
-    [
-      close.endLat,
-      close.endLng,
-      close.distanceYards,
-      close.impossibleJump ? 1 : 0,
-      new Date().toISOString(),
-      close.shotId,
-    ],
-  );
 }
 
 export function listPenaltiesForHole(db: SQLiteDatabase, holeId: string): HolePenalty[] {

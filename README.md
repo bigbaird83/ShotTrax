@@ -163,7 +163,7 @@ EAS credentials for `com.shottrax.app.watch` and `com.shottrax.app.watch.widget`
 7. **All clubs** stays on the hole sheet and opens the full bag. The sticky club chip (e.g. **2 i**) does the same. **Same club** is the one-tap repeat mark. Voice fail offers **Pick a club** (opens the bag) and **Say again** — never voice-only. **Undo last** if the club was wrong (or pick another before you walk). **Mark without club**, Drop / Penalty, and catch-up **Add shot** stay available. GPS at the club pick = shot **start**; if this hole already had an open GPS shot, that same fix is its **end** and yards are logged (haversine).
 8. **End last shot** closes an open GPS shot without starting a new one.
 9. **+ Penalty** adds 1–5 penalty strokes to the hole score, with reason water / OB / unplayable / other (optional note). Shown as a penalty row — not a map polyline. A penalty is **not a Shot for distance**: it never hits `acceptFix`, haversine, club averages, or top-3.
-10. **Add shot** (catch-up, including going back later): tap where you hit from, then pick the club. Repeat as many as you want. Distance is haversine yards between consecutive points, same as a live mark. Badge **Placed**. Counts in club averages because you confirmed the location. No typed yards, no invented GPS. Putter stays out of averages. No auto-putts. **Next** is always allowed; a chip flags unfinished shots or putts.
+10. **Add shot** (catch-up only, not live play): tap where you hit from **and** where it landed. Yards are haversine between those two points, shown immediately. Pick a club. Badge **Placed**. Counts in club averages because you confirmed the spots. No typed yards, no invented GPS. Live play is unchanged: club tap marks start; next mark or green closes it. Putter stays out of averages. No auto-putts. **Next** is always allowed; a chip flags unfinished shots or putts.
 11. **Putter** opens a putt sheet (phone + Watch) — not a GPS mark. Each putt gets a length bucket (**Under 3 ft · 3–10 · 10–20 · 20+**). Add more putts, each with its own bucket. **Made it** confirms the last putt and advances the hole (next hole + Pick a club, or summary after the last). Putts are stats only — no green GPS and not a map mark. Walking off the green / to the next tee does **not** invent putts. Play continues; a **Finish putts · Hole N** chip stays until you enter them. In-round **Menu** reaches Home, previous hole, and Settings.
 12. Finish the round for a scorecard. Club averages live on the Averages tab (putter is omitted — scoring / green play only). Stock wedges are **PW · 52° · 56° · 60°**.
 
@@ -178,25 +178,25 @@ Hole **score remains the source of truth**. If you also logged shots and/or pena
 
 ## Catch-up Add shot (`source = placed`)
 
-Use **Add shot** when you went back to a hole (or forgot a swing) and want to log it from the map.
+Use **Add shot** when you went back to a hole (or forgot a swing) and want to log it from the map. Not live play.
 
 | Field | Stored value |
 | --- | --- |
 | `source` | `placed` |
 | `fix_quality` / start / end quality | `NULL` — no soft/good/forced/none |
-| start lat, lng | the map point you tapped (where you hit from) |
-| end lat, lng | the next Add-shot point (consecutive), or blank while in play |
+| start/end lat, lng | the two points you tapped (from, then landed) |
 | accuracy | `NULL` |
-| `distance_yards` | haversine between consecutive points, same as a live mark |
+| `distance_yards` | haversine between those two points, shown immediately |
 | `typed_yards` | always `NULL` — no typed-yards form |
+| `ended_at` | set immediately (closed stroke) |
 
-**Never `acceptFix`.** Placed shots have **no** GPS quality. The **400-yard** cap still asks (**That looks too far. Mark anyway?**) before a silent save when closing the prior shot.
+**Never `acceptFix`.** Placed shots have **no** GPS quality. The **400-yard** cap still asks (**That looks too far. Mark anyway?**) before a silent save; confirming still stores `placed` with no quality.
 
-**Distance averages / top-3:** closed Placed shots count because you confirmed the locations. Open placed shots have no yards yet. **Putter** stays out. No auto-putts.
+**Distance averages / top-3:** included because you confirmed both spots. **Putter** stays out. Live play is unchanged: club tap marks start; next mark or green closes it.
 
 ## Add shot without GPS (`source = no_gps`)
 
-Legacy / forgotten-swing storage when there is no map pin. **Add shot** on the hole is the consecutive-point Placed flow above — not this form.
+Legacy / forgotten-swing storage when there is no map pin. **Add shot** on the hole is the two-point Placed flow above — not this form.
 
 | Field | Stored value |
 | --- | --- |
@@ -246,7 +246,7 @@ ShotTraxx **does not synthesize a fairway or fake points**.
 - On the iOS Simulator a **SIMULATOR / MOCK GPS** banner is shown.
 - Marks use whatever location the simulator (or a mock provider) reports.
 - If the pin never moves, closed GPS shots will be **0 yd** — that is honest, not a demo path.
-- Forgotten swings should use **Add shot** (map point + club) instead of inventing a pin.
+- Forgotten swings should use **Add shot** (two map points) instead of inventing a pin.
 - To test yards in Simulator: Features → Location → Custom Location, then move the pin between marks.
 
 ## Limitations
