@@ -13,7 +13,7 @@ import {
 import { averageWithBadges, type ClubAverage } from '../domain/averages';
 import { isValidLatLng } from '../domain/latLng';
 import { clampPenaltyStrokes, scoreAfterPenalty } from '../domain/penalty';
-import { clampPutts, parsePuttLengths, serializePuttLengths, type PuttLengthId } from '../domain/putts';
+import { clampPutts, planMadeIt, parsePuttLengths, serializePuttLengths, type PuttLengthId } from '../domain/putts';
 import { includeInDistanceAverages, planNoGpsShot } from '../domain/shotSource';
 import { planUndoLastShot } from '../domain/undoLastShot';
 import type {
@@ -529,14 +529,16 @@ export function updateHolePutts(
   ]);
 }
 
-/** Made it: persist buckets and mark putts entered. Walking off the green never calls this. */
+/** Made it: persist user-chosen buckets and mark putts entered. Walking off the green never calls this. */
 export function finishHolePutts(
   db: SQLiteDatabase,
   holeId: string,
   putts: number,
   lengths: PuttLengthId[],
 ): void {
-  updateHolePutts(db, holeId, putts, lengths, true);
+  const planned = planMadeIt({ putts, lengths });
+  if (!planned.ok) return;
+  updateHolePutts(db, holeId, planned.putts, planned.lengths, true);
 }
 
 /** Close an open GPS shot without an end pin — never invents coordinates. */

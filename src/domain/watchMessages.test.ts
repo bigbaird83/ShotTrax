@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { MIC_SHOT_ASSIST, WATCH_ASSIST } from '../sensing/assists';
+import { MIC_SHOT_ASSIST, PUTT_ASSIST, WATCH_ASSIST } from '../sensing/assists';
 import { SOFT_GPS_MAX_M, SOFT_GPS_MIN_M } from '../config/sensing';
 import { yardsToGreen } from '../sensing/yardsToGreen';
 import type { GpsFix } from './types';
@@ -196,9 +196,10 @@ test('Watch feedback is marked ✓ or Phone unavailable — never silent fail', 
   assert.equal(PHONE_UNAVAILABLE, 'Phone unavailable');
 });
 
-test('Watch companion is club-pick only — no motion or mic auto-mark', () => {
+test('Watch companion is club-pick only — no motion, mic, or auto-putt', () => {
   assert.equal(WATCH_ASSIST, false);
   assert.equal(MIC_SHOT_ASSIST, false);
+  assert.equal(PUTT_ASSIST, false);
 });
 
 test('puttSheet is buckets plus Made it — never GPS and never invented putts', () => {

@@ -66,9 +66,21 @@ export function undoLastPutt(current: PuttDraft): PuttDraft {
   return { putts: lengths.length, lengths };
 }
 
-/** Made it needs at least one putt with its own bucket. */
+/** Made it needs at least one user-chosen bucket. GPS counts do not count. */
 export function canMakePutt(draft: PuttDraft): boolean {
-  return draft.lengths.length > 0 && draft.lengths.length === clampPutts(draft.putts || draft.lengths.length);
+  return planMadeIt(draft).ok;
+}
+
+/**
+ * Made it persists only the buckets the player tapped — never a GPS-invented
+ * putt count, never a fabricated distance.
+ */
+export function planMadeIt(
+  draft: PuttDraft,
+): { ok: false } | { ok: true; putts: number; lengths: PuttLengthId[] } {
+  const lengths = draft.lengths.filter(isPuttLengthId);
+  if (lengths.length === 0) return { ok: false };
+  return { ok: true, putts: lengths.length, lengths };
 }
 
 export function isNearOrOnGreen(toGreen: { yards: number | null; quality: string }): boolean {
@@ -144,4 +156,17 @@ export function madeItAdvancesHole(args: {
   currentHoleNumber: number;
 }): boolean {
   return args.sheetHoleNumber === args.currentHoleNumber;
+}
+
+/**
+ * After Made it (or arriving on a fresh hole), Pick a club still marks GPS.
+ * Opening the putt sheet skips this so Putter is never a silent mark.
+ */
+export function shouldAutoOpenClubPick(args: {
+  readOnly: boolean;
+  shotCount: number;
+  openingPutts?: boolean;
+}): boolean {
+  if (args.readOnly || args.openingPutts) return false;
+  return args.shotCount === 0;
 }

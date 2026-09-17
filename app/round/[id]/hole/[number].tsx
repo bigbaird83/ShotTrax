@@ -30,13 +30,14 @@ import { COPY, finishPuttsChip, formatHoleHeader, markedSuggestedMessage, voiceF
 import { formatPenaltyRow, PENALTY_REASONS, totalPenaltyStrokes } from '@/src/domain/penalty';
 import {
   addPuttLength,
-  canMakePutt,
   emptyPuttDraft,
   holeAfterDone,
   holesNeedingPutts,
   isPuttLengthId,
   madeItAdvancesHole,
+  planMadeIt,
   putterOpensPuttSheet,
+  shouldAutoOpenClubPick,
   undoLastPutt,
   type PuttDraft,
   type PuttLengthId,
@@ -203,7 +204,16 @@ export default function HoleScreen() {
   }, []);
 
   useEffect(() => {
-    if (puttsParam === '1' || !round || !hole || readOnly || shots.length > 0 || Number.isNaN(holeNumber)) return;
+    if (!round || !hole || Number.isNaN(holeNumber)) return;
+    if (
+      !shouldAutoOpenClubPick({
+        readOnly,
+        shotCount: shots.length,
+        openingPutts: puttsParam === '1',
+      })
+    ) {
+      return;
+    }
     if (autoOpened.current === holeNumber) return;
     autoOpened.current = holeNumber;
     router.push(`/round/${id}/club-pick?hole=${holeNumber}`);
@@ -269,10 +279,11 @@ export default function HoleScreen() {
 
   const applyMadeIt = useCallback(
     (targetHole: number, draft: PuttDraft) => {
-      if (readOnly || !canMakePutt(draft) || !round) return false;
-      saveDraft(targetHole, draft, true);
+      const planned = planMadeIt(draft);
+      if (readOnly || !planned.ok || !round) return false;
+      saveDraft(targetHole, planned, true);
       setPuttOpen(false);
-      void pushWatchPuttSheet({ open: false, holeNumber: targetHole, lengths: draft.lengths });
+      void pushWatchPuttSheet({ open: false, holeNumber: targetHole, lengths: planned.lengths });
       if (!madeItAdvancesHole({ sheetHoleNumber: targetHole, currentHoleNumber: holeNumber })) {
         return true;
       }

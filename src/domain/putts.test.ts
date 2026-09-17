@@ -13,12 +13,14 @@ import {
   madeItAdvancesHole,
   NEAR_GREEN_YD,
   parsePuttLengths,
+  planMadeIt,
   PUTT_LENGTHS,
   PUTT_MAX,
   putterOpensPuttSheet,
   puttsFromWalkOff,
   serializePuttLengths,
   setPuttCount,
+  shouldAutoOpenClubPick,
   undoLastPutt,
 } from './putts';
 
@@ -62,8 +64,20 @@ test('each bucket tap adds its own putt; undo drops the last', () => {
 test('Made it needs at least one putt with a bucket', () => {
   assert.equal(canMakePutt(emptyPuttDraft()), false);
   assert.equal(canMakePutt({ putts: 0, lengths: [] }), false);
+  assert.equal(canMakePutt({ putts: 3, lengths: [] }), false);
   assert.equal(canMakePutt({ putts: 1, lengths: ['inside_3'] }), true);
   assert.equal(canMakePutt({ putts: 2, lengths: ['over_20', '3_to_10'] }), true);
+  const planned = planMadeIt({ putts: 99, lengths: ['3_to_10'] });
+  assert.equal(planned.ok, true);
+  if (planned.ok) {
+    assert.equal(planned.putts, 1);
+    assert.deepEqual(planned.lengths, ['3_to_10']);
+  }
+});
+
+test('next hole with no shots opens Pick a club (club-select = mark)', () => {
+  assert.equal(shouldAutoOpenClubPick({ readOnly: false, shotCount: 0 }), true);
+  assert.equal(shouldAutoOpenClubPick({ readOnly: false, shotCount: 0, openingPutts: true }), false);
 });
 
 test('near / on green is live yards-to-green within 40 yd — never a putt record', () => {

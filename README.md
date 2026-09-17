@@ -216,6 +216,8 @@ Defined in `src/config/sensing.ts`. Mark path is `getFix` → `acceptFix`, then 
 
 `soft` and `forced` GPS shots **stay in club averages** (and therefore in top-3 once a club has 5+ closed GPS shots). Badges mean those qualities are in the mix, not that they were dropped. History / summary still show SOFT / FORCED on GPS shots. Penalties and `no_gps` (`fixQuality: none`) shots are separate and never distance samples.
 
+**Putts (Signal Lab lock):** `PUTT_ASSIST`, `AUTO_PUTTS_FROM_GPS`, and `AUTO_PUTTS_FROM_LEAVE_GREEN` are **false**. Walking off the green never invents putts. **Made it** stores only user-chosen buckets (not a GPS count) and advances. **Finish putts · Hole N** is score-only — never a fabricated distance. Putter stays out of averages and top-3. The next hole still opens **Pick a club** (club-select = mark).
+
 ## Simulator / mock GPS
 
 ShotTraxx **does not synthesize a fairway or fake points**.
