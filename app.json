@@ -74,7 +74,29 @@
     },
     "extra": {
       "eas": {
-        "_todo_projectId": "Run `eas init` or `eas build:configure` while logged in. Expo writes extra.eas.projectId here. Commit that UUID (it is not a secret). Do not invent a projectId, Apple Team ID, or ASC API key."
+        "_todo_projectId": "Run `eas init` or `eas build:configure` while logged in. Expo writes extra.eas.projectId here. Commit that UUID (it is not a secret). Do not invent a projectId, Apple Team ID, or ASC API key.",
+        "build": {
+          "experimental": {
+            "ios": {
+              "appExtensions": [
+                {
+                  "targetName": "ShotTraxxWatch",
+                  "bundleIdentifier": "com.shottrax.app.watch",
+                  "entitlements": {
+                    "com.apple.security.application-groups": ["group.com.shottrax.app"]
+                  }
+                },
+                {
+                  "targetName": "ShotTraxxHole",
+                  "bundleIdentifier": "com.shottrax.app.watch.widget",
+                  "entitlements": {
+                    "com.apple.security.application-groups": ["group.com.shottrax.app"]
+                  }
+                }
+              ]
+            }
+          }
+        }
       },
       "golfCoursesApiKey": null
     }

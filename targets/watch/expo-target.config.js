@@ -1,7 +1,7 @@
 /** @type {import('@bacons/apple-targets/app.plugin').ConfigFunction} */
 module.exports = (config) => ({
   type: 'watch',
-  name: 'ShotTraxx Watch',
+  name: 'ShotTraxxWatch',
   displayName: 'ShotTraxx',
   bundleIdentifier: `${config.ios.bundleIdentifier}.watch`,
   deploymentTarget: '10.0',

@@ -120,7 +120,16 @@ eas submit -p ios
 | **Microphone** | Only after **Say a club**. Used to capture the utterance. |
 | **Speech Recognition** (iOS) | Maps the utterance to a bag club and applies it immediately. |
 
-Watch Connectivity carries the club list to a paired Apple Watch. Watch motion / mic-shot-detect stay off. **Add shot without GPS** does not request location and does not store lat/lng.
+## Apple Watch (ships in this IPA)
+
+Companion via `@bacons/apple-targets` (`targets/watch`, bundle `com.shottrax.app.watch`) plus a local Expo module (`modules/watch-bridge`) so EAS iOS prebuild links Watch Connectivity.
+
+- Watch shows **top-3 + full bag** and sticky **Same club**
+- Tap a club on Watch → phone applies the same **club=mark GPS** as a phone tap/voice (start now, close prior)
+- **Undo** stays on the phone
+- **No** Watch motion, mic, or sensor auto-mark
+
+EAS credentials for `com.shottrax.app.watch` and `com.shottrax.app.watch.widget` are declared under `extra.eas.build.experimental.ios.appExtensions`.
 
 ## Maps (`react-native-maps`)
 

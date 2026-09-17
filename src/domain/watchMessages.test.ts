@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { MIC_SHOT_ASSIST, WATCH_ASSIST } from '../sensing/assists';
 import {
   CHECK_PHONE,
   PHONE_UNAVAILABLE,
@@ -56,4 +57,9 @@ test('Watch feedback copy', () => {
   assert.equal(formatClubMarkedFeedback('7i'), '7i marked ✓');
   assert.equal(PHONE_UNAVAILABLE, 'Phone unavailable');
   assert.equal(CHECK_PHONE, 'Check phone');
+});
+
+test('Watch companion is club-pick only — no motion or mic auto-mark', () => {
+  assert.equal(WATCH_ASSIST, false);
+  assert.equal(MIC_SHOT_ASSIST, false);
 });

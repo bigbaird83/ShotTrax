@@ -3,6 +3,9 @@ import Foundation
 import WatchConnectivity
 import WatchKit
 
+// Club-pick only. No motion detection, no mic, no sensor auto-mark.
+// Tap → phone club=mark GPS. Undo stays on the phone.
+
 struct ClubListState {
   var top3: [String] = []
   var bag: [String] = []
