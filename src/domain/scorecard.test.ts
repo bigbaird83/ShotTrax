@@ -28,11 +28,17 @@ test('scorecard rows keep stored par/score/putts and never invent par', () => {
   const rows = planScorecard([
     { number: 2, par: null, score: 4, putts: 2 },
     { number: 1, par: 4, score: 3, putts: 1 },
+    { number: 3, par: 4, score: 5, putts: 2 },
   ]);
   assert.deepEqual(rows, [
     { number: 1, par: 4, score: 3, putts: 1, mark: 'birdie' },
     { number: 2, par: null, score: 4, putts: 2, mark: null },
+    { number: 3, par: 4, score: 5, putts: 2, mark: 'bogey' },
   ]);
+  assert.deepEqual(Object.keys(rows[0]!).sort(), ['mark', 'number', 'par', 'putts', 'score']);
+  assert.equal('gir' in rows[0]!, false);
+  assert.equal('strokesGained' in rows[0]!, false);
+  assert.equal(rows[1]!.par, null);
 });
 
 test('scorecard is view-only and has no GIR or strokes gained', () => {

@@ -24,6 +24,7 @@ export function scorecardMark(score: number | null, par: number | null): Scoreca
   return 'double';
 }
 
+/** In-round card: stored holes, par, score, putts. Missing par stays blank. No GIR / SG. */
 export function planScorecard(holes: {
   number: number;
   par: number | null;

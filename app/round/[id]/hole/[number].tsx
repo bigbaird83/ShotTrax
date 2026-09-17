@@ -1051,7 +1051,6 @@ export default function HoleScreen() {
         <BigButton
           label={COPY.scorecard}
           variant="ghost"
-          disabled={placing}
           onPress={() => setScorecardOpen(true)}
         />
 
