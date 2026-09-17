@@ -33,7 +33,8 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
+# local env files (Golf Courses API key lives here — never commit)
+.env
 .env*.local
 
 # typescript

@@ -1,8 +1,11 @@
 import { Component, type ErrorInfo, type ReactNode, useEffect, useMemo, useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker, Polyline } from 'react-native-maps';
+import type { OsmOverlay } from '@/src/course/types';
 import type { GpsFix, Shot } from '@/src/domain/types';
+import type { YardsToGreen } from '@/src/domain/yardsToGreen';
 import { hasClosedGpsTrail, hasGpsStart } from '@/src/domain/shotSource';
+import { YardsToGreenBadge } from './YardsToGreenBadge';
 import { colors } from './theme';
 
 type Coord = { latitude: number; longitude: number };
@@ -12,6 +15,9 @@ type Props = {
   shots: Shot[];
   userFix: GpsFix | null;
   green: { lat: number; lng: number } | null;
+  yardsToGreen: YardsToGreen;
+  /** Part 2 OSM polygons. Ignored while null — never invents an overlay. */
+  osmOverlay?: OsmOverlay | null;
   onDropGreenEstimate?: (coord: { lat: number; lng: number }) => void;
 };
 
@@ -34,15 +40,18 @@ function TrailFallback({
   holeNumber,
   shots,
   message,
+  yardsToGreen,
 }: {
   holeNumber: number;
   shots: Shot[];
   message: string;
+  yardsToGreen?: YardsToGreen;
 }) {
   const closed = shots.filter(hasClosedGpsTrail);
   return (
     <View style={styles.fallback}>
       <Text style={styles.holeBadgeText}>HOLE {holeNumber}</Text>
+      {yardsToGreen ? <YardsToGreenBadge result={yardsToGreen} /> : null}
       <Text style={styles.fallbackMsg}>{message}</Text>
       {closed.length === 0 ? (
         <Text style={styles.meta}>No closed-shot trails yet.</Text>
@@ -58,7 +67,7 @@ function TrailFallback({
   );
 }
 
-function NativeHoleMap({ holeNumber, shots, userFix, green, onDropGreenEstimate }: Props) {
+function NativeHoleMap({ holeNumber, shots, userFix, green, yardsToGreen, onDropGreenEstimate }: Props) {
   const mapRef = useRef<MapView | null>(null);
 
   const closed = useMemo(() => shots.filter(hasClosedGpsTrail), [shots]);
@@ -102,6 +111,7 @@ function NativeHoleMap({ holeNumber, shots, userFix, green, onDropGreenEstimate 
         holeNumber={holeNumber}
         shots={shots}
         message="Waiting for a real GPS fix to center the map. ShotTrax does not invent coordinates."
+        yardsToGreen={yardsToGreen}
       />
     );
   }
@@ -145,8 +155,8 @@ function NativeHoleMap({ holeNumber, shots, userFix, green, onDropGreenEstimate 
         {green ? (
           <Marker
             coordinate={toCoord(green.lat, green.lng)}
-            title="Green estimate"
-            description="User pin — not a licensed course green"
+            title="Green"
+            description="GPS/map pin or course centroid — never invented"
             pinColor="green"
           />
         ) : null}
@@ -155,8 +165,11 @@ function NativeHoleMap({ holeNumber, shots, userFix, green, onDropGreenEstimate 
         <Text style={styles.holeBadgeKicker}>SCORECARD</Text>
         <Text style={styles.holeBadgeText}>HOLE {holeNumber}</Text>
       </View>
+      <View pointerEvents="none" style={styles.toGreen}>
+        <YardsToGreenBadge compact result={yardsToGreen} />
+      </View>
       <Text style={styles.hint}>
-        Closed-shot trails only. Long-press to drop a green estimate. No course polygons.
+        Closed-shot trails only. Long-press to drop a green pin. No invented coordinates or OSM polygons.
       </Text>
     </View>
   );
@@ -168,6 +181,7 @@ export function HoleMap(props: Props) {
       holeNumber={props.holeNumber}
       shots={props.shots}
       message="Map native module unavailable. Use a development build, or Expo Go on a device. Trails list closed shots below."
+      yardsToGreen={props.yardsToGreen}
     />
   );
 
@@ -207,6 +221,12 @@ const styles = StyleSheet.create({
     color: colors.cream,
     fontSize: 18,
     fontWeight: '900',
+  },
+  toGreen: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    maxWidth: '58%',
   },
   hint: {
     position: 'absolute',

@@ -1,10 +1,12 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { averageWithBadges, type ClubAverage } from '../domain/averages';
+import { isValidLatLng } from '../domain/latLng';
 import { clampPenaltyStrokes, scoreAfterPenalty } from '../domain/penalty';
 import { includeInDistanceAverages, planNoGpsShot } from '../domain/shotSource';
 import type {
   Club,
   FixQuality,
+  GreenSource,
   Hole,
   HolePenalty,
   OpenShot,
@@ -31,6 +33,7 @@ type RoundRow = {
   finished_at: string | null;
   course_name: string | null;
   hole_count: number;
+  course_api_id: string | null;
 };
 
 type HoleRow = {
@@ -41,6 +44,7 @@ type HoleRow = {
   score: number | null;
   green_lat: number | null;
   green_lng: number | null;
+  green_source: string | null;
 };
 
 type ShotRow = {
@@ -85,6 +89,11 @@ function mapClub(row: ClubRow): Club {
   };
 }
 
+function mapGreenSource(value: string | null): GreenSource | null {
+  if (value === 'user_estimate' || value === 'course_centroid') return value;
+  return null;
+}
+
 function mapRound(row: RoundRow): Round {
   return {
     id: row.id,
@@ -92,6 +101,7 @@ function mapRound(row: RoundRow): Round {
     finishedAt: row.finished_at,
     courseName: row.course_name,
     holeCount: row.hole_count,
+    courseApiId: row.course_api_id ?? null,
   };
 }
 
@@ -104,6 +114,7 @@ function mapHole(row: HoleRow): Hole {
     score: row.score,
     greenLat: row.green_lat,
     greenLng: row.green_lng,
+    greenSource: mapGreenSource(row.green_source),
   };
 }
 
@@ -230,22 +241,45 @@ export function getActiveRound(db: SQLiteDatabase): Round | null {
   return row ? mapRound(row) : null;
 }
 
+export type CourseLayoutSeed = {
+  apiId: string | null;
+  holes?: Array<{
+    number: number;
+    par: number | null;
+    greenCentroid: { lat: number; lng: number } | null;
+  }>;
+};
+
 export function startRound(
   db: SQLiteDatabase,
   holeCount: 9 | 18,
   courseName: string | null,
+  layout?: CourseLayoutSeed | null,
 ): Round {
   const id = newId();
   const startedAt = new Date().toISOString();
+  const courseApiId = layout?.apiId ?? null;
   db.withTransactionSync(() => {
     db.runSync(
-      'INSERT INTO rounds (id, started_at, finished_at, course_name, hole_count) VALUES (?, ?, NULL, ?, ?)',
-      [id, startedAt, courseName, holeCount],
+      'INSERT INTO rounds (id, started_at, finished_at, course_name, hole_count, course_api_id) VALUES (?, ?, NULL, ?, ?, ?)',
+      [id, startedAt, courseName, holeCount, courseApiId],
     );
     for (let n = 1; n <= holeCount; n += 1) {
+      const seed = layout?.holes?.find((hole) => hole.number === n);
+      const par = seed?.par ?? 4;
+      const greenCandidate = seed?.greenCentroid ?? null;
+      const green = isValidLatLng(greenCandidate) ? greenCandidate : null;
       db.runSync(
-        'INSERT INTO holes (id, round_id, number, par, score) VALUES (?, ?, ?, 4, NULL)',
-        [newId(), id, n],
+        'INSERT INTO holes (id, round_id, number, par, score, green_lat, green_lng, green_source) VALUES (?, ?, ?, ?, NULL, ?, ?, ?)',
+        [
+          newId(),
+          id,
+          n,
+          par,
+          green?.lat ?? null,
+          green?.lng ?? null,
+          green ? 'course_centroid' : null,
+        ],
       );
     }
   });
@@ -255,6 +289,7 @@ export function startRound(
     finishedAt: null,
     courseName,
     holeCount,
+    courseApiId,
   };
 }
 
@@ -284,15 +319,17 @@ export function updateHoleScore(db: SQLiteDatabase, holeId: string, score: numbe
   db.runSync('UPDATE holes SET score = ? WHERE id = ?', [score, holeId]);
 }
 
-/** Green estimate from current GPS or a map long-press. Not a licensed course pin. */
+/** Green pin from current GPS, a map long-press, or a course centroid. Never invented. */
 export function setHoleGreen(
   db: SQLiteDatabase,
   holeId: string,
-  green: { lat: number; lng: number } | null,
+  green: { lat: number; lng: number; source?: GreenSource } | null,
 ): void {
-  db.runSync('UPDATE holes SET green_lat = ?, green_lng = ? WHERE id = ?', [
-    green?.lat ?? null,
-    green?.lng ?? null,
+  const valid = isValidLatLng(green) ? green : null;
+  db.runSync('UPDATE holes SET green_lat = ?, green_lng = ?, green_source = ? WHERE id = ?', [
+    valid?.lat ?? null,
+    valid?.lng ?? null,
+    valid ? (green?.source ?? 'user_estimate') : null,
     holeId,
   ]);
 }

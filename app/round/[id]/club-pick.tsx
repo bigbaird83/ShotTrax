@@ -6,7 +6,8 @@ import { getHole, listClubAverages, listClubs, listShotsForHole } from '@/src/db
 import { clubToRankInput, lastClosedShotYards, rankTopClubs, resolveDistanceTarget } from '@/src/domain/rankClubs';
 import { parseTypedYards } from '@/src/domain/shotSource';
 import { matchSpokenClub, speechContextualStrings } from '@/src/domain/voiceClub';
-import type { Club } from '@/src/domain/types';
+import type { Club, GpsFix } from '@/src/domain/types';
+import { measureYardsToGreen } from '@/src/domain/yardsToGreen';
 import { speechRecognitionAvailable, startClubSpeech, type ClubSpeechSession } from '@/src/services/speechClub';
 import { getCurrentFix } from '@/src/services/location';
 import { addNoGpsShot, markShotWithClub, promptForPlan } from '@/src/services/shotActions';
@@ -30,7 +31,7 @@ export default function ClubPickScreen() {
   const averages = useMemo(() => listClubAverages(db).filter((row) => row.club.enabled), [db, revision]);
 
   const [busy, setBusy] = useState(false);
-  const [fix, setFix] = useState<{ lat: number; lng: number } | null>(null);
+  const [fix, setFix] = useState<GpsFix | null>(null);
   const [bagOpen, setBagOpen] = useState(false);
   const [listening, setListening] = useState(false);
   const [heard, setHeard] = useState<string | null>(null);
@@ -49,7 +50,7 @@ export default function ClubPickScreen() {
     let live = true;
     getCurrentFix()
       .then((next) => {
-        if (live) setFix({ lat: next.lat, lng: next.lng });
+        if (live) setFix(next);
       })
       .catch(() => {
         if (live) setFix(null);
@@ -70,6 +71,11 @@ export default function ClubPickScreen() {
     holeRow?.greenLat != null && holeRow.greenLng != null
       ? { lat: holeRow.greenLat, lng: holeRow.greenLng }
       : null;
+  const toGreen = measureYardsToGreen({
+    from: fix,
+    green,
+    accuracyM: fix?.accuracyM,
+  });
   const target = resolveDistanceTarget({
     from: fix,
     green,
@@ -166,7 +172,7 @@ export default function ClubPickScreen() {
   const targetLabel = !target
     ? 'No green pin and no closed shot on this hole yet — full bag.'
     : target.source === 'yards_to_green'
-      ? `${target.dYards} yd to green`
+      ? `${target.dYards} yd to green${toGreen.available && toGreen.accuracyClass === 'soft' ? ' · SOFT GPS' : ''}`
       : `Last closed shot ${target.dYards} yd`;
 
   return (

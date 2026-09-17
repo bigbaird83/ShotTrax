@@ -68,7 +68,8 @@
     "extra": {
       "eas": {
         "_todo_projectId": "Run `eas init` or `eas build:configure` while logged in. Expo writes extra.eas.projectId here. Commit that UUID (it is not a secret). Do not invent a projectId, Apple Team ID, or ASC API key."
-      }
+      },
+      "golfCoursesApiKey": null
     }
   }
 }

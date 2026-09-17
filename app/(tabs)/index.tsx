@@ -1,10 +1,13 @@
 import * as Device from 'expo-device';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { getCourseDataClient } from '@/src/course/client';
+import type { CourseSummary } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
-import { finishRound, getActiveRound, listHoles, listRounds, startRound } from '@/src/db/repo';
+import { finishRound, getActiveRound, listHoles, listRounds, startRound, type CourseLayoutSeed } from '@/src/db/repo';
 import { BigButton } from '@/src/ui/BigButton';
+import { CoursePicker } from '@/src/ui/CoursePicker';
 import { GpsBanner } from '@/src/ui/GpsBanner';
 import { Screen } from '@/src/ui/Screen';
 import { colors } from '@/src/ui/theme';
@@ -12,6 +15,8 @@ import { colors } from '@/src/ui/theme';
 export default function HomeScreen() {
   const { db, revision, bump } = useDb();
   const [courseName, setCourseName] = useState('');
+  const [picked, setPicked] = useState<CourseSummary | null>(null);
+  const [starting, setStarting] = useState(false);
   const rounds = useMemo(() => listRounds(db), [db, revision]);
   const active = useMemo(() => getActiveRound(db), [db, revision]);
   const isSimulator = Device.isDevice === false;
@@ -21,18 +26,47 @@ export default function HomeScreen() {
       router.push(`/round/${active.id}/hole/1`);
       return;
     }
-    const round = startRound(db, holeCount, courseName.trim() || null);
-    bump();
-    router.push(`/round/${round.id}/hole/1`);
+    void (async () => {
+      setStarting(true);
+      try {
+        let layout: CourseLayoutSeed | undefined = picked ? { apiId: picked.id } : undefined;
+        if (picked) {
+          try {
+            const detail = await getCourseDataClient().getCourse(picked.id);
+            if (detail) {
+              layout = {
+                apiId: detail.id,
+                holes: detail.holes.map((hole) => ({
+                  number: hole.holeNumber,
+                  par: hole.par,
+                  greenCentroid: hole.greenCentroid,
+                })),
+              };
+            }
+          } catch {
+            layout = { apiId: picked.id };
+          }
+        }
+        const name = (picked?.name ?? courseName.trim()) || null;
+        const round = startRound(db, holeCount, name, layout);
+        bump();
+        router.push(`/round/${round.id}/hole/1`);
+      } catch (err) {
+        Alert.alert('Could not start round', err instanceof Error ? err.message : 'Unknown error');
+      } finally {
+        setStarting(false);
+      }
+    })();
   };
 
   return (
     <Screen>
-      <Text style={styles.kicker}>P3 · GPS shot tracker</Text>
+      <Text style={styles.kicker}>P5 · GPS shot tracker</Text>
       <Text style={styles.title}>ShotTrax</Text>
       <Text style={styles.lede}>
-        Confirm a club to mark the shot start. The next mark is the end and logs yards. Add a
-        penalty or a no-GPS stroke when you forget a swing. Hole map shows closed GPS trails only.
+        Confirm a club to mark the shot start. The next mark is the end and logs yards. Yards to green
+        uses phone GPS → a real green pin (never invented). Add a penalty or a no-GPS stroke when you
+        forget a swing.
       </Text>
 
       {isSimulator ? (
@@ -42,9 +76,20 @@ export default function HomeScreen() {
       <TextInput
         placeholder="Course name (optional)"
         placeholderTextColor={colors.muted}
-        value={courseName}
-        onChangeText={setCourseName}
+        value={picked?.name ?? courseName}
+        onChangeText={(text) => {
+          setPicked(null);
+          setCourseName(text);
+        }}
         style={styles.input}
+      />
+
+      <CoursePicker
+        selected={picked}
+        onSelect={(course) => {
+          setPicked(course);
+          if (course) setCourseName(course.name);
+        }}
       />
 
       {active ? (
@@ -69,8 +114,8 @@ export default function HomeScreen() {
         </View>
       ) : (
         <View style={{ gap: 10 }}>
-          <BigButton label="Start 18 holes" onPress={() => onStart(18)} />
-          <BigButton label="Start 9 holes" variant="secondary" onPress={() => onStart(9)} />
+          <BigButton label="Start 18 holes" disabled={starting} onPress={() => onStart(18)} />
+          <BigButton label="Start 9 holes" variant="secondary" disabled={starting} onPress={() => onStart(9)} />
         </View>
       )}
 

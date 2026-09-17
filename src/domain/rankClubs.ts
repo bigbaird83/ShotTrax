@@ -1,5 +1,5 @@
-import { haversineYards, roundYards } from './haversine';
 import type { Club } from './types';
+import { measureYardsToGreen } from './yardsToGreen';
 
 /** A club is rankable only after this many closed shots with yards. */
 export const MIN_CLOSED_SHOTS_FOR_RANK = 5;
@@ -48,10 +48,11 @@ export function resolveDistanceTarget(args: {
   green: { lat: number; lng: number } | null;
   lastClosedYards: number | null;
 }): DistanceTarget | null {
-  if (args.from && args.green) {
+  const toGreen = measureYardsToGreen({ from: args.from, green: args.green });
+  if (toGreen.available) {
     return {
       source: 'yards_to_green',
-      dYards: roundYards(haversineYards(args.from, args.green)),
+      dYards: toGreen.yards,
     };
   }
   if (args.lastClosedYards != null && Number.isFinite(args.lastClosedYards)) {

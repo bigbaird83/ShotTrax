@@ -34,6 +34,15 @@ test('MIN_CLOSED_SHOTS_FOR_RANK is 5', () => {
   assert.equal(MIN_CLOSED_SHOTS_FOR_RANK, 5);
 });
 
+test('invalid 0,0 green is not D — ranking falls back instead of inventing a pin', () => {
+  const target = resolveDistanceTarget({
+    from: { lat: 37, lng: -122 },
+    green: { lat: 0, lng: 0 },
+    lastClosedYards: 140,
+  });
+  assert.deepEqual(target, { source: 'last_closed_shot', dYards: 140 });
+});
+
 test('no D (no green, no last closed shot) falls back to empty ranking / full bag', () => {
   const target = resolveDistanceTarget({ from: null, green: null, lastClosedYards: null });
   assert.equal(target, null);
