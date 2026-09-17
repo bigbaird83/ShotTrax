@@ -265,6 +265,17 @@ test('fewer than 3 eligible clubs still surfaces those that qualify', () => {
   );
 });
 
+test('skip / no typed seed means no fake average — top-3 stays empty until live shots', () => {
+  const ranked = rankTopClubs(
+    [
+      club({ id: 'club_7i', loftRank: 9, avgYards: 0, count: 0 }),
+      club({ id: 'club_8i', loftRank: 10, avgYards: 0, count: 2 }),
+    ],
+    { source: 'yards_to_green', dYards: 150 },
+  );
+  assert.deepEqual(ranked, []);
+});
+
 test('no eligible clubs (all <5 shots) → empty ranking so UI shows full bag', () => {
   const ranked = rankTopClubs(
     [club({ id: '7i', loftRank: 6, avgYards: 150, count: 4 })],
@@ -283,17 +294,23 @@ test('seeded bag loftRanks increase toward the short clubs', () => {
   assert.ok((fiveIron?.loftRank ?? 0) > (twoIron?.loftRank ?? 0));
 });
 
-test('clubToRankInput attaches typical-carry seeds; putter has none and is not rankable', () => {
+test('clubToRankInput attaches typed typical-carry seeds; putter has none and is not rankable', () => {
   const wedge = DEFAULT_BAG.find((c) => c.id === 'club_gw');
   const putter = DEFAULT_BAG.find((c) => c.id === 'club_putter');
   assert.ok(wedge && putter);
-  const wedgeIn = clubToRankInput({ ...wedge, enabled: true }, { avgYards: 0, count: 0 });
+  const wedgeIn = clubToRankInput(
+    { ...wedge, enabled: true, typicalCarryYards: 105 },
+    { avgYards: 0, count: 0 },
+  );
+  const skipped = clubToRankInput({ ...wedge, enabled: true }, { avgYards: 0, count: 0 });
   const putterIn = clubToRankInput(
     { ...putter, enabled: true, typicalCarryYards: 8 },
     { avgYards: 8, count: 12 },
   );
   assert.equal(wedgeIn.typicalCarryYards, 105);
   assert.equal(rankDistanceYards(wedgeIn), 105);
+  assert.equal(skipped.typicalCarryYards, null);
+  assert.equal(rankDistanceYards(skipped), null);
   assert.equal(putterIn.typicalCarryYards, null);
   assert.equal(rankDistanceYards(putterIn), null);
 });

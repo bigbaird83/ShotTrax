@@ -29,6 +29,9 @@ type Props = {
   placeHint?: string | null;
   fullBleed?: boolean;
   style?: StyleProp<ViewStyle>;
+  /** Catch-up: frame once to these points. Never includes the phone fix. */
+  framePoints?: Coord[] | null;
+  lockFrame?: boolean;
 };
 
 class MapGuard extends Component<{ children: ReactNode; fallback: ReactNode }, { failed: boolean }> {
@@ -101,8 +104,11 @@ function NativeHoleMap({
   placeHint,
   fullBleed,
   style,
+  framePoints,
+  lockFrame,
 }: Props) {
   const mapRef = useRef<MapView | null>(null);
+  const framedOnce = useRef(false);
 
   const closed = useMemo(() => shots.filter(hasClosedGpsTrail), [shots]);
   const osmFeatures = useMemo(
@@ -120,7 +126,7 @@ function NativeHoleMap({
       }
     }
     if (green) out.push(toCoord(green.lat, green.lng));
-    if (userFix) out.push(toCoord(userFix.lat, userFix.lng));
+    if (!lockFrame && userFix) out.push(toCoord(userFix.lat, userFix.lng));
     if (placedFrom) out.push(toCoord(placedFrom.lat, placedFrom.lng));
     if (placedTo) out.push(toCoord(placedTo.lat, placedTo.lng));
     for (const feature of osmFeatures) {
@@ -129,10 +135,11 @@ function NativeHoleMap({
       }
     }
     return out;
-  }, [shots, green, userFix, osmFeatures, placedFrom, placedTo]);
+  }, [shots, green, userFix, osmFeatures, placedFrom, placedTo, lockFrame]);
 
   const region = useMemo(() => {
-    const c = coords[0] ?? (userFix ? toCoord(userFix.lat, userFix.lng) : null);
+    const framed = lockFrame && framePoints && framePoints.length > 0 ? framePoints[0] : null;
+    const c = framed ?? coords[0] ?? (lockFrame ? null : userFix ? toCoord(userFix.lat, userFix.lng) : null);
     if (!c) return null;
     return {
       latitude: c.latitude,
@@ -140,15 +147,40 @@ function NativeHoleMap({
       latitudeDelta: 0.004,
       longitudeDelta: 0.004,
     };
-  }, [coords, userFix]);
+  }, [coords, userFix, lockFrame, framePoints]);
+
+  const lockKey = lockFrame
+    ? (framePoints ?? []).map((point) => `${point.latitude},${point.longitude}`).join('|')
+    : '';
 
   useEffect(() => {
+    if (lockFrame) {
+      framedOnce.current = false;
+    }
+  }, [lockFrame, lockKey]);
+
+  useEffect(() => {
+    const padding = { edgePadding: { top: 72, right: 36, bottom: 48, left: 36 }, animated: !lockFrame };
+    if (lockFrame) {
+      if (framedOnce.current) return;
+      const points = framePoints && framePoints.length > 0 ? framePoints : coords;
+      if (points.length === 0) return;
+      if (points.length === 1) {
+        mapRef.current?.animateToRegion({
+          latitude: points[0].latitude,
+          longitude: points[0].longitude,
+          latitudeDelta: 0.004,
+          longitudeDelta: 0.004,
+        });
+      } else {
+        mapRef.current?.fitToCoordinates(points, padding);
+      }
+      framedOnce.current = true;
+      return;
+    }
     if (coords.length < 2) return;
-    mapRef.current?.fitToCoordinates(coords, {
-      edgePadding: { top: 72, right: 36, bottom: 48, left: 36 },
-      animated: true,
-    });
-  }, [coords]);
+    mapRef.current?.fitToCoordinates(coords, padding);
+  }, [coords, framePoints, lockFrame]);
 
   if (!region) {
     return (
@@ -170,8 +202,11 @@ function NativeHoleMap({
         initialRegion={region}
         showsUserLocation={Boolean(userFix)}
         showsMyLocationButton={false}
-        rotateEnabled={false}
+        followsUserLocation={false}
+        zoomEnabled
+        scrollEnabled
         pitchEnabled={false}
+        rotateEnabled={false}
         onPress={(event) => {
           if (!onPlacePoint) return;
           const { latitude, longitude } = event.nativeEvent.coordinate;

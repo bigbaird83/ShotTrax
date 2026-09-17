@@ -1,3 +1,4 @@
+import { featureCentroid } from '../domain/catchUpMap';
 import { isValidLatLng, type LatLng } from '../domain/latLng';
 import type { OsmFeature, OsmGolfKind, OsmOverlay, OsmOverlayHook, OsmOverlayQuery } from './types';
 
@@ -100,6 +101,13 @@ export function featuresForHole(overlay: OsmOverlay | null, holeNumber: number):
   if (numbered.length > 0) return numbered;
   // Unmapped hole refs: show unnumbered features in the query bbox, never invent.
   return overlay.features.filter((f) => f.holeNumber == null);
+}
+
+/** Tee centroid for catch-up framing. Missing tee → null, never invented. */
+export function teePointForHole(overlay: OsmOverlay | null, holeNumber: number): LatLng | null {
+  const tees = featuresForHole(overlay, holeNumber).filter((feature) => feature.kind === 'tee');
+  if (tees.length === 0) return null;
+  return featureCentroid(tees[0].coordinates);
 }
 
 function overpassQuery(location: LatLng, radiusM: number): string {

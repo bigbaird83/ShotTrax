@@ -21,6 +21,8 @@ type Props = {
   placedTo?: { lat: number; lng: number } | null;
   placeHint?: string | null;
   fullBleed?: boolean;
+  framePoints?: { latitude: number; longitude: number }[] | null;
+  lockFrame?: boolean;
 };
 
 export function HoleMap({ holeNumber, userFix, green, yardsToGreen, placeHint }: Props) {

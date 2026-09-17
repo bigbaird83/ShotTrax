@@ -6,7 +6,9 @@ import {
   finishShotChip,
   formatHoleHeader,
   formatParLabel,
+  formatPickerLeftYards,
   formatSiLabel,
+  formatSuggestedClubChip,
   formatTeeMeta,
   markedSuggestedMessage,
   voiceFailRecovery,
@@ -42,11 +44,14 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.undoEdit, 'Undo edit');
   assert.equal(COPY.editFromHint, 'Tap the new from pin.');
   assert.equal(COPY.editToHint, 'Tap the new landing pin.');
-  assert.equal(COPY.bagLede, 'Your bag. Turn off what you don’t carry.');
+  assert.equal(COPY.bagLede, 'Your bag. Turn off what you don’t carry. Carry is on each row.');
   assert.equal(COPY.restoreBag, 'Restore stock bag');
   assert.equal(COPY.typicalCarry, 'Typical');
-  assert.equal(COPY.typicalCarryYards, 'Typical carry (yd)');
-  assert.equal(COPY.clearTypicalCarry, 'Clear typical carry');
+  assert.equal(COPY.typicalCarryYards, 'Carry (yd)');
+  assert.equal(COPY.clearTypicalCarry, 'Clear carry');
+  assert.equal(COPY.bagCustomizeSkip, 'Skip');
+  assert.equal(COPY.estimated, 'Estimated');
+  assert.equal(COPY.insertShot, 'Insert shot');
   assert.equal(COPY.putts, 'Putts');
   assert.equal(COPY.madeIt, 'Made it');
   assert.equal(COPY.puttSheetLede, 'How long was the putt?');
@@ -95,6 +100,20 @@ test('voice fail recovery is Pick a club plus Say again, never voice-only', () =
   assert.equal(recovery.secondaryLabel, 'Say again');
   assert.equal(recovery.primaryLabel, COPY.pickClub);
   assert.notEqual(recovery.primaryLabel, COPY.sayClub);
+});
+
+test('suggested chips show that club’s carry, not yards-to-green', () => {
+  assert.equal(formatSuggestedClubChip('7i', 155), '7i · 155');
+  assert.equal(formatSuggestedClubChip('7i', null), '7i · —');
+  assert.equal(formatSuggestedClubChip('7i', undefined), '7i · —');
+});
+
+test('picker remaining yards are 148 left only when quality is good or soft', () => {
+  assert.equal(formatPickerLeftYards({ yards: 148, quality: 'good' }), '148 left');
+  assert.equal(formatPickerLeftYards({ yards: 148, quality: 'soft' }), '148 left');
+  assert.equal(formatPickerLeftYards({ yards: 148, quality: 'none' }), '—');
+  assert.equal(formatPickerLeftYards({ yards: 148, quality: 'forced' }), '—');
+  assert.equal(formatPickerLeftYards({ yards: null, quality: 'good' }), '—');
 });
 
 test('tee meta shows rating and slope in player voice when present', () => {

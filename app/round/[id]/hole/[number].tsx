@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCourseDataClient } from '@/src/course/client';
+import { teePointForHole } from '@/src/course/osmOverlay';
 import { formatParLabel, formatSiLabel, formatTeeMeta } from '@/src/course/layout';
 import type { OsmOverlay } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
@@ -27,10 +28,13 @@ import {
 } from '@/src/db/repo';
 import { pinOrNull, formatFmbRow, hasApiFmb, yardsToGreenDepth } from '@/src/domain/greenDepth';
 import { clubPickLeaveHref, clubPickLeaveRunsAcceptFix, planClubPickLeave } from '@/src/domain/clubPickNav';
-import { COPY, finishPuttsChip, finishShotChip, formatHoleHeader, markedSuggestedMessage, voiceFailRecovery } from '@/src/domain/playerCopy';
+import { COPY, finishPuttsChip, finishShotChip, formatHoleHeader, formatSuggestedClubChip, markedSuggestedMessage, voiceFailRecovery } from '@/src/domain/playerCopy';
 import { canAdvanceHole, holesNeedingOpenShots } from '@/src/domain/holeAdvance';
 import { isPutterClubId } from '@/src/domain/defaultBag';
+import { catchUpPinFromTap, planCatchUpFrame } from '@/src/domain/catchUpMap';
+import { planInsertSlots } from '@/src/domain/insertShot';
 import { planPlacedShot } from '@/src/domain/shotSource';
+import { planUndoPlacePins } from '@/src/domain/undoLastShot';
 import type { LatLng } from '@/src/domain/latLng';
 import { formatPenaltyRow, PENALTY_REASONS, totalPenaltyStrokes } from '@/src/domain/penalty';
 import {
@@ -48,7 +52,7 @@ import {
   type PuttLengthId,
 } from '@/src/domain/putts';
 import { canMoveFromPin, canMoveToPin, type ShotEditSnapshot } from '@/src/domain/shotEdit';
-import { clubToRankInput, lastClosedShotYards, rankCatchUpClubs, rankTopClubs, resolveDistanceTarget } from '@/src/domain/rankClubs';
+import { clubToRankInput, lastClosedShotYards, rankCatchUpClubs, rankDistanceYards, rankTopClubs, resolveDistanceTarget } from '@/src/domain/rankClubs';
 import { reconcileHoleScore, scoreMismatchMessage } from '@/src/domain/scoreReconcile';
 import { resolveStickyClub, selectClubForMark } from '@/src/domain/stickyClub';
 import type { Club, PenaltyReason } from '@/src/domain/types';
@@ -89,6 +93,7 @@ export default function HoleScreen() {
   const [placeTo, setPlaceTo] = useState<LatLng | null>(null);
   const [placeClubOpen, setPlaceClubOpen] = useState(false);
   const [placeMode, setPlaceMode] = useState<'off' | 'from' | 'to' | 'edit-from' | 'edit-to'>('off');
+  const [insertSeq, setInsertSeq] = useState<number | null>(null);
   const [editShotId, setEditShotId] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editClubOpen, setEditClubOpen] = useState(false);
@@ -173,8 +178,16 @@ export default function HoleScreen() {
     setPlaceTo(null);
     setPlaceClubOpen(false);
     setPlaceMode('off');
+    setInsertSeq(null);
     setEditClubOpen(false);
     setShowAllClubs(false);
+  };
+
+  const startCatchUp = (seq: number | null) => {
+    closeEdit();
+    resetPlace();
+    setInsertSeq(seq);
+    setPlaceMode('from');
   };
 
   const closeEdit = () => {
@@ -318,6 +331,21 @@ export default function HoleScreen() {
     averages.map((row) => clubToRankInput(row.club, row)),
     target,
   );
+  const catchUpFrame = planCatchUpFrame({
+    tee: teePointForHole(osmOverlay, holeNumber),
+    green,
+    shotPins: shots.flatMap((shot) => {
+      const pins: { lat: number; lng: number }[] = [];
+      if (shot.startLat != null && shot.startLng != null) {
+        pins.push({ lat: shot.startLat, lng: shot.startLng });
+      }
+      if (shot.endLat != null && shot.endLng != null) {
+        pins.push({ lat: shot.endLat, lng: shot.endLng });
+      }
+      return pins;
+    }),
+  });
+  const insertSlots = planInsertSlots(shots);
 
   const openPuttSheet = useCallback(
     async (targetHole: number) => {
@@ -435,8 +463,15 @@ export default function HoleScreen() {
       labelForClub: (clubId) => clubMap[clubId]?.shortName ?? clubs.find((club) => club.id === clubId)?.shortName ?? null,
     },
     {
-      top3: ranked.map((club) => ({ id: club.id, shortName: club.shortName })),
-      bag: clubs.map((club) => ({ id: club.id, shortName: club.shortName })),
+      top3: ranked.map((club) => ({
+        id: club.id,
+        shortName: formatSuggestedClubChip(club.shortName, rankDistanceYards(club)),
+      })),
+      bag: clubs.map((club) => {
+        const row = averages.find((item) => item.club.id === club.id);
+        const carry = row ? rankDistanceYards(clubToRankInput(row.club, row)) : null;
+        return { id: club.id, shortName: formatSuggestedClubChip(club.shortName, carry) };
+      }),
       holeNumber,
       yardsToGreen: toGreen.yards,
       yardsQuality: toGreen.quality,
@@ -496,6 +531,16 @@ export default function HoleScreen() {
 
   const onUndo = () => {
     if (readOnly) return;
+    if (placing && (placeFrom || placeTo)) {
+      const next = planUndoPlacePins({ from: placeFrom, to: placeTo });
+      if (!next) return;
+      setPlaceFrom(next.from);
+      setPlaceTo(next.to);
+      setPlaceClubOpen(false);
+      setPlaceMode(next.mode);
+      hapticTap();
+      return;
+    }
     const ok = undoLastShot(db, { roundId: id, holeNumber });
     if (!ok) return;
     hapticTap();
@@ -657,6 +702,7 @@ export default function HoleScreen() {
       from: placeFrom,
       to: placeTo,
       force,
+      seq: insertSeq ?? undefined,
     });
     if (result.status === 'needs_confirm') {
       Alert.alert(COPY.tooFar, '', [
@@ -753,6 +799,11 @@ export default function HoleScreen() {
           osmOverlay={osmOverlay}
           placedFrom={placeFrom}
           placedTo={placeTo}
+          lockFrame={placing}
+          framePoints={catchUpFrame?.points.map((point) => ({
+            latitude: point.lat,
+            longitude: point.lng,
+          }))}
           placeHint={
             placeMode === 'edit-from'
               ? COPY.editFromHint
@@ -771,22 +822,24 @@ export default function HoleScreen() {
             readOnly || placeMode === 'off' || placeClubOpen || editClubOpen
               ? undefined
               : (coord) => {
+                  const tap = catchUpPinFromTap(coord, fix);
+                  if (!tap) return;
                   if (placeMode === 'from') {
-                    setPlaceFrom(coord);
+                    setPlaceFrom(tap);
                     setPlaceMode('to');
                     return;
                   }
                   if (placeMode === 'to') {
-                    setPlaceTo(coord);
+                    setPlaceTo(tap);
                     setPlaceClubOpen(true);
                     return;
                   }
                   if (placeMode === 'edit-from') {
-                    commitMovePin(coord, 'from');
+                    commitMovePin(tap, 'from');
                     return;
                   }
                   if (placeMode === 'edit-to') {
-                    commitMovePin(coord, 'to');
+                    commitMovePin(tap, 'to');
                   }
                 }
           }
@@ -893,6 +946,62 @@ export default function HoleScreen() {
         </View>
       ) : null}
 
+      <ScrollView style={styles.shotList} nestedScrollEnabled>
+        {shots.length === 0 ? (
+          <Text style={styles.muted}>{COPY.noShots}</Text>
+        ) : (
+          shots.map((shot) => {
+            const club = shot.clubId ? clubMap[shot.clubId] : null;
+            const slot = insertSlots.find((row) => row.afterShotId === shot.id);
+            return (
+              <View key={shot.id}>
+                <Pressable
+                  disabled={readOnly || placing}
+                  onPress={() => openEdit(shot.id)}
+                  style={styles.shot}>
+                  <Text style={styles.shotSeq}>{shot.seq}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.shotClub}>{club?.shortName ?? 'Club'}</Text>
+                    <Text style={styles.meta}>
+                      {shot.source === 'no_gps' || shot.fixQuality === 'none'
+                        ? COPY.logged
+                        : shot.endedAt == null
+                          ? COPY.inPlay
+                          : `${shot.distanceYards ?? '—'} yd`}
+                    </Text>
+                  </View>
+                  <QualityBadge
+                    quality={shot.fixQuality}
+                    open={shot.endedAt == null && shot.source !== 'no_gps'}
+                    source={shot.source}
+                  />
+                </Pressable>
+                {!readOnly && slot ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={COPY.insertShot}
+                    disabled={placing}
+                    onPress={() => startCatchUp(slot.seq)}
+                    style={styles.insertPlus}>
+                    <Text style={styles.insertPlusText}>+</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            );
+          })
+        )}
+        {!readOnly && shots.length === 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={COPY.insertShot}
+            disabled={placing}
+            onPress={() => startCatchUp(1)}
+            style={styles.insertPlus}>
+            <Text style={styles.insertPlusText}>+</Text>
+          </Pressable>
+        ) : null}
+      </ScrollView>
+
       {!readOnly && ranked.length > 0 ? (
         <View style={styles.top3}>
           {ranked.map((club, index) => (
@@ -908,7 +1017,9 @@ export default function HoleScreen() {
                 index === 0 && styles.top3Primary,
                 sticky?.id === club.id && styles.chipOn,
               ]}>
-              <Text style={[styles.top3Text, index === 0 && styles.top3PrimaryText]}>{club.shortName}</Text>
+              <Text style={[styles.top3Text, index === 0 && styles.top3PrimaryText]}>
+                {formatSuggestedClubChip(club.shortName, rankDistanceYards(club))}
+              </Text>
               {index === 0 ? <Text style={styles.suggest}>{COPY.suggested}</Text> : null}
             </Pressable>
           ))}
@@ -995,11 +1106,7 @@ export default function HoleScreen() {
               label={COPY.addShot}
               variant="ghost"
               style={{ flex: 1 }}
-              onPress={() => {
-                closeEdit();
-                resetPlace();
-                setPlaceMode('from');
-              }}
+              onPress={() => startCatchUp(null)}
             />
             <BigButton
               label={COPY.penalty}
@@ -1099,7 +1206,7 @@ export default function HoleScreen() {
                   }}
                   style={[styles.top3Chip, index === 0 && styles.top3Primary]}>
                   <Text style={[styles.top3Text, index === 0 && styles.top3PrimaryText]}>
-                    {club.shortName}
+                    {formatSuggestedClubChip(club.shortName, rankDistanceYards(club))}
                   </Text>
                   {index === 0 ? <Text style={styles.suggest}>{COPY.suggested}</Text> : null}
                 </Pressable>
@@ -1233,29 +1340,43 @@ export default function HoleScreen() {
               const club = shot.clubId ? clubMap[shot.clubId] : null;
               const openShot = shot.endedAt == null;
               const noGps = shot.source === 'no_gps' || shot.fixQuality === 'none';
+              const slot = insertSlots.find((row) => row.afterShotId === shot.id);
               return (
-                <Pressable
-                  key={shot.id}
-                  disabled={readOnly}
-                  onPress={() => openEdit(shot.id)}
-                  style={styles.shot}>
-                  <Text style={styles.shotSeq}>{shot.seq}</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.shotClub}>{club?.name ?? 'Club'}</Text>
-                    <Text style={styles.meta}>
-                      {noGps
-                        ? shot.typedYards != null
-                          ? `${shot.typedYards} yd`
-                          : COPY.logged
-                        : openShot
-                          ? COPY.inPlay
-                          : `${shot.distanceYards ?? '—'} yd`}
-                      {shot.suggested ? ` · ${COPY.suggested}` : ''}
-                    </Text>
-                    {!readOnly ? <Text style={styles.meta}>{COPY.changeClub}</Text> : null}
-                  </View>
-                  <QualityBadge quality={shot.fixQuality} open={openShot && !noGps} source={shot.source} />
-                </Pressable>
+                <View key={shot.id}>
+                  <Pressable
+                    disabled={readOnly}
+                    onPress={() => openEdit(shot.id)}
+                    style={styles.shot}>
+                    <Text style={styles.shotSeq}>{shot.seq}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.shotClub}>{club?.name ?? 'Club'}</Text>
+                      <Text style={styles.meta}>
+                        {noGps
+                          ? shot.typedYards != null
+                            ? `${shot.typedYards} yd`
+                            : COPY.logged
+                          : openShot
+                            ? COPY.inPlay
+                            : `${shot.distanceYards ?? '—'} yd`}
+                        {shot.suggested ? ` · ${COPY.suggested}` : ''}
+                      </Text>
+                      {!readOnly ? <Text style={styles.meta}>{COPY.changeClub}</Text> : null}
+                    </View>
+                    <QualityBadge quality={shot.fixQuality} open={openShot && !noGps} source={shot.source} />
+                  </Pressable>
+                  {!readOnly && slot ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={COPY.insertShot}
+                      onPress={() => {
+                        setScoreOpen(false);
+                        startCatchUp(slot.seq);
+                      }}
+                      style={styles.insertPlus}>
+                      <Text style={styles.insertPlusText}>+</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
               );
             })
           )}
@@ -1283,9 +1404,7 @@ export default function HoleScreen() {
                 variant="secondary"
                 onPress={() => {
                   setScoreOpen(false);
-                  closeEdit();
-                  resetPlace();
-                  setPlaceMode('from');
+                  startCatchUp(null);
                 }}
               />
               <BigButton
@@ -1509,6 +1628,19 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     minHeight: 64,
   },
+  shotList: { paddingHorizontal: 16, paddingTop: 8, gap: 6, maxHeight: 220 },
+  insertPlus: {
+    alignSelf: 'center',
+    minHeight: 36,
+    minWidth: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.lime,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 4,
+  },
+  insertPlusText: { color: colors.lime, fontSize: 22, fontWeight: '900', lineHeight: 24 },
   shotSeq: { color: colors.lime, fontWeight: '900', fontSize: 20, width: 24 },
   shotClub: { color: colors.cream, fontSize: 18, fontWeight: '700' },
   reasonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

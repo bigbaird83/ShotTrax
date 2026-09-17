@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -19,13 +20,17 @@ import {
   finishRound,
   getActiveRound,
   getCourseDistanceUnit,
+  hasSeenBagCustomize,
+  listClubs,
   listHoles,
   listRounds,
+  markBagCustomizeSeen,
   startRound,
   type CourseLayoutSeed,
 } from '@/src/db/repo';
 import { COPY, formatTeeMeta } from '@/src/domain/playerCopy';
 import { describeGpsSource } from '@/src/services/location';
+import { BagCarryList, BagCustomizeActions } from '@/src/ui/BagCarryList';
 import { BigButton } from '@/src/ui/BigButton';
 import { CoursePicker, type CoursePick } from '@/src/ui/CoursePicker';
 import { GpsBanner } from '@/src/ui/GpsBanner';
@@ -69,6 +74,13 @@ export default function HomeScreen() {
   const rounds = useMemo(() => listRounds(db), [db, revision]);
   const active = useMemo(() => getActiveRound(db), [db, revision]);
   const courseDistanceUnit = useMemo(() => getCourseDistanceUnit(db), [db, revision]);
+  const clubs = useMemo(() => listClubs(db), [db, revision]);
+  const bagPromptOpen = useMemo(() => !hasSeenBagCustomize(db), [db, revision]);
+
+  const finishBagPrompt = () => {
+    markBagCustomizeSeen(db);
+    bump();
+  };
 
   const applyPickedCourse = async (course: CourseSummary, holeCount: 9 | 18) => {
     const layout = await loadLayout(course, pickedDetail, pickedTee);
@@ -161,6 +173,17 @@ export default function HomeScreen() {
     <Screen edges={['bottom']} refreshing={refreshing} onRefresh={() => void onRefresh()}>
       <Text style={styles.title}>ShotTraxx</Text>
       <Text style={styles.lede}>{COPY.homeLede}</Text>
+
+      <FullSheet
+        visible={bagPromptOpen}
+        title={COPY.bagCustomizeTitle}
+        onClose={finishBagPrompt}>
+        <ScrollView contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 40 }}>
+          <Text style={styles.lede}>{COPY.bagCustomizeLede}</Text>
+          <BagCustomizeActions onSkip={finishBagPrompt} onDone={finishBagPrompt} />
+          <BagCarryList db={db} clubs={clubs} onChange={bump} />
+        </ScrollView>
+      </FullSheet>
 
       {simMessage ? <GpsBanner message={simMessage} /> : null}
 

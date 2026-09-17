@@ -165,7 +165,8 @@ EAS credentials for `com.shottrax.app.watch` and `com.shottrax.app.watch.widget`
 9. **+ Penalty** adds 1–5 penalty strokes to the hole score, with reason water / OB / unplayable / other (optional note). Shown as a penalty row — not a map polyline. A penalty is **not a Shot for distance**: it never hits `acceptFix`, haversine, club averages, or top-3.
 10. **Add shot** (catch-up only, not live play): tap where you hit from **and** where it landed. Yards are haversine between those two points, shown immediately. Then pick a club — **top 3 ranked against that shot’s yards** (not yards-to-green) plus **All clubs**. Badge **Placed**. Counts in club averages because you confirmed the spots. Tap any shot to **edit**: move **from**, move **to**, or **change club**. Club-only keeps coordinates and moves averages. Moving a pin badges **Placed** and recomputes yards. **Undo edit** if that was wrong. No typed yards, no invented GPS. Live play is unchanged: club tap marks start; next mark or green closes it. Putter stays out of averages. No auto-putts. **Next** is always allowed; a chip flags unfinished shots or putts.
 11. **Putter** opens a putt sheet (phone + Watch) — not a GPS mark. Each putt gets a length bucket (**Under 3 ft · 3–10 · 10–20 · 20+**). Add more putts, each with its own bucket. **Made it** confirms the last putt and advances the hole (next hole + Pick a club, or summary after the last). Putts are stats only — no green GPS and not a map mark. Walking off the green / to the next tee does **not** invent putts. Play continues; a **Finish putts · Hole N** chip stays until you enter them. In-round **Menu** reaches Home, previous hole, and Settings.
-12. Finish the round for a scorecard. Club averages live on the Averages tab (putter is omitted — scoring / green play only). Stock wedges are **PW · 52° · 56° · 60°**.
+12. Finish the round for a scorecard. Club averages live on the Averages tab (putter is omitted — scoring / green play only). Stock wedges are **PW · 48° · 50° · GW · 56° · 60°** (`club_gw` is Gap Wedge, not a second 52° wedge).
+13. The hole shot list has a **+** between each pair of shots and after the last. Tap **+** for the same two-point catch-up (from → to → club). The new shot slots into that gap, or appends after the last. Neighbor pins stay put. Yards recompute from pins. Nothing invented.
 
 Hole **score remains the source of truth**. If you also logged shots and/or penalties, the hole screen and round summary warn when `score ≠ shots + penalty strokes`.
 
@@ -190,7 +191,9 @@ Use **Add shot** when you went back to a hole (or forgot a swing) and want to lo
 | `typed_yards` | always `NULL` — no typed-yards form |
 | `ended_at` | set immediately (closed stroke) |
 
-**Never `acceptFix`.** Placed shots have **no** GPS quality. The **400-yard** cap still asks (**That looks too far. Mark anyway?**) before a silent save; confirming still stores `placed` with no quality.
+**Never `acceptFix`.** Placed shots have **no** GPS quality. The **400-yard** cap still asks (**That looks too far. Mark anyway?**) before a silent save; confirming still stores `placed` with no quality. Pins are the spots they tap, never the phone GPS fix. The add-shot map frames tee → green (or shot pins, or the green), pinch-zoom stays on, and the camera never recenters on the phone.
+
+**Insert / append:** **+** between logged shots and after the last uses this same flow. Sequence numbers stay correct. Neighbors keep their pins.
 
 **Distance averages / top-3:** included because you confirmed both spots. After the two pins, the club picker is **top 3 vs that shot’s yards** (same seed → ≥5 live rule) plus **All clubs**. **Putter** stays out. Live play is unchanged: club tap marks start; next mark or green closes it.
 
@@ -215,7 +218,7 @@ Legacy / forgotten-swing storage when there is no map pin. **Add shot** on the h
 
 ## Top-3 ranking
 
-Stock clubs start from a **typical-carry seed**. **Bag:** tap a club → set **typical carry** in yards (or clear). That seed drives top-3 until the club has **≥5** closed **GPS or Placed** shots with yards (good/soft, and forced included the same as averages; `no_gps` / `fixQuality none` / **putter** excluded; Placed has no GPS quality and still counts). Then the live average **fully replaces** the seed — no blend.
+There is **no fake stock average**. First open prompts once to customize the bag and each club’s carry (skip is allowed so a round is not blocked). Typed carries are the seed until **≥5** closed **GPS or Placed** shots replace them. Skip leaves top-3 empty until live shots exist. **Bag:** carry is edited on the club row and applies immediately (no save). Estimated fill stays off until **3** clubs have a typed number, then interpolates only between those clubs in loft order (badge **Estimated**). Outside that span stays blank. Typed always wins. Putter is never filled and never in Suggested. Suggested chips show that club’s carry (`7i · 155` or `7i · —`), not yards-to-green. The picker shows remaining yards as **148 left** only when yards-to-green quality is good or soft; otherwise **—**.
 
 - **Live play D** = `yardsToGreen(fix, greenCentroid).yards` **only when `quality !== none`** (good or soft GPS + a real green centroid)
 - else **D** = last closed **GPS or Placed** shot distance on this hole

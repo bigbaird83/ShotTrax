@@ -10,6 +10,7 @@ import {
   applyShotPlacement,
   getShot,
   insertPlacedShot,
+  insertPlacedShotAtSeq,
   nextShotSeq,
   restoreShotSnapshot,
   sealOpenShotWithoutGps,
@@ -235,6 +236,8 @@ export function addPlacedShot(
     from: LatLng;
     to: LatLng;
     force?: boolean;
+    /** When set, insert at this seq (between or append). Otherwise append after last. */
+    seq?: number;
   },
 ): AddPlacedShotResult {
   if (isPutterClubId(args.clubId)) return { status: 'rejected' };
@@ -247,13 +250,23 @@ export function addPlacedShot(
   if (!hole) {
     throw new Error(`Hole ${args.holeNumber} not found`);
   }
-  const id = insertPlacedShot(db, {
-    holeId: hole.id,
-    clubId: args.clubId,
-    seq: nextShotSeq(db, hole.id),
-    from: args.from,
-    to: args.to,
-  });
+  const seq = args.seq ?? nextShotSeq(db, hole.id);
+  const id =
+    args.seq != null
+      ? insertPlacedShotAtSeq(db, {
+          holeId: hole.id,
+          clubId: args.clubId,
+          seq,
+          from: args.from,
+          to: args.to,
+        })
+      : insertPlacedShot(db, {
+          holeId: hole.id,
+          clubId: args.clubId,
+          seq,
+          from: args.from,
+          to: args.to,
+        });
   if (!id) return { status: 'rejected' };
   setRoundLastClub(db, args.roundId, args.clubId);
   return { status: 'commit', id };
