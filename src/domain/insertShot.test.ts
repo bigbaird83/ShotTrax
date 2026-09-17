@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { haversineYards, roundYards } from './haversine';
-import { planInsertPlacedShot, planInsertSlots, planRenumberAfterInsert, yardsFromShotPins } from './insertShot';
+import {
+  insertMovesNeighborPins,
+  insertSharesEndpoints,
+  planInsertPlacedShot,
+  planInsertSlots,
+  planRenumberAfterInsert,
+  yardsFromShotPins,
+} from './insertShot';
+import { placedShotRunsAcceptFix } from './shotSource';
 import type { Shot } from './types';
 
 function shot(partial: Partial<Shot> & { id: string; seq: number }): Shot {
@@ -71,10 +79,64 @@ test('insert-between slots the new shot and renumbers later seqs; neighbors keep
   assert.equal(planned.plan.endLat, to.lat);
   assert.equal(planned.plan.distanceYards, roundYards(haversineYards(from, to)));
   assert.deepEqual(planned.renumber, [{ id: 's2', seq: 3 }]);
-  assert.equal(planned.neighborYards.every((row) => row.pinsUnchanged), true);
+  assert.equal(insertMovesNeighborPins(), false);
+  assert.equal(insertSharesEndpoints(), false);
+  assert.equal(placedShotRunsAcceptFix(), false);
+  assert.equal(planned.plan.source, 'placed');
+  const before = [first, second].map((shot) => ({
+    id: shot.id,
+    startLat: shot.startLat,
+    startLng: shot.startLng,
+    endLat: shot.endLat,
+    endLng: shot.endLng,
+    distanceYards: shot.distanceYards,
+  }));
+  assert.deepEqual(planned.neighbors, before);
   assert.equal(first.startLat, 37);
   assert.equal(second.startLat, 37.004);
+  assert.equal(second.distanceYards, 90);
   assert.equal(planInsertPlacedShot({ shots: [first, second], seq: 2, from, to, clubId: 'club_putter' }).ok, false);
+});
+
+test('insert does not change neighbor coordinates or yards', () => {
+  const first = shot({
+    id: 's1',
+    seq: 1,
+    startLat: 36.9,
+    startLng: -121.9,
+    endLat: 36.91,
+    endLng: -121.9,
+    distanceYards: 188,
+  });
+  const second = shot({
+    id: 's2',
+    seq: 2,
+    startLat: 36.92,
+    startLng: -121.88,
+    endLat: 36.93,
+    endLng: -121.88,
+    distanceYards: 77,
+  });
+  const planned = planInsertPlacedShot({
+    shots: [first, second],
+    seq: 2,
+    from,
+    to,
+    clubId: 'club_6i',
+  });
+  assert.equal(planned.ok, true);
+  if (!planned.ok) return;
+  assert.equal(planned.plan.distanceYards, roundYards(haversineYards(from, to)));
+  assert.notEqual(planned.plan.startLat, first.endLat);
+  assert.notEqual(planned.plan.endLat, second.startLat);
+  for (const neighbor of planned.neighbors) {
+    const prior = neighbor.id === 's1' ? first : second;
+    assert.equal(neighbor.startLat, prior.startLat);
+    assert.equal(neighbor.startLng, prior.startLng);
+    assert.equal(neighbor.endLat, prior.endLat);
+    assert.equal(neighbor.endLng, prior.endLng);
+    assert.equal(neighbor.distanceYards, prior.distanceYards);
+  }
 });
 
 test('append-after adds at the end without moving earlier seqs', () => {

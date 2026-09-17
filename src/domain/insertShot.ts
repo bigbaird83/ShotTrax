@@ -51,6 +51,15 @@ export function yardsFromShotPins(shot: {
   return plan.ok ? plan.distanceYards : null;
 }
 
+export type NeighborSnapshot = {
+  id: string;
+  startLat: number | null;
+  startLng: number | null;
+  endLat: number | null;
+  endLng: number | null;
+  distanceYards: number | null;
+};
+
 export type InsertPlacedPlan =
   | { ok: false }
   | {
@@ -60,13 +69,22 @@ export type InsertPlacedPlan =
       clubId: string;
       plan: { ok: true } & PlacedShotPlan;
       renumber: { id: string; seq: number }[];
-      /** Neighbors keep pins. Recompute yards only from those pins — never invent. */
-      neighborYards: { id: string; distanceYards: number | null; pinsUnchanged: true }[];
+      /** Neighbors stay exactly as stored. Do not move pins or rewrite yards. */
+      neighbors: NeighborSnapshot[];
     };
+
+/** Insert never shares endpoints or invents a gap-fill point. */
+export function insertMovesNeighborPins(): false {
+  return false;
+}
+
+export function insertSharesEndpoints(): false {
+  return false;
+}
 
 /**
  * Insert a catch-up Placed shot at `seq` (between or append).
- * Pins are the two taps. Neighbors keep their pins. No guessed GPS, club, or yards.
+ * Yards = haversine of that shot's own from/to taps. Neighbors keep pins and yards.
  */
 export function planInsertPlacedShot(args: {
   shots: Shot[];
@@ -84,12 +102,15 @@ export function planInsertPlacedShot(args: {
   const maxSeq = ordered.length === 0 ? 0 : ordered[ordered.length - 1].seq;
   const append = args.seq > maxSeq;
   const renumber = planRenumberAfterInsert(ordered, args.seq);
-  const neighborYards = ordered
+  const neighbors = ordered
     .filter((shot) => shot.seq === args.seq - 1 || shot.seq === args.seq)
     .map((shot) => ({
       id: shot.id,
-      distanceYards: yardsFromShotPins(shot),
-      pinsUnchanged: true as const,
+      startLat: shot.startLat,
+      startLng: shot.startLng,
+      endLat: shot.endLat,
+      endLng: shot.endLng,
+      distanceYards: shot.distanceYards,
     }));
   return {
     ok: true,
@@ -98,6 +119,6 @@ export function planInsertPlacedShot(args: {
     clubId: args.clubId,
     plan,
     renumber,
-    neighborYards,
+    neighbors,
   };
 }

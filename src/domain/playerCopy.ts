@@ -99,6 +99,8 @@ export const COPY = {
   clearTypicalCarry: 'Clear carry',
   estimated: 'Estimated',
   insertShot: 'Insert shot',
+  nerdOut: 'Nerd out',
+  nerdOutLede: 'Score, putts, and how far you hit each club.',
   summaryHome: 'Home',
 } as const;
 

@@ -4,7 +4,7 @@ import {
   seedHoleFromCourse,
   type CourseLayoutSeed,
 } from '../course/layout';
-import { applyCarryFill } from '../domain/carryFill';
+import { applyCarryFill, fillEstimatedCarries, type CarrySource } from '../domain/carryFill';
 import { DEFAULT_BAG, isPutterClubId, typicalCarrySeedForClub } from '../domain/defaultBag';
 import { bagCustomizeSeenValue, BAG_CUSTOMIZE_SETTING_KEY, shouldPromptBagCustomize } from '../domain/bagCustomize';
 import { planInsertPlacedShot } from '../domain/insertShot';
@@ -930,10 +930,6 @@ export function insertPlacedShotAtSeq(
     for (const row of planned.renumber) {
       db.runSync('UPDATE shots SET seq = ? WHERE id = ?', [row.seq, row.id]);
     }
-    for (const row of planned.neighborYards) {
-      if (row.distanceYards == null) continue;
-      db.runSync('UPDATE shots SET distance_yards = ? WHERE id = ?', [row.distanceYards, row.id]);
-    }
     id = insertPlacedShot(db, {
       holeId: args.holeId,
       clubId: args.clubId,
@@ -1005,10 +1001,13 @@ export function insertPenalty(
 export type ClubAverageRow = ClubAverage & {
   club: Club;
   typicalCarryYards: number | null;
+  carrySource: CarrySource;
 };
 
 export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
-  const clubs = applyCarryFill(listClubs(db, false).filter((club) => !isPutterClubId(club.id)));
+  const raw = listClubs(db, false).filter((club) => !isPutterClubId(club.id));
+  const filled = fillEstimatedCarries(raw);
+  const clubs = applyCarryFill(raw);
   const shots = db.getAllSync<{
     club_id: string;
     distance_yards: number;
@@ -1052,7 +1051,12 @@ export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
               : null;
         return { yards: s.distance_yards, fixQuality: quality };
       });
-    return { club, typicalCarryYards: typicalCarrySeedForClub(club), ...averageWithBadges(forClub) };
+    return {
+      club,
+      typicalCarryYards: typicalCarrySeedForClub(club),
+      carrySource: filled.get(club.id)?.source ?? null,
+      ...averageWithBadges(forClub),
+    };
   });
 }
 

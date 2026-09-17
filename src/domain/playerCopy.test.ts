@@ -52,6 +52,8 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.bagCustomizeSkip, 'Skip');
   assert.equal(COPY.estimated, 'Estimated');
   assert.equal(COPY.insertShot, 'Insert shot');
+  assert.equal(COPY.nerdOut, 'Nerd out');
+  assert.equal(COPY.nerdOutLede, 'Score, putts, and how far you hit each club.');
   assert.equal(COPY.putts, 'Putts');
   assert.equal(COPY.madeIt, 'Made it');
   assert.equal(COPY.puttSheetLede, 'How long was the putt?');

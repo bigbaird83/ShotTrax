@@ -1,20 +1,40 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { formatParLabel, formatSiLabel, formatTeeMeta } from '@/src/course/layout';
 import { useDb } from '@/src/db/DbProvider';
-import { getRound, listHoles, listPenaltiesForHole, listShotsForHole } from '@/src/db/repo';
+import { getRound, listClubAverages, listClubs, listHoles, listPenaltiesForHole, listShotsForHole } from '@/src/db/repo';
+import { planNerdOut } from '@/src/domain/nerdOut';
 import { formatPenaltyRow, totalPenaltyStrokes } from '@/src/domain/penalty';
+import { COPY } from '@/src/domain/playerCopy';
 import { reconcileHoleScore } from '@/src/domain/scoreReconcile';
 import { BigButton } from '@/src/ui/BigButton';
 import { Screen } from '@/src/ui/Screen';
+import { FullSheet } from '@/src/ui/Sheet';
 import { colors } from '@/src/ui/theme';
 
 export default function RoundSummaryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { db, revision } = useDb();
+  const [nerdOpen, setNerdOpen] = useState(false);
   const round = useMemo(() => getRound(db, id), [db, id, revision]);
   const holes = useMemo(() => (round ? listHoles(db, round.id) : []), [db, round, revision]);
+  const clubs = useMemo(() => listClubs(db), [db, revision]);
+  const averages = useMemo(() => listClubAverages(db), [db, revision]);
+  const nerd = useMemo(
+    () =>
+      planNerdOut({
+        holeScores: holes.map((hole) => hole.score),
+        holePutts: holes.map((hole) => hole.putts),
+        clubs,
+        averages: averages.map((row) => ({
+          clubId: row.club.id,
+          count: row.count,
+          avgYards: row.avgYards,
+        })),
+      }),
+    [holes, clubs, averages],
+  );
 
   if (!round) {
     return (
@@ -100,7 +120,35 @@ export default function RoundSummaryScreen() {
         );
       })}
 
-      <BigButton label="Home" variant="secondary" onPress={() => router.replace('/')} />
+      <BigButton label={COPY.nerdOut} variant="secondary" onPress={() => setNerdOpen(true)} />
+      <BigButton label={COPY.home} variant="ghost" onPress={() => router.replace('/')} />
+
+      <FullSheet visible={nerdOpen} title={COPY.nerdOut} onClose={() => setNerdOpen(false)}>
+        <ScrollView contentContainerStyle={styles.nerdPad}>
+          <Text style={styles.muted}>{COPY.nerdOutLede}</Text>
+          <Text style={styles.nerdLabel}>{COPY.score}</Text>
+          <Text style={styles.nerdValue}>{nerd.score ?? '—'}</Text>
+          <Text style={styles.nerdLabel}>{COPY.putts}</Text>
+          <Text style={styles.nerdValue}>{nerd.putts}</Text>
+          {nerd.clubs.map((row) => (
+            <View key={row.id} style={styles.nerdRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.holeTitle}>{row.name}</Text>
+                <Text style={styles.muted}>
+                  {row.kind === 'live'
+                    ? `${row.count} shot${row.count === 1 ? '' : 's'}`
+                    : row.kind === 'estimated'
+                      ? COPY.estimated
+                      : row.kind === 'typed'
+                        ? COPY.typicalCarry
+                        : COPY.noClosedShots}
+                </Text>
+              </View>
+              <Text style={styles.score}>{row.yards != null ? `${row.yards}` : '—'}</Text>
+            </View>
+          ))}
+        </ScrollView>
+      </FullSheet>
     </Screen>
   );
 }
@@ -125,4 +173,16 @@ const styles = StyleSheet.create({
   holeNum: { color: colors.lime, fontSize: 22, fontWeight: '900', width: 28 },
   holeTitle: { color: colors.cream, fontSize: 18, fontWeight: '700' },
   score: { color: colors.cream, fontSize: 24, fontWeight: '900' },
+  nerdPad: { padding: 16, gap: 10, paddingBottom: 40 },
+  nerdLabel: { color: colors.muted, fontSize: 14, fontWeight: '800' },
+  nerdValue: { color: colors.cream, fontSize: 36, fontWeight: '900' },
+  nerdRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: colors.bgElevated,
+    padding: 12,
+    borderRadius: 14,
+    minHeight: 64,
+  },
 });
