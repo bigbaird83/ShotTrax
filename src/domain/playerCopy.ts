@@ -49,6 +49,7 @@ export const COPY = {
   menu: 'Menu',
   settings: 'Settings',
   courseDistance: 'Course distance',
+  courseDistanceSetting: 'Course distance: Miles / Kilometers',
   miles: 'Miles',
   kilometers: 'Kilometers',
   madeIt: 'Made it',
@@ -77,6 +78,8 @@ export const COPY = {
   averagesLede: 'How far you hit each club — from marked shots.',
   noClosedShots: 'No marked shots yet',
   typicalCarry: 'Typical',
+  typicalCarryYards: 'Typical carry (yd)',
+  clearTypicalCarry: 'Clear typical carry',
   summaryHome: 'Home',
 } as const;
 

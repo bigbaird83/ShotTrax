@@ -29,3 +29,10 @@ test('short nearby distances are under 1 mi or under 1 km', () => {
   assert.equal(formatCourseDistance(400, 'mi'), '< 1 mi');
   assert.equal(formatCourseDistance(400, 'km'), '< 1 km');
 });
+
+test('Doc/Lead: course miles/km is separate from shot yards and putt buckets', () => {
+  assert.equal(DEFAULT_COURSE_DISTANCE_UNIT, 'mi');
+  assert.equal(formatCourseDistance(13_000), '8.1 mi');
+  assert.notEqual(formatCourseDistance(13_000), '13.0 km');
+  assert.equal(formatCourseDistance(null, 'mi'), null);
+});

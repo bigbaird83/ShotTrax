@@ -18,7 +18,7 @@ export default function SettingsScreen() {
   return (
     <Screen>
       <Text style={styles.title}>{COPY.settings}</Text>
-      <Text style={styles.label}>{COPY.courseDistance}</Text>
+      <Text style={styles.label}>{COPY.courseDistanceSetting}</Text>
       <View style={styles.row}>
         <Pressable
           accessibilityRole="button"

@@ -38,6 +38,8 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.bagLede, 'Your bag. Turn off what you don’t carry.');
   assert.equal(COPY.restoreBag, 'Restore stock bag');
   assert.equal(COPY.typicalCarry, 'Typical');
+  assert.equal(COPY.typicalCarryYards, 'Typical carry (yd)');
+  assert.equal(COPY.clearTypicalCarry, 'Clear typical carry');
   assert.equal(COPY.putts, 'Putts');
   assert.equal(COPY.madeIt, 'Made it');
   assert.equal(COPY.puttSheetLede, 'How long was the putt?');
@@ -46,6 +48,7 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.settings, 'Settings');
   assert.equal(COPY.home, 'Home');
   assert.equal(COPY.courseDistance, 'Course distance');
+  assert.equal(COPY.courseDistanceSetting, 'Course distance: Miles / Kilometers');
   assert.equal(COPY.miles, 'Miles');
   assert.equal(COPY.kilometers, 'Kilometers');
   assert.equal(finishPuttsChip(4), 'Finish putts · Hole 4');
