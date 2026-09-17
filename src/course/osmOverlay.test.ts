@@ -104,17 +104,16 @@ test('fetchOsmOverlay returns null on Overpass failure — graceful empty overla
 });
 
 test('fetchOsmOverlay POSTs around a real pin and returns parsed features', async () => {
+  let method: string | undefined;
+  let url = '';
+  let body = '';
   const overlay = await fetchOsmOverlay(
     { location: { lat: 37.01, lng: -86.43 }, holeNumber: 1 },
     {
       fetch: async (input, init) => {
-        assert.equal(String(input).includes('overpass'), true);
-        assert.equal(init?.method, 'POST');
-        const body = decodeURIComponent(String(init?.body ?? ''));
-        assert.match(body, /golf="green"/);
-        assert.match(body, /golf="fairway"/);
-        assert.match(body, /golf="tee"/);
-        assert.match(body, /golf="hole"/);
+        url = String(input);
+        method = init?.method;
+        body = decodeURIComponent(String(init?.body ?? ''));
         return new Response(
           JSON.stringify({
             elements: [
@@ -129,11 +128,17 @@ test('fetchOsmOverlay POSTs around a real pin and returns parsed features', asyn
               },
             ],
           }),
-          { status: 200 },
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
       },
     },
   );
+  assert.match(url, /overpass/);
+  assert.equal(method, 'POST');
+  assert.match(body, /\["golf"="green"\]/);
+  assert.match(body, /\["golf"="fairway"\]/);
+  assert.match(body, /\["golf"="tee"\]/);
+  assert.match(body, /\["golf"="hole"\]/);
   assert.ok(overlay);
   assert.equal(overlay?.features[0].kind, 'green');
 });
