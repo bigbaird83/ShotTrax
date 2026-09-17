@@ -102,6 +102,11 @@ export function planPlacedShot(from: LatLng, to: LatLng): { ok: false } | ({ ok:
   };
 }
 
+/** Signal Lab: catch-up Placed shots never run acceptFix. Live GPS marks still do. */
+export function placedShotRunsAcceptFix(): false {
+  return false;
+}
+
 /**
  * 400-yard cap: ask before a silent save. Confirming still stores `placed`
  * with no GPS quality — never acceptFix / forceMark / forced.

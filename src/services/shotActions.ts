@@ -24,7 +24,7 @@ import { preferWatchFix } from '../domain/preferWatchFix';
 import { isPutterClubId } from '../domain/defaultBag';
 import type { LatLng } from '../domain/latLng';
 import { planChangeShotClub, planMoveShotPin, type ShotEditSnapshot } from '../domain/shotEdit';
-import { confirmPlacedShot, planPlacedShot } from '../domain/shotSource';
+import { confirmPlacedShot, placedShotRunsAcceptFix, planPlacedShot } from '../domain/shotSource';
 import type { GpsFix, OpenShot, PenaltyReason } from '../domain/types';
 import { COPY } from '../domain/playerCopy';
 import { acceptFix, forceMark } from '../sensing/api';
@@ -238,6 +238,7 @@ export function addPlacedShot(
   },
 ): AddPlacedShotResult {
   if (isPutterClubId(args.clubId)) return { status: 'rejected' };
+  if (placedShotRunsAcceptFix()) return { status: 'rejected' };
   const plan = planPlacedShot(args.from, args.to);
   if (!plan.ok) return { status: 'rejected' };
   const gate = confirmPlacedShot(plan, Boolean(args.force));
