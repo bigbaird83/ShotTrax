@@ -4,7 +4,7 @@ import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-nativ
 import { useDb } from '@/src/db/DbProvider';
 import { getHole, listClubAverages, listClubs, listShotsForHole } from '@/src/db/repo';
 import { COPY } from '@/src/domain/playerCopy';
-import { clubPickLeaveHref } from '@/src/domain/clubPickNav';
+import { clubPickLeaveHref, planClubPickLeave } from '@/src/domain/clubPickNav';
 import { putterOpensPuttSheet } from '@/src/domain/putts';
 import { clubToRankInput, lastClosedShotYards, rankTopClubs, resolveDistanceTarget } from '@/src/domain/rankClubs';
 import { parseTypedYards } from '@/src/domain/shotSource';
@@ -37,8 +37,18 @@ export default function ClubPickScreen() {
   const { db, revision, bump } = useDb();
 
   const leavePicker = (action: 'back' | 'home') => {
+    const plan = planClubPickLeave(action);
+    if (plan.mark || plan.selectClub || plan.savesGps || plan.closesPendingShot) return;
+    if (plan.dest === 'rounds') {
+      router.replace('/');
+      return;
+    }
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
     if (!id || Number.isNaN(holeNumber)) return;
-    router.replace(clubPickLeaveHref({ action, roundId: id, holeNumber }));
+    router.replace(clubPickLeaveHref({ action: 'back', roundId: id, holeNumber }));
   };
   const clubs = useMemo(() => listClubs(db, true), [db, revision]);
   const holeRow = useMemo(() => getHole(db, id, holeNumber), [db, id, holeNumber, revision]);

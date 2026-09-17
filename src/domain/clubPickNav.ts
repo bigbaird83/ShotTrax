@@ -5,6 +5,8 @@ export type ClubPickLeaveAction = 'back' | 'home';
 export type ClubPickLeavePlan = {
   selectClub: false;
   mark: false;
+  savesGps: false;
+  closesPendingShot: false;
   dest: 'hole' | 'rounds';
   keepRoundInProgress: true;
 };
@@ -13,6 +15,8 @@ export function planClubPickLeave(action: ClubPickLeaveAction): ClubPickLeavePla
   return {
     selectClub: false,
     mark: false,
+    savesGps: false,
+    closesPendingShot: false,
     dest: action === 'home' ? 'rounds' : 'hole',
     keepRoundInProgress: true,
   };

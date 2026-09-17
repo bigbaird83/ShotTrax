@@ -26,6 +26,7 @@ import {
   updateHoleScore,
 } from '@/src/db/repo';
 import { pinOrNull, formatFmbRow, hasApiFmb, yardsToGreenDepth } from '@/src/domain/greenDepth';
+import { clubPickLeaveHref, planClubPickLeave } from '@/src/domain/clubPickNav';
 import { COPY, finishPuttsChip, formatHoleHeader, markedSuggestedMessage, voiceFailRecovery } from '@/src/domain/playerCopy';
 import { formatPenaltyRow, PENALTY_REASONS, totalPenaltyStrokes } from '@/src/domain/penalty';
 import {
@@ -349,7 +350,9 @@ export default function HoleScreen() {
         void openPuttSheet(holeNumber);
       },
       onLeave: (action) => {
-        if (action === 'home') router.replace('/');
+        const plan = planClubPickLeave(action);
+        if (plan.mark || plan.selectClub || plan.savesGps || plan.closesPendingShot) return;
+        if (plan.dest === 'rounds') router.replace(clubPickLeaveHref({ action, roundId: id, holeNumber }));
       },
       onPuttPick: onWatchPuttPick,
       labelForClub: (clubId) => clubMap[clubId]?.shortName ?? clubs.find((club) => club.id === clubId)?.shortName ?? null,

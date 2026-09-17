@@ -163,6 +163,11 @@ export function parseClubPick(raw: unknown): ClubPickMessage | null {
   return pick;
 }
 
+/** Only a clubPick (club tap / Watch tap / Same club) runs acceptFix. Back/Home never do. */
+export function watchPayloadRunsAcceptFix(raw: unknown): boolean {
+  return parseClubPick(raw) != null;
+}
+
 export function clubListPayload(args: {
   top3: ClubId[];
   bag: ClubId[];

@@ -20,6 +20,7 @@ import {
   parseClubPick,
   parsePuttPick,
   parsePuttSheet,
+  watchPayloadRunsAcceptFix,
   puttPickPayload,
   puttSheetPayload,
   PUTTS_ON_WATCH,
@@ -201,6 +202,14 @@ test('Watch Back and Home never parse as a club pick', () => {
   assert.deepEqual(parseClubNav(JSON.parse(JSON.stringify(back))), back);
   assert.equal(parseClubPick(back), null);
   assert.equal(parseClubPick(home), null);
+  assert.equal(watchPayloadRunsAcceptFix(back), false);
+  assert.equal(watchPayloadRunsAcceptFix(home), false);
+  assert.equal(
+    watchPayloadRunsAcceptFix(clubPickPayload({ clubId: 'club_7i', at: '2026-09-17T22:00:00.000Z' })),
+    true,
+  );
+  assert.equal('lat' in back, false);
+  assert.equal('lng' in home, false);
   assert.equal(parseClubNav({ type: 'clubNav', action: 'mark', at: '2026-09-17T22:00:00.000Z' }), null);
 });
 
