@@ -159,6 +159,9 @@ test('no eligible clubs (all <5 shots) → empty ranking so UI shows full bag', 
 test('seeded bag loftRanks increase toward the short clubs', () => {
   const putter = DEFAULT_BAG.find((c) => c.id === 'club_putter');
   const driver = DEFAULT_BAG.find((c) => c.id === 'club_driver');
-  assert.ok(putter && driver);
+  const twoIron = DEFAULT_BAG.find((c) => c.id === 'club_2i');
+  const fiveIron = DEFAULT_BAG.find((c) => c.id === 'club_5i');
+  assert.ok(putter && driver && twoIron && fiveIron);
   assert.ok((putter?.loftRank ?? 0) > (driver?.loftRank ?? 0));
+  assert.ok((fiveIron?.loftRank ?? 0) > (twoIron?.loftRank ?? 0));
 });

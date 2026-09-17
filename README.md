@@ -156,7 +156,7 @@ EAS credentials for `com.shottrax.app.watch` and `com.shottrax.app.watch.widget`
 3. Hole advance opens **Pick a club**. Say or tap a club — that **marks GPS immediately** (start now; closes the prior shot’s end). On-screen: “Picking a club marks where you hit from.” No Confirm sheet. Top-3 **#1 suggested** is larger/highlighted; #2–3 are secondary.
 4. **Walk-away assist** (Pick a club only — shot pending, no club tap yet this lie): dwell ≥10 s inside 8 yd, then leave ≥20 yd for 2 consecutive fixes → auto-mark **#1** at the lie pin (not the cart). Badge **Suggested**. Toast: **“Marked 7i (suggested) · Change club.”** Soft dwell → Approximate + Suggested. Poor/none dwell never silent-marks. Already-marked lie / Drop-Penalty / Change club / no-GPS skip. Re-arm only after the next dwell. Club tap / Watch stay primary.
 5. **Change club** on any logged shot later — GPS start/end and yards stay; club averages follow the new club.
-6. **Same club** is the one-tap escape after that. **Undo last** if the club was wrong (or pick another before you walk). **Mark without club**, no-GPS, and Drop / Penalty stay available. GPS at the club pick = shot **start**; if this hole already had an open GPS shot, that same fix is its **end** and yards are logged (haversine).
+6. **All clubs** stays on the hole sheet and opens the full bag. The sticky club chip (e.g. **2 i**) does the same. **Same club** is the one-tap repeat mark. Voice fail offers **Pick a club** (opens the bag) and **Say again** — never voice-only. **Undo last** if the club was wrong (or pick another before you walk). **Mark without club**, no-GPS, and Drop / Penalty stay available. GPS at the club pick = shot **start**; if this hole already had an open GPS shot, that same fix is its **end** and yards are logged (haversine).
 7. **End last shot** closes an open GPS shot without starting a new one.
 8. **+ Penalty** adds 1–5 penalty strokes to the hole score, with reason water / OB / unplayable / other (optional note). Shown as a penalty row — not a map polyline. A penalty is **not a Shot for distance**: it never hits `acceptFix`, haversine, club averages, or top-3.
 9. **Add shot without GPS** (forgotten swing / no fix): pick a club and optionally type yards (or leave blank). Stored as `source = no_gps`, `fixQuality = none`, **null** lat/lng, **null** `distance_yards`. Typed yards live in `typed_yards` (score/UI only) and are **excluded from distance averages and top-3**. No include-typed-yards toggle in MVP. Never invents a coordinate and never calls `acceptFix`.
@@ -196,7 +196,7 @@ After a club has **≥5** closed **GPS** shots with yards (soft and forced inclu
 - else **D** = last closed **GPS** shot distance on this hole
 - else full bag (no ranking)
 
-The 3 eligible clubs with the lowest `|avgYards − D|` are surfaced. Ties prefer the **shorter** club (higher `loftRank`). Full bag is always one tap away. Penalties do not affect ranking.
+The 3 eligible clubs with the lowest `|avgYards − D|` are surfaced. Ties prefer the **shorter** club (higher `loftRank`). **All clubs** is always one tap away. Penalties do not affect ranking.
 
 ## Sensing gates (locked, unchanged from P1)
 

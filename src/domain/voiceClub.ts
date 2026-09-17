@@ -13,12 +13,15 @@ const NUMBER_WORDS: Record<string, string> = {
   ten: '10',
 };
 
-/** Spoken nicknames for the seeded 14-club bag. Custom clubs still match on name/shortName. */
+/** Spoken nicknames for the seeded stock bag. Custom clubs still match on name/shortName. */
 export const DEFAULT_CLUB_NICKNAMES: Record<string, string[]> = {
   club_driver: ['driver', 'the driver', 'big dog', 'big stick', '1 wood', '1w', 'one wood'],
   club_3w: ['3 wood', '3w', 'three wood', 'spoon', '3wood'],
   club_5w: ['5 wood', '5w', 'five wood', '5wood'],
   club_4h: ['4 hybrid', '4h', 'four hybrid', '4 rescue', 'hybrid', 'rescue', 'utility'],
+  club_2i: ['2 iron', '2i', '2 i', 'two iron', '2iron'],
+  club_3i: ['3 iron', '3i', '3 i', 'three iron', '3iron'],
+  club_4i: ['4 iron', '4i', '4 i', 'four iron', '4iron'],
   club_5i: ['5 iron', '5i', 'five iron', '5iron'],
   club_6i: ['6 iron', '6i', 'six iron', '6iron'],
   club_7i: ['7 iron', '7i', 'seven iron', '7iron'],
@@ -79,6 +82,7 @@ function aliasesForClub(club: Club): string[] {
     if (kind === 'i') push(`${n} iron`);
     if (kind === 'w') push(`${n} wood`);
     if (kind === 'h') push(`${n} hybrid`);
+    push(`${n} ${kind}`);
   }
 
   for (const nick of DEFAULT_CLUB_NICKNAMES[club.id] ?? []) {

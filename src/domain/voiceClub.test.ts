@@ -58,18 +58,31 @@ test('disabled clubs are not matched', () => {
   assert.equal(matchSpokenClub('seven iron', clubs), null);
 });
 
+test('two / three / four iron map to stock 2i, 3i, 4i', () => {
+  assert.equal(idFor('2 iron'), 'club_2i');
+  assert.equal(idFor('two iron'), 'club_2i');
+  assert.equal(idFor('2 i'), 'club_2i');
+  assert.equal(idFor('2i'), 'club_2i');
+  assert.equal(idFor('3i'), 'club_3i');
+  assert.equal(idFor('3 i'), 'club_3i');
+  assert.equal(idFor('three iron'), 'club_3i');
+  assert.equal(idFor('four iron'), 'club_4i');
+  assert.equal(idFor('4i'), 'club_4i');
+  assert.equal(idFor('4 i'), 'club_4i');
+});
+
 test('custom bag club matches on name without a seeded nickname', () => {
   const clubs: Club[] = [
     ...bag(),
     {
-      id: 'club_2i',
-      name: '2 Iron',
-      shortName: '2i',
+      id: 'club_1i',
+      name: '1 Iron',
+      shortName: '1i',
       loftRank: 3.5,
       sortOrder: 3,
       enabled: true,
     },
   ];
-  assert.equal(matchSpokenClub('2 iron', clubs)?.id, 'club_2i');
-  assert.equal(matchSpokenClub('two iron', clubs)?.id, 'club_2i');
+  assert.equal(matchSpokenClub('1 iron', clubs)?.id, 'club_1i');
+  assert.equal(matchSpokenClub('one iron', clubs)?.id, 'club_1i');
 });

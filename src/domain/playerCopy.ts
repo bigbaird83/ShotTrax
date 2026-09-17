@@ -30,9 +30,11 @@ export const COPY = {
   drop: 'Drop',
   penalty: 'Penalty',
   sayClub: 'Say a club',
+  sayAgain: 'Say again',
   listening: 'Listening…',
   bag: 'Bag',
   fullBag: 'Full bag',
+  allClubs: 'All clubs',
   top3: 'Top 3',
   top3Unlock: 'Top clubs unlock after a few shots',
   pickClub: 'Pick a club',
@@ -58,8 +60,8 @@ export const COPY = {
   cancel: 'Cancel',
   locationOff: 'Turn on location to mark.',
   simulator: 'Simulator — move the location pin between shots.',
-  restoreBag: 'Restore 14-club bag',
-  bagLede: 'Your 14 clubs. Turn off what you don’t carry.',
+  restoreBag: 'Restore stock bag',
+  bagLede: 'Your bag. Turn off what you don’t carry.',
   averagesLede: 'How far you hit each club — from marked shots.',
   noClosedShots: 'No marked shots yet',
   summaryHome: 'Home',
@@ -67,6 +69,19 @@ export const COPY = {
 
 export function markedSuggestedMessage(shortName: string): string {
   return `Marked ${shortName} (suggested) · Change club.`;
+}
+
+/** Voice fail always offers a tap into the bag — never voice-only recovery. */
+export function voiceFailRecovery(): {
+  banner: string;
+  primaryLabel: string;
+  secondaryLabel: string;
+} {
+  return {
+    banner: COPY.didntCatchClub,
+    primaryLabel: COPY.pickClub,
+    secondaryLabel: COPY.sayAgain,
+  };
 }
 
 export function formatParLabel(par: number | null): string {
