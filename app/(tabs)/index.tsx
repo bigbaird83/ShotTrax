@@ -1,13 +1,21 @@
 import * as Device from 'expo-device';
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import {
+  Alert,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { getCourseDataClient } from '@/src/course/client';
 import { layoutFromTee } from '@/src/course/layout';
 import type { CourseDetail, CourseSummary, TeeSet } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
 import {
   attachCourseToRound,
+  deleteRound,
   finishRound,
   getActiveRound,
   listHoles,
@@ -15,11 +23,15 @@ import {
   startRound,
   type CourseLayoutSeed,
 } from '@/src/db/repo';
+import { COPY, formatTeeMeta } from '@/src/domain/playerCopy';
+import { describeGpsSource } from '@/src/services/location';
 import { BigButton } from '@/src/ui/BigButton';
 import { CoursePicker, type CoursePick } from '@/src/ui/CoursePicker';
 import { GpsBanner } from '@/src/ui/GpsBanner';
 import { Screen } from '@/src/ui/Screen';
-import { colors } from '@/src/ui/theme';
+import { FullSheet } from '@/src/ui/Sheet';
+import { colors, tapTarget, type } from '@/src/ui/theme';
+import { getCurrentFix } from '@/src/services/location';
 
 async function loadLayout(
   course: CourseSummary,
@@ -47,14 +59,18 @@ export default function HomeScreen() {
   const [pickedTee, setPickedTee] = useState<TeeSet | null>(null);
   const [pickedDetail, setPickedDetail] = useState<CourseDetail | null>(null);
   const [starting, setStarting] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [simMessage, setSimMessage] = useState<string | null>(
+    Device.isDevice === false ? COPY.simulator : null,
+  );
+  const refreshRef = useRef<(() => Promise<void>) | null>(null);
   const rounds = useMemo(() => listRounds(db), [db, revision]);
   const active = useMemo(() => getActiveRound(db), [db, revision]);
-  const isSimulator = Device.isDevice === false;
 
   const applyPickedCourse = async (course: CourseSummary, holeCount: 9 | 18) => {
     const layout = await loadLayout(course, pickedDetail, pickedTee);
-    const name = course.name;
-    const round = startRound(db, holeCount, name, layout);
+    const round = startRound(db, holeCount, course.name, layout);
     bump();
     router.push(`/round/${round.id}/hole/1`);
   };
@@ -66,6 +82,7 @@ export default function HomeScreen() {
     setPickedDetail(pick.detail);
     setCourseName(pick.course.name);
     if (needsTee) return;
+    setSheetOpen(false);
     if (active) {
       setStarting(true);
       try {
@@ -74,7 +91,7 @@ export default function HomeScreen() {
         bump();
         router.push(`/round/${active.id}/hole/1`);
       } catch (err) {
-        Alert.alert('Could not attach course', err instanceof Error ? err.message : 'Unknown error');
+        Alert.alert('Couldn’t attach course', err instanceof Error ? err.message : 'Try again.');
       } finally {
         setStarting(false);
       }
@@ -108,29 +125,45 @@ export default function HomeScreen() {
         bump();
         router.push(`/round/${round.id}/hole/1`);
       } catch (err) {
-        Alert.alert('Could not start round', err instanceof Error ? err.message : 'Unknown error');
+        Alert.alert('Couldn’t start round', err instanceof Error ? err.message : 'Try again.');
       } finally {
         setStarting(false);
       }
     })();
   };
 
-  return (
-    <Screen>
-      <Text style={styles.kicker}>P5 · Nearby courses</Text>
-      <Text style={styles.title}>ShotTraxx</Text>
-      <Text style={styles.lede}>
-        Find a nearby course, pick a named tee, then start or attach a round. Par, SI, and greens
-        come from Golf Courses API only (blank / “par ?” / “SI ?” if missing). Yards to green is
-        phone GPS → the Pro green centroid.
-      </Text>
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      if (Device.isDevice === false) {
+        const fix = await getCurrentFix().catch(() => null);
+        setSimMessage(fix ? describeGpsSource(fix) : COPY.simulator);
+      }
+      await refreshRef.current?.();
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
 
-      {isSimulator ? (
-        <GpsBanner message="This is a simulator. ShotTraxx uses whatever location the simulator reports and does not invent GPS. Set a GPS pin (Features → Location) and move it between marks or distances will be 0 yd." />
-      ) : null}
+  const needsTee = Boolean(picked) && (pickedDetail?.tees.length ?? 0) > 1 && !pickedTee;
+  const teeLabel = pickedTee
+    ? formatTeeMeta({
+        name: pickedTee.name,
+        rating: pickedTee.rating,
+        slope: pickedTee.slope,
+        totalYards: pickedTee.totalYards,
+      })
+    : null;
+
+  return (
+    <Screen edges={['bottom']} refreshing={refreshing} onRefresh={() => void onRefresh()}>
+      <Text style={styles.title}>ShotTraxx</Text>
+      <Text style={styles.lede}>{COPY.homeLede}</Text>
+
+      {simMessage ? <GpsBanner message={simMessage} /> : null}
 
       <TextInput
-        placeholder="Course name (optional)"
+        placeholder={COPY.courseNamePlaceholder}
         placeholderTextColor={colors.muted}
         value={picked?.name ?? courseName}
         onChangeText={(text) => {
@@ -142,26 +175,52 @@ export default function HomeScreen() {
         style={styles.input}
       />
 
-      <CoursePicker
-        selected={picked}
-        selectedTee={pickedTee}
-        attachMode={Boolean(active)}
-        onSelect={onSelectCourse}
+      <BigButton
+        label="Courses near you"
+        variant="secondary"
+        onPress={() => setSheetOpen(true)}
       />
+      <Text style={styles.hint}>{COPY.nearbyHint}</Text>
+      {picked ? (
+        <Text style={styles.meta}>
+          {picked.name}
+          {teeLabel ? ` · ${teeLabel}` : needsTee ? ` · ${COPY.pickTee}` : ''}
+        </Text>
+      ) : null}
+
+      <FullSheet visible={sheetOpen} title="Courses near you" onClose={() => setSheetOpen(false)}>
+        <CoursePicker
+          selected={picked}
+          selectedTee={pickedTee}
+          attachMode={Boolean(active)}
+          onSelect={onSelectCourse}
+          onRefreshReady={(fn) => {
+            refreshRef.current = fn;
+          }}
+        />
+      </FullSheet>
 
       {active ? (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Round in progress</Text>
+          <Text style={styles.cardTitle}>{COPY.roundInProgress}</Text>
           <Text style={styles.cardMeta}>
-            {active.courseName ?? 'Unnamed'}
-            {active.teeName ? ` · ${active.teeName}` : ''} · {active.holeCount} holes
+            {active.courseName ?? 'Round'}
+            {active.teeName
+              ? ` · ${formatTeeMeta({
+                  name: active.teeName,
+                  rating: active.teeRating,
+                  slope: active.teeSlope,
+                  totalYards: active.teeTotalYards,
+                })}`
+              : ''}
+            {` · ${active.holeCount} holes`}
           </Text>
           <BigButton
-            label="Continue round"
+            label={COPY.continueRound}
             onPress={() => router.push(`/round/${active.id}/hole/1`)}
           />
           <BigButton
-            label="Finish without continuing"
+            label="Finish round"
             variant="ghost"
             onPress={() => {
               finishRound(db, active.id);
@@ -176,27 +235,27 @@ export default function HomeScreen() {
             label={
               picked
                 ? `Start 18 at ${picked.name}${pickedTee ? ` · ${pickedTee.name}` : ''}`
-                : 'Start 18 holes'
+                : COPY.start18
             }
-            disabled={starting || (Boolean(picked) && (pickedDetail?.tees.length ?? 0) > 1 && !pickedTee)}
+            disabled={starting || needsTee}
             onPress={() => onStart(18)}
           />
           <BigButton
             label={
               picked
                 ? `Start 9 at ${picked.name}${pickedTee ? ` · ${pickedTee.name}` : ''}`
-                : 'Start 9 holes'
+                : COPY.start9
             }
             variant="secondary"
-            disabled={starting || (Boolean(picked) && (pickedDetail?.tees.length ?? 0) > 1 && !pickedTee)}
+            disabled={starting || needsTee}
             onPress={() => onStart(9)}
           />
         </View>
       )}
 
-      <Text style={styles.section}>Round history</Text>
+      <Text style={styles.section}>{COPY.roundHistory}</Text>
       {rounds.length === 0 ? (
-        <Text style={styles.muted}>No rounds yet.</Text>
+        <Text style={styles.muted}>{COPY.noRounds}</Text>
       ) : (
         rounds.map((round) => {
           const holes = listHoles(db, round.id);
@@ -209,8 +268,21 @@ export default function HomeScreen() {
               onPress={() =>
                 router.push(open ? `/round/${round.id}/hole/1` : `/round/${round.id}/summary`)
               }
+              onLongPress={() => {
+                Alert.alert(COPY.deleteRound, COPY.deleteRoundConfirm, [
+                  { text: COPY.cancel, style: 'cancel' },
+                  {
+                    text: COPY.deleteRound,
+                    style: 'destructive',
+                    onPress: () => {
+                      deleteRound(db, round.id);
+                      bump();
+                    },
+                  },
+                ]);
+              }}
               style={styles.row}>
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.rowTitle}>{round.courseName ?? 'Round'}</Text>
                 <Text style={styles.cardMeta}>
                   {new Date(round.startedAt).toLocaleString()}
@@ -228,9 +300,10 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  kicker: { color: colors.lime, fontWeight: '800', letterSpacing: 1, fontSize: 13 },
-  title: { color: colors.cream, fontSize: 36, fontWeight: '900' },
-  lede: { color: colors.muted, fontSize: 16, lineHeight: 22 },
+  title: { color: colors.cream, fontSize: type.title, fontWeight: '900' },
+  lede: { color: colors.muted, fontSize: type.body, lineHeight: 22 },
+  hint: { color: colors.muted, fontSize: type.tiny },
+  meta: { color: colors.cream, fontSize: type.meta, fontWeight: '700' },
   input: {
     minHeight: 56,
     borderWidth: 1,
@@ -250,9 +323,9 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   cardTitle: { color: colors.cream, fontSize: 20, fontWeight: '800' },
-  cardMeta: { color: colors.muted, fontSize: 14 },
+  cardMeta: { color: colors.muted, fontSize: type.meta },
   section: { color: colors.cream, fontSize: 18, fontWeight: '800', marginTop: 8 },
-  muted: { color: colors.muted, fontSize: 16 },
+  muted: { color: colors.muted, fontSize: type.body },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -260,7 +333,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgElevated,
     padding: 14,
     borderRadius: 14,
-    minHeight: 64,
+    minHeight: tapTarget,
+    gap: 8,
   },
   rowTitle: { color: colors.cream, fontSize: 18, fontWeight: '700' },
   score: { color: colors.lime, fontSize: 24, fontWeight: '900' },

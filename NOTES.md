@@ -1,4 +1,4 @@
-# ShotTraxx — P5 part 2
+# ShotTraxx — P5.x
 
 User-facing name is **ShotTraxx** (`expo.name`, iOS `CFBundleDisplayName`, Android `label`). Bundle ID `com.shottrax.app` and Expo slug `shottrax` stay unchanged. Icon files under `assets/images/` are the Doc + Lead locked mark.
 
@@ -29,7 +29,7 @@ When a key is present:
 - Course detail is `GET /api/v1/courses/:id` (named teeboxes → par, SI/handicap, hole yardage, rating, slope)
 - Flow: nearby → select course → select named tee
 - Green centroids are `GET /api/v1/courses/:id/green-centers` (**Pro/Max**; `403` on free → greens stay blank)
-- Missing par is **par ?**. Missing SI is **SI ?**. Missing rating/slope/yardage stay blank. Missing green stays empty — yards to green shows **— / unavailable**.
+- Missing par is **Par unknown**. Missing SI is **SI unknown**. Missing rating/slope/yardage stay blank. Missing green stays empty — yards to green shows **—** and **Waiting on green location.**
 
 **Smoke:** `golfcoursesapi.com` may fail TLS on some boxes. Confirm nearby search on a **device or EAS build**, not only CI.
 

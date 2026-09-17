@@ -113,15 +113,38 @@ test('parseGreenCenters maps Pro {hole,lat,lng} and skips invalid pins', () => {
   assert.equal(greens.length, 1);
   assert.equal(greens[0].holeNumber, 1);
   assert.deepEqual(greens[0].greenCentroid, { lat: 37.01744, lng: -86.43135 });
+  assert.equal(greens[0].greenFront, null);
+  assert.equal(greens[0].greenBack, null);
+  assert.equal(greens[0].greenDepthYards, null);
+});
+
+test('parseGreenCenters copies F/M/B only when the API supplies them — never invents', () => {
+  const greens = parseGreenCenters({
+    data: {
+      holes: [
+        {
+          hole: 1,
+          lat: 37.01744,
+          lng: -86.43135,
+          front: { lat: 37.0178, lng: -86.43135 },
+          back: { lat: 37.0171, lng: -86.43135 },
+          depth_yards: 28,
+        },
+      ],
+    },
+  });
+  assert.deepEqual(greens[0].greenFront, { lat: 37.0178, lng: -86.43135 });
+  assert.deepEqual(greens[0].greenBack, { lat: 37.0171, lng: -86.43135 });
+  assert.equal(greens[0].greenDepthYards, 28);
 });
 
 test('mergeGreenCenters fills blank greens and does not invent par', () => {
   const merged = mergeGreenCenters(
     [
-      { holeNumber: 1, par: 4, yards: 437, handicap: 7, greenCentroid: null },
-      { holeNumber: 2, par: null, yards: null, handicap: null, greenCentroid: null },
+      { holeNumber: 1, par: 4, yards: 437, handicap: 7, greenCentroid: null, greenFront: null, greenBack: null, greenDepthYards: null },
+      { holeNumber: 2, par: null, yards: null, handicap: null, greenCentroid: null, greenFront: null, greenBack: null, greenDepthYards: null },
     ],
-    [{ holeNumber: 1, greenCentroid: { lat: 37.01, lng: -86.43 } }],
+    [{ holeNumber: 1, greenCentroid: { lat: 37.01, lng: -86.43 }, greenFront: null, greenBack: null, greenDepthYards: null }],
   );
   assert.deepEqual(merged[0].greenCentroid, { lat: 37.01, lng: -86.43 });
   assert.equal(merged[0].par, 4);

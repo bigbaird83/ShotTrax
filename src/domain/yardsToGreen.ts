@@ -36,12 +36,12 @@ export function yardsToGreenLabel(
     return {
       heading,
       value: `${result.yards} yd`,
-      detail: result.quality === 'soft' ? 'SOFT GPS 15–25 m' : 'to green pin',
+      detail: 'to green',
     };
   }
-  let detail = 'unavailable';
-  if (!ctx.hasGreen) detail = 'unavailable — no course or green pin yet';
-  else if (!ctx.hasFix) detail = 'unavailable — waiting for GPS';
-  else detail = 'unavailable — GPS not in good/soft window';
+  let detail = 'Waiting on green location.';
+  if (!ctx.hasGreen) detail = 'Waiting on green location.';
+  else if (!ctx.hasFix) detail = 'Waiting on your location.';
+  else detail = 'Waiting on green location.';
   return { heading, value: '—', detail };
 }

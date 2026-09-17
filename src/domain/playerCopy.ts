@@ -1,0 +1,108 @@
+/** Player-facing copy. Accuracy / API / OSM rules stay in code, not on screen. */
+
+export const COPY = {
+  homeLede: 'Find a course nearby, pick your tee, start the round.',
+  nearbyHint: 'Courses near you — pull to refresh.',
+  nearbyEmpty: 'No courses near you.',
+  nearbyUnavailable: 'Courses near you aren’t available. Type a course name to start.',
+  nearbyBusy: 'Looking nearby…',
+  nearbyRefresh: 'Pull to refresh',
+  courseNamePlaceholder: 'Course name (optional)',
+  pickTee: 'Pick your tee',
+  start18: 'Start 18 holes',
+  start9: 'Start 9 holes',
+  continueRound: 'Continue round',
+  finishRound: 'Finish round',
+  deleteRound: 'Delete round',
+  deleteRoundConfirm: 'Delete this round? Shots and scores go with it.',
+  roundHistory: 'Round history',
+  noRounds: 'No rounds yet.',
+  roundInProgress: 'Round in progress',
+  clearCourse: 'Clear course',
+  waitingOnGreen: 'Waiting on green location.',
+  waitingOnLocation: 'Waiting on your location.',
+  longPressGreen: 'Long-press to set the green',
+  toGreen: 'To green',
+  mark: 'Mark',
+  marked: 'Marked',
+  drop: 'Drop',
+  penalty: 'Penalty',
+  sayClub: 'Say a club',
+  listening: 'Listening…',
+  bag: 'Bag',
+  fullBag: 'Full bag',
+  top3: 'Top 3',
+  stickyClub: 'Same club',
+  endShot: 'End last shot',
+  prevHole: 'Prev',
+  nextHole: 'Next',
+  forgotShot: 'Log a missed shot',
+  score: 'Score',
+  shots: 'Shots',
+  noShots: 'No shots yet.',
+  inPlay: 'In play',
+  logged: 'Logged',
+  didntCatchClub: 'Didn’t catch a club. Say it again or pick one.',
+  weakLocation: 'Location is weak. Mark anyway?',
+  tooFar: 'That looks too far. Mark anyway?',
+  markAnyway: 'Mark anyway',
+  dropAnyway: 'Drop anyway',
+  cancel: 'Cancel',
+  locationOff: 'Turn on location to mark.',
+  simulator: 'Simulator — move the location pin between shots.',
+  restoreBag: 'Restore 14-club bag',
+  bagLede: 'Your 14 clubs. Turn off what you don’t carry.',
+  averagesLede: 'How far you hit each club — from marked shots.',
+  noClosedShots: 'No marked shots yet',
+  summaryHome: 'Home',
+} as const;
+
+export function formatParLabel(par: number | null): string {
+  return par == null ? 'Par unknown' : `Par ${par}`;
+}
+
+export function formatSiLabel(handicap: number | null): string {
+  return handicap == null ? 'SI unknown' : `SI ${handicap}`;
+}
+
+export function formatHoleHeader(holeNumber: number, par: number | null): string {
+  return `Hole ${holeNumber} · ${formatParLabel(par)}`;
+}
+
+export function formatTeeMeta(tee: {
+  name: string;
+  rating: number | null;
+  slope: number | null;
+  totalYards: number | null;
+}): string {
+  const bits = [
+    tee.rating != null ? `Rating ${tee.rating}` : null,
+    tee.slope != null ? `Slope ${tee.slope}` : null,
+    tee.totalYards != null ? `${tee.totalYards} yd` : null,
+  ].filter(Boolean);
+  return bits.length ? `${tee.name} · ${bits.join(' · ')}` : tee.name;
+}
+
+export function yardsToGreenPlayerLabel(
+  result: { yards: number | null; quality: string },
+  ctx: { hasGreen?: boolean; hasFix?: boolean } = {},
+): { heading: string; value: string; detail: string } {
+  const heading = COPY.toGreen;
+  if (result.quality !== 'none' && result.yards != null) {
+    return { heading, value: `${result.yards}`, detail: 'yd' };
+  }
+  const detail = !ctx.hasGreen
+    ? COPY.waitingOnGreen
+    : !ctx.hasFix
+      ? COPY.waitingOnLocation
+      : COPY.waitingOnGreen;
+  return { heading, value: '—', detail };
+}
+
+export function scoreMismatchPlayerMessage(args: {
+  score: number | null;
+  shotCount: number;
+  penaltyStrokes: number;
+}): string {
+  return `Score ${args.score} doesn’t match ${args.shotCount} shots + ${args.penaltyStrokes} penalties.`;
+}

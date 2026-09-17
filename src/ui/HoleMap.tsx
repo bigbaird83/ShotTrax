@@ -1,13 +1,15 @@
 import { Component, type ErrorInfo, type ReactNode, useEffect, useMemo, useRef } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import MapView, { Marker, Polygon, Polyline } from 'react-native-maps';
 import type { OsmFeature, OsmGolfKind, OsmOverlay } from '@/src/course/types';
 import { featuresForHole } from '@/src/course/osmOverlay';
+import { COPY } from '@/src/domain/playerCopy';
 import type { GpsFix, Shot } from '@/src/domain/types';
 import type { YardsToGreenResult } from '@/src/sensing/yardsToGreen';
 import { hasClosedGpsTrail, hasGpsStart } from '@/src/domain/shotSource';
+import { FmbRow } from './FmbRow';
 import { YardsToGreenBadge } from './YardsToGreenBadge';
-import { colors } from './theme';
+import { colors, type } from './theme';
 
 type Coord = { latitude: number; longitude: number };
 
@@ -17,9 +19,11 @@ type Props = {
   userFix: GpsFix | null;
   green: { lat: number; lng: number } | null;
   yardsToGreen: YardsToGreenResult;
-  /** Part 2 OSM polygons. Ignored while null — never invents an overlay. */
+  fmb?: { f: string; m: string; b: string } | null;
   osmOverlay?: OsmOverlay | null;
   onDropGreenEstimate?: (coord: { lat: number; lng: number }) => void;
+  fullBleed?: boolean;
+  style?: StyleProp<ViewStyle>;
 };
 
 class MapGuard extends Component<{ children: ReactNode; fallback: ReactNode }, { failed: boolean }> {
@@ -56,37 +60,22 @@ function overlayFeatures(overlay: OsmOverlay | null | undefined, holeNumber: num
 
 function TrailFallback({
   holeNumber,
-  shots,
-  message,
   yardsToGreen,
   hasFix,
   hasGreen,
 }: {
   holeNumber: number;
-  shots: Shot[];
-  message: string;
   yardsToGreen?: YardsToGreenResult;
   hasFix?: boolean;
   hasGreen?: boolean;
 }) {
-  const closed = shots.filter(hasClosedGpsTrail);
   return (
     <View style={styles.fallback}>
-      <Text style={styles.holeBadgeText}>HOLE {holeNumber}</Text>
+      <Text style={styles.holeBadgeText}>Hole {holeNumber}</Text>
       {yardsToGreen ? (
         <YardsToGreenBadge result={yardsToGreen} hasFix={hasFix} hasGreen={hasGreen} />
       ) : null}
-      <Text style={styles.fallbackMsg}>{message}</Text>
-      {closed.length === 0 ? (
-        <Text style={styles.meta}>No closed-shot trails yet.</Text>
-      ) : (
-        closed.map((shot) => (
-          <Text key={shot.id} style={styles.meta}>
-            {shot.seq}: {shot.startLat.toFixed(5)}, {shot.startLng.toFixed(5)} → {shot.endLat.toFixed(5)},{' '}
-            {shot.endLng.toFixed(5)}
-          </Text>
-        ))
-      )}
+      <Text style={styles.fallbackMsg}>{hasGreen ? COPY.waitingOnLocation : COPY.longPressGreen}</Text>
     </View>
   );
 }
@@ -97,8 +86,11 @@ function NativeHoleMap({
   userFix,
   green,
   yardsToGreen,
+  fmb,
   osmOverlay,
   onDropGreenEstimate,
+  fullBleed,
+  style,
 }: Props) {
   const mapRef = useRef<MapView | null>(null);
 
@@ -141,7 +133,7 @@ function NativeHoleMap({
   useEffect(() => {
     if (coords.length < 2) return;
     mapRef.current?.fitToCoordinates(coords, {
-      edgePadding: { top: 48, right: 36, bottom: 36, left: 36 },
+      edgePadding: { top: 72, right: 36, bottom: 48, left: 36 },
       animated: true,
     });
   }, [coords]);
@@ -150,8 +142,6 @@ function NativeHoleMap({
     return (
       <TrailFallback
         holeNumber={holeNumber}
-        shots={shots}
-        message="Waiting for a real GPS fix to center the map. ShotTraxx does not invent coordinates."
         yardsToGreen={yardsToGreen}
         hasFix={Boolean(userFix)}
         hasGreen={Boolean(green)}
@@ -160,7 +150,7 @@ function NativeHoleMap({
   }
 
   return (
-    <View style={styles.wrap}>
+    <View style={[fullBleed ? styles.bleed : styles.wrap, style]}>
       <MapView
         ref={mapRef}
         style={styles.map}
@@ -175,15 +165,15 @@ function NativeHoleMap({
           onDropGreenEstimate?.({ lat: latitude, lng: longitude });
         }}>
         {osmFeatures.map((feature, index) => {
-          const style = OSM_STYLE[feature.kind];
+          const styleOsm = OSM_STYLE[feature.kind];
           const coordinates = feature.coordinates.map((point) => toCoord(point.lat, point.lng));
           if (feature.kind === 'hole') {
             return (
               <Polyline
                 key={`osm-hole-${index}`}
                 coordinates={coordinates}
-                strokeColor={style.stroke}
-                strokeWidth={style.width}
+                strokeColor={styleOsm.stroke}
+                strokeWidth={styleOsm.width}
                 lineDashPattern={[8, 6]}
               />
             );
@@ -192,9 +182,9 @@ function NativeHoleMap({
             <Polygon
               key={`osm-${feature.kind}-${index}`}
               coordinates={coordinates}
-              fillColor={style.fill}
-              strokeColor={style.stroke}
-              strokeWidth={style.width}
+              fillColor={styleOsm.fill}
+              strokeColor={styleOsm.stroke}
+              strokeWidth={styleOsm.width}
             />
           );
         })}
@@ -214,7 +204,7 @@ function NativeHoleMap({
             key={`start-${shot.id}`}
             coordinate={toCoord(shot.startLat, shot.startLng)}
             title={`Shot ${shot.seq}`}
-            description={shot.endedAt ? `${shot.distanceYards ?? '—'} yd` : 'Open'}
+            description={shot.endedAt ? `${shot.distanceYards ?? '—'} yd` : 'In play'}
             pinColor={shot.endedAt ? 'tomato' : 'yellow'}
             anchor={{ x: 0.5, y: 1 }}
           />
@@ -223,15 +213,10 @@ function NativeHoleMap({
           <Marker
             coordinate={toCoord(green.lat, green.lng)}
             title="Green"
-            description="GPS/map pin or course centroid — never invented"
             pinColor="green"
           />
         ) : null}
       </MapView>
-      <View pointerEvents="none" style={styles.holeBadge}>
-        <Text style={styles.holeBadgeKicker}>SCORECARD</Text>
-        <Text style={styles.holeBadgeText}>HOLE {holeNumber}</Text>
-      </View>
       <View pointerEvents="none" style={styles.toGreen}>
         <YardsToGreenBadge
           compact
@@ -239,12 +224,13 @@ function NativeHoleMap({
           hasFix={Boolean(userFix)}
           hasGreen={Boolean(green)}
         />
+        {fmb ? (
+          <View style={{ marginTop: 6 }}>
+            <FmbRow f={fmb.f} m={fmb.m} b={fmb.b} />
+          </View>
+        ) : null}
       </View>
-      <Text style={styles.hint}>
-        {osmFeatures.length > 0
-          ? 'OSM green/fairway/tee/hole where mapped. Long-press to drop a green pin. No invented polygons.'
-          : 'Closed-shot trails only. Long-press to drop a green pin. OSM overlay is empty here — nothing invented.'}
-      </Text>
+      {!green ? <Text style={styles.hint}>{COPY.longPressGreen}</Text> : null}
     </View>
   );
 }
@@ -253,8 +239,6 @@ export function HoleMap(props: Props) {
   const fallback = (
     <TrailFallback
       holeNumber={props.holeNumber}
-      shots={props.shots}
-      message="Map native module unavailable. Use a development build, or Expo Go on a device. Trails list closed shots below."
       yardsToGreen={props.yardsToGreen}
       hasFix={Boolean(props.userFix)}
       hasGreen={Boolean(props.green)}
@@ -277,22 +261,12 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     backgroundColor: colors.bgElevated,
   },
+  bleed: {
+    flex: 1,
+    overflow: 'hidden',
+    backgroundColor: colors.bgElevated,
+  },
   map: { flex: 1 },
-  holeBadge: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    backgroundColor: 'rgba(11,26,18,0.82)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-  holeBadgeKicker: {
-    color: colors.lime,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
   holeBadgeText: {
     color: colors.cream,
     fontSize: 18,
@@ -311,19 +285,17 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: 'rgba(11,26,18,0.78)',
     color: colors.cream,
-    fontSize: 11,
+    fontSize: type.tiny,
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 8,
   },
   fallback: {
     minHeight: 160,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.line,
+    flex: 1,
     backgroundColor: colors.bgElevated,
     padding: 12,
     gap: 6,
+    justifyContent: 'center',
   },
-  fallbackMsg: { color: colors.muted, fontSize: 14, lineHeight: 20 },
-  meta: { color: colors.cream, fontSize: 13 },
+  fallbackMsg: { color: colors.muted, fontSize: type.meta, lineHeight: 20 },
 });

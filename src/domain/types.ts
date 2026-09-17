@@ -44,6 +44,8 @@ export type Round = {
   teeRating: number | null;
   teeSlope: number | null;
   teeTotalYards: number | null;
+  /** Last club used with Mark. Sticky for the next Mark. */
+  lastClubId: string | null;
 };
 
 export type GreenSource = 'user_estimate' | 'course_centroid';
@@ -52,18 +54,23 @@ export type Hole = {
   id: string;
   roundId: string;
   number: number;
-  /** Null when the course API omitted par — never invented. Shown as "par ?". */
+  /** Null when course par is missing — never invented. Shown as "Par unknown". */
   par: number | null;
   parSource: ParSource | null;
   score: number | null;
   /** Tee yardage from course data. Null if the API omitted it. */
   yards: number | null;
-  /** Stroke index 1–18 from course data. Null → “SI ?”. */
+  /** Stroke index 1–18 from course data. Null → “SI unknown”. */
   handicap: number | null;
   /** User GPS/map pin or course centroid — never invented. */
   greenLat: number | null;
   greenLng: number | null;
   greenSource: GreenSource | null;
+  greenFrontLat: number | null;
+  greenFrontLng: number | null;
+  greenBackLat: number | null;
+  greenBackLng: number | null;
+  greenDepthYards: number | null;
 };
 
 export type Shot = {
@@ -91,6 +98,8 @@ export type Shot = {
   source: ShotSource;
 };
 
+export type PenaltyKind = 'drop' | 'penalty';
+
 export type HolePenalty = {
   id: string;
   holeId: string;
@@ -98,6 +107,9 @@ export type HolePenalty = {
   reason: PenaltyReason;
   note: string | null;
   createdAt: string;
+  kind: PenaltyKind;
+  lat: number | null;
+  lng: number | null;
 };
 
 export type OpenShot = {

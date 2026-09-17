@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import type { ShotFixQuality, ShotSource } from '../domain/types';
-import { colors } from './theme';
+import { colors, type } from './theme';
 
 export function QualityBadge({
   quality,
@@ -14,36 +14,18 @@ export function QualityBadge({
   if (source === 'no_gps' || quality === 'none') {
     return (
       <View style={[styles.badge, styles.manual]}>
-        <Text style={styles.text}>NO GPS</Text>
+        <Text style={styles.text}>Logged</Text>
       </View>
     );
   }
   if (open) {
     return (
       <View style={[styles.badge, styles.open]}>
-        <Text style={styles.text}>OPEN</Text>
+        <Text style={styles.text}>In play</Text>
       </View>
     );
   }
-  if (!quality || quality === 'good') {
-    return (
-      <View style={[styles.badge, styles.good]}>
-        <Text style={styles.text}>GOOD</Text>
-      </View>
-    );
-  }
-  if (quality === 'soft') {
-    return (
-      <View style={[styles.badge, styles.soft]}>
-        <Text style={[styles.text, styles.dark]}>SOFT</Text>
-      </View>
-    );
-  }
-  return (
-    <View style={[styles.badge, styles.forced]}>
-      <Text style={styles.text}>FORCED</Text>
-    </View>
-  );
+  return null;
 }
 
 export function AverageBadges({
@@ -54,12 +36,7 @@ export function AverageBadges({
   includesForced: boolean;
 }) {
   if (!includesSoft && !includesForced) return null;
-  return (
-    <View style={styles.row}>
-      {includesSoft ? <QualityBadge quality="soft" /> : null}
-      {includesForced ? <QualityBadge quality="forced" /> : null}
-    </View>
-  );
+  return <View style={styles.row} />;
 }
 
 const styles = StyleSheet.create({
@@ -73,14 +50,10 @@ const styles = StyleSheet.create({
   },
   text: {
     color: colors.cream,
-    fontSize: 12,
+    fontSize: type.tiny,
     fontWeight: '800',
-    letterSpacing: 0.6,
+    letterSpacing: 0.4,
   },
-  dark: { color: colors.bg },
-  good: { backgroundColor: '#1F4A2C' },
-  soft: { backgroundColor: colors.amber },
-  forced: { backgroundColor: colors.orange },
   open: { backgroundColor: colors.line },
   manual: { backgroundColor: '#3A4A5C' },
 });

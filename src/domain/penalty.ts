@@ -44,10 +44,12 @@ export function formatPenaltyRow(penalty: {
   strokes: number;
   reason: PenaltyReason;
   note: string | null;
+  kind?: 'drop' | 'penalty' | null;
 }): string {
   const label = penaltyReasonLabel(penalty.reason);
   const note = penalty.note?.trim();
   const reasonText =
     penalty.reason === 'other' && note ? note : note ? `${label} · ${note}` : label;
+  if (penalty.kind === 'drop') return `Drop +${penalty.strokes} · ${reasonText}`;
   return `+${penalty.strokes} ${reasonText}`;
 }

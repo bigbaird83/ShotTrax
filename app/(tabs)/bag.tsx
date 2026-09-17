@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
-import { addClub, deleteClub, listClubs, setClubEnabled, updateClub } from '@/src/db/repo';
+import { addClub, deleteClub, listClubs, restoreDefaultBag, setClubEnabled, updateClub } from '@/src/db/repo';
+import { COPY } from '@/src/domain/playerCopy';
 import { BigButton } from '@/src/ui/BigButton';
 import { Screen } from '@/src/ui/Screen';
-import { colors } from '@/src/ui/theme';
+import { colors, tapTarget, type } from '@/src/ui/theme';
 
 export default function BagScreen() {
   const { db, revision, bump } = useDb();
@@ -21,10 +22,7 @@ export default function BagScreen() {
 
   return (
     <Screen>
-      <Text style={styles.lede}>
-        Seeded 14-club bag with full CRUD. Voice pick matches names and nicknames (“seven iron”)
-        then still requires confirm. Top-3 ranking uses club averages after 5 closed shots.
-      </Text>
+      <Text style={styles.lede}>{COPY.bagLede}</Text>
       {clubs.map((club) => (
         <View key={club.id} style={styles.row}>
           <Pressable
@@ -35,7 +33,7 @@ export default function BagScreen() {
               setShortName(club.shortName);
             }}>
             <Text style={styles.name}>{club.name}</Text>
-            <Text style={styles.short}>{club.shortName} · tap to edit</Text>
+            <Text style={styles.short}>{club.shortName}</Text>
           </Pressable>
           <Switch
             value={club.enabled}
@@ -50,14 +48,14 @@ export default function BagScreen() {
       ))}
       <Text style={styles.addTitle}>{editingId ? 'Edit club' : 'Add club'}</Text>
       <TextInput
-        placeholder="Name (e.g. 2 Iron)"
+        placeholder="Name"
         placeholderTextColor={colors.muted}
         value={name}
         onChangeText={setName}
         style={styles.input}
       />
       <TextInput
-        placeholder="Short (e.g. 2i)"
+        placeholder="Short name"
         placeholderTextColor={colors.muted}
         value={shortName}
         onChangeText={setShortName}
@@ -84,24 +82,29 @@ export default function BagScreen() {
           onPress={() => {
             const result = deleteClub(db, editingId);
             if (result === 'disabled') {
-              Alert.alert(
-                'Club has shots',
-                'It was turned off in the bag so existing shot history and averages stay intact.',
-              );
+              Alert.alert('Club has shots', 'It was turned off so your history stays intact.');
             }
             resetForm();
             bump();
           }}
         />
       ) : null}
+      <BigButton
+        label={COPY.restoreBag}
+        variant="ghost"
+        onPress={() => {
+          restoreDefaultBag(db);
+          bump();
+        }}
+      />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  lede: { color: colors.muted, fontSize: 16, lineHeight: 22 },
+  lede: { color: colors.muted, fontSize: type.body, lineHeight: 22 },
   row: {
-    minHeight: 64,
+    minHeight: tapTarget,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -111,7 +114,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   name: { color: colors.cream, fontSize: 18, fontWeight: '700' },
-  short: { color: colors.muted, fontSize: 14 },
+  short: { color: colors.muted, fontSize: type.meta },
   addTitle: { color: colors.cream, fontSize: 18, fontWeight: '800', marginTop: 8 },
   input: {
     minHeight: 56,

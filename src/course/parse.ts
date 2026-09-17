@@ -1,3 +1,4 @@
+import { pinOrNull } from '../domain/greenDepth';
 import { isValidLatLng, type LatLng } from '../domain/latLng';
 import type { CourseDetail, CourseSummary, HoleCourseData, TeeSet } from './types';
 
@@ -94,6 +95,32 @@ export function parseHandicap(raw: unknown): number | null {
     : raw;
   const n = asFiniteNumber(value);
   if (n == null || !Number.isInteger(n) || n < 1 || n > 18) return null;
+  return n;
+}
+
+export function parseGreenFront(raw: unknown): LatLng | null {
+  const record = asRecord(raw);
+  if (!record) return null;
+  return pinOrNull(
+    parseLatLng(pick(record, ['front', 'green_front', 'greenFront', 'front_green', 'green_front_center'])),
+  );
+}
+
+export function parseGreenBack(raw: unknown): LatLng | null {
+  const record = asRecord(raw);
+  if (!record) return null;
+  return pinOrNull(
+    parseLatLng(pick(record, ['back', 'green_back', 'greenBack', 'back_green', 'green_back_center'])),
+  );
+}
+
+export function parseGreenDepthYards(raw: unknown): number | null {
+  const record = asRecord(raw);
+  const value = record
+    ? pick(record, ['depth_yards', 'depthYards', 'green_depth_yards', 'greenDepthYards', 'green_depth', 'depth'])
+    : raw;
+  const n = asFiniteNumber(value);
+  if (n == null || !Number.isInteger(n) || n < 1 || n > 80) return null;
   return n;
 }
 
@@ -211,6 +238,9 @@ function parseHoleRow(item: unknown): HoleCourseData | null {
     yards: parseYards(item),
     handicap: parseHandicap(item),
     greenCentroid: parseGreenCentroid(item),
+    greenFront: parseGreenFront(item),
+    greenBack: parseGreenBack(item),
+    greenDepthYards: parseGreenDepthYards(item),
   };
 }
 
@@ -259,11 +289,19 @@ export function parseTeeSets(raw: unknown): TeeSet[] {
   return out;
 }
 
+export type GreenCenterRow = {
+  holeNumber: number;
+  greenCentroid: LatLng;
+  greenFront: LatLng | null;
+  greenBack: LatLng | null;
+  greenDepthYards: number | null;
+};
+
 /**
  * Pro `GET /courses/:id/green-centers`. Each hole is `{ hole, lat, lng }`.
- * Does not treat tee lat/lng as a green — this payload is green-only.
+ * Front/back/depth are copied only when present — never invented from the centroid.
  */
-export function parseGreenCenters(json: unknown): Array<{ holeNumber: number; greenCentroid: LatLng }> {
+export function parseGreenCenters(json: unknown): GreenCenterRow[] {
   const payload = unwrapData(json);
   const record = asRecord(payload);
   const rows = Array.isArray(payload)
@@ -271,29 +309,38 @@ export function parseGreenCenters(json: unknown): Array<{ holeNumber: number; gr
     : record
       ? findHolesArray(record)
       : [];
-  const out: Array<{ holeNumber: number; greenCentroid: LatLng }> = [];
+  const out: GreenCenterRow[] = [];
   for (const item of rows) {
     const holeNumber = parseHoleNumber(item);
     const green = parseLatLng(item);
     if (holeNumber == null || !green) continue;
-    out.push({ holeNumber, greenCentroid: green });
+    out.push({
+      holeNumber,
+      greenCentroid: green,
+      greenFront: parseGreenFront(item),
+      greenBack: parseGreenBack(item),
+      greenDepthYards: parseGreenDepthYards(item),
+    });
   }
   return out;
 }
 
 export function mergeGreenCenters(
   holes: HoleCourseData[],
-  greens: Array<{ holeNumber: number; greenCentroid: LatLng }>,
+  greens: GreenCenterRow[],
 ): HoleCourseData[] {
   if (greens.length === 0) return holes;
-  const byHole = new Map(greens.map((row) => [row.holeNumber, row.greenCentroid]));
+  const byHole = new Map(greens.map((row) => [row.holeNumber, row]));
   const used = new Set<number>();
   const merged = holes.map((hole) => {
     const fromApi = byHole.get(hole.holeNumber) ?? null;
     if (fromApi) used.add(hole.holeNumber);
     return {
       ...hole,
-      greenCentroid: hole.greenCentroid ?? fromApi,
+      greenCentroid: hole.greenCentroid ?? fromApi?.greenCentroid ?? null,
+      greenFront: hole.greenFront ?? fromApi?.greenFront ?? null,
+      greenBack: hole.greenBack ?? fromApi?.greenBack ?? null,
+      greenDepthYards: hole.greenDepthYards ?? fromApi?.greenDepthYards ?? null,
     };
   });
   for (const row of greens) {
@@ -304,6 +351,9 @@ export function mergeGreenCenters(
       yards: null,
       handicap: null,
       greenCentroid: row.greenCentroid,
+      greenFront: row.greenFront,
+      greenBack: row.greenBack,
+      greenDepthYards: row.greenDepthYards,
     });
   }
   merged.sort((a, b) => a.holeNumber - b.holeNumber);

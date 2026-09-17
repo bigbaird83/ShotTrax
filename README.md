@@ -1,8 +1,8 @@
 # ShotTraxx
 
-Phone GPS golf shot tracker (no club sensors). **This branch is P5 part 2** on top of P1–P5.1 (GPS mark-shot, scores, club averages, hole map trails, voice club pick, top-3, penalties, no-GPS shots, ShotTraxx splash, yards-to-green).
+Phone GPS golf shot tracker (no club sensors). **This branch is P5.x** on P1–P5.2 (GPS mark-shot, scores, club averages, hole map trails, voice club pick, top-3, penalties, nearby courses, OSM outlines).
 
-P5.2 wires **nearby courses** from Golf Courses API Pro (EAS secret `GOLF_COURSES_API_KEY`), nearby → course → **named tee**, **par / SI from course data only** (`par ?` / `SI ?` if missing), rating/slope/yardage when present, **green centroids** into `yardsToGreen(fix, greenCentroid)`, and **OSM** `golf=green/fairway/tee/hole` overlays when mapped. Watch motion, Plays Like, F/M/B pins, auto-detect, and Stracka scrape stay **out of scope**.
+P5.x is the on-course hero: **sticky last club + one Mark**, voice sets the club immediately (no confirm), Drop vs Penalty, delete round, haptics, and a thumb-zone layout. **Player voice only** on screen — no API/OSM/GPS-meter footnotes. F/M/B distances show only when course data includes front and back pins (never invented from a single green). Rating and slope sit on the tee. Watch, putts (P5.y), StoreKit, and Photos stay out of scope.
 
 User-facing name is **ShotTraxx** (`app.json` `expo.name`, iOS `CFBundleDisplayName`, Android `label` / home screen). Bundle ID `com.shottrax.app` and Expo slug `shottrax` stay unchanged (App Store ID). Home-screen icon is the Doc + Lead locked mark at `assets/images/icon.png` (see `assets/images/README.md`).
 
@@ -45,7 +45,7 @@ Expo client JS only inlines `EXPO_PUBLIC_*`. For local Expo Go, CoS must also se
 EXPO_PUBLIC_GOLF_COURSES_API_KEY=your_key_here
 ```
 
-Without a key the nearby picker is disabled (graceful copy, no network). You can still type a course name and drop a green pin. Missing API par stays **par ?**. Missing greens stay blank — ShotTraxx does not invent them.
+Without a key the nearby picker is disabled (graceful copy, no network). You can still type a course name and drop a green pin. Missing par stays **Par unknown**. Missing greens stay blank.
 
 Selecting a nearby course **starts** a new round (Start 9/18) or **attaches** par/greens to a round in progress (blank holes only).
 
@@ -129,13 +129,13 @@ There is no Watch / motion / mic-shot-detect permission. Those assists are stubb
 - Polylines are **closed GPS shots only** (start→end). Penalties are list rows, not trails. `no_gps` shots have no coordinates and never draw.
 - **Yards to green** uses the sensing hook `yardsToGreen(fix, greenCentroid) → { yards, quality }`. Same haversine and good (<15 m) / soft (15–25 m) bands as shot marks. No fix or no green pin → `{ yards: null, quality: 'none' }` (never invents a pin or a range). Poor GPS (>25 m) is also `none`, matching `acceptFix`. Soft GPS shows a **SOFT** badge. When quality is `none`, the map shows **yards to green — / unavailable**.
 - Course API **green centroids** feed that hook. Long-press (or **Mark green (GPS)**) still drops a **user** pin and wins over the centroid.
-- Scorecard **par** is course data only. Missing API par is **par ?** until you tap 3–6. ShotTraxx does not default to par 4.
+- Scorecard **par** is course data only. Missing par is **Par unknown** until you tap 3–6.
 - **Android** satellite tiles typically need a Google Maps API key in the `react-native-maps` config plugin for store/dev binaries. iOS is the target.
 
 ## On-course flow
 
 1. Find a nearby course (GPS) or type a name, then start a 9- or 18-hole round (or attach a course to a round in progress).
-2. On a hole, par comes from the course when present; otherwise **par ?**. Set par and score (large +/− targets).
+2. On a hole, par comes from the course when present; otherwise **Par unknown**. Set par and score (large +/− targets).
 3. **Mark shot** → optional **Say a club** (confirm still required) and/or **top-3**, or expand **Full bag** and tap.
 4. GPS at confirm = shot **start**. If this hole already had an open GPS shot, that same fix is its **end** and yards are logged (haversine).
 5. **End last shot** closes an open GPS shot without starting a new one.
@@ -214,6 +214,6 @@ ShotTraxx **does not synthesize a fairway or fake points**.
 ## Tests
 
 ```bash
-npm test          # domain tests + sensing smoke + course client/OSM, including yards-to-green, par ?, penalties, no-gps exclusion, top-3, voice
+npm test          # domain tests + sensing smoke + course client, including yards-to-green, sticky club, F/M/B, drop, voice
 npm run typecheck
 ```

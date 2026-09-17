@@ -6,7 +6,6 @@ import { useDb } from '@/src/db/DbProvider';
 import { getRound, listHoles, listPenaltiesForHole, listShotsForHole } from '@/src/db/repo';
 import { formatPenaltyRow, totalPenaltyStrokes } from '@/src/domain/penalty';
 import { reconcileHoleScore } from '@/src/domain/scoreReconcile';
-import { AverageBadges } from '@/src/ui/Badge';
 import { BigButton } from '@/src/ui/BigButton';
 import { Screen } from '@/src/ui/Screen';
 import { colors } from '@/src/ui/theme';
@@ -51,17 +50,14 @@ export default function RoundSummaryScreen() {
         <Text style={styles.toPar}>{toParLabel}</Text>
       </Text>
       <Text style={styles.muted}>
-        {scored.length} of {round.holeCount} holes scored. Scorecard score is the source of truth.
+        {scored.length} of {round.holeCount} holes scored.
       </Text>
 
       {holes.map((hole) => {
         const shots = listShotsForHole(db, hole.id);
         const penalties = listPenaltiesForHole(db, hole.id);
         const closedGps = shots.filter((s) => s.source === 'gps' && s.distanceYards != null);
-        const yards = closedGps.reduce((sum, s) => sum + (s.distanceYards ?? 0), 0);
-        const includesSoft = closedGps.some((s) => s.fixQuality === 'soft');
-        const includesForced = closedGps.some((s) => s.fixQuality === 'forced');
-        const noGpsCount = shots.filter((s) => s.source === 'no_gps').length;
+        const yards = closedGps.reduce((sum, h) => sum + (h.distanceYards ?? 0), 0);
         const penStrokes = totalPenaltyStrokes(penalties);
         const mismatch = reconcileHoleScore({
           score: hole.score,
@@ -71,7 +67,6 @@ export default function RoundSummaryScreen() {
         const shotBits = [
           `${shots.length} shot${shots.length === 1 ? '' : 's'}`,
           closedGps.length ? `${yards} yd` : null,
-          noGpsCount ? `${noGpsCount} no GPS` : null,
         ].filter(Boolean);
         return (
           <Pressable
@@ -92,10 +87,9 @@ export default function RoundSummaryScreen() {
               ) : null}
               {mismatch ? (
                 <Text style={styles.warn}>
-                  Score {hole.score} ≠ {shots.length} shots + {penStrokes} penalties
+                  Score {hole.score} doesn’t match {shots.length} shots + {penStrokes} penalties.
                 </Text>
               ) : null}
-              <AverageBadges includesSoft={includesSoft} includesForced={includesForced} />
             </View>
             <Text style={styles.score}>{hole.score ?? '—'}</Text>
           </Pressable>

@@ -15,7 +15,7 @@ export async function requestLocationPermission(): Promise<boolean> {
 export async function getCurrentFix(): Promise<GpsFix> {
   const granted = await requestLocationPermission();
   if (!granted) {
-    throw new Error('Location permission is required to mark a shot.');
+    throw new Error('Turn on location to mark.');
   }
 
   const loc = await Location.getCurrentPositionAsync({
@@ -25,7 +25,7 @@ export async function getCurrentFix(): Promise<GpsFix> {
   const lat = loc.coords.latitude;
   const lng = loc.coords.longitude;
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    throw new Error('GPS did not return a valid coordinate. No location was invented.');
+    throw new Error('Couldn’t read your location.');
   }
 
   const isSimulator = Device.isDevice === false;
@@ -41,10 +41,10 @@ export async function getCurrentFix(): Promise<GpsFix> {
 
 export function describeGpsSource(fix: Pick<GpsFix, 'mocked' | 'isSimulator'>): string | null {
   if (fix.isSimulator) {
-    return 'SIMULATOR GPS — using the location the simulator reports. ShotTraxx does not invent coordinates. Move the Simulator GPS pin to get real yards.';
+    return 'Simulator — move the location pin between shots.';
   }
   if (fix.mocked) {
-    return 'MOCK GPS — this fix is flagged mocked by the OS. ShotTraxx is not synthesizing a location.';
+    return 'Simulator — move the location pin between shots.';
   }
   return null;
 }

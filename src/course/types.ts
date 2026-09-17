@@ -18,10 +18,16 @@ export type HoleCourseData = {
   par: number | null;
   /** Tee yardage for this hole. Blank if the API omits it. */
   yards: number | null;
-  /** Stroke index 1–18. Blank if the API omits it — shown as “SI ?”. */
+  /** Stroke index 1–18. Blank if the API omits it — shown as “SI unknown”. */
   handicap: number | null;
   /** Green centroid when the API provides one — never invented. */
   greenCentroid: LatLng | null;
+  /** Front of green when the API provides it — never derived from centroid. */
+  greenFront: LatLng | null;
+  /** Back of green when the API provides it — never derived from centroid. */
+  greenBack: LatLng | null;
+  /** Green depth in yards when the API provides it — never derived. */
+  greenDepthYards: number | null;
 };
 
 export type TeeSet = {

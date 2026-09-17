@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { isGolfCoursesApiConfigured } from '@/src/course/config';
 import { getCourseDataClient } from '@/src/course/client';
 import { formatTeeHoleYards, formatTeeMeta } from '@/src/course/layout';
 import type { CourseDetail, CourseSummary, TeeSet } from '@/src/course/types';
+import { COPY } from '@/src/domain/playerCopy';
 import { getCurrentFix } from '@/src/services/location';
 import { BigButton } from './BigButton';
-import { colors } from './theme';
+import { colors, tapTarget, type } from './theme';
 
 export type CoursePick = {
   course: CourseSummary;
@@ -18,14 +19,14 @@ type Props = {
   selected: CourseSummary | null;
   selectedTee: TeeSet | null;
   onSelect: (pick: CoursePick | null) => void;
-  /** When set, picking a tee attaches it to the round in progress. */
   attachMode?: boolean;
   autoFind?: boolean;
+  onRefreshReady?: (refresh: () => Promise<void>) => void;
 };
 
 function formatDistance(meters: number | null): string | null {
   if (meters == null || !Number.isFinite(meters) || meters < 0) return null;
-  if (meters < 950) return `${Math.round(meters)} m`;
+  if (meters < 950) return '< 1 km';
   return `${(meters / 1000).toFixed(1)} km`;
 }
 
@@ -35,16 +36,12 @@ function placeLine(course: CourseSummary): string {
   return [place || course.club || 'Course', dist].filter(Boolean).join(' · ');
 }
 
-/**
- * Nearby course + named tee picker (Golf Courses API Pro).
- * Disabled and graceful when the EAS secret / local key is missing.
- */
 export function CoursePicker({
   selected,
   selectedTee,
   onSelect,
-  attachMode = false,
   autoFind = true,
+  onRefreshReady,
 }: Props) {
   const configured = isGolfCoursesApiConfigured();
   const [busy, setBusy] = useState(false);
@@ -63,15 +60,19 @@ export function CoursePicker({
       const nearby = await getCourseDataClient().nearbyCourses({ lat: fix.lat, lng: fix.lng });
       setResults(nearby);
       if (nearby.length === 0) {
-        setError('No nearby courses returned. ShotTraxx does not invent a course list.');
+        setError(COPY.nearbyEmpty);
       }
     } catch (err) {
       setResults([]);
-      setError(err instanceof Error ? err.message : 'Could not look up nearby courses');
+      setError(err instanceof Error ? err.message : 'Couldn’t find courses nearby.');
     } finally {
       setBusy(false);
     }
   }, [configured]);
+
+  useEffect(() => {
+    onRefreshReady?.(onFind);
+  }, [onFind, onRefreshReady]);
 
   useEffect(() => {
     if (!configured || !autoFind) return;
@@ -94,7 +95,7 @@ export function CoursePicker({
         onSelect({ course, detail: next, tee: null });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load course');
+      setError(err instanceof Error ? err.message : 'Couldn’t load that course.');
       onSelect({ course, detail: null, tee: null });
     } finally {
       setTeeBusy(false);
@@ -103,29 +104,10 @@ export function CoursePicker({
 
   return (
     <View style={styles.box}>
-      <Text style={styles.label}>Nearby courses</Text>
-      <Text style={styles.meta}>
-        {configured
-          ? attachMode
-            ? 'Pick a course, then a named tee. Rating, slope, and per-hole yardage show when the API has them (blank if missing). Par / SI stay “par ?” / “SI ?” until course data exists.'
-            : 'GPS nearby → named tee. Par, SI, yardage, rating, and slope come from the API only — never invented.'
-          : 'Nearby picker needs the Golf Courses API key. CoS: EAS secret GOLF_COURSES_API_KEY (prod/preview/dev). Local: EXPO_PUBLIC_GOLF_COURSES_API_KEY in .env. You can still type a course name and drop a green pin.'}
-      </Text>
-      <BigButton
-        label={
-          configured
-            ? busy
-              ? 'Finding…'
-              : results
-                ? 'Refresh nearby'
-                : 'Find nearby courses'
-            : 'Nearby courses — needs API key'
-        }
-        variant="secondary"
-        disabled={!configured || busy}
-        onPress={() => void onFind()}
-      />
+      <Text style={styles.label}>{COPY.nearbyHint}</Text>
+      {!configured ? <Text style={styles.meta}>{COPY.nearbyUnavailable}</Text> : null}
       {error ? <Text style={styles.warn}>{error}</Text> : null}
+      {busy ? <Text style={styles.meta}>{COPY.nearbyBusy}</Text> : null}
       {selected ? (
         <View style={styles.selected}>
           <Text style={styles.selectedName}>{selected.name}</Text>
@@ -139,7 +121,7 @@ export function CoursePicker({
             </>
           ) : null}
           <BigButton
-            label="Clear course"
+            label={COPY.clearCourse}
             variant="ghost"
             onPress={() => {
               setTees(null);
@@ -149,63 +131,60 @@ export function CoursePicker({
           />
         </View>
       ) : null}
-      {results?.map((course) => (
-        <Pressable
-          key={course.id}
-          onPress={() => void pickCourse(course)}
-          style={[styles.row, selected?.id === course.id && styles.rowOn]}>
-          <Text style={styles.rowTitle}>{course.name}</Text>
-          <Text style={styles.meta}>{placeLine(course)}</Text>
-        </Pressable>
-      ))}
-      {teeBusy ? <Text style={styles.meta}>Loading tees…</Text> : null}
-      {selected && tees && tees.length === 0 ? (
-        <Text style={styles.meta}>No named tees returned. Par / SI / yardage stay blank — nothing invented.</Text>
-      ) : null}
-      {selected && tees && tees.length > 0 ? (
-        <View style={styles.teeBox}>
-          <Text style={styles.label}>Tee</Text>
-          {tees.map((tee) => (
-            <Pressable
-              key={tee.name}
-              onPress={() => onSelect({ course: selected, detail, tee })}
-              style={[styles.row, selectedTee?.name === tee.name && styles.rowOn]}>
-              <Text style={styles.rowTitle}>{tee.name}</Text>
-              <Text style={styles.meta}>{formatTeeMeta(tee)}</Text>
-              {formatTeeHoleYards(tee.holes) ? (
-                <Text style={styles.meta}>{formatTeeHoleYards(tee.holes)}</Text>
-              ) : null}
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
+      <ScrollView style={styles.list} keyboardShouldPersistTaps="handled">
+        {results?.map((course) => (
+          <Pressable
+            key={course.id}
+            onPress={() => void pickCourse(course)}
+            style={[styles.row, selected?.id === course.id && styles.rowOn]}>
+            <Text style={styles.rowTitle}>{course.name}</Text>
+            <Text style={styles.meta}>{placeLine(course)}</Text>
+          </Pressable>
+        ))}
+        {teeBusy ? <Text style={styles.meta}>Loading tees…</Text> : null}
+        {selected && tees && tees.length === 0 ? (
+          <Text style={styles.meta}>No tees listed for this course.</Text>
+        ) : null}
+        {selected && tees && tees.length > 0 ? (
+          <View style={styles.teeBox}>
+            <Text style={styles.label}>{COPY.pickTee}</Text>
+            {tees.map((tee) => (
+              <Pressable
+                key={tee.name}
+                onPress={() => onSelect({ course: selected, detail, tee })}
+                style={[styles.row, selectedTee?.name === tee.name && styles.rowOn]}>
+                <Text style={styles.rowTitle}>{tee.name}</Text>
+                <Text style={styles.meta}>{formatTeeMeta(tee)}</Text>
+                {formatTeeHoleYards(tee.holes) ? (
+                  <Text style={styles.meta}>{formatTeeHoleYards(tee.holes)}</Text>
+                ) : null}
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  box: {
-    backgroundColor: colors.bgElevated,
-    borderRadius: 16,
-    padding: 14,
-    gap: 10,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  label: { color: colors.cream, fontSize: 14, fontWeight: '800', letterSpacing: 0.6 },
-  meta: { color: colors.muted, fontSize: 14, lineHeight: 20 },
-  warn: { color: colors.orange, fontSize: 14, fontWeight: '700' },
+  box: { flex: 1, gap: 10, paddingHorizontal: 16, paddingBottom: 16 },
+  list: { flex: 1 },
+  label: { color: colors.muted, fontSize: type.meta, fontWeight: '700' },
+  meta: { color: colors.muted, fontSize: type.meta, lineHeight: 20 },
+  warn: { color: colors.orange, fontSize: type.meta, fontWeight: '700' },
   selected: { gap: 6 },
   selectedName: { color: colors.lime, fontSize: 18, fontWeight: '800' },
   row: {
-    minHeight: 56,
+    minHeight: tapTarget,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.line,
     padding: 12,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.bgElevated,
+    marginBottom: 8,
   },
   rowOn: { borderColor: colors.lime },
-  rowTitle: { color: colors.cream, fontSize: 16, fontWeight: '700' },
-  teeBox: { gap: 8 },
+  rowTitle: { color: colors.cream, fontSize: type.body, fontWeight: '700' },
+  teeBox: { gap: 8, marginTop: 8 },
 });

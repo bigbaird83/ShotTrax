@@ -6,34 +6,29 @@ import {
   getOpenShotForHole,
   insertNoGpsShot,
   insertOpenShot,
+  insertPenalty,
   nextShotSeq,
+  setRoundLastClub,
 } from '../db/repo';
+import { planDrop } from '../domain/drop';
 import { worstFixQuality } from '../domain/fixQuality';
 import type { ClosedShotPlan, MarkPlan } from '../domain/markShot';
-import type { GpsFix, OpenShot } from '../domain/types';
+import type { GpsFix, OpenShot, PenaltyReason } from '../domain/types';
+import { COPY } from '../domain/playerCopy';
 import { acceptFix, forceMark, getFix } from '../sensing/api';
-
-function describePoorGps(accuracyM: number | null): string {
-  const acc = accuracyM == null ? 'unknown' : `${Math.round(accuracyM)} m`;
-  return `GPS accuracy is ${acc} (soft window is 15–25 m; worse than 25 m needs Force). Forcing stores this shot as FORCED. It still counts in club averages.`;
-}
-
-function describeJump(yards: number): string {
-  return `${yards} yd is over the 400 yd impossible-jump gate. Forcing stores the distance as FORCED. It still counts in club averages.`;
-}
 
 export function promptForPlan(plan: MarkPlan, onForce: () => void): boolean {
   if (plan.status === 'needs_force_poor_gps') {
-    Alert.alert('Weak GPS', describePoorGps(plan.accuracyM), [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Force mark', onPress: onForce },
+    Alert.alert(COPY.weakLocation, '', [
+      { text: COPY.cancel, style: 'cancel' },
+      { text: COPY.markAnyway, onPress: onForce },
     ]);
     return true;
   }
   if (plan.status === 'needs_force_impossible_jump') {
-    Alert.alert('Impossible jump', describeJump(plan.yards), [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Force anyway', onPress: onForce },
+    Alert.alert(COPY.tooFar, '', [
+      { text: COPY.cancel, style: 'cancel' },
+      { text: COPY.markAnyway, onPress: onForce },
     ]);
     return true;
   }
@@ -111,6 +106,7 @@ export async function markShotWithClub(
       accuracyM: fix.accuracyM,
       startFixQuality: plan.startFixQuality,
     });
+    setRoundLastClub(db, args.roundId, args.clubId);
   });
   return { plan, fix };
 }
@@ -144,11 +140,52 @@ export function addNoGpsShot(
   if (!hole) {
     throw new Error(`Hole ${args.holeNumber} not found`);
   }
-  // Sensing lock: missed-mark does not call getFix / acceptFix / haversine.
-  return insertNoGpsShot(db, {
+  const id = insertNoGpsShot(db, {
     holeId: hole.id,
     clubId: args.clubId,
     seq: nextShotSeq(db, hole.id),
     typedYards: args.typedYards ?? null,
   });
+  setRoundLastClub(db, args.roundId, args.clubId);
+  return id;
+}
+
+export async function takeDrop(
+  db: SQLiteDatabase,
+  args: {
+    roundId: string;
+    holeNumber: number;
+    reason: PenaltyReason;
+    note?: string | null;
+    force?: boolean;
+  },
+): Promise<{ plan: MarkPlan; fix: GpsFix }> {
+  const hole = getHole(db, args.roundId, args.holeNumber);
+  if (!hole) {
+    throw new Error(`Hole ${args.holeNumber} not found`);
+  }
+  const drop = planDrop({ reason: args.reason, note: args.note });
+  const fix = await getFix();
+  const open = getOpenShotForHole(db, hole.id);
+  const plan = decide(fix, open, Boolean(args.force));
+  if (open && plan.status !== 'commit') {
+    return { plan, fix };
+  }
+  db.withTransactionSync(() => {
+    if (plan.status === 'commit' && plan.closePrior) {
+      applyClosedShot(db, plan.closePrior);
+    }
+    insertPenalty(db, {
+      holeId: hole.id,
+      par: hole.par,
+      currentScore: hole.score,
+      strokes: drop.strokes,
+      reason: drop.reason,
+      note: drop.note,
+      kind: 'drop',
+      lat: fix.lat,
+      lng: fix.lng,
+    });
+  });
+  return { plan: { status: 'commit', startFixQuality: 'good', closePrior: null }, fix };
 }
