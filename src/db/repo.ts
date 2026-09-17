@@ -4,7 +4,7 @@ import {
   seedHoleFromCourse,
   type CourseLayoutSeed,
 } from '../course/layout';
-import { DEFAULT_BAG } from '../domain/defaultBag';
+import { DEFAULT_BAG, isPutterClubId, typicalCarryForClub } from '../domain/defaultBag';
 import { averageWithBadges, type ClubAverage } from '../domain/averages';
 import { isValidLatLng } from '../domain/latLng';
 import { clampPenaltyStrokes, scoreAfterPenalty } from '../domain/penalty';
@@ -756,10 +756,11 @@ export function insertPenalty(
 
 export type ClubAverageRow = ClubAverage & {
   club: Club;
+  typicalCarryYards: number | null;
 };
 
 export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
-  const clubs = listClubs(db, false);
+  const clubs = listClubs(db, false).filter((club) => !isPutterClubId(club.id));
   const shots = db.getAllSync<{
     club_id: string;
     distance_yards: number;
@@ -780,6 +781,7 @@ export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
           includeInDistanceAverages({
             source: s.source === 'no_gps' ? 'no_gps' : 'gps',
             distanceYards: s.distance_yards,
+            clubId: s.club_id,
             fixQuality:
               s.fix_quality === 'none'
                 ? 'none'
@@ -792,7 +794,7 @@ export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
         yards: s.distance_yards,
         fixQuality: s.fix_quality as FixQuality,
       }));
-    return { club, ...averageWithBadges(forClub) };
+    return { club, typicalCarryYards: typicalCarryForClub(club.id), ...averageWithBadges(forClub) };
   });
 }
 

@@ -64,6 +64,7 @@ export const COPY = {
   bagLede: 'Your bag. Turn off what you don’t carry.',
   averagesLede: 'How far you hit each club — from marked shots.',
   noClosedShots: 'No marked shots yet',
+  typicalCarry: 'Typical',
   summaryHome: 'Home',
 } as const;
 

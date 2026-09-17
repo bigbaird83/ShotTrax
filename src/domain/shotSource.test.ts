@@ -141,6 +141,36 @@ test('penalties are not shots and cannot enter distance averages', () => {
   assert.equal(includeInDistanceAverages({ source: 'gps', distanceYards: 140, fixQuality: 'good' }), true);
 });
 
+test('putter GPS shots never count toward any club sample', () => {
+  assert.equal(
+    includeInDistanceAverages({
+      source: 'gps',
+      distanceYards: 12,
+      fixQuality: 'good',
+      clubId: 'club_putter',
+    }),
+    false,
+  );
+  assert.equal(
+    includeInTop3Samples({
+      source: 'gps',
+      distanceYards: 12,
+      fixQuality: 'good',
+      clubId: 'club_putter',
+    }),
+    false,
+  );
+  assert.equal(
+    includeInDistanceAverages({
+      source: 'gps',
+      distanceYards: 150,
+      fixQuality: 'good',
+      clubId: 'club_7i',
+    }),
+    true,
+  );
+});
+
 test('P1 sensing lock: MAX_SHOT_YD is 400; good/soft/forced still average', () => {
   assert.equal(MAX_SHOT_YD, 400);
   const a = averageWithBadges([

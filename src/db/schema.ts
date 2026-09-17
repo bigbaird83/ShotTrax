@@ -238,7 +238,7 @@ export function migrate(db: SQLiteDatabase): void {
   ensureStockBag(db);
 }
 
-/** First-run seed plus insert any stock clubs missing from an older bag (2i / 3i / 4i). */
+/** First-run seed plus insert any stock clubs missing from an older bag (2i / 3i / 4i / 52° / 56° / 60°). */
 function ensureStockBag(db: SQLiteDatabase): void {
   const existing = new Set(
     db.getAllSync<{ id: string }>('SELECT id FROM clubs').map((row) => row.id),

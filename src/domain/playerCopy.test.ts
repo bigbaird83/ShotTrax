@@ -36,6 +36,7 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.changeClub, 'Change club');
   assert.equal(COPY.bagLede, 'Your bag. Turn off what you don’t carry.');
   assert.equal(COPY.restoreBag, 'Restore stock bag');
+  assert.equal(COPY.typicalCarry, 'Typical');
   assert.equal(markedSuggestedMessage('7i'), 'Marked 7i (suggested) · Change club.');
 });
 

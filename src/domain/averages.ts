@@ -15,7 +15,8 @@ export type ClubAverage = {
 /**
  * Club averages include `soft` and `forced` GPS shots; badges report that mix.
  * Callers must pass only shots that `includeInDistanceAverages` accepts —
- * `fixQuality: none`, `no_gps`, typed yards, and hole penalties never belong here.
+ * `fixQuality: none`, `no_gps`, typed yards, hole penalties, and putter shots
+ * never belong here.
  */
 export function averageWithBadges(shots: AverageShot[]): ClubAverage {
   if (shots.length === 0) {

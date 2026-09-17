@@ -160,7 +160,7 @@ EAS credentials for `com.shottrax.app.watch` and `com.shottrax.app.watch.widget`
 7. **End last shot** closes an open GPS shot without starting a new one.
 8. **+ Penalty** adds 1–5 penalty strokes to the hole score, with reason water / OB / unplayable / other (optional note). Shown as a penalty row — not a map polyline. A penalty is **not a Shot for distance**: it never hits `acceptFix`, haversine, club averages, or top-3.
 9. **Add shot without GPS** (forgotten swing / no fix): pick a club and optionally type yards (or leave blank). Stored as `source = no_gps`, `fixQuality = none`, **null** lat/lng, **null** `distance_yards`. Typed yards live in `typed_yards` (score/UI only) and are **excluded from distance averages and top-3**. No include-typed-yards toggle in MVP. Never invents a coordinate and never calls `acceptFix`.
-10. Finish the round for a scorecard. Club averages live on the Averages tab.
+10. Finish the round for a scorecard. Club averages live on the Averages tab (putter is omitted — scoring / green play only). Stock wedges are **PW · 52° · 56° · 60°**.
 
 Hole **score remains the source of truth**. If you also logged shots and/or penalties, the hole screen and round summary warn when `score ≠ shots + penalty strokes`.
 
@@ -190,13 +190,13 @@ Use this when you swung but have no GPS fix (or forgot to mark).
 
 ## Top-3 ranking
 
-After a club has **≥5** closed **GPS** shots with yards (soft and forced included, same as averages; `no_gps` / `fixQuality none` excluded):
+Stock clubs start from a **typical-carry seed**. After a club has **≥5** closed **GPS** shots with yards (soft and forced included, same as averages; `no_gps` / `fixQuality none` / **putter** excluded), the live average replaces that seed:
 
 - **D** = `yardsToGreen(fix, greenCentroid).yards` **only when `quality !== none`** (good or soft GPS + a real green centroid)
 - else **D** = last closed **GPS** shot distance on this hole
 - else full bag (no ranking)
 
-The 3 eligible clubs with the lowest `|avgYards − D|` are surfaced. Ties prefer the **shorter** club (higher `loftRank`). **All clubs** is always one tap away. Penalties do not affect ranking.
+The 3 eligible clubs with the lowest `|rank yards − D|` are surfaced. Rank yards are the **live average** after ≥5 closed GPS shots, else the stock **typical-carry seed**. Ties prefer the **shorter** club (higher `loftRank`). **Putter** stays in the bag for scoring / green play only — no typical-carry seed, no live average, never in Suggested top-3, and putter shots never count toward any club sample. **All clubs** is always one tap away. Penalties do not affect ranking.
 
 ## Sensing gates (locked, unchanged from P1)
 

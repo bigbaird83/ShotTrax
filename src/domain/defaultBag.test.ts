@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DEFAULT_BAG, STOCK_LONG_IRONS } from './defaultBag';
+import {
+  clubCountsTowardDistanceSamples,
+  DEFAULT_BAG,
+  isPutterClubId,
+  PUTTER_CLUB_ID,
+  STOCK_LONG_IRONS,
+  STOCK_WEDGES,
+  typicalCarryForClub,
+} from './defaultBag';
 
 test('stock bag includes 2i, 3i, and 4i along with the rest of the irons', () => {
   const byId = new Map(DEFAULT_BAG.map((club) => [club.id, club]));
@@ -34,4 +42,67 @@ test('long irons sit between hybrid and 5i in loft and bag order', () => {
   assert.ok(two.sortOrder < three.sortOrder);
   assert.ok(three.sortOrder < four.sortOrder);
   assert.ok(four.sortOrder < five.sortOrder);
+});
+
+test('default bag keeps PW and distinct 52°, 56°, 60° wedges — not one SW', () => {
+  const byId = new Map(DEFAULT_BAG.map((club) => [club.id, club]));
+  assert.equal(byId.get('club_pw')?.shortName, 'PW');
+  assert.equal(byId.get('club_pw')?.name, 'Pitching Wedge');
+  assert.deepEqual(
+    STOCK_WEDGES.map((id) => byId.get(id)?.shortName),
+    ['52°', '56°', '60°'],
+  );
+  assert.deepEqual(
+    STOCK_WEDGES.map((id) => byId.get(id)?.name),
+    ['52°', '56°', '60°'],
+  );
+  const pw = byId.get('club_pw');
+  const w52 = byId.get('club_gw');
+  const w56 = byId.get('club_sw');
+  const w60 = byId.get('club_lw');
+  const putter = byId.get('club_putter');
+  assert.ok(pw && w52 && w56 && w60 && putter);
+  assert.ok(pw.loftRank < w52.loftRank);
+  assert.ok(w52.loftRank < w56.loftRank);
+  assert.ok(w56.loftRank < w60.loftRank);
+  assert.ok(w60.loftRank < putter.loftRank);
+  assert.ok(pw.sortOrder < w52.sortOrder);
+  assert.ok(w52.sortOrder < w56.sortOrder);
+  assert.ok(w56.sortOrder < w60.sortOrder);
+  assert.ok(w60.sortOrder < putter.sortOrder);
+  assert.equal(DEFAULT_BAG.filter((club) => club.shortName === 'SW').length, 0);
+});
+
+test('putter stays in the bag but has no typical-carry seed and is not a distance sample', () => {
+  const putter = DEFAULT_BAG.find((club) => club.id === PUTTER_CLUB_ID);
+  assert.ok(putter);
+  assert.equal(putter?.name, 'Putter');
+  assert.equal(putter?.shortName, 'Pt');
+  assert.equal(putter?.typicalCarryYards, null);
+  assert.equal(typicalCarryForClub(PUTTER_CLUB_ID), null);
+  assert.equal(isPutterClubId(PUTTER_CLUB_ID), true);
+  assert.equal(isPutterClubId('club_7i'), false);
+  assert.equal(isPutterClubId(null), false);
+  assert.equal(clubCountsTowardDistanceSamples(PUTTER_CLUB_ID), false);
+  assert.equal(clubCountsTowardDistanceSamples('club_7i'), true);
+  assert.equal(clubCountsTowardDistanceSamples(null), false);
+});
+
+test('stock clubs except putter have a typical-carry seed, including 52° / 56° / 60°', () => {
+  for (const club of DEFAULT_BAG) {
+    if (club.id === PUTTER_CLUB_ID) {
+      assert.equal(club.typicalCarryYards, null);
+      continue;
+    }
+    assert.ok(
+      club.typicalCarryYards != null && club.typicalCarryYards > 0,
+      `${club.id} should have a typical-carry seed`,
+    );
+    assert.equal(typicalCarryForClub(club.id), club.typicalCarryYards);
+  }
+  assert.equal(typicalCarryForClub('club_gw'), 105);
+  assert.equal(typicalCarryForClub('club_sw'), 90);
+  assert.equal(typicalCarryForClub('club_lw'), 75);
+  assert.equal(typicalCarryForClub('club_pw'), 120);
+  assert.equal(typicalCarryForClub('club_custom'), null);
 });
