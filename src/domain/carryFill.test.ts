@@ -47,20 +47,20 @@ test('interpolation only between typed clubs in loft order', () => {
   assert.equal(filled.get('club_7i')?.source, 'typed');
   assert.equal(filled.get('club_pw')?.source, 'typed');
   assert.equal(filled.get('club_3w')?.source, 'estimated');
-  assert.equal(filled.get('club_3w')?.yards, Math.round(230 + ((140 - 230) * 1) / 9));
+  assert.equal(filled.get('club_3w')?.yards, Math.round(230 + ((140 - 230) * 1) / 2));
   assert.equal(filled.get('club_8i')?.source, 'estimated');
-  assert.equal(filled.get('club_8i')?.yards, Math.round(140 + ((110 - 140) * 1) / 3));
+  assert.equal(filled.get('club_8i')?.yards, Math.round(140 + ((110 - 140) * 1) / 2));
 });
 
 test('typed number always wins over the interpolated value', () => {
   const filled = fillEstimatedCarries([
     club('club_5i', 7, 170),
-    club('club_6i', 8, 155),
+    club('club_6i', 8, 162),
     club('club_7i', 9, 140),
     club('club_8i', 10, null),
   ]);
   assert.equal(filled.get('club_6i')?.source, 'typed');
-  assert.equal(filled.get('club_6i')?.yards, 155);
+  assert.equal(filled.get('club_6i')?.yards, 162);
   assert.notEqual(filled.get('club_6i')?.yards, Math.round((170 + 140) / 2));
 });
 
