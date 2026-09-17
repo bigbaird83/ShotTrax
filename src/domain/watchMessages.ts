@@ -7,6 +7,7 @@
  * Watch never marks alone, never silent-forces, no motion/mic, no auto-detect putts.
  */
 
+import { isPutterClubId } from './defaultBag';
 import { isPuttLengthId, PUTT_LENGTHS, type PuttLengthId } from './putts';
 
 export type ClubId = string;
@@ -163,9 +164,59 @@ export function parseClubPick(raw: unknown): ClubPickMessage | null {
   return pick;
 }
 
-/** Only a clubPick (club tap / Watch tap / Same club) runs acceptFix. Back/Home never do. */
+/**
+ * Signal Lab: Back / Home never mark. Putter never marks GPS.
+ * Only a real club tap / Watch club tap / Same club runs acceptFix.
+ */
+export type WatchInboundIntent =
+  | {
+      kind: 'leave';
+      action: 'back' | 'home';
+      runsAcceptFix: false;
+      savesGps: false;
+      closesPendingShot: false;
+    }
+  | {
+      kind: 'putter';
+      clubId: string;
+      runsAcceptFix: false;
+      savesGps: false;
+      closesPendingShot: false;
+    }
+  | {
+      kind: 'club';
+      pick: ClubPickMessage;
+      runsAcceptFix: true;
+    };
+
+export function parseWatchInboundIntent(raw: unknown): WatchInboundIntent | null {
+  const nav = parseClubNav(raw);
+  if (nav) {
+    return {
+      kind: 'leave',
+      action: nav.action,
+      runsAcceptFix: false,
+      savesGps: false,
+      closesPendingShot: false,
+    };
+  }
+  const pick = parseClubPick(raw);
+  if (!pick) return null;
+  if (isPutterClubId(pick.clubId)) {
+    return {
+      kind: 'putter',
+      clubId: pick.clubId,
+      runsAcceptFix: false,
+      savesGps: false,
+      closesPendingShot: false,
+    };
+  }
+  return { kind: 'club', pick, runsAcceptFix: true };
+}
+
+/** Only a club tap / Watch tap / Same club runs acceptFix. Back/Home never do. */
 export function watchPayloadRunsAcceptFix(raw: unknown): boolean {
-  return parseClubPick(raw) != null;
+  return parseWatchInboundIntent(raw)?.runsAcceptFix === true;
 }
 
 export function clubListPayload(args: {

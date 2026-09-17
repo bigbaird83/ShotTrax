@@ -22,6 +22,11 @@ export function planClubPickLeave(action: ClubPickLeaveAction): ClubPickLeavePla
   };
 }
 
+/** Signal Lab: Back / Home never run acceptFix. */
+export function clubPickLeaveRunsAcceptFix(_action: ClubPickLeaveAction): false {
+  return false;
+}
+
 /** Destinations for Back (hole) and Home (Rounds list). Round stays in progress. */
 export function clubPickLeaveHref(args: {
   action: ClubPickLeaveAction;

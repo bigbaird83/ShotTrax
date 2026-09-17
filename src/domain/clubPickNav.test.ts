@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { clubPickLeaveHref, planClubPickLeave } from './clubPickNav';
+import { clubPickLeaveHref, clubPickLeaveRunsAcceptFix, planClubPickLeave } from './clubPickNav';
 import { COPY } from './playerCopy';
 
 test('club pick Back returns to the hole and marks nothing', () => {
@@ -34,5 +34,6 @@ test('Signal Lab: Back and Home never call mark, save GPS, or close a pending sh
     assert.equal(plan.selectClub, false);
     assert.equal(plan.savesGps, false);
     assert.equal(plan.closesPendingShot, false);
+    assert.equal(clubPickLeaveRunsAcceptFix(action), false);
   }
 });

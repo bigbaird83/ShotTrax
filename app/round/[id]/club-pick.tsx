@@ -4,7 +4,7 @@ import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-nativ
 import { useDb } from '@/src/db/DbProvider';
 import { getHole, listClubAverages, listClubs, listShotsForHole } from '@/src/db/repo';
 import { COPY } from '@/src/domain/playerCopy';
-import { clubPickLeaveHref, planClubPickLeave } from '@/src/domain/clubPickNav';
+import { clubPickLeaveHref, clubPickLeaveRunsAcceptFix, planClubPickLeave } from '@/src/domain/clubPickNav';
 import { putterOpensPuttSheet } from '@/src/domain/putts';
 import { clubToRankInput, lastClosedShotYards, rankTopClubs, resolveDistanceTarget } from '@/src/domain/rankClubs';
 import { parseTypedYards } from '@/src/domain/shotSource';
@@ -36,9 +36,20 @@ export default function ClubPickScreen() {
   const navigation = useNavigation();
   const { db, revision, bump } = useDb();
 
+  const leavingRef = useRef(false);
+
   const leavePicker = (action: 'back' | 'home') => {
     const plan = planClubPickLeave(action);
-    if (plan.mark || plan.selectClub || plan.savesGps || plan.closesPendingShot) return;
+    if (
+      clubPickLeaveRunsAcceptFix(action) ||
+      plan.mark ||
+      plan.selectClub ||
+      plan.savesGps ||
+      plan.closesPendingShot
+    ) {
+      return;
+    }
+    leavingRef.current = true;
     if (plan.dest === 'rounds') {
       router.replace('/');
       return;
@@ -66,6 +77,13 @@ export default function ClubPickScreen() {
   const [typedYards, setTypedYards] = useState('');
   const sessionRef = useRef<ClubSpeechSession | null>(null);
   const voiceCommitted = useRef(false);
+
+  useEffect(() => {
+    const unsub = navigation.addListener('beforeRemove', () => {
+      leavingRef.current = true;
+    });
+    return unsub;
+  }, [navigation]);
 
   useEffect(() => {
     navigation.setOptions({
@@ -149,6 +167,7 @@ export default function ClubPickScreen() {
     force = false,
     opts: { fixOverride?: GpsFix; suggested?: boolean } = {},
   ) => {
+    if (leavingRef.current) return;
     const next = selectClubForMark(club, clubs);
     if (!next || !id || Number.isNaN(holeNumber)) return;
     hapticSelect();
@@ -164,8 +183,10 @@ export default function ClubPickScreen() {
       return;
     }
     if (withoutGps) return;
+    if (leavingRef.current) return;
     setBusy(true);
     try {
+      if (leavingRef.current) return;
       const { plan } = await markShotWithClub(db, {
         roundId: id,
         holeNumber,
@@ -215,7 +236,8 @@ export default function ClubPickScreen() {
         fix,
       }) ||
       busyRef.current ||
-      selectedRef.current
+      selectedRef.current ||
+      leavingRef.current
     ) {
       return;
     }

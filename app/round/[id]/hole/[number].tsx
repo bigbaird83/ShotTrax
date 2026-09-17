@@ -26,7 +26,7 @@ import {
   updateHoleScore,
 } from '@/src/db/repo';
 import { pinOrNull, formatFmbRow, hasApiFmb, yardsToGreenDepth } from '@/src/domain/greenDepth';
-import { clubPickLeaveHref, planClubPickLeave } from '@/src/domain/clubPickNav';
+import { clubPickLeaveHref, clubPickLeaveRunsAcceptFix, planClubPickLeave } from '@/src/domain/clubPickNav';
 import { COPY, finishPuttsChip, finishShotChip, formatHoleHeader, markedSuggestedMessage, voiceFailRecovery } from '@/src/domain/playerCopy';
 import { canAdvanceHole, holesNeedingOpenShots } from '@/src/domain/holeAdvance';
 import { isPutterClubId } from '@/src/domain/defaultBag';
@@ -386,7 +386,15 @@ export default function HoleScreen() {
       },
       onLeave: (action) => {
         const plan = planClubPickLeave(action);
-        if (plan.mark || plan.selectClub || plan.savesGps || plan.closesPendingShot) return;
+        if (
+          clubPickLeaveRunsAcceptFix(action) ||
+          plan.mark ||
+          plan.selectClub ||
+          plan.savesGps ||
+          plan.closesPendingShot
+        ) {
+          return;
+        }
         if (plan.dest === 'rounds') router.replace(clubPickLeaveHref({ action, roundId: id, holeNumber }));
       },
       onPuttPick: onWatchPuttPick,

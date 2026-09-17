@@ -237,7 +237,7 @@ Defined in `src/config/sensing.ts`. Mark path is `getFix` → `acceptFix`, then 
 
 **Putts (Signal Lab lock):** `PUTT_ASSIST`, `AUTO_PUTTS_FROM_GPS`, and `AUTO_PUTTS_FROM_LEAVE_GREEN` are **false**. Walking off the green never invents putts. **Made it** stores only user-chosen buckets (not a GPS count) and advances. **Finish putts · Hole N** is score-only — never a fabricated distance. Putter stays out of averages and top-3. The next hole still opens **Pick a club** (club-select = mark).
 
-**Club picker Back / Home:** neither tap selects a club or runs `acceptFix`. **Back** returns to the hole. **Home** returns to Rounds and keeps the round in progress. Same labels on Watch (`clubNav`, never `clubPick`).
+**Club picker Back / Home:** neither tap selects a club or runs `acceptFix`. No GPS fix is saved and no pending shot is closed. **Back** returns to the hole. **Home** returns to Rounds and keeps the round in progress. Same labels on Watch (`clubNav`, never `clubPick`). Only a real club tap, Watch club tap, or Same club runs `acceptFix`.
 
 ## Simulator / mock GPS
 

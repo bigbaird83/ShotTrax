@@ -20,6 +20,7 @@ import {
   parseClubPick,
   parsePuttPick,
   parsePuttSheet,
+  parseWatchInboundIntent,
   watchPayloadRunsAcceptFix,
   puttPickPayload,
   puttSheetPayload,
@@ -211,6 +212,33 @@ test('Watch Back and Home never parse as a club pick', () => {
   assert.equal('lat' in back, false);
   assert.equal('lng' in home, false);
   assert.equal(parseClubNav({ type: 'clubNav', action: 'mark', at: '2026-09-17T22:00:00.000Z' }), null);
+});
+
+test('Signal Lab: only a club tap, Watch tap, or Same club runs acceptFix', () => {
+  const at = '2026-09-17T22:00:00.000Z';
+  const back = parseWatchInboundIntent(clubNavPayload({ action: 'back', at }));
+  const home = parseWatchInboundIntent(clubNavPayload({ action: 'home', at }));
+  const club = parseWatchInboundIntent(clubPickPayload({ clubId: 'club_7i', at }));
+  const sameClub = parseWatchInboundIntent(clubPickPayload({ clubId: 'club_8i', at }));
+  const putter = parseWatchInboundIntent(clubPickPayload({ clubId: 'club_putter', at }));
+  assert.equal(back?.kind, 'leave');
+  assert.equal(back?.runsAcceptFix, false);
+  if (back?.kind === 'leave') {
+    assert.equal(back.savesGps, false);
+    assert.equal(back.closesPendingShot, false);
+  }
+  assert.equal(home?.kind, 'leave');
+  assert.equal(home?.runsAcceptFix, false);
+  assert.equal(club?.kind, 'club');
+  assert.equal(club?.runsAcceptFix, true);
+  assert.equal(sameClub?.kind, 'club');
+  assert.equal(sameClub?.runsAcceptFix, true);
+  assert.equal(putter?.kind, 'putter');
+  assert.equal(putter?.runsAcceptFix, false);
+  assert.equal(watchPayloadRunsAcceptFix(clubNavPayload({ action: 'back', at })), false);
+  assert.equal(watchPayloadRunsAcceptFix(clubNavPayload({ action: 'home', at })), false);
+  assert.equal(watchPayloadRunsAcceptFix(clubPickPayload({ clubId: 'club_putter', at })), false);
+  assert.equal(watchPayloadRunsAcceptFix(clubPickPayload({ clubId: 'club_7i', at })), true);
 });
 
 test('Watch feedback is marked ✓ or Phone unavailable — never silent fail', () => {

@@ -1,7 +1,6 @@
 import { Alert } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getWatchBridgeNative } from '@/modules/watch-bridge';
-import { isPutterClubId } from '../domain/defaultBag';
 import { COPY } from '../domain/playerCopy';
 import { watchFixFromPick } from '../domain/preferWatchFix';
 import {
@@ -10,9 +9,8 @@ import {
   PUTTS_ON_WATCH,
   clubListPayload,
   formatClubMarkedFeedback,
-  parseClubNav,
-  parseClubPick,
   parsePuttPick,
+  parseWatchInboundIntent,
   puttSheetPayload,
   toWatchYardsQuality,
   type ClubListMessage,
@@ -131,19 +129,8 @@ async function handlePick(token: string, json: string): Promise<void> {
     await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
     return;
   }
-  const nav = parseClubNav(raw);
-  if (nav) {
-    const ctx = context;
-    if (!ctx || ctx.readOnly) {
-      await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
-      return;
-    }
-    ctx.onLeave?.(nav.action);
-    await replyToken(token, { ok: true, feedback: nav.action === 'home' ? COPY.home : COPY.back });
-    return;
-  }
-  const pick = parseClubPick(raw);
-  if (!pick) {
+  const intent = parseWatchInboundIntent(raw);
+  if (!intent) {
     await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
     return;
   }
@@ -153,17 +140,25 @@ async function handlePick(token: string, json: string): Promise<void> {
     return;
   }
 
-  if (isPutterClubId(pick.clubId)) {
+  if (intent.kind === 'leave') {
+    // Signal Lab: never mark, never acceptFix, never save GPS, never close a pending shot.
+    ctx.onLeave?.(intent.action);
+    await replyToken(token, { ok: true, feedback: intent.action === 'home' ? COPY.home : COPY.back });
+    return;
+  }
+
+  if (intent.kind === 'putter') {
     hapticSelect();
     ctx.onPutter?.();
     await replyToken(token, { ok: true, feedback: PUTTS_ON_WATCH });
     return;
   }
 
+  const pick = intent.pick;
   const label = ctx.labelForClub(pick.clubId) ?? pick.clubId;
   const watchFix = watchFixFromPick(pick);
   try {
-    // Same club=mark as a phone tap (acceptFix). Prefer a fresh Watch fix; never silent-force.
+    // Club tap / Watch tap / Same club — the only Watch path that runs acceptFix.
     const { plan } = await markShotWithClub(ctx.db, {
       roundId: ctx.roundId,
       holeNumber: ctx.holeNumber,
