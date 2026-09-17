@@ -4,8 +4,8 @@ import {
   seedHoleFromCourse,
   type CourseLayoutSeed,
 } from '../course/layout';
-import { applyCarryFill, fillEstimatedCarries, type CarrySource } from '../domain/carryFill';
-import { DEFAULT_BAG, isPutterClubId, typicalCarrySeedForClub } from '../domain/defaultBag';
+import { fillEstimatedCarries, type CarrySource } from '../domain/carryFill';
+import { DEFAULT_BAG, isPutterClubId } from '../domain/defaultBag';
 import { bagCustomizeSeenValue, BAG_CUSTOMIZE_SETTING_KEY, shouldPromptBagCustomize } from '../domain/bagCustomize';
 import { planInsertPlacedShot } from '../domain/insertShot';
 import {
@@ -1005,9 +1005,8 @@ export type ClubAverageRow = ClubAverage & {
 };
 
 export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
-  const raw = listClubs(db, false).filter((club) => !isPutterClubId(club.id));
-  const filled = fillEstimatedCarries(raw);
-  const clubs = applyCarryFill(raw);
+  const clubs = listClubs(db, false).filter((club) => !isPutterClubId(club.id));
+  const filled = fillEstimatedCarries(clubs);
   const shots = db.getAllSync<{
     club_id: string;
     distance_yards: number;
@@ -1053,7 +1052,7 @@ export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
       });
     return {
       club,
-      typicalCarryYards: typicalCarrySeedForClub(club),
+      typicalCarryYards: filled.get(club.id)?.yards ?? null,
       carrySource: filled.get(club.id)?.source ?? null,
       ...averageWithBadges(forClub),
     };

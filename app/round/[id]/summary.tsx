@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { formatParLabel, formatSiLabel, formatTeeMeta } from '@/src/course/layout';
 import { useDb } from '@/src/db/DbProvider';
-import { getRound, listClubAverages, listClubs, listHoles, listPenaltiesForHole, listShotsForHole } from '@/src/db/repo';
+import { getRound, listClubAverages, listHoles, listPenaltiesForHole, listShotsForHole } from '@/src/db/repo';
 import { planNerdOut } from '@/src/domain/nerdOut';
 import { formatPenaltyRow, totalPenaltyStrokes } from '@/src/domain/penalty';
 import { COPY } from '@/src/domain/playerCopy';
@@ -19,21 +19,23 @@ export default function RoundSummaryScreen() {
   const [nerdOpen, setNerdOpen] = useState(false);
   const round = useMemo(() => getRound(db, id), [db, id, revision]);
   const holes = useMemo(() => (round ? listHoles(db, round.id) : []), [db, round, revision]);
-  const clubs = useMemo(() => listClubs(db), [db, revision]);
   const averages = useMemo(() => listClubAverages(db), [db, revision]);
   const nerd = useMemo(
     () =>
       planNerdOut({
         holeScores: holes.map((hole) => hole.score),
         holePutts: holes.map((hole) => hole.putts),
-        clubs,
-        averages: averages.map((row) => ({
-          clubId: row.club.id,
+        clubs: averages.map((row) => ({
+          id: row.club.id,
+          name: row.club.name,
+          shortName: row.club.shortName,
           count: row.count,
           avgYards: row.avgYards,
+          typicalCarryYards: row.typicalCarryYards,
+          carrySource: row.carrySource,
         })),
       }),
-    [holes, clubs, averages],
+    [holes, averages],
   );
 
   if (!round) {

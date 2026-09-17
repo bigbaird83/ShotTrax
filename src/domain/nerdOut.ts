@@ -1,4 +1,4 @@
-import { fillEstimatedCarries, type CarrySource } from './carryFill';
+import type { CarrySource } from './carryFill';
 import { isPutterClubId } from './defaultBag';
 
 export type ClubBookKind = 'live' | 'typed' | 'estimated' | null;
@@ -9,6 +9,17 @@ export type ClubBookCarry = {
   count: number;
 };
 
+/** Same row the club book / Averages tab feeds `clubBookCarry`. */
+export type ClubBookRow = {
+  id: string;
+  name: string;
+  shortName: string;
+  count: number;
+  avgYards: number;
+  typicalCarryYards: number | null;
+  carrySource: CarrySource;
+};
+
 export type NerdOutClub = ClubBookCarry & {
   id: string;
   name: string;
@@ -17,8 +28,8 @@ export type NerdOutClub = ClubBookCarry & {
 
 /**
  * Same number the club book / Averages tab shows.
- * Live average after real GPS or Placed shots. A seed is never labeled live.
- * Estimated fill keeps the estimated badge. Putter is not a row.
+ * Live average only after real GPS or Placed shots (`count > 0`).
+ * A seed is never labeled live. Estimated fill keeps the estimated badge.
  */
 export function clubBookCarry(args: {
   count: number;
@@ -38,11 +49,15 @@ export function clubBookCarry(args: {
   return { yards: null, kind: null, count: 0 };
 }
 
+/**
+ * End-of-round stats from stored hole scores / putts and the club book.
+ * Club carries are `clubBookCarry` on those same rows — nothing invented.
+ * Putter is omitted. No GIR. No strokes gained.
+ */
 export function planNerdOut(args: {
   holeScores: (number | null)[];
   holePutts: number[];
-  clubs: { id: string; name: string; shortName: string; loftRank: number; typicalCarryYards?: number | null }[];
-  averages: { clubId: string; count: number; avgYards: number }[];
+  clubs: ClubBookRow[];
 }): {
   score: number | null;
   putts: number;
@@ -51,26 +66,14 @@ export function planNerdOut(args: {
   const scored = args.holeScores.filter((score): score is number => score != null);
   const score = scored.length === 0 ? null : scored.reduce((sum, n) => sum + n, 0);
   const putts = args.holePutts.reduce((sum, n) => sum + n, 0);
-  const filled = fillEstimatedCarries(args.clubs.filter((club) => !isPutterClubId(club.id)));
-  const avgById = new Map(args.averages.map((row) => [row.clubId, row]));
   const clubs: NerdOutClub[] = args.clubs
     .filter((club) => !isPutterClubId(club.id))
-    .map((club) => {
-      const fill = filled.get(club.id);
-      const avg = avgById.get(club.id);
-      const book = clubBookCarry({
-        count: avg?.count ?? 0,
-        avgYards: avg?.avgYards ?? 0,
-        typicalCarryYards: fill?.yards ?? null,
-        carrySource: fill?.source ?? null,
-      });
-      return {
-        id: club.id,
-        name: club.name,
-        shortName: club.shortName,
-        ...book,
-      };
-    });
+    .map((club) => ({
+      id: club.id,
+      name: club.name,
+      shortName: club.shortName,
+      ...clubBookCarry(club),
+    }));
   return { score, putts, clubs };
 }
 
