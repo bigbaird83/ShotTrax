@@ -2,7 +2,11 @@ import { classifyAccuracyM } from './fixQuality';
 import { haversineYards } from './haversine';
 import type { GpsFix } from './types';
 
-/** Signal Lab walk-away auto-mark. Assist only — club tap / Watch still primary. */
+/** Signal Lab walk-away auto-mark (assist only — club tap / Watch still primary).
+ * Doc placeholder was leave ~25–40 yd + dwell; Signal Lab lock:
+ * dwell ≥10 s inside 8 yd, then leave ≥20 yd × 2 consecutive fixes.
+ * Marks at the lie pin with top-3 #1. Poor GPS at dwell never silent-marks.
+ */
 export const DWELL_S = 10;
 export const DWELL_YD = 8;
 export const LEAVE_YD = 20;

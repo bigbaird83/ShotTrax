@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
 import { getHole, listClubAverages, listClubs, listShotsForHole } from '@/src/db/repo';
-import { COPY, markedSuggestedMessage } from '@/src/domain/playerCopy';
+import { COPY } from '@/src/domain/playerCopy';
 import { clubToRankInput, lastClosedShotYards, rankTopClubs, resolveDistanceTarget } from '@/src/domain/rankClubs';
 import { parseTypedYards } from '@/src/domain/shotSource';
 import { selectClubForMark } from '@/src/domain/stickyClub';
@@ -19,7 +19,7 @@ import { BigButton } from '@/src/ui/BigButton';
 import { ClubButton } from '@/src/ui/ClubButton';
 import { hapticMark, hapticSelect, hapticWarn } from '@/src/ui/haptics';
 import { Screen } from '@/src/ui/Screen';
-import { colors, type } from '@/src/ui/theme';
+import { colors, tapTarget, type } from '@/src/ui/theme';
 
 export default function ClubPickScreen() {
   const { id, hole, noGps, shot: shotId } = useLocalSearchParams<{
@@ -133,9 +133,6 @@ export default function ClubPickScreen() {
       if (!waiting && plan.status === 'commit') {
         hapticMark();
         bump();
-        if (opts.suggested) {
-          Alert.alert(COPY.suggested, markedSuggestedMessage(next.shortName));
-        }
         router.back();
       }
     } catch (err) {
@@ -154,6 +151,8 @@ export default function ClubPickScreen() {
   markRef.current = markClub;
   const busyRef = useRef(busy);
   busyRef.current = busy;
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
   const walkStateRef = useRef(emptyWalkAway());
 
   useEffect(() => {
@@ -161,7 +160,7 @@ export default function ClubPickScreen() {
   }, [withoutGps, relabelId, holeNumber]);
 
   useEffect(() => {
-    if (withoutGps || relabelId || !fix || busyRef.current) return;
+    if (withoutGps || relabelId || !fix || busyRef.current || selectedRef.current) return;
     const top = rankedRef.current[0];
     if (!top) return;
     const stepped = stepWalkAway(walkStateRef.current, fix);
@@ -350,8 +349,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgElevated,
   },
   chipOn: { borderColor: colors.lime, backgroundColor: '#1C3A24' },
-  chipPrimary: { flex: 1.6, minHeight: 64, borderColor: colors.lime, borderWidth: 2 },
-  chipPrimaryText: { fontSize: type.button, color: colors.lime },
+  chipPrimary: {
+    flex: 2.2,
+    minHeight: tapTarget,
+    borderColor: colors.lime,
+    borderWidth: 2,
+    backgroundColor: '#1C3A24',
+  },
+  chipPrimaryText: { fontSize: type.button, color: colors.lime, fontWeight: '900' },
   suggest: { color: colors.lime, fontSize: type.tiny, fontWeight: '800' },
   chipText: { color: colors.cream, fontWeight: '800', fontSize: type.chip },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },

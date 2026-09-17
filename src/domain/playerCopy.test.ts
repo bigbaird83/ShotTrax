@@ -6,6 +6,7 @@ import {
   formatParLabel,
   formatSiLabel,
   formatTeeMeta,
+  markedSuggestedMessage,
   yardsToGreenPlayerLabel,
 } from './playerCopy';
 
@@ -30,6 +31,7 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.approximate, 'Approximate');
   assert.equal(COPY.suggested, 'Suggested');
   assert.equal(COPY.changeClub, 'Change club');
+  assert.equal(markedSuggestedMessage('7i'), 'Marked 7i (suggested) · Change club.');
 });
 
 test('player copy never mentions API, OSM, invent, centroid, or meters', () => {

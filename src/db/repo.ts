@@ -587,6 +587,9 @@ export function insertOpenShot(
   return id;
 }
 
+/** Change club only. GPS start/end and distance_yards stay; suggested badge clears.
+ * Club averages follow `club_id` on the next listClubAverages() read.
+ */
 export function updateShotClub(db: SQLiteDatabase, shotId: string, clubId: string): void {
   db.runSync('UPDATE shots SET club_id = ?, suggested = 0 WHERE id = ?', [clubId, shotId]);
 }

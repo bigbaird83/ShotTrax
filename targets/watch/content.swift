@@ -43,8 +43,8 @@ struct ContentView: View {
                 session.pick(clubId: clubId)
               }
               .buttonStyle(.bordered)
-              .font(index == 0 ? .headline.weight(.black) : .body.weight(.bold)
-              )
+              .font(index == 0 ? .title3.weight(.black) : .caption.weight(.bold))
+              .frame(minHeight: index == 0 ? 44 : 32)
             }
           }
         }
