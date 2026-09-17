@@ -97,12 +97,13 @@ test('Finish putts chip stays for holes you left without Made it', () => {
       { number: 2, puttsDone: true, shotCount: 2, puttCount: 2 },
       { number: 3, puttsDone: false, shotCount: 0, puttCount: 0 },
       { number: 4, puttsDone: false, shotCount: 1, puttCount: 0 },
+      { number: 5, puttsDone: false, shotCount: 0, puttCount: 2 },
     ],
     4,
   );
   assert.deepEqual(
     pending.map((row) => row.number),
-    [1, 3],
+    [1, 5],
   );
   assert.equal(
     holesNeedingPutts([{ number: 4, puttsDone: false, shotCount: 2, puttCount: 0 }], 4).length,

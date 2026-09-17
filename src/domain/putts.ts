@@ -134,8 +134,7 @@ export function holesNeedingPutts(
     if (hole.puttsDone) return false;
     if (hole.number === currentHoleNumber) return false;
     const played = hole.shotCount > 0 || hole.puttCount > 0;
-    const walkedPast = hole.number < currentHoleNumber;
-    return played || walkedPast;
+    return played;
   });
 }
 
