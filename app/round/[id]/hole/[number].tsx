@@ -27,7 +27,11 @@ import {
 } from '@/src/db/repo';
 import { pinOrNull, formatFmbRow, hasApiFmb, yardsToGreenDepth } from '@/src/domain/greenDepth';
 import { clubPickLeaveHref, planClubPickLeave } from '@/src/domain/clubPickNav';
-import { COPY, finishPuttsChip, formatHoleHeader, markedSuggestedMessage, voiceFailRecovery } from '@/src/domain/playerCopy';
+import { COPY, finishPuttsChip, finishShotChip, formatHoleHeader, markedSuggestedMessage, voiceFailRecovery } from '@/src/domain/playerCopy';
+import { canAdvanceHole, holesNeedingOpenShots } from '@/src/domain/holeAdvance';
+import { isPutterClubId } from '@/src/domain/defaultBag';
+import { planPlacedShot } from '@/src/domain/shotSource';
+import type { LatLng } from '@/src/domain/latLng';
 import { formatPenaltyRow, PENALTY_REASONS, totalPenaltyStrokes } from '@/src/domain/penalty';
 import {
   addPuttLength,
@@ -50,7 +54,7 @@ import type { Club, PenaltyReason } from '@/src/domain/types';
 import { matchSpokenClub, speechContextualStrings } from '@/src/domain/voiceClub';
 import { yardsToGreen } from '@/src/sensing/api';
 import { describeGpsSource } from '@/src/services/location';
-import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, closeApproachBeforePutts } from '@/src/services/shotActions';
+import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, closeApproachBeforePutts, addPlacedShot } from '@/src/services/shotActions';
 import { startClubSpeech, type ClubSpeechSession } from '@/src/services/speechClub';
 import { useLiveFix } from '@/src/services/useLiveFix';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
@@ -58,6 +62,7 @@ import { pushWatchPuttSheet } from '@/src/services/watchClub';
 import { MADE_IT_FEEDBACK, PHONE_UNAVAILABLE } from '@/src/domain/watchMessages';
 import { QualityBadge } from '@/src/ui/Badge';
 import { BigButton } from '@/src/ui/BigButton';
+import { ClubButton } from '@/src/ui/ClubButton';
 import { GpsBanner } from '@/src/ui/GpsBanner';
 import { hapticMark, hapticSelect, hapticTap, hapticWarn } from '@/src/ui/haptics';
 import { HoleMap } from '@/src/ui/HoleMap';
@@ -79,6 +84,11 @@ export default function HoleScreen() {
   const [penaltyOpen, setPenaltyOpen] = useState(false);
   const [scoreOpen, setScoreOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [placeFrom, setPlaceFrom] = useState<LatLng | null>(null);
+  const [placeTo, setPlaceTo] = useState<LatLng | null>(null);
+  const [placeClubOpen, setPlaceClubOpen] = useState(false);
+  const [placeMode, setPlaceMode] = useState<'off' | 'from' | 'to'>('off');
+  const placing = placeMode !== 'off' || placeClubOpen;
   const [puttOpen, setPuttOpen] = useState(false);
   const [puttSheetHole, setPuttSheetHole] = useState(holeNumber);
   const [puttDraft, setPuttDraft] = useState<PuttDraft>(emptyPuttDraft());
@@ -130,6 +140,31 @@ export default function HoleScreen() {
       ),
     [db, holes, holeNumber, revision],
   );
+  const pendingShots = useMemo(
+    () =>
+      holesNeedingOpenShots(
+        holes.map((row) => ({
+          number: row.number,
+          hasOpenShot: listShotsForHole(db, row.id).some((shot) => shot.endedAt == null),
+        })),
+        holeNumber,
+      ),
+    [db, holes, holeNumber, revision],
+  );
+  const placedPlan = placeFrom && placeTo ? planPlacedShot(placeFrom, placeTo) : null;
+  const placedYards = placedPlan && placedPlan.ok ? placedPlan.distanceYards : null;
+
+  const resetPlace = () => {
+    setPlaceFrom(null);
+    setPlaceTo(null);
+    setPlaceClubOpen(false);
+    setPlaceMode('off');
+  };
+
+  const goToHole = (nextNumber: number) => {
+    resetPlace();
+    router.replace(`/round/${id}/hole/${nextNumber}`);
+  };
 
   const lastShotClubId = [...shots].reverse().find((shot) => shot.clubId)?.clubId ?? null;
   const sticky = useMemo(
@@ -380,7 +415,7 @@ export default function HoleScreen() {
 
   const markClub = async (club: Club | null, force = false) => {
     const next = club ? selectClubForMark(club, clubs) : null;
-    if (readOnly) return;
+    if (readOnly || placing) return;
     if (club && !next) return;
     if (next && putterOpensPuttSheet({ clubId: next.id })) {
       hapticSelect();
@@ -442,7 +477,7 @@ export default function HoleScreen() {
   };
 
   const onDrop = async (force = false) => {
-    if (readOnly) return;
+    if (readOnly || placing) return;
     setBusy(true);
     try {
       const { plan } = await takeDrop(db, {
@@ -555,6 +590,7 @@ export default function HoleScreen() {
   };
 
   const onListen = () => {
+    if (placing) return;
     if (listening) {
       stopListening();
       return;
@@ -563,9 +599,36 @@ export default function HoleScreen() {
   };
 
   const openBag = () => {
+    if (placing) return;
     stopListening();
     setVoiceError(null);
     router.push(`/round/${id}/club-pick?hole=${holeNumber}`);
+  };
+
+  const commitPlaced = (clubId: string, force = false) => {
+    if (!placeFrom || !placeTo) return;
+    const result = addPlacedShot(db, {
+      roundId: round.id,
+      holeNumber,
+      clubId,
+      from: placeFrom,
+      to: placeTo,
+      force,
+    });
+    if (result.status === 'needs_confirm') {
+      Alert.alert(COPY.tooFar, '', [
+        { text: COPY.cancel, style: 'cancel' },
+        { text: COPY.markAnyway, onPress: () => commitPlaced(clubId, true) },
+      ]);
+      return;
+    }
+    if (result.status !== 'commit') {
+      hapticWarn();
+      return;
+    }
+    hapticMark();
+    resetPlace();
+    bump();
   };
 
   const retryVoice = () => {
@@ -596,8 +659,34 @@ export default function HoleScreen() {
           yardsToGreen={yardsToGreenResult}
           fmb={fmb}
           osmOverlay={osmOverlay}
+          placedFrom={placeFrom}
+          placedTo={placeTo}
+          placeHint={
+            placing
+              ? placeTo
+                ? `${placedYards ?? '—'} yd · ${COPY.pickClub}`
+                : placeFrom
+                  ? COPY.placeToHint
+                  : COPY.placeFromHint
+              : null
+          }
+          onPlacePoint={
+            readOnly || placeMode === 'off' || placeClubOpen
+              ? undefined
+              : (coord) => {
+                  if (placeMode === 'from') {
+                    setPlaceFrom(coord);
+                    setPlaceMode('to');
+                    return;
+                  }
+                  if (placeMode === 'to') {
+                    setPlaceTo(coord);
+                    setPlaceClubOpen(true);
+                  }
+                }
+          }
           onDropGreenEstimate={
-            readOnly
+            readOnly || placing
               ? undefined
               : (coord) => {
                   setHoleGreen(db, hole.id, { ...coord, source: 'user_estimate' });
@@ -654,8 +743,24 @@ export default function HoleScreen() {
       ) : null}
       {toast ? <Text style={styles.toast}>{toast}</Text> : null}
 
-      {pendingPutts.length > 0 ? (
+      {placing ? (
         <View style={styles.pendingWrap}>
+          <BigButton label={COPY.cancelPlace} variant="ghost" onPress={resetPlace} />
+        </View>
+      ) : null}
+
+      {pendingPutts.length > 0 || pendingShots.length > 0 ? (
+        <View style={styles.pendingWrap}>
+          {pendingShots.map((row) => (
+            <Pressable
+              key={`shot-${row.number}`}
+              accessibilityRole="button"
+              disabled={readOnly}
+              onPress={() => goToHole(row.number)}
+              style={styles.pendingChip}>
+              <Text style={styles.pendingText}>{finishShotChip(row.number)}</Text>
+            </Pressable>
+          ))}
           {pendingPutts.map((row) => (
             <Pressable
               key={row.number}
@@ -675,6 +780,7 @@ export default function HoleScreen() {
             <Pressable
               key={club.id}
               onPress={() => {
+                if (placing) return;
                 const full = clubs.find((row) => row.id === club.id);
                 if (full) void markClub(full);
               }}
@@ -695,7 +801,7 @@ export default function HoleScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={sticky ? `${sticky.shortName}. ${COPY.allClubs}` : COPY.allClubs}
-            disabled={readOnly}
+            disabled={readOnly || placing}
             onPress={openBag}
             style={styles.clubChip}>
             <Text style={styles.clubShort}>{sticky?.shortName ?? 'Club'}</Text>
@@ -703,6 +809,7 @@ export default function HoleScreen() {
           </Pressable>
           <Pressable
             accessibilityRole="button"
+            disabled={placing}
             onPress={() => void onListen()}
             style={styles.sideBtn}>
             <Text style={styles.sideLabel}>{listening ? COPY.listening : COPY.sayClub}</Text>
@@ -712,18 +819,37 @@ export default function HoleScreen() {
         <BigButton
           label={COPY.allClubs}
           variant="secondary"
-          disabled={readOnly}
+          disabled={readOnly || placing}
           onPress={openBag}
         />
 
         <View style={styles.markWrap}>
           <BigButton
             label={sticky ? `${COPY.stickyClub} · ${sticky.shortName}` : COPY.stickyClub}
-            disabled={busy || readOnly || !sticky}
+            disabled={busy || readOnly || !sticky || placing}
             onPress={() => void onMark()}
           />
           <MarkCheck nonce={checkNonce} />
         </View>
+
+        {!readOnly ? (
+          <View style={styles.row}>
+            <BigButton
+              label={COPY.prevHole}
+              variant="ghost"
+              style={{ flex: 1 }}
+              disabled={holeNumber <= 1}
+              onPress={() => goToHole(holeNumber - 1)}
+            />
+            <BigButton
+              label={COPY.nextHole}
+              variant="secondary"
+              style={{ flex: 1 }}
+              disabled={!canAdvanceHole({ holeNumber, holeCount: round.holeCount })}
+              onPress={() => goToHole(holeNumber + 1)}
+            />
+          </View>
+        ) : null}
 
         {!readOnly ? (
           <View style={styles.row}>
@@ -734,12 +860,27 @@ export default function HoleScreen() {
               disabled={busy || shots.length === 0}
               onPress={onUndo}
             />
-            <BigButton label={COPY.drop} variant="secondary" style={{ flex: 1 }} onPress={() => setDropOpen(true)} />
+            <BigButton
+              label={COPY.drop}
+              variant="secondary"
+              style={{ flex: 1 }}
+              disabled={placing}
+              onPress={() => setDropOpen(true)}
+            />
           </View>
         ) : null}
 
         {!readOnly ? (
           <View style={styles.row}>
+            <BigButton
+              label={COPY.addShot}
+              variant="ghost"
+              style={{ flex: 1 }}
+              onPress={() => {
+                resetPlace();
+                setPlaceMode('from');
+              }}
+            />
             <BigButton
               label={COPY.penalty}
               variant="ghost"
@@ -769,16 +910,16 @@ export default function HoleScreen() {
             disabled={holeNumber <= 1}
             onPress={() => {
               setMenuOpen(false);
-              router.replace(`/round/${id}/hole/${holeNumber - 1}`);
+              goToHole(holeNumber - 1);
             }}
           />
           <BigButton
             label={COPY.nextHole}
             variant="ghost"
-            disabled={holeNumber >= round.holeCount}
+            disabled={!canAdvanceHole({ holeNumber, holeCount: round.holeCount })}
             onPress={() => {
               setMenuOpen(false);
-              router.replace(`/round/${id}/hole/${holeNumber + 1}`);
+              goToHole(holeNumber + 1);
             }}
           />
           <BigButton
@@ -807,6 +948,27 @@ export default function HoleScreen() {
           onUndo={onUndoPutt}
           onMadeIt={onMadeIt}
         />
+      </FullSheet>
+
+      <FullSheet
+        visible={placeClubOpen}
+        title={placedYards != null ? `${placedYards} yd · ${COPY.pickClub}` : COPY.pickClub}
+        onClose={resetPlace}>
+        <ScrollView contentContainerStyle={styles.sheetPad}>
+          <Text style={styles.muted}>
+            {placedYards != null ? `${placedYards} yd` : COPY.placeToHint}
+          </Text>
+          <View style={styles.placeGrid}>
+            {clubs.filter((club) => !isPutterClubId(club.id)).map((club) => (
+              <ClubButton
+                key={club.id}
+                shortName={club.shortName}
+                name={club.name}
+                onPress={() => commitPlaced(club.id)}
+              />
+            ))}
+          </View>
+        </ScrollView>
       </FullSheet>
 
       <FullSheet visible={scoreOpen} title={`Hole ${hole.number}`} onClose={() => setScoreOpen(false)}>
@@ -909,11 +1071,12 @@ export default function HoleScreen() {
                 }}
               />
               <BigButton
-                label={COPY.forgotShot}
+                label={COPY.addShot}
                 variant="secondary"
                 onPress={() => {
                   setScoreOpen(false);
-                  router.push(`/round/${id}/club-pick?hole=${holeNumber}&noGps=1`);
+                  resetPlace();
+                  setPlaceMode('from');
                 }}
               />
               <BigButton
@@ -1102,6 +1265,7 @@ const styles = StyleSheet.create({
   meta: { color: colors.muted, fontSize: type.meta },
   label: { color: colors.cream, fontSize: type.meta, fontWeight: '800', letterSpacing: 0.6 },
   sheetPad: { padding: 16, gap: 12, paddingBottom: 40 },
+  placeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   chip: {
     minHeight: 56,
     minWidth: 56,

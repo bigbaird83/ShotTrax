@@ -14,7 +14,7 @@ import { averageWithBadges, type ClubAverage } from '../domain/averages';
 import { isValidLatLng } from '../domain/latLng';
 import { clampPenaltyStrokes, scoreAfterPenalty } from '../domain/penalty';
 import { clampPutts, planMadeIt, parsePuttLengths, serializePuttLengths, type PuttLengthId } from '../domain/putts';
-import { includeInDistanceAverages, planNoGpsShot } from '../domain/shotSource';
+import { includeInDistanceAverages, planNoGpsShot, planPlacedShot } from '../domain/shotSource';
 import { planUndoLastShot } from '../domain/undoLastShot';
 import type {
   Club,
@@ -183,10 +183,13 @@ function mapHole(row: HoleRow): Hole {
 }
 
 function mapSource(value: string | null): ShotSource {
-  return value === 'no_gps' ? 'no_gps' : 'gps';
+  if (value === 'no_gps') return 'no_gps';
+  if (value === 'placed') return 'placed';
+  return 'gps';
 }
 
 function mapFixQuality(value: string | null, source: ShotSource): ShotFixQuality | null {
+  if (source === 'placed') return null;
   if (source === 'no_gps' || value === 'none') return 'none';
   if (value === 'good' || value === 'soft' || value === 'forced') return value;
   return value as FixQuality | null;
@@ -780,6 +783,47 @@ export function insertNoGpsShot(
   return id;
 }
 
+/** Catch-up Add shot: two player map points. Haversine yards. Never acceptFix. No GPS quality. */
+export function insertPlacedShot(
+  db: SQLiteDatabase,
+  args: {
+    holeId: string;
+    clubId: string;
+    seq: number;
+    from: { lat: number; lng: number };
+    to: { lat: number; lng: number };
+  },
+): string | null {
+  const plan = planPlacedShot(args.from, args.to);
+  if (!plan.ok) return null;
+  const id = newId();
+  const now = new Date().toISOString();
+  db.runSync(
+    `INSERT INTO shots (
+      id, hole_id, club_id, seq,
+      start_lat, start_lng, start_accuracy_m, start_fix_quality,
+      end_lat, end_lng, end_accuracy_m, end_fix_quality,
+      distance_yards, typed_yards, fix_quality, impossible_jump, started_at, ended_at, source
+    ) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, NULL, NULL, ?, NULL, NULL, ?, ?, ?, ?)`,
+    [
+      id,
+      args.holeId,
+      args.clubId,
+      args.seq,
+      plan.startLat,
+      plan.startLng,
+      plan.endLat,
+      plan.endLng,
+      plan.distanceYards,
+      plan.impossibleJump ? 1 : 0,
+      now,
+      now,
+      plan.source,
+    ],
+  );
+  return id;
+}
+
 export function listPenaltiesForHole(db: SQLiteDatabase, holeId: string): HolePenalty[] {
   return db
     .getAllSync<PenaltyRow>(
@@ -853,8 +897,10 @@ export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
     `SELECT club_id, distance_yards, fix_quality, source
      FROM shots
      WHERE distance_yards IS NOT NULL AND club_id IS NOT NULL
-       AND IFNULL(source, 'gps') = 'gps'
-       AND fix_quality IN ('good', 'soft', 'forced')`,
+       AND (
+         (IFNULL(source, 'gps') = 'gps' AND fix_quality IN ('good', 'soft', 'forced'))
+         OR IFNULL(source, 'gps') = 'placed'
+       )`,
   );
   return clubs.map((club) => {
     const forClub = shots
@@ -862,20 +908,28 @@ export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
         (s) =>
           s.club_id === club.id &&
           includeInDistanceAverages({
-            source: s.source === 'no_gps' ? 'no_gps' : 'gps',
+            source:
+              s.source === 'no_gps' ? 'no_gps' : s.source === 'placed' ? 'placed' : 'gps',
             distanceYards: s.distance_yards,
             clubId: s.club_id,
             fixQuality:
-              s.fix_quality === 'none'
-                ? 'none'
-                : s.fix_quality === 'soft' || s.fix_quality === 'forced' || s.fix_quality === 'good'
-                  ? s.fix_quality
-                  : 'good',
+              s.source === 'placed'
+                ? null
+                : s.fix_quality === 'none'
+                  ? 'none'
+                  : s.fix_quality === 'soft' || s.fix_quality === 'forced' || s.fix_quality === 'good'
+                    ? s.fix_quality
+                    : 'good',
           }),
       )
       .map((s) => ({
         yards: s.distance_yards,
-        fixQuality: s.fix_quality as FixQuality,
+        fixQuality:
+          s.source === 'placed'
+            ? null
+            : s.fix_quality === 'soft' || s.fix_quality === 'forced' || s.fix_quality === 'good'
+              ? s.fix_quality
+              : null,
       }));
     return { club, typicalCarryYards: typicalCarrySeedForClub(club), ...averageWithBadges(forClub) };
   });

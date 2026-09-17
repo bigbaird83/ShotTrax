@@ -99,6 +99,14 @@ test('lastClosedShotYards skips no_gps / none even if yards were present', () =>
   assert.equal(yards, 240);
 });
 
+test('lastClosedShotYards uses placed yards (no GPS quality) and still skips putter', () => {
+  const yards = lastClosedShotYards([
+    { endedAt: 'a', distanceYards: 155, source: 'gps', fixQuality: 'good', clubId: 'club_7i' },
+    { endedAt: 'b', distanceYards: 168, source: 'placed', fixQuality: null, clubId: 'club_6i' },
+  ]);
+  assert.equal(yards, 168);
+});
+
 test('lastClosedShotYards skips putter shots — they are not a club sample', () => {
   const yards = lastClosedShotYards([
     { endedAt: 'a', distanceYards: 155, source: 'gps', fixQuality: 'good', clubId: 'club_7i' },

@@ -82,13 +82,13 @@ export function resolveDistanceTarget(args: {
   return null;
 }
 
-/** Most recent closed GPS shot with haversine yards. `no_gps` / `none` / putter never rank. */
+/** Most recent closed GPS or Placed shot with haversine yards. `no_gps` / `none` / putter never rank. */
 export function lastClosedShotYards(
   shots: {
     endedAt: string | null;
     distanceYards: number | null;
     clubId?: string | null;
-    source?: 'gps' | 'no_gps';
+    source?: 'gps' | 'no_gps' | 'placed';
     fixQuality?: 'good' | 'soft' | 'forced' | 'none' | null;
   }[],
 ): number | null {

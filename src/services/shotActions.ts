@@ -7,6 +7,7 @@ import {
   insertNoGpsShot,
   insertOpenShot,
   insertPenalty,
+  insertPlacedShot,
   nextShotSeq,
   sealOpenShotWithoutGps,
   setRoundLastClub,
@@ -17,6 +18,9 @@ import { planDrop } from '../domain/drop';
 import { worstFixQuality } from '../domain/fixQuality';
 import type { ClosedShotPlan, MarkPlan } from '../domain/markShot';
 import { preferWatchFix } from '../domain/preferWatchFix';
+import { isPutterClubId } from '../domain/defaultBag';
+import type { LatLng } from '../domain/latLng';
+import { confirmPlacedShot, planPlacedShot } from '../domain/shotSource';
 import type { GpsFix, OpenShot, PenaltyReason } from '../domain/types';
 import { COPY } from '../domain/playerCopy';
 import { acceptFix, forceMark } from '../sensing/api';
@@ -211,6 +215,43 @@ export function addNoGpsShot(
   });
   setRoundLastClub(db, args.roundId, args.clubId);
   return id;
+}
+
+export type AddPlacedShotResult =
+  | { status: 'commit'; id: string }
+  | { status: 'needs_confirm'; yards: number }
+  | { status: 'rejected' };
+
+export function addPlacedShot(
+  db: SQLiteDatabase,
+  args: {
+    roundId: string;
+    holeNumber: number;
+    clubId: string;
+    from: LatLng;
+    to: LatLng;
+    force?: boolean;
+  },
+): AddPlacedShotResult {
+  if (isPutterClubId(args.clubId)) return { status: 'rejected' };
+  const plan = planPlacedShot(args.from, args.to);
+  if (!plan.ok) return { status: 'rejected' };
+  const gate = confirmPlacedShot(plan, Boolean(args.force));
+  if (gate.status !== 'commit') return gate;
+  const hole = getHole(db, args.roundId, args.holeNumber);
+  if (!hole) {
+    throw new Error(`Hole ${args.holeNumber} not found`);
+  }
+  const id = insertPlacedShot(db, {
+    holeId: hole.id,
+    clubId: args.clubId,
+    seq: nextShotSeq(db, hole.id),
+    from: args.from,
+    to: args.to,
+  });
+  if (!id) return { status: 'rejected' };
+  setRoundLastClub(db, args.roundId, args.clubId);
+  return { status: 'commit', id };
 }
 
 export function undoLastShot(

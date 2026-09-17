@@ -2,7 +2,8 @@ import type { FixQuality } from './types';
 
 export type AverageShot = {
   yards: number;
-  fixQuality: FixQuality;
+  /** GPS quality. Null for catch-up Placed shots (no soft/good quality). */
+  fixQuality: FixQuality | null;
 };
 
 export type ClubAverage = {
@@ -16,7 +17,7 @@ export type ClubAverage = {
  * Club averages include `soft` and `forced` GPS shots; badges report that mix.
  * Callers must pass only shots that `includeInDistanceAverages` accepts —
  * `fixQuality: none`, `no_gps`, typed yards, hole penalties, and putter shots
- * never belong here.
+ * never belong here. Catch-up Placed shots pass `fixQuality: null` and still count.
  */
 export function averageWithBadges(shots: AverageShot[]): ClubAverage {
   if (shots.length === 0) {

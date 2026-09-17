@@ -22,6 +22,10 @@ type Props = {
   fmb?: { f: string; m: string; b: string } | null;
   osmOverlay?: OsmOverlay | null;
   onDropGreenEstimate?: (coord: { lat: number; lng: number }) => void;
+  onPlacePoint?: (coord: { lat: number; lng: number }) => void;
+  placedFrom?: { lat: number; lng: number } | null;
+  placedTo?: { lat: number; lng: number } | null;
+  placeHint?: string | null;
   fullBleed?: boolean;
   style?: StyleProp<ViewStyle>;
 };
@@ -89,6 +93,10 @@ function NativeHoleMap({
   fmb,
   osmOverlay,
   onDropGreenEstimate,
+  onPlacePoint,
+  placedFrom,
+  placedTo,
+  placeHint,
   fullBleed,
   style,
 }: Props) {
@@ -111,13 +119,15 @@ function NativeHoleMap({
     }
     if (green) out.push(toCoord(green.lat, green.lng));
     if (userFix) out.push(toCoord(userFix.lat, userFix.lng));
+    if (placedFrom) out.push(toCoord(placedFrom.lat, placedFrom.lng));
+    if (placedTo) out.push(toCoord(placedTo.lat, placedTo.lng));
     for (const feature of osmFeatures) {
       for (const point of feature.coordinates) {
         out.push(toCoord(point.lat, point.lng));
       }
     }
     return out;
-  }, [shots, green, userFix, osmFeatures]);
+  }, [shots, green, userFix, osmFeatures, placedFrom, placedTo]);
 
   const region = useMemo(() => {
     const c = coords[0] ?? (userFix ? toCoord(userFix.lat, userFix.lng) : null);
@@ -160,6 +170,11 @@ function NativeHoleMap({
         showsMyLocationButton={false}
         rotateEnabled={false}
         pitchEnabled={false}
+        onPress={(event) => {
+          if (!onPlacePoint) return;
+          const { latitude, longitude } = event.nativeEvent.coordinate;
+          onPlacePoint({ lat: latitude, lng: longitude });
+        }}
         onLongPress={(event) => {
           const { latitude, longitude } = event.nativeEvent.coordinate;
           onDropGreenEstimate?.({ lat: latitude, lng: longitude });
@@ -209,6 +224,20 @@ function NativeHoleMap({
             anchor={{ x: 0.5, y: 1 }}
           />
         ))}
+        {placedFrom ? (
+          <Marker
+            coordinate={toCoord(placedFrom.lat, placedFrom.lng)}
+            title="From"
+            pinColor="tomato"
+          />
+        ) : null}
+        {placedTo ? (
+          <Marker
+            coordinate={toCoord(placedTo.lat, placedTo.lng)}
+            title="Landed"
+            pinColor="green"
+          />
+        ) : null}
         {green ? (
           <Marker
             coordinate={toCoord(green.lat, green.lng)}
@@ -230,7 +259,8 @@ function NativeHoleMap({
           </View>
         ) : null}
       </View>
-      {!green ? <Text style={styles.hint}>{COPY.longPressGreen}</Text> : null}
+      {!green && !placeHint ? <Text style={styles.hint}>{COPY.longPressGreen}</Text> : null}
+      {placeHint ? <Text style={styles.hint}>{placeHint}</Text> : null}
     </View>
   );
 }

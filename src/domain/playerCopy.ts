@@ -59,6 +59,11 @@ export const COPY = {
   addPutt: 'Add a putt',
   undoPutt: 'Undo putt',
   forgotShot: 'Log a missed shot',
+  addShot: 'Add shot',
+  placed: 'Placed',
+  placeFromHint: 'Tap where you hit from.',
+  placeToHint: 'Tap where it landed.',
+  cancelPlace: 'Cancel',
   score: 'Score',
   shots: 'Shots',
   noShots: 'No shots yet.',
@@ -86,6 +91,10 @@ export const COPY = {
 
 export function finishPuttsChip(holeNumber: number): string {
   return `Finish putts · Hole ${holeNumber}`;
+}
+
+export function finishShotChip(holeNumber: number): string {
+  return `Finish shot · Hole ${holeNumber}`;
 }
 
 export function markedSuggestedMessage(shortName: string): string {

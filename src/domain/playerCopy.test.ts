@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   COPY,
   finishPuttsChip,
+  finishShotChip,
   formatHoleHeader,
   formatParLabel,
   formatSiLabel,
@@ -48,11 +49,18 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.settings, 'Settings');
   assert.equal(COPY.home, 'Home');
   assert.equal(COPY.back, 'Back');
+  assert.equal(COPY.addShot, 'Add shot');
+  assert.equal(COPY.placed, 'Placed');
+  assert.equal(COPY.placeFromHint, 'Tap where you hit from.');
+  assert.equal(COPY.placeToHint, 'Tap where it landed.');
+  assert.equal(COPY.cancelPlace, 'Cancel');
+  assert.equal(COPY.nextHole, 'Next');
   assert.equal(COPY.courseDistance, 'Course distance');
   assert.equal(COPY.courseDistanceSetting, 'Course distance: Miles / Kilometers');
   assert.equal(COPY.miles, 'Miles');
   assert.equal(COPY.kilometers, 'Kilometers');
   assert.equal(finishPuttsChip(4), 'Finish putts · Hole 4');
+  assert.equal(finishShotChip(2), 'Finish shot · Hole 2');
   assert.equal(markedSuggestedMessage('7i'), 'Marked 7i (suggested) · Change club.');
 });
 
