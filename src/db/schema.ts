@@ -235,17 +235,29 @@ export function migrate(db: SQLiteDatabase): void {
   ensureColumn(db, 'shots', 'suggested', 'INTEGER NOT NULL DEFAULT 0');
   migrateNoGpsSensingLock(db);
 
-  const clubCount = db.getFirstSync<{ n: number }>('SELECT COUNT(*) AS n FROM clubs');
-  if ((clubCount?.n ?? 0) === 0) {
-    const insert = db.prepareSync(
-      'INSERT INTO clubs (id, name, short_name, loft_rank, sort_order, enabled) VALUES (?, ?, ?, ?, ?, 1)',
-    );
-    try {
-      for (const club of DEFAULT_BAG) {
+  ensureStockBag(db);
+}
+
+/** First-run seed plus insert any stock clubs missing from an older bag (2i / 3i / 4i). */
+function ensureStockBag(db: SQLiteDatabase): void {
+  const existing = new Set(
+    db.getAllSync<{ id: string }>('SELECT id FROM clubs').map((row) => row.id),
+  );
+  const insert = db.prepareSync(
+    'INSERT INTO clubs (id, name, short_name, loft_rank, sort_order, enabled) VALUES (?, ?, ?, ?, ?, 1)',
+  );
+  try {
+    for (const club of DEFAULT_BAG) {
+      if (existing.has(club.id)) {
+        db.runSync(
+          'UPDATE clubs SET name = ?, short_name = ?, loft_rank = ?, sort_order = ? WHERE id = ?',
+          [club.name, club.shortName, club.loftRank, club.sortOrder, club.id],
+        );
+      } else {
         insert.executeSync([club.id, club.name, club.shortName, club.loftRank, club.sortOrder]);
       }
-    } finally {
-      insert.finalizeSync();
     }
+  } finally {
+    insert.finalizeSync();
   }
 }
