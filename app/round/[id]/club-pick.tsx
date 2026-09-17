@@ -13,7 +13,7 @@ import type { Club, GpsFix } from '@/src/domain/types';
 import { yardsToGreen } from '@/src/sensing/api';
 import { startClubSpeech, type ClubSpeechSession } from '@/src/services/speechClub';
 import { addNoGpsShot, changeShotClub, markShotWithClub, promptForPlan } from '@/src/services/shotActions';
-import { getCurrentFix, watchFixes } from '@/src/services/location';
+import { useLiveFix } from '@/src/services/useLiveFix';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
 import { BigButton } from '@/src/ui/BigButton';
 import { ClubButton } from '@/src/ui/ClubButton';
@@ -67,21 +67,7 @@ export default function ClubPickScreen() {
     holeRow?.greenLat != null && holeRow.greenLng != null
       ? { lat: holeRow.greenLat, lng: holeRow.greenLng }
       : null;
-  const [fix, setFix] = useState(null as Awaited<ReturnType<typeof getCurrentFix>> | null);
-  useEffect(() => {
-    if (withoutGps) return undefined;
-    let live = true;
-    getCurrentFix()
-      .then((next) => {
-        if (live) setFix(next);
-      })
-      .catch(() => {
-        if (live) setFix(null);
-      });
-    return () => {
-      live = false;
-    };
-  }, [withoutGps, revision]);
+  const fix = useLiveFix(!withoutGps);
 
   const toGreen = yardsToGreen(withoutGps ? null : fix, green);
   const target = resolveDistanceTarget({
@@ -168,31 +154,23 @@ export default function ClubPickScreen() {
   markRef.current = markClub;
   const busyRef = useRef(busy);
   busyRef.current = busy;
+  const walkStateRef = useRef(emptyWalkAway());
 
   useEffect(() => {
-    if (withoutGps || relabelId) return undefined;
-    let stop = false;
-    let unsub: (() => void) | undefined;
-    let state = emptyWalkAway();
-    void watchFixes((sample) => {
-      if (stop || busyRef.current) return;
-      const top = rankedRef.current[0];
-      if (!top) return;
-      const stepped = stepWalkAway(state, sample);
-      state = stepped.state;
-      if (!stepped.firePin) return;
-      const full = clubsRef.current.find((row) => row.id === top.id);
-      if (!full) return;
-      void markRef.current(full, false, { fixOverride: stepped.firePin, suggested: true });
-    }).then((remove) => {
-      if (stop) remove();
-      else unsub = remove;
-    });
-    return () => {
-      stop = true;
-      unsub?.();
-    };
-  }, [withoutGps, relabelId]);
+    walkStateRef.current = emptyWalkAway();
+  }, [withoutGps, relabelId, holeNumber]);
+
+  useEffect(() => {
+    if (withoutGps || relabelId || !fix || busyRef.current) return;
+    const top = rankedRef.current[0];
+    if (!top) return;
+    const stepped = stepWalkAway(walkStateRef.current, fix);
+    walkStateRef.current = stepped.state;
+    if (!stepped.firePin) return;
+    const full = clubsRef.current.find((row) => row.id === top.id);
+    if (!full) return;
+    void markRef.current(full, false, { fixOverride: stepped.firePin, suggested: true });
+  }, [fix, withoutGps, relabelId]);
 
   const onLogMissed = () => {
     if (!selected || !id || Number.isNaN(holeNumber)) return;

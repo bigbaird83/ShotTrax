@@ -10,7 +10,12 @@ export type YardsQuality = 'good' | 'soft' | 'none';
 export const WATCH_MESSAGE_TYPES = ['clubList', 'clubPick'] as const;
 export type WatchMessageType = (typeof WATCH_MESSAGE_TYPES)[number];
 
-/** Phone → Watch on open / bag / hole / rank change. */
+/** Phone → Watch. Push on hole change / fix quality change / bag rank change.
+ * Exact required keys: type, top3, bag, labels, holeNumber, yardsToGreen, yardsQuality.
+ * yardsToGreen is yardsToGreen().yards (null when quality is none).
+ * yardsQuality is the same good/soft/none bands as the phone — never invent.
+ * lastClubId is optional (Same club on the wrist).
+ */
 export type ClubListMessage = {
   type: 'clubList';
   top3: ClubId[];
@@ -21,6 +26,16 @@ export type ClubListMessage = {
   yardsQuality: YardsQuality;
   lastClubId?: ClubId | null;
 };
+
+export const CLUB_LIST_KEYS = [
+  'type',
+  'top3',
+  'bag',
+  'labels',
+  'holeNumber',
+  'yardsToGreen',
+  'yardsQuality',
+] as const;
 
 /** Watch → Phone on tap. Phone runs the same club=mark as a phone tap (acceptFix). */
 export type ClubPickMessage = {
@@ -40,6 +55,13 @@ export type ClubPickReply = {
 
 export function isYardsQuality(value: unknown): value is YardsQuality {
   return value === 'good' || value === 'soft' || value === 'none';
+}
+
+/** Phone shot quality → Watch. Poor/forced/unknown is none — never invent. */
+export function toWatchYardsQuality(
+  quality: 'good' | 'soft' | 'forced' | 'none',
+): YardsQuality {
+  return quality === 'good' || quality === 'soft' ? quality : 'none';
 }
 
 /** ISO-8601 instant (date + time). Fractional seconds and Z/offset allowed. */
@@ -75,6 +97,7 @@ export function parseClubList(raw: unknown): ClubListMessage | null {
     return null;
   }
   if (!isYardsQuality(row.yardsQuality)) return null;
+  if (row.yardsQuality === 'none') yardsToGreen = null;
   const msg: ClubListMessage = {
     type: 'clubList',
     top3: row.top3 as string[],
@@ -119,16 +142,33 @@ export function clubListPayload(args: {
   yardsQuality: YardsQuality;
   lastClubId?: ClubId | null;
 }): ClubListMessage {
+  const yardsToGreen =
+    args.yardsQuality === 'none' || args.yardsToGreen == null
+      ? null
+      : Math.round(args.yardsToGreen);
   return {
     type: 'clubList',
     top3: args.top3,
     bag: args.bag,
     labels: args.labels,
     holeNumber: args.holeNumber,
-    yardsToGreen: args.yardsToGreen,
+    yardsToGreen,
     yardsQuality: args.yardsQuality,
     ...(args.lastClubId ? { lastClubId: args.lastClubId } : {}),
   };
+}
+
+/** Identity for Watch pushes: hole, yards/quality (same bands as phone), bag rank. */
+export function clubListPushKey(msg: ClubListMessage): string {
+  return JSON.stringify({
+    type: msg.type,
+    top3: msg.top3,
+    bag: msg.bag,
+    labels: msg.labels,
+    holeNumber: msg.holeNumber,
+    yardsToGreen: msg.yardsToGreen,
+    yardsQuality: msg.yardsQuality,
+  });
 }
 
 export function clubPickPayload(args: { clubId: string; at?: string }): ClubPickMessage {

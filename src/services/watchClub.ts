@@ -8,6 +8,7 @@ import {
   clubListPayload,
   formatClubMarkedFeedback,
   parseClubPick,
+  toWatchYardsQuality,
   type ClubListMessage,
   type ClubPickReply,
 } from '../domain/watchMessages';
@@ -65,14 +66,13 @@ export function buildClubList(args: {
   for (const club of [...args.top3, ...args.bag]) {
     labels[club.id] = club.shortName;
   }
-  const quality = args.yardsQuality === 'forced' ? 'none' : args.yardsQuality;
   return clubListPayload({
     top3: args.top3.map((club) => club.id),
     bag: args.bag.map((club) => club.id),
     labels,
     holeNumber: args.holeNumber,
     yardsToGreen: args.yardsToGreen,
-    yardsQuality: quality,
+    yardsQuality: toWatchYardsQuality(args.yardsQuality),
     lastClubId: args.lastClubId ?? null,
   });
 }

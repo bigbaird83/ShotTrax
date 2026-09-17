@@ -125,7 +125,7 @@ eas submit -p ios
 Companion via `@bacons/apple-targets` (`targets/watch`, bundle `com.shottrax.app.watch`) plus a local Expo module (`modules/watch-bridge`) so EAS iOS prebuild links Watch Connectivity.
 
 - Watch Connectivity only two types this cut:
-  - Phone → Watch `clubList`: `{ type, top3, bag, labels, holeNumber, yardsToGreen, yardsQuality }` on open / bag / hole / rank change (ranking stays on phone)
+  - Phone → Watch `clubList`: `{ type, top3, bag, labels, holeNumber, yardsToGreen, yardsQuality }` pushed on hole change / fix quality change / bag rank change (ranking stays on phone). `yardsToGreen` is `yardsToGreen().yards` (`null` when quality is none). `yardsQuality` is `good | soft | none` — same bands as the phone, never invent.
   - Watch → Phone `clubPick`: `{ type, clubId, at: ISO8601 }` — phone runs the same **club=mark** (`acceptFix`). Soft → Approximate. Quality none → phone Waiting / Mark anyway / no-GPS. Watch never silent-forces.
 - Watch status: **Hole N · XXX yd** (same yardsToGreen as phone); **—** when quality is none; tiny **SOFT** chip when soft.
 - Offline: Watch queues **one** pending `clubPick` until reachable, then flushes

@@ -28,12 +28,13 @@ import { formatPenaltyRow, PENALTY_REASONS, totalPenaltyStrokes } from '@/src/do
 import { clubToRankInput, lastClosedShotYards, rankTopClubs, resolveDistanceTarget } from '@/src/domain/rankClubs';
 import { reconcileHoleScore, scoreMismatchMessage } from '@/src/domain/scoreReconcile';
 import { resolveStickyClub, selectClubForMark } from '@/src/domain/stickyClub';
-import type { Club, GpsFix, PenaltyReason } from '@/src/domain/types';
+import type { Club, PenaltyReason } from '@/src/domain/types';
 import { matchSpokenClub, speechContextualStrings } from '@/src/domain/voiceClub';
 import { yardsToGreen } from '@/src/sensing/api';
-import { describeGpsSource, getCurrentFix } from '@/src/services/location';
+import { describeGpsSource } from '@/src/services/location';
 import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot } from '@/src/services/shotActions';
 import { startClubSpeech, type ClubSpeechSession } from '@/src/services/speechClub';
+import { useLiveFix } from '@/src/services/useLiveFix';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
 import { QualityBadge } from '@/src/ui/Badge';
 import { BigButton } from '@/src/ui/BigButton';
@@ -51,7 +52,7 @@ export default function HoleScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { db, revision, bump } = useDb();
-  const [fix, setFix] = useState<GpsFix | null>(null);
+  const fix = useLiveFix(true);
   const [busy, setBusy] = useState(false);
   const [dropOpen, setDropOpen] = useState(false);
   const [penaltyOpen, setPenaltyOpen] = useState(false);
@@ -113,22 +114,6 @@ export default function HoleScreen() {
   useEffect(() => {
     navigation.setOptions({ headerShown: false, title: `Hole ${holeNumber}` });
   }, [navigation, holeNumber]);
-
-  useEffect(() => {
-    let live = true;
-    getCurrentFix()
-      .then((next) => {
-        if (!live) return;
-        setFix(next);
-      })
-      .catch(() => {
-        if (!live) return;
-        setFix(null);
-      });
-    return () => {
-      live = false;
-    };
-  }, [revision]);
 
   useEffect(() => {
     const location =

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { clubListPushKey } from '../domain/watchMessages';
 import {
   buildClubList,
   pushWatchClubList,
@@ -34,7 +35,8 @@ export function useWatchClubList(
   const ctxRef = useRef(ctx);
   ctxRef.current = ctx;
   const payload = buildClubList(list);
-  const json = JSON.stringify(payload);
+  // Push clubList on hole change / fix quality change / bag rank change (plus labels / Same club).
+  const json = `${clubListPushKey(payload)}\0${payload.lastClubId ?? ''}`;
 
   useEffect(() => {
     startWatchClubBridge();
