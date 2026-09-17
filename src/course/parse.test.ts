@@ -1,10 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  mergeGreenCenters,
   parseCourseDetail,
+  parseCourseLocation,
+  parseGreenCenters,
   parseGreenCentroid,
+  parseHandicap,
   parseNearbyCourses,
   parsePar,
+  parseTeeSets,
 } from './parse';
 
 test('parsePar is blank when missing — never invents a par', () => {
@@ -27,10 +32,17 @@ test('parseGreenCentroid ignores tee lat/lng and 0,0 — never invents a green',
   });
 });
 
-test('parseNearbyCourses maps list payload and skips nameless rows', () => {
+test('parseNearbyCourses maps list payload, distance_km, and skips nameless rows', () => {
   const courses = parseNearbyCourses({
     data: [
-      { id: 4, name: 'Bowling Green Country Club', city: 'Bowling Green', latitude: 37.01, longitude: -86.43 },
+      {
+        id: 4,
+        name: 'Bowling Green Country Club',
+        city: 'Bowling Green',
+        latitude: 37.01,
+        longitude: -86.43,
+        distance_km: 0.09,
+      },
       { id: 9 },
     ],
   });
@@ -38,20 +50,155 @@ test('parseNearbyCourses maps list payload and skips nameless rows', () => {
   assert.equal(courses[0].id, '4');
   assert.equal(courses[0].name, 'Bowling Green Country Club');
   assert.deepEqual(courses[0].location, { lat: 37.01, lng: -86.43 });
+  assert.equal(courses[0].distanceMeters, 90);
 });
 
-test('parseCourseDetail keeps missing par/green blank', () => {
+test('parseCourseDetail reads teeboxes scorecard and keeps missing par/green blank', () => {
   const detail = parseCourseDetail({
-    id: 'c1',
-    name: 'Test Course',
-    holes: [
-      { hole: 1, par: 4, green: { lat: 34.1, lng: -85.6 } },
-      { hole: 2 },
-    ],
+    data: {
+      id: 4,
+      name: 'Bowling Green Country Club',
+      coordinates: { latitude: 37.0132, longitude: -86.43378 },
+      location: { city: 'Bowling Green', state: 'Kentucky', country: { name: 'United States', iso2: 'US' } },
+      scorecard: {
+        hole_count: 18,
+        teeboxes: [
+          {
+            name: 'Gold',
+            holes: [
+              { hole: 1, par: 4, yards: 437, handicap: 7 },
+              { hole: 2 },
+            ],
+          },
+        ],
+      },
+      green_centers_available: true,
+    },
   });
   assert.ok(detail);
+  assert.equal(detail?.id, '4');
+  assert.deepEqual(detail?.location, { lat: 37.0132, lng: -86.43378 });
+  assert.equal(detail?.holeCount, 18);
+  assert.equal(detail?.greenCentersAvailable, true);
   assert.equal(detail?.holes[0].par, 4);
-  assert.deepEqual(detail?.holes[0].greenCentroid, { lat: 34.1, lng: -85.6 });
+  assert.equal(detail?.holes[0].yards, 437);
+  assert.equal(detail?.holes[0].handicap, 7);
+  assert.equal(detail?.tees.length, 1);
+  assert.equal(detail?.tees[0].name, 'Gold');
+  assert.equal(detail?.holes[0].greenCentroid, null);
   assert.equal(detail?.holes[1].par, null);
   assert.equal(detail?.holes[1].greenCentroid, null);
+});
+
+test('parseCourseLocation ignores address location objects', () => {
+  assert.equal(
+    parseCourseLocation({
+      location: { city: 'Bowling Green', state: 'Kentucky' },
+    }),
+    null,
+  );
+});
+
+test('parseGreenCenters maps Pro {hole,lat,lng} and skips invalid pins', () => {
+  const greens = parseGreenCenters({
+    data: {
+      course_id: 4,
+      holes: [
+        { hole: 1, lat: 37.01744, lng: -86.43135 },
+        { hole: 2, lat: 0, lng: 0 },
+        { hole: 99, lat: 37.01, lng: -86.43 },
+      ],
+    },
+  });
+  assert.equal(greens.length, 1);
+  assert.equal(greens[0].holeNumber, 1);
+  assert.deepEqual(greens[0].greenCentroid, { lat: 37.01744, lng: -86.43135 });
+});
+
+test('mergeGreenCenters fills blank greens and does not invent par', () => {
+  const merged = mergeGreenCenters(
+    [
+      { holeNumber: 1, par: 4, yards: 437, handicap: 7, greenCentroid: null },
+      { holeNumber: 2, par: null, yards: null, handicap: null, greenCentroid: null },
+    ],
+    [{ holeNumber: 1, greenCentroid: { lat: 37.01, lng: -86.43 } }],
+  );
+  assert.deepEqual(merged[0].greenCentroid, { lat: 37.01, lng: -86.43 });
+  assert.equal(merged[0].par, 4);
+  assert.equal(merged[0].handicap, 7);
+  assert.equal(merged[1].par, null);
+  assert.equal(merged[1].greenCentroid, null);
+});
+
+test('parseHandicap is SI 1–18 or blank — never invented', () => {
+  assert.equal(parseHandicap({}), null);
+  assert.equal(parseHandicap({ handicap: 7 }), 7);
+  assert.equal(parseHandicap({ si: 18 }), 18);
+  assert.equal(parseHandicap({ handicap: 0 }), null);
+  assert.equal(parseHandicap({ handicap: 19 }), null);
+});
+
+test('parseTeeSets keeps rating/slope/yards when present and blank otherwise', () => {
+  const tees = parseTeeSets({
+    scorecard: {
+      teeboxes: [
+        {
+          name: 'Gold',
+          rating: 73.3,
+          slope: 128,
+          total_yards: 6800,
+          holes: [{ hole: 1, par: 4, yards: 437, handicap: 7 }, { hole: 2 }],
+        },
+        { name: 'Red', holes: [{ hole: 1, par: 4 }] },
+      ],
+    },
+  });
+  assert.equal(tees.length, 2);
+  assert.equal(tees[0].name, 'Gold');
+  assert.equal(tees[0].rating, 73.3);
+  assert.equal(tees[0].slope, 128);
+  assert.equal(tees[0].totalYards, 6800);
+  assert.equal(tees[0].holes[0].handicap, 7);
+  assert.equal(tees[0].holes[1].par, null);
+  assert.equal(tees[0].holes[1].handicap, null);
+  assert.equal(tees[1].rating, null);
+  assert.equal(tees[1].slope, null);
+});
+
+test('parseTeeSets skips unnamed teeboxes and does not invent Tee 1', () => {
+  const tees = parseTeeSets({
+    scorecard: {
+      teeboxes: [{ holes: [{ hole: 1, par: 4, yards: 400 }] }, { name: 'White', holes: [{ hole: 1, par: 4 }] }],
+    },
+  });
+  assert.equal(tees.length, 1);
+  assert.equal(tees[0].name, 'White');
+});
+
+test('parseTeeSets does not copy women fields into men rating/slope/SI', () => {
+  const tees = parseTeeSets({
+    scorecard: {
+      teeboxes: [
+        {
+          name: 'Red',
+          rating_women: 71.2,
+          slope_women: 120,
+          holes: [{ hole: 1, par: 4, handicap_women: 9 }],
+        },
+      ],
+    },
+  });
+  assert.equal(tees[0].rating, null);
+  assert.equal(tees[0].slope, null);
+  assert.equal(tees[0].holes[0].handicap, null);
+});
+
+test('parseTeeSets blanks non-positive rating/slope — never invents', () => {
+  const tees = parseTeeSets({
+    scorecard: {
+      teeboxes: [{ name: 'Gold', rating: 0, slope: 0, holes: [{ hole: 1, par: 4 }] }],
+    },
+  });
+  assert.equal(tees[0].rating, null);
+  assert.equal(tees[0].slope, null);
 });

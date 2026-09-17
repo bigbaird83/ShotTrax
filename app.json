@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "ShotTrax",
+    "name": "ShotTraxx",
     "slug": "shottrax",
     "version": "0.1.0",
     "orientation": "portrait",
@@ -12,14 +12,17 @@
       "bundleIdentifier": "com.shottrax.app",
       "buildNumber": "1",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "ShotTrax captures GPS when you confirm a club to start a shot, and again on the next mark to measure yards.",
-        "NSMicrophoneUsageDescription": "ShotTrax uses the microphone only when you tap Say a club so you can name a club like “seven iron”. You still confirm before the shot is marked. Watch and mic shot-detect assists are not in this build.",
-        "NSSpeechRecognitionUsageDescription": "ShotTrax uses speech recognition to match what you say to a club in your bag. You still confirm before the shot is marked."
+        "CFBundleDisplayName": "ShotTraxx",
+        "CFBundleName": "ShotTraxx",
+        "NSLocationWhenInUseUsageDescription": "ShotTraxx captures GPS when you confirm a club to start a shot, and again on the next mark to measure yards.",
+        "NSMicrophoneUsageDescription": "ShotTraxx uses the microphone only when you tap Say a club so you can name a club like “seven iron”. You still confirm before the shot is marked. Watch and mic shot-detect assists are not in this build.",
+        "NSSpeechRecognitionUsageDescription": "ShotTraxx uses speech recognition to match what you say to a club in your bag. You still confirm before the shot is marked."
       }
     },
     "android": {
+      "label": "ShotTraxx",
       "adaptiveIcon": {
-        "backgroundColor": "#0B1A12",
+        "backgroundColor": "#05190D",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -43,21 +46,21 @@
         {
           "image": "./assets/images/splash-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#0B1A12"
+          "backgroundColor": "#05190D"
         }
       ],
       "expo-sqlite",
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "ShotTrax captures GPS when you confirm a club to start a shot, and again on the next mark to measure yards."
+          "locationWhenInUsePermission": "ShotTraxx captures GPS when you confirm a club to start a shot, and again on the next mark to measure yards."
         }
       ],
       [
         "expo-speech-recognition",
         {
-          "microphonePermission": "ShotTrax uses the microphone only when you tap Say a club so you can name a club like “seven iron”. You still confirm before the shot is marked.",
-          "speechRecognitionPermission": "ShotTrax uses speech recognition to match what you say to a club in your bag. You still confirm before the shot is marked."
+          "microphonePermission": "ShotTraxx uses the microphone only when you tap Say a club so you can name a club like “seven iron”. You still confirm before the shot is marked.",
+          "speechRecognitionPermission": "ShotTraxx uses speech recognition to match what you say to a club in your bag. You still confirm before the shot is marked."
         }
       ],
       "react-native-maps"

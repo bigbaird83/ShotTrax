@@ -7,7 +7,7 @@ import type { GpsFix, ShotFixQuality } from '../domain/types';
  * P5 sensing hook: remaining yards to a real green centroid.
  * Same haversine and good (<15 m) / soft (15–25 m) bands as shot marks.
  * `quality` is `none` (and `yards` is null) when there is no usable fix or green —
- * ShotTrax does not invent a pin or a range. Poor GPS (>25 m / unknown) matches
+ * ShotTraxx does not invent a pin or a range. Poor GPS (>25 m / unknown) matches
  * `acceptFix`: not auto-accepted, so quality is `none`.
  */
 export type YardsToGreenResult = {

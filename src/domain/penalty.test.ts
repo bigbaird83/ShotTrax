@@ -18,9 +18,9 @@ test('N penalty strokes increase score by N', () => {
   assert.equal(scoreAfterPenalty(5, 4, 3), 8);
 });
 
-test('when score is unset, penalty starts from par (same as hole +/−)', () => {
-  assert.equal(scoreAfterPenalty(null, 5, 1), 6);
-  assert.equal(scoreAfterPenalty(null, 3, 2), 5);
+test('when score and par are unset, penalty starts from 0 — never invents par', () => {
+  assert.equal(scoreAfterPenalty(null, null, 1), 1);
+  assert.equal(scoreAfterPenalty(null, null, 2), 2);
 });
 
 test('penalty strokes clamp to 1–5', () => {

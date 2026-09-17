@@ -1,5 +1,5 @@
 import { isValidLatLng, type LatLng } from '../domain/latLng';
-import type { CourseDetail, CourseSummary, HoleCourseData } from './types';
+import type { CourseDetail, CourseSummary, HoleCourseData, TeeSet } from './types';
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value != null && typeof value === 'object' && !Array.isArray(value)
@@ -20,6 +20,13 @@ function asString(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function asBoolean(value: unknown): boolean | null {
+  if (typeof value === 'boolean') return value;
+  if (value === 1 || value === '1' || value === 'true') return true;
+  if (value === 0 || value === '0' || value === 'false') return false;
+  return null;
 }
 
 function pick(record: Record<string, unknown>, keys: string[]): unknown {
@@ -43,7 +50,7 @@ export function parseLatLng(raw: unknown): LatLng | null {
     const lat = asFiniteNumber(pick(record, ['lat', 'latitude']));
     const lng = asFiniteNumber(pick(record, ['lng', 'lon', 'longitude']));
     const nested = parseLatLng(
-      pick(record, ['green', 'green_center', 'greenCenter', 'centroid', 'location', 'coordinates']),
+      pick(record, ['green', 'green_center', 'greenCenter', 'centroid', 'coordinates']),
     );
     if (nested) return nested;
     const point = lat != null && lng != null ? { lat, lng } : null;
@@ -70,6 +77,26 @@ export function parseHoleNumber(raw: unknown): number | null {
   return n;
 }
 
+/** Tee yardage when present. Blank if missing — never invented. */
+export function parseYards(raw: unknown): number | null {
+  const record = asRecord(raw);
+  const value = record ? pick(record, ['yards', 'yardage', 'length', 'yds']) : raw;
+  const n = asFiniteNumber(value);
+  if (n == null || !Number.isInteger(n) || n < 1 || n > 999) return null;
+  return n;
+}
+
+/** Stroke index 1–18. Blank if missing — never invented. */
+export function parseHandicap(raw: unknown): number | null {
+  const record = asRecord(raw);
+  const value = record
+    ? pick(record, ['handicap', 'si', 'stroke_index', 'strokeIndex', 'index', 'handicap_men'])
+    : raw;
+  const n = asFiniteNumber(value);
+  if (n == null || !Number.isInteger(n) || n < 1 || n > 18) return null;
+  return n;
+}
+
 export function parseGreenCentroid(raw: unknown): LatLng | null {
   const record = asRecord(raw);
   if (!record) return parseLatLng(raw);
@@ -83,13 +110,37 @@ export function parseGreenCentroid(raw: unknown): LatLng | null {
   return isValidLatLng(point) ? point : null;
 }
 
+/** Course pin from `coordinates` or top-level lat/lng. Ignores address `location`. */
+export function parseCourseLocation(raw: unknown): LatLng | null {
+  const record = asRecord(raw);
+  if (!record) return parseLatLng(raw);
+  const fromCoords = parseLatLng(pick(record, ['coordinates', 'coordinate']));
+  if (fromCoords) return fromCoords;
+  const lat = asFiniteNumber(pick(record, ['lat', 'latitude']));
+  const lng = asFiniteNumber(pick(record, ['lng', 'lon', 'longitude']));
+  const point = lat != null && lng != null ? { lat, lng } : null;
+  return isValidLatLng(point) ? point : null;
+}
+
+function parseDistanceMeters(record: Record<string, unknown>): number | null {
+  const meters = asFiniteNumber(
+    pick(record, ['distance_meters', 'distanceMeters', 'distance_m']),
+  );
+  if (meters != null && meters >= 0) return meters;
+  const km = asFiniteNumber(pick(record, ['distance_km', 'distanceKm']));
+  if (km != null && km >= 0) return km * 1000;
+  const distance = asFiniteNumber(pick(record, ['distance']));
+  if (distance != null && distance >= 0) return distance;
+  return null;
+}
+
 function parseCourseSummary(raw: unknown): CourseSummary | null {
   const record = asRecord(raw);
   if (!record) return null;
-  const id = asString(pick(record, ['id', 'course_id', 'courseId'])) ?? String(pick(record, ['id']) ?? '');
+  const idRaw = pick(record, ['id', 'course_id', 'courseId']);
+  const id = asString(idRaw) ?? (idRaw != null && idRaw !== '' ? String(idRaw) : null);
   const name = asString(pick(record, ['name', 'course_name', 'courseName']));
   if (!id || !name) return null;
-  const distance = asFiniteNumber(pick(record, ['distance_meters', 'distanceMeters', 'distance_m', 'distance']));
   return {
     id,
     name,
@@ -97,8 +148,8 @@ function parseCourseSummary(raw: unknown): CourseSummary | null {
     city: asString(pick(record, ['city'])),
     state: asString(pick(record, ['state', 'region'])),
     country: asString(pick(record, ['country', 'country_code'])),
-    location: parseLatLng(record),
-    distanceMeters: distance,
+    location: parseCourseLocation(record),
+    distanceMeters: parseDistanceMeters(record),
   };
 }
 
@@ -123,48 +174,167 @@ export function parseNearbyCourses(json: unknown): CourseSummary[] {
 function findHolesArray(raw: unknown): unknown[] {
   const record = asRecord(raw);
   if (!record) return Array.isArray(raw) ? raw : [];
-  const direct = pick(record, ['holes', 'scorecard']);
+  const direct = pick(record, ['holes']);
   if (Array.isArray(direct)) return direct;
-  const nested = asRecord(direct);
-  if (nested && Array.isArray(nested.holes)) return nested.holes;
-  const tees = record.tees;
-  if (Array.isArray(tees) && tees[0]) {
-    const tee = asRecord(tees[0]);
+  const boxes = pick(record, ['teeboxes', 'tees', 'tee_boxes']);
+  if (Array.isArray(boxes) && boxes[0]) {
+    const tee = asRecord(boxes[0]);
     if (tee && Array.isArray(tee.holes)) return tee.holes;
   }
+  const scorecard = pick(record, ['scorecard']);
+  if (scorecard != null) return findHolesArray(scorecard);
+  const nested = asRecord(direct);
+  if (nested) return findHolesArray(nested);
   const inner = asRecord(record.data);
   if (inner) return findHolesArray(inner);
   return [];
 }
 
+function findTeeboxArray(raw: unknown): unknown[] {
+  const record = asRecord(raw);
+  if (!record) return [];
+  const direct = pick(record, ['teeboxes', 'tees', 'tee_boxes']);
+  if (Array.isArray(direct)) return direct;
+  const scorecard = pick(record, ['scorecard']);
+  if (scorecard != null) return findTeeboxArray(scorecard);
+  const inner = asRecord(record.data);
+  if (inner) return findTeeboxArray(inner);
+  return [];
+}
+
+function parseHoleRow(item: unknown): HoleCourseData | null {
+  const holeNumber = parseHoleNumber(item);
+  if (holeNumber == null) return null;
+  return {
+    holeNumber,
+    par: parsePar(item),
+    yards: parseYards(item),
+    handicap: parseHandicap(item),
+    greenCentroid: parseGreenCentroid(item),
+  };
+}
+
 export function parseCourseHoles(raw: unknown): HoleCourseData[] {
   const holes: HoleCourseData[] = [];
   for (const item of findHolesArray(raw)) {
-    const holeNumber = parseHoleNumber(item);
-    if (holeNumber == null) continue;
-    holes.push({
-      holeNumber,
-      par: parsePar(item),
-      greenCentroid: parseGreenCentroid(item),
-    });
+    const parsed = parseHoleRow(item);
+    if (parsed) holes.push(parsed);
   }
   holes.sort((a, b) => a.holeNumber - b.holeNumber);
   return holes;
+}
+
+export function parseTeeSet(raw: unknown): TeeSet | null {
+  const record = asRecord(raw);
+  if (!record) return null;
+  const holes: HoleCourseData[] = [];
+  const holeRows = Array.isArray(record.holes) ? record.holes : [];
+  for (const item of holeRows) {
+    const parsed = parseHoleRow(item);
+    if (parsed) holes.push(parsed);
+  }
+  holes.sort((a, b) => a.holeNumber - b.holeNumber);
+  const name = asString(pick(record, ['name', 'tee_name', 'teeName', 'color', 'tee']));
+  if (!name) return null;
+  const rating = asFiniteNumber(pick(record, ['rating', 'rating_men', 'course_rating', 'courseRating']));
+  const slopeRaw = asFiniteNumber(pick(record, ['slope', 'slope_men', 'slopeRating', 'slope_rating']));
+  const totalRaw = asFiniteNumber(pick(record, ['total_yards', 'totalYards', 'yards']));
+  const totalYards =
+    totalRaw != null && Number.isInteger(totalRaw) && totalRaw >= 1 && totalRaw <= 9999 ? totalRaw : null;
+  return {
+    name,
+    rating: rating != null && rating > 0 ? rating : null,
+    slope: slopeRaw != null && Number.isInteger(slopeRaw) && slopeRaw > 0 ? slopeRaw : null,
+    totalYards,
+    holes,
+  };
+}
+
+export function parseTeeSets(raw: unknown): TeeSet[] {
+  const out: TeeSet[] = [];
+  findTeeboxArray(raw).forEach((box) => {
+    const parsed = parseTeeSet(box);
+    if (parsed) out.push(parsed);
+  });
+  return out;
+}
+
+/**
+ * Pro `GET /courses/:id/green-centers`. Each hole is `{ hole, lat, lng }`.
+ * Does not treat tee lat/lng as a green — this payload is green-only.
+ */
+export function parseGreenCenters(json: unknown): Array<{ holeNumber: number; greenCentroid: LatLng }> {
+  const payload = unwrapData(json);
+  const record = asRecord(payload);
+  const rows = Array.isArray(payload)
+    ? payload
+    : record
+      ? findHolesArray(record)
+      : [];
+  const out: Array<{ holeNumber: number; greenCentroid: LatLng }> = [];
+  for (const item of rows) {
+    const holeNumber = parseHoleNumber(item);
+    const green = parseLatLng(item);
+    if (holeNumber == null || !green) continue;
+    out.push({ holeNumber, greenCentroid: green });
+  }
+  return out;
+}
+
+export function mergeGreenCenters(
+  holes: HoleCourseData[],
+  greens: Array<{ holeNumber: number; greenCentroid: LatLng }>,
+): HoleCourseData[] {
+  if (greens.length === 0) return holes;
+  const byHole = new Map(greens.map((row) => [row.holeNumber, row.greenCentroid]));
+  const used = new Set<number>();
+  const merged = holes.map((hole) => {
+    const fromApi = byHole.get(hole.holeNumber) ?? null;
+    if (fromApi) used.add(hole.holeNumber);
+    return {
+      ...hole,
+      greenCentroid: hole.greenCentroid ?? fromApi,
+    };
+  });
+  for (const row of greens) {
+    if (used.has(row.holeNumber)) continue;
+    merged.push({
+      holeNumber: row.holeNumber,
+      par: null,
+      yards: null,
+      handicap: null,
+      greenCentroid: row.greenCentroid,
+    });
+  }
+  merged.sort((a, b) => a.holeNumber - b.holeNumber);
+  return merged;
 }
 
 export function parseCourseDetail(json: unknown): CourseDetail | null {
   const payload = unwrapData(json);
   const record = asRecord(payload) ?? asRecord(json);
   if (!record) return null;
-  const id = asString(pick(record, ['id', 'course_id', 'courseId']));
+  const idRaw = pick(record, ['id', 'course_id', 'courseId']);
+  const id = asString(idRaw) ?? (idRaw != null && idRaw !== '' ? String(idRaw) : null);
   const name = asString(pick(record, ['name', 'course_name', 'courseName']));
   if (!id || !name) return null;
-  const holes = parseCourseHoles(record);
-  const holeCount = asFiniteNumber(pick(record, ['hole_count', 'holeCount', 'holes_count']));
+  const tees = parseTeeSets(record).map((tee) => ({
+    ...tee,
+    holes: mergeGreenCenters(tee.holes, []),
+  }));
+  const holes = tees[0]?.holes ?? parseCourseHoles(record);
+  const holeCount = asFiniteNumber(
+    pick(record, ['hole_count', 'holeCount', 'holes_count']) ??
+      asRecord(record.scorecard)?.hole_count ??
+      asRecord(record.scorecard)?.holeCount,
+  );
   return {
     id,
     name,
     holeCount: holeCount != null && Number.isInteger(holeCount) ? holeCount : holes.length || null,
+    location: parseCourseLocation(record),
     holes,
+    tees,
+    greenCentersAvailable: asBoolean(pick(record, ['green_centers_available', 'greenCentersAvailable'])),
   };
 }

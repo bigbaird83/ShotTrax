@@ -1,5 +1,5 @@
 /**
- * Product-locked sensing gates (ShotTrax Lead / Mobile Core).
+ * Product-locked sensing gates (ShotTraxx Lead / Mobile Core).
  *
  * Soft GPS 15–25 m → include the shot and badge it `soft`.
  * Accuracy worse than 25 m → do not auto-accept; user may Force → `forced`.

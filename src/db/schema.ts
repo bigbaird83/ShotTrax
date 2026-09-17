@@ -80,6 +80,51 @@ function migrateNoGpsSensingLock(db: SQLiteDatabase): void {
   `);
 }
 
+/** P5.2: par is course-data only. Existing NOT NULL par stays; new holes may be NULL. */
+function migrateHolesParNullable(db: SQLiteDatabase): void {
+  const cols = db.getAllSync<{ name: string; notnull: number }>(`PRAGMA table_info(holes)`);
+  if (cols.length === 0) return;
+  const par = cols.find((c) => c.name === 'par');
+  if (par?.notnull !== 1) return;
+
+  db.execSync('PRAGMA foreign_keys = OFF;');
+  db.execSync(`
+    CREATE TABLE holes_p5 (
+      id TEXT PRIMARY KEY NOT NULL,
+      round_id TEXT NOT NULL,
+      number INTEGER NOT NULL,
+      par INTEGER,
+      par_source TEXT,
+      score INTEGER,
+      yards INTEGER,
+      handicap INTEGER,
+      green_lat REAL,
+      green_lng REAL,
+      green_source TEXT,
+      FOREIGN KEY (round_id) REFERENCES rounds(id) ON DELETE CASCADE
+    );
+  `);
+  const hasParSource = cols.some((c) => c.name === 'par_source');
+  const hasGreenSource = cols.some((c) => c.name === 'green_source');
+  const hasYards = cols.some((c) => c.name === 'yards');
+  const hasHandicap = cols.some((c) => c.name === 'handicap');
+  const parSourceExpr = hasParSource ? 'par_source' : 'NULL';
+  const greenSourceExpr = hasGreenSource ? 'green_source' : 'NULL';
+  const yardsExpr = hasYards ? 'yards' : 'NULL';
+  const handicapExpr = hasHandicap ? 'handicap' : 'NULL';
+  db.execSync(`
+    INSERT INTO holes_p5 (
+      id, round_id, number, par, par_source, score, yards, handicap, green_lat, green_lng, green_source
+    )
+    SELECT
+      id, round_id, number, par, ${parSourceExpr}, score, ${yardsExpr}, ${handicapExpr}, green_lat, green_lng, ${greenSourceExpr}
+    FROM holes;
+  `);
+  db.execSync('DROP TABLE holes;');
+  db.execSync('ALTER TABLE holes_p5 RENAME TO holes;');
+  db.execSync('PRAGMA foreign_keys = ON;');
+}
+
 export function migrate(db: SQLiteDatabase): void {
   db.execSync('PRAGMA foreign_keys = ON;');
   db.execSync(`
@@ -97,17 +142,28 @@ export function migrate(db: SQLiteDatabase): void {
       started_at TEXT NOT NULL,
       finished_at TEXT,
       course_name TEXT,
-      hole_count INTEGER NOT NULL
+      hole_count INTEGER NOT NULL,
+      course_api_id TEXT,
+      course_lat REAL,
+      course_lng REAL,
+      tee_name TEXT,
+      tee_rating REAL,
+      tee_slope INTEGER,
+      tee_total_yards INTEGER
     );
 
     CREATE TABLE IF NOT EXISTS holes (
       id TEXT PRIMARY KEY NOT NULL,
       round_id TEXT NOT NULL,
       number INTEGER NOT NULL,
-      par INTEGER NOT NULL,
+      par INTEGER,
+      par_source TEXT,
       score INTEGER,
+      yards INTEGER,
+      handicap INTEGER,
       green_lat REAL,
       green_lng REAL,
+      green_source TEXT,
       FOREIGN KEY (round_id) REFERENCES rounds(id) ON DELETE CASCADE
     );
 
@@ -149,7 +205,17 @@ export function migrate(db: SQLiteDatabase): void {
   ensureColumn(db, 'holes', 'green_lat', 'REAL');
   ensureColumn(db, 'holes', 'green_lng', 'REAL');
   ensureColumn(db, 'holes', 'green_source', 'TEXT');
+  ensureColumn(db, 'holes', 'par_source', 'TEXT');
+  ensureColumn(db, 'holes', 'yards', 'INTEGER');
+  ensureColumn(db, 'holes', 'handicap', 'INTEGER');
   ensureColumn(db, 'rounds', 'course_api_id', 'TEXT');
+  ensureColumn(db, 'rounds', 'course_lat', 'REAL');
+  ensureColumn(db, 'rounds', 'course_lng', 'REAL');
+  ensureColumn(db, 'rounds', 'tee_name', 'TEXT');
+  ensureColumn(db, 'rounds', 'tee_rating', 'REAL');
+  ensureColumn(db, 'rounds', 'tee_slope', 'INTEGER');
+  ensureColumn(db, 'rounds', 'tee_total_yards', 'INTEGER');
+  migrateHolesParNullable(db);
   migrateShotsP3(db);
   ensureColumn(db, 'shots', 'source', "TEXT NOT NULL DEFAULT 'gps'");
   ensureColumn(db, 'shots', 'typed_yards', 'INTEGER');

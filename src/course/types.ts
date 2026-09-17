@@ -8,6 +8,7 @@ export type CourseSummary = {
   state: string | null;
   country: string | null;
   location: LatLng | null;
+  /** Nearby search distance. API returns km; stored as meters. */
   distanceMeters: number | null;
 };
 
@@ -15,30 +16,63 @@ export type HoleCourseData = {
   holeNumber: number;
   /** Blank when the API omits par — never invented. */
   par: number | null;
+  /** Tee yardage for this hole. Blank if the API omits it. */
+  yards: number | null;
+  /** Stroke index 1–18. Blank if the API omits it — shown as “SI ?”. */
+  handicap: number | null;
   /** Green centroid when the API provides one — never invented. */
   greenCentroid: LatLng | null;
+};
+
+export type TeeSet = {
+  name: string;
+  rating: number | null;
+  slope: number | null;
+  totalYards: number | null;
+  holes: HoleCourseData[];
 };
 
 export type CourseDetail = {
   id: string;
   name: string;
   holeCount: number | null;
+  location: LatLng | null;
   holes: HoleCourseData[];
+  tees: TeeSet[];
+  /** Pro/Max flag from course detail. Missing/false → no invented greens. */
+  greenCentersAvailable: boolean | null;
 };
 
-/** OSM fairway/green polygons. Part 2 fills this in; P5.1 always returns null. */
+export type OsmGolfKind = 'green' | 'fairway' | 'tee' | 'hole';
+
+export type OsmFeature = {
+  kind: OsmGolfKind;
+  holeNumber: number | null;
+  coordinates: LatLng[];
+};
+
+/** OSM fairway/green/tee/hole overlay. Empty/unmapped → null, never invented. */
 export type OsmOverlay = {
   source: 'osm';
+  features: OsmFeature[];
   geojson: object | null;
 };
 
+export type OsmOverlayQuery = {
+  courseId?: string | null;
+  location?: LatLng | null;
+  holeNumber?: number;
+  /** Search radius in meters. Default depends on whether a hole pin is used. */
+  radiusM?: number;
+};
+
 export type OsmOverlayHook = {
-  fetchCourseOverlay: (courseId: string) => Promise<OsmOverlay | null>;
+  fetchCourseOverlay: (query: OsmOverlayQuery) => Promise<OsmOverlay | null>;
 };
 
 export interface CourseDataClient {
   isConfigured(): boolean;
   nearbyCourses(from: LatLng, radiusKm?: number): Promise<CourseSummary[]>;
   getCourse(id: string): Promise<CourseDetail | null>;
-  fetchOsmOverlay(courseId: string): Promise<OsmOverlay | null>;
+  fetchOsmOverlay(query: OsmOverlayQuery): Promise<OsmOverlay | null>;
 }

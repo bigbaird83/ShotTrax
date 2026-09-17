@@ -1,7 +1,8 @@
 import { Component, type ErrorInfo, type ReactNode, useEffect, useMemo, useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import MapView, { Marker, Polyline } from 'react-native-maps';
-import type { OsmOverlay } from '@/src/course/types';
+import MapView, { Marker, Polygon, Polyline } from 'react-native-maps';
+import type { OsmFeature, OsmGolfKind, OsmOverlay } from '@/src/course/types';
+import { featuresForHole } from '@/src/course/osmOverlay';
 import type { GpsFix, Shot } from '@/src/domain/types';
 import type { YardsToGreenResult } from '@/src/sensing/yardsToGreen';
 import { hasClosedGpsTrail, hasGpsStart } from '@/src/domain/shotSource';
@@ -34,6 +35,23 @@ class MapGuard extends Component<{ children: ReactNode; fallback: ReactNode }, {
 
 function toCoord(lat: number, lng: number): Coord {
   return { latitude: lat, longitude: lng };
+}
+
+const OSM_DRAW_ORDER: OsmGolfKind[] = ['fairway', 'tee', 'green', 'hole'];
+
+const OSM_STYLE: Record<OsmGolfKind, { fill?: string; stroke: string; width: number }> = {
+  fairway: { fill: 'transparent', stroke: 'rgba(200, 245, 66, 0.85)', width: 2 },
+  green: { fill: 'transparent', stroke: '#7DCF7A', width: 3 },
+  tee: { fill: 'transparent', stroke: '#F5C542', width: 2 },
+  hole: { stroke: '#F4F1E8', width: 2 },
+};
+
+function overlayFeatures(overlay: OsmOverlay | null | undefined, holeNumber: number): OsmFeature[] {
+  if (!overlay) return [];
+  const scoped = featuresForHole(overlay, holeNumber);
+  return [...scoped].sort(
+    (a, b) => OSM_DRAW_ORDER.indexOf(a.kind) - OSM_DRAW_ORDER.indexOf(b.kind),
+  );
 }
 
 function TrailFallback({
@@ -73,10 +91,22 @@ function TrailFallback({
   );
 }
 
-function NativeHoleMap({ holeNumber, shots, userFix, green, yardsToGreen, onDropGreenEstimate }: Props) {
+function NativeHoleMap({
+  holeNumber,
+  shots,
+  userFix,
+  green,
+  yardsToGreen,
+  osmOverlay,
+  onDropGreenEstimate,
+}: Props) {
   const mapRef = useRef<MapView | null>(null);
 
   const closed = useMemo(() => shots.filter(hasClosedGpsTrail), [shots]);
+  const osmFeatures = useMemo(
+    () => overlayFeatures(osmOverlay ?? null, holeNumber),
+    [osmOverlay, holeNumber],
+  );
 
   const coords = useMemo(() => {
     const out: Coord[] = [];
@@ -89,8 +119,13 @@ function NativeHoleMap({ holeNumber, shots, userFix, green, yardsToGreen, onDrop
     }
     if (green) out.push(toCoord(green.lat, green.lng));
     if (userFix) out.push(toCoord(userFix.lat, userFix.lng));
+    for (const feature of osmFeatures) {
+      for (const point of feature.coordinates) {
+        out.push(toCoord(point.lat, point.lng));
+      }
+    }
     return out;
-  }, [shots, green, userFix]);
+  }, [shots, green, userFix, osmFeatures]);
 
   const region = useMemo(() => {
     const c = coords[0] ?? (userFix ? toCoord(userFix.lat, userFix.lng) : null);
@@ -116,7 +151,7 @@ function NativeHoleMap({ holeNumber, shots, userFix, green, yardsToGreen, onDrop
       <TrailFallback
         holeNumber={holeNumber}
         shots={shots}
-        message="Waiting for a real GPS fix to center the map. ShotTrax does not invent coordinates."
+        message="Waiting for a real GPS fix to center the map. ShotTraxx does not invent coordinates."
         yardsToGreen={yardsToGreen}
         hasFix={Boolean(userFix)}
         hasGreen={Boolean(green)}
@@ -139,6 +174,30 @@ function NativeHoleMap({ holeNumber, shots, userFix, green, yardsToGreen, onDrop
           const { latitude, longitude } = event.nativeEvent.coordinate;
           onDropGreenEstimate?.({ lat: latitude, lng: longitude });
         }}>
+        {osmFeatures.map((feature, index) => {
+          const style = OSM_STYLE[feature.kind];
+          const coordinates = feature.coordinates.map((point) => toCoord(point.lat, point.lng));
+          if (feature.kind === 'hole') {
+            return (
+              <Polyline
+                key={`osm-hole-${index}`}
+                coordinates={coordinates}
+                strokeColor={style.stroke}
+                strokeWidth={style.width}
+                lineDashPattern={[8, 6]}
+              />
+            );
+          }
+          return (
+            <Polygon
+              key={`osm-${feature.kind}-${index}`}
+              coordinates={coordinates}
+              fillColor={style.fill}
+              strokeColor={style.stroke}
+              strokeWidth={style.width}
+            />
+          );
+        })}
         {closed.map((shot, index) => (
           <Polyline
             key={shot.id}
@@ -182,7 +241,9 @@ function NativeHoleMap({ holeNumber, shots, userFix, green, yardsToGreen, onDrop
         />
       </View>
       <Text style={styles.hint}>
-        Closed-shot trails only. Long-press to drop a green pin. No invented coordinates or OSM polygons.
+        {osmFeatures.length > 0
+          ? 'OSM green/fairway/tee/hole where mapped. Long-press to drop a green pin. No invented polygons.'
+          : 'Closed-shot trails only. Long-press to drop a green pin. OSM overlay is empty here — nothing invented.'}
       </Text>
     </View>
   );

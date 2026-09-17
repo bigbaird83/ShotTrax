@@ -1,4 +1,9 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
+import {
+  attachHoleFromCourse,
+  seedHoleFromCourse,
+  type CourseLayoutSeed,
+} from '../course/layout';
 import { averageWithBadges, type ClubAverage } from '../domain/averages';
 import { isValidLatLng } from '../domain/latLng';
 import { clampPenaltyStrokes, scoreAfterPenalty } from '../domain/penalty';
@@ -10,6 +15,7 @@ import type {
   Hole,
   HolePenalty,
   OpenShot,
+  ParSource,
   PenaltyReason,
   Round,
   Shot,
@@ -17,6 +23,8 @@ import type {
   ShotSource,
 } from '../domain/types';
 import { newId } from '../lib/id';
+
+export type { CourseLayoutSeed } from '../course/layout';
 
 type ClubRow = {
   id: string;
@@ -34,14 +42,23 @@ type RoundRow = {
   course_name: string | null;
   hole_count: number;
   course_api_id: string | null;
+  course_lat: number | null;
+  course_lng: number | null;
+  tee_name: string | null;
+  tee_rating: number | null;
+  tee_slope: number | null;
+  tee_total_yards: number | null;
 };
 
 type HoleRow = {
   id: string;
   round_id: string;
   number: number;
-  par: number;
+  par: number | null;
+  par_source: string | null;
   score: number | null;
+  yards: number | null;
+  handicap: number | null;
   green_lat: number | null;
   green_lng: number | null;
   green_source: string | null;
@@ -94,6 +111,11 @@ function mapGreenSource(value: string | null): GreenSource | null {
   return null;
 }
 
+function mapParSource(value: string | null): ParSource | null {
+  if (value === 'course' || value === 'user') return value;
+  return null;
+}
+
 function mapRound(row: RoundRow): Round {
   return {
     id: row.id,
@@ -102,6 +124,12 @@ function mapRound(row: RoundRow): Round {
     courseName: row.course_name,
     holeCount: row.hole_count,
     courseApiId: row.course_api_id ?? null,
+    courseLat: row.course_lat ?? null,
+    courseLng: row.course_lng ?? null,
+    teeName: row.tee_name ?? null,
+    teeRating: row.tee_rating ?? null,
+    teeSlope: row.tee_slope ?? null,
+    teeTotalYards: row.tee_total_yards ?? null,
   };
 }
 
@@ -111,7 +139,10 @@ function mapHole(row: HoleRow): Hole {
     roundId: row.round_id,
     number: row.number,
     par: row.par,
+    parSource: mapParSource(row.par_source),
     score: row.score,
+    yards: row.yards ?? null,
+    handicap: row.handicap ?? null,
     greenLat: row.green_lat,
     greenLng: row.green_lng,
     greenSource: mapGreenSource(row.green_source),
@@ -241,15 +272,6 @@ export function getActiveRound(db: SQLiteDatabase): Round | null {
   return row ? mapRound(row) : null;
 }
 
-export type CourseLayoutSeed = {
-  apiId: string | null;
-  holes?: Array<{
-    number: number;
-    par: number | null;
-    greenCentroid: { lat: number; lng: number } | null;
-  }>;
-};
-
 export function startRound(
   db: SQLiteDatabase,
   holeCount: 9 | 18,
@@ -259,26 +281,40 @@ export function startRound(
   const id = newId();
   const startedAt = new Date().toISOString();
   const courseApiId = layout?.apiId ?? null;
+  const courseLoc = isValidLatLng(layout?.location ?? null) ? layout?.location ?? null : null;
   db.withTransactionSync(() => {
     db.runSync(
-      'INSERT INTO rounds (id, started_at, finished_at, course_name, hole_count, course_api_id) VALUES (?, ?, NULL, ?, ?, ?)',
-      [id, startedAt, courseName, holeCount, courseApiId],
+      'INSERT INTO rounds (id, started_at, finished_at, course_name, hole_count, course_api_id, course_lat, course_lng, tee_name, tee_rating, tee_slope, tee_total_yards) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        id,
+        startedAt,
+        courseName,
+        holeCount,
+        courseApiId,
+        courseLoc?.lat ?? null,
+        courseLoc?.lng ?? null,
+        layout?.teeName ?? null,
+        layout?.teeRating ?? null,
+        layout?.teeSlope ?? null,
+        layout?.teeTotalYards ?? null,
+      ],
     );
     for (let n = 1; n <= holeCount; n += 1) {
       const seed = layout?.holes?.find((hole) => hole.number === n);
-      const par = seed?.par ?? 4;
-      const greenCandidate = seed?.greenCentroid ?? null;
-      const green = isValidLatLng(greenCandidate) ? greenCandidate : null;
+      const applied = seedHoleFromCourse(seed ?? null);
       db.runSync(
-        'INSERT INTO holes (id, round_id, number, par, score, green_lat, green_lng, green_source) VALUES (?, ?, ?, ?, NULL, ?, ?, ?)',
+        'INSERT INTO holes (id, round_id, number, par, par_source, score, yards, handicap, green_lat, green_lng, green_source) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)',
         [
           newId(),
           id,
           n,
-          par,
-          green?.lat ?? null,
-          green?.lng ?? null,
-          green ? 'course_centroid' : null,
+          applied.par,
+          applied.parSource,
+          applied.yards,
+          applied.handicap,
+          applied.green?.lat ?? null,
+          applied.green?.lng ?? null,
+          applied.greenSource,
         ],
       );
     }
@@ -290,7 +326,72 @@ export function startRound(
     courseName,
     holeCount,
     courseApiId,
+    courseLat: courseLoc?.lat ?? null,
+    courseLng: courseLoc?.lng ?? null,
+    teeName: layout?.teeName ?? null,
+    teeRating: layout?.teeRating ?? null,
+    teeSlope: layout?.teeSlope ?? null,
+    teeTotalYards: layout?.teeTotalYards ?? null,
   };
+}
+
+/**
+ * Attach a nearby course to an in-progress round. Fills blank par/green only.
+ * Never overwrites user par/green and never invents missing API fields.
+ */
+export function attachCourseToRound(
+  db: SQLiteDatabase,
+  roundId: string,
+  courseName: string | null,
+  layout: CourseLayoutSeed,
+): void {
+  const courseLoc = isValidLatLng(layout.location ?? null) ? layout.location ?? null : null;
+  db.withTransactionSync(() => {
+    db.runSync(
+      'UPDATE rounds SET course_name = COALESCE(?, course_name), course_api_id = ?, course_lat = ?, course_lng = ?, tee_name = ?, tee_rating = ?, tee_slope = ?, tee_total_yards = ? WHERE id = ?',
+      [
+        courseName,
+        layout.apiId,
+        courseLoc?.lat ?? null,
+        courseLoc?.lng ?? null,
+        layout.teeName ?? null,
+        layout.teeRating ?? null,
+        layout.teeSlope ?? null,
+        layout.teeTotalYards ?? null,
+        roundId,
+      ],
+    );
+    const holes = db.getAllSync<HoleRow>(
+      'SELECT * FROM holes WHERE round_id = ? ORDER BY number ASC',
+      [roundId],
+    );
+    for (const row of holes) {
+      const seed = layout.holes?.find((hole) => hole.number === row.number);
+      const applied = attachHoleFromCourse(
+        {
+          par: row.par,
+          parSource: mapParSource(row.par_source),
+          greenLat: row.green_lat,
+          greenLng: row.green_lng,
+          greenSource: mapGreenSource(row.green_source),
+        },
+        seed ?? null,
+      );
+      db.runSync(
+        'UPDATE holes SET par = ?, par_source = ?, yards = ?, handicap = ?, green_lat = ?, green_lng = ?, green_source = ? WHERE id = ?',
+        [
+          applied.par,
+          applied.parSource,
+          applied.yards,
+          applied.handicap,
+          applied.green?.lat ?? null,
+          applied.green?.lng ?? null,
+          applied.greenSource,
+          row.id,
+        ],
+      );
+    }
+  });
 }
 
 export function finishRound(db: SQLiteDatabase, id: string): void {
@@ -311,8 +412,12 @@ export function getHole(db: SQLiteDatabase, roundId: string, number: number): Ho
   return row ? mapHole(row) : null;
 }
 
-export function updateHolePar(db: SQLiteDatabase, holeId: string, par: number): void {
-  db.runSync('UPDATE holes SET par = ? WHERE id = ?', [par, holeId]);
+export function updateHolePar(db: SQLiteDatabase, holeId: string, par: number | null): void {
+  db.runSync('UPDATE holes SET par = ?, par_source = ? WHERE id = ?', [
+    par,
+    par == null ? null : 'user',
+    holeId,
+  ]);
 }
 
 export function updateHoleScore(db: SQLiteDatabase, holeId: string, score: number | null): void {
@@ -486,7 +591,7 @@ export function insertPenalty(
   db: SQLiteDatabase,
   args: {
     holeId: string;
-    par: number;
+    par: number | null;
     currentScore: number | null;
     strokes: number;
     reason: PenaltyReason;

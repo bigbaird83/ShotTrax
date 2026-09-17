@@ -2,7 +2,7 @@ export type LatLng = { lat: number; lng: number };
 
 /**
  * Real geographic coordinates only. Rejects missing, non-finite, out-of-range,
- * and 0,0 (a common placeholder). ShotTrax never invents a pin.
+ * and 0,0 (a common placeholder). ShotTraxx never invents a pin.
  */
 export function isValidLatLng(point: LatLng | null | undefined): point is LatLng {
   if (!point) return false;
