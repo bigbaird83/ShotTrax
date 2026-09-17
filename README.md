@@ -194,13 +194,13 @@ Use this when you swung but have no GPS fix (or forgot to mark).
 
 ## Top-3 ranking
 
-Stock clubs start from a **typical-carry seed**. After a club has **≥5** closed **GPS** shots with yards (soft and forced included, same as averages; `no_gps` / `fixQuality none` / **putter** excluded), the live average replaces that seed:
+Stock clubs start from a **typical-carry seed**. **Bag:** tap a club → set **typical carry** in yards (or clear). That seed drives top-3 until the club has **≥5** closed **GPS** shots with yards (good/soft, and forced included the same as averages; `no_gps` / `fixQuality none` / **putter** excluded). Then the live average **fully replaces** the seed — no blend.
 
 - **D** = `yardsToGreen(fix, greenCentroid).yards` **only when `quality !== none`** (good or soft GPS + a real green centroid)
 - else **D** = last closed **GPS** shot distance on this hole
 - else full bag (no ranking)
 
-The 3 eligible clubs with the lowest `|rank yards − D|` are surfaced. Rank yards are the **live average** after ≥5 closed GPS shots, else the stock **typical-carry seed**. Ties prefer the **shorter** club (higher `loftRank`). **Putter** stays in the bag for scoring / green play only — no typical-carry seed, no live average, never in Suggested top-3, and putter shots never count toward any club sample. **All clubs** is always one tap away. Penalties do not affect ranking.
+The 3 eligible clubs with the lowest `|rank yards − D|` are surfaced. Rank yards are the **live average** after ≥5 closed GPS shots, else the **typical-carry seed**. Ties prefer the **shorter** club (higher `loftRank`). **Putter** stays in the bag for scoring / green play only — no carry field, no typical-carry seed, no live average, never in Suggested top-3, and putter shots never count toward any club sample. **All clubs** is always one tap away. Penalties do not affect ranking.
 
 ## Sensing gates (locked, unchanged from P1)
 

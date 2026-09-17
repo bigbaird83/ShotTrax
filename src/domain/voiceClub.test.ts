@@ -90,6 +90,7 @@ test('custom bag club matches on name without a seeded nickname', () => {
       loftRank: 3.5,
       sortOrder: 3,
       enabled: true,
+      typicalCarryYards: null,
     },
   ];
   assert.equal(matchSpokenClub('1 iron', clubs)?.id, 'club_1i');

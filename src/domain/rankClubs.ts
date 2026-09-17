@@ -1,4 +1,4 @@
-import { isPutterClubId, typicalCarryForClub } from './defaultBag';
+import { isPutterClubId, typicalCarrySeedForClub } from './defaultBag';
 import type { Club, ShotFixQuality } from './types';
 
 /** Live average replaces the typical-carry seed after this many closed shots. */
@@ -11,7 +11,7 @@ export type RankClubInput = {
   loftRank: number;
   avgYards: number;
   count: number;
-  /** Stock typical carry. Putter and custom clubs omit this. */
+  /** Bag typical-carry seed (stock or edited). Putter and cleared clubs omit this. */
   typicalCarryYards?: number | null;
 };
 
@@ -36,14 +36,14 @@ export function clubToRankInput(
     loftRank: club.loftRank,
     avgYards: avg.avgYards,
     count: avg.count,
-    typicalCarryYards: typicalCarryForClub(club.id),
+    typicalCarryYards: typicalCarrySeedForClub(club),
   };
 }
 
 /**
  * Yards used for Suggested top-3.
- * Live average after ≥5 closed GPS shots; else typical-carry seed.
- * Putter is never rankable.
+ * Live average after ≥5 closed GPS shots fully replaces the seed (no blend);
+ * else typical-carry seed. Putter is never rankable.
  */
 export function rankDistanceYards(club: RankClubInput): number | null {
   if (isPutterClubId(club.id)) return null;
@@ -105,8 +105,9 @@ export function lastClosedShotYards(
 
 /**
  * Surface up to 3 clubs with the lowest |rank yards − D|.
- * Rank yards = live average after ≥5 closed shots, else typical-carry seed.
- * Putter is never eligible. Custom clubs still need ≥5 live shots.
+ * Rank yards = live average after ≥5 closed shots (replaces seed, no blend),
+ * else typical-carry seed. Putter is never eligible. Cleared / custom clubs
+ * still need ≥5 live shots.
  * Ties prefer the shorter club (higher loftRank).
  * Returns [] when there is no D or no eligible clubs (full bag fallback).
  */

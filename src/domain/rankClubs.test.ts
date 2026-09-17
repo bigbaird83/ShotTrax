@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DEFAULT_BAG } from './defaultBag';
 import { haversineYards, roundYards } from './haversine';
+import type { Club } from './types';
 import {
   clubToRankInput,
   lastClosedShotYards,
@@ -181,7 +182,10 @@ test('clubToRankInput attaches typical-carry seeds; putter has none and is not r
   const putter = DEFAULT_BAG.find((c) => c.id === 'club_putter');
   assert.ok(wedge && putter);
   const wedgeIn = clubToRankInput({ ...wedge, enabled: true }, { avgYards: 0, count: 0 });
-  const putterIn = clubToRankInput({ ...putter, enabled: true }, { avgYards: 8, count: 12 });
+  const putterIn = clubToRankInput(
+    { ...putter, enabled: true, typicalCarryYards: 8 },
+    { avgYards: 8, count: 12 },
+  );
   assert.equal(wedgeIn.typicalCarryYards, 105);
   assert.equal(rankDistanceYards(wedgeIn), 105);
   assert.equal(putterIn.typicalCarryYards, null);
@@ -207,6 +211,29 @@ test('putter is never in Suggested top-3 even with a live average', () => {
   );
   assert.ok(!ranked.some((c) => c.id === 'club_putter'));
   assert.ok(ranked.length > 0);
+});
+
+test('bag-edited typical carry is the seed until 5 GPS shots; live avg then replaces it with no blend', () => {
+  const seven: Club = {
+    id: 'club_7i',
+    name: '7 Iron',
+    shortName: '7i',
+    loftRank: 9,
+    sortOrder: 9,
+    enabled: true,
+    typicalCarryYards: 145,
+  };
+  const seeded = clubToRankInput(seven, { avgYards: 160, count: 4 });
+  assert.equal(seeded.typicalCarryYards, 145);
+  assert.equal(rankDistanceYards(seeded), 145);
+
+  const live = clubToRankInput(seven, { avgYards: 160, count: 5 });
+  assert.equal(rankDistanceYards(live), 160);
+  assert.notEqual(rankDistanceYards(live), (145 + 160) / 2);
+
+  const cleared = clubToRankInput({ ...seven, typicalCarryYards: null }, { avgYards: 150, count: 3 });
+  assert.equal(cleared.typicalCarryYards, null);
+  assert.equal(rankDistanceYards(cleared), null);
 });
 
 test('typical-carry seed ranks a stock club before 5 live shots; live avg takes over after', () => {

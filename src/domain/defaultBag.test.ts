@@ -8,6 +8,9 @@ import {
   STOCK_LONG_IRONS,
   STOCK_WEDGES,
   typicalCarryForClub,
+  typicalCarrySeedForClub,
+  parseTypicalCarryYards,
+  MAX_TYPICAL_CARRY_YARDS,
 } from './defaultBag';
 
 test('stock bag includes 2i, 3i, and 4i along with the rest of the irons', () => {
@@ -105,4 +108,29 @@ test('stock clubs except putter have a typical-carry seed, including 52° / 56°
   assert.equal(typicalCarryForClub('club_lw'), 75);
   assert.equal(typicalCarryForClub('club_pw'), 120);
   assert.equal(typicalCarryForClub('club_custom'), null);
+});
+
+test('parseTypicalCarryYards accepts yards or clear, never invents GPS', () => {
+  assert.equal(parseTypicalCarryYards(''), null);
+  assert.equal(parseTypicalCarryYards('   '), null);
+  assert.equal(parseTypicalCarryYards(null), null);
+  assert.equal(parseTypicalCarryYards('150'), 150);
+  assert.equal(parseTypicalCarryYards(' 145.4 '), 145);
+  assert.equal(parseTypicalCarryYards('0'), null);
+  assert.equal(parseTypicalCarryYards('-10'), null);
+  assert.equal(parseTypicalCarryYards('nope'), null);
+  assert.equal(parseTypicalCarryYards(String(MAX_TYPICAL_CARRY_YARDS + 1)), null);
+  assert.equal(parseTypicalCarryYards(String(MAX_TYPICAL_CARRY_YARDS)), MAX_TYPICAL_CARRY_YARDS);
+});
+
+test('typicalCarrySeedForClub uses the bag seed and never a putter carry', () => {
+  assert.equal(
+    typicalCarrySeedForClub({ id: 'club_7i', typicalCarryYards: 145 }),
+    145,
+  );
+  assert.equal(typicalCarrySeedForClub({ id: 'club_7i', typicalCarryYards: null }), null);
+  assert.equal(
+    typicalCarrySeedForClub({ id: PUTTER_CLUB_ID, typicalCarryYards: 8 }),
+    null,
+  );
 });

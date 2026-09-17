@@ -7,10 +7,10 @@ export const STOCK_LONG_IRONS = ['club_2i', 'club_3i', 'club_4i'] as const;
 /** Distinct lofted wedges. Keep PW separate — do not collapse these into one SW. */
 export const STOCK_WEDGES = ['club_gw', 'club_sw', 'club_lw'] as const;
 
-export type StockClub = Omit<Club, 'enabled'> & {
-  /** Mid-handicap typical carry. Null on putter — scoring / green play only. */
-  typicalCarryYards: number | null;
-};
+export type StockClub = Omit<Club, 'enabled'>;
+
+/** Typical carry is yards, not GPS. Cap matches the longest mark we would keep. */
+export const MAX_TYPICAL_CARRY_YARDS = 400;
 
 /** Stock bag. Voice nicknames live in `voiceClub.ts`; loftRank ranks shorter clubs higher. */
 export const DEFAULT_BAG: StockClub[] = [
@@ -41,10 +41,33 @@ export function isPutterClubId(clubId: string | null | undefined): boolean {
   return clubId === PUTTER_CLUB_ID;
 }
 
-/** Typical carry for a stock club. Putter and custom clubs have none. */
+/** Stock typical-carry default. Putter and custom clubs have none. */
 export function typicalCarryForClub(clubId: string | null | undefined): number | null {
   if (!clubId) return null;
   return TYPICAL_CARRY_BY_ID.get(clubId) ?? null;
+}
+
+/** Parse bag-edit yards. Empty or invalid → null (clear). Never invented from GPS. */
+export function parseTypicalCarryYards(raw: string | null | undefined): number | null {
+  if (raw == null) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const n = Number(trimmed);
+  if (!Number.isFinite(n)) return null;
+  const yards = Math.round(n);
+  if (yards < 1 || yards > MAX_TYPICAL_CARRY_YARDS) return null;
+  return yards;
+}
+
+/** Seed that drives top-3 until ≥5 live GPS samples. Putter is always null. */
+export function typicalCarrySeedForClub(club: {
+  id: string;
+  typicalCarryYards?: number | null;
+}): number | null {
+  if (isPutterClubId(club.id)) return null;
+  return parseTypicalCarryYards(
+    club.typicalCarryYards == null ? '' : String(club.typicalCarryYards),
+  );
 }
 
 /** Putter stays in the bag for scoring / green play, never a distance sample. */

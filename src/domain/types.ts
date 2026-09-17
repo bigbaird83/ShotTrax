@@ -24,6 +24,8 @@ export type Club = {
   loftRank: number;
   sortOrder: number;
   enabled: boolean;
+  /** User-set or stock typical carry in yards. Null on putter, when cleared, or custom-until-set. */
+  typicalCarryYards: number | null;
 };
 
 export type ParSource = 'course' | 'user';

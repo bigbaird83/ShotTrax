@@ -4,7 +4,7 @@ import {
   seedHoleFromCourse,
   type CourseLayoutSeed,
 } from '../course/layout';
-import { DEFAULT_BAG, isPutterClubId, typicalCarryForClub } from '../domain/defaultBag';
+import { DEFAULT_BAG, isPutterClubId, typicalCarrySeedForClub } from '../domain/defaultBag';
 import {
   COURSE_DISTANCE_SETTING_KEY,
   parseCourseDistanceUnit,
@@ -42,6 +42,7 @@ type ClubRow = {
   loft_rank: number;
   sort_order: number;
   enabled: number;
+  typical_carry_yards: number | null;
 };
 
 type RoundRow = {
@@ -125,6 +126,7 @@ function mapClub(row: ClubRow): Club {
     loftRank: row.loft_rank,
     sortOrder: row.sort_order,
     enabled: row.enabled === 1,
+    typicalCarryYards: isPutterClubId(row.id) ? null : (row.typical_carry_yards ?? null),
   };
 }
 
@@ -246,7 +248,12 @@ export function setClubEnabled(db: SQLiteDatabase, id: string, enabled: boolean)
   db.runSync('UPDATE clubs SET enabled = ? WHERE id = ?', [enabled ? 1 : 0, id]);
 }
 
-export function addClub(db: SQLiteDatabase, name: string, shortName: string): Club {
+export function addClub(
+  db: SQLiteDatabase,
+  name: string,
+  shortName: string,
+  typicalCarryYards: number | null = null,
+): Club {
   const max = db.getFirstSync<{ n: number }>('SELECT COALESCE(MAX(sort_order), -1) AS n FROM clubs');
   const sortOrder = (max?.n ?? -1) + 1;
   const club: Club = {
@@ -256,10 +263,11 @@ export function addClub(db: SQLiteDatabase, name: string, shortName: string): Cl
     loftRank: sortOrder,
     sortOrder,
     enabled: true,
+    typicalCarryYards,
   };
   db.runSync(
-    'INSERT INTO clubs (id, name, short_name, loft_rank, sort_order, enabled) VALUES (?, ?, ?, ?, ?, 1)',
-    [club.id, club.name, club.shortName, club.loftRank, club.sortOrder],
+    'INSERT INTO clubs (id, name, short_name, loft_rank, sort_order, enabled, typical_carry_yards) VALUES (?, ?, ?, ?, ?, 1, ?)',
+    [club.id, club.name, club.shortName, club.loftRank, club.sortOrder, club.typicalCarryYards],
   );
   return club;
 }
@@ -269,10 +277,30 @@ export function updateClub(
   id: string,
   name: string,
   shortName: string,
+  typicalCarryYards?: number | null,
 ): void {
-  db.runSync('UPDATE clubs SET name = ?, short_name = ? WHERE id = ?', [
-    name.trim(),
-    shortName.trim() || name.trim().slice(0, 3),
+  const trimmedName = name.trim();
+  const trimmedShort = shortName.trim() || trimmedName.slice(0, 3);
+  if (isPutterClubId(id)) {
+    db.runSync('UPDATE clubs SET name = ?, short_name = ?, typical_carry_yards = NULL WHERE id = ?', [
+      trimmedName,
+      trimmedShort,
+      id,
+    ]);
+    return;
+  }
+  if (typicalCarryYards === undefined) {
+    db.runSync('UPDATE clubs SET name = ?, short_name = ? WHERE id = ?', [
+      trimmedName,
+      trimmedShort,
+      id,
+    ]);
+    return;
+  }
+  db.runSync('UPDATE clubs SET name = ?, short_name = ?, typical_carry_yards = ? WHERE id = ?', [
+    trimmedName,
+    trimmedShort,
+    typicalCarryYards,
     id,
   ]);
 }
@@ -293,17 +321,24 @@ export function deleteClub(db: SQLiteDatabase, id: string): 'deleted' | 'disable
 export function restoreDefaultBag(db: SQLiteDatabase): void {
   const existing = new Set(listClubs(db).map((club) => club.id));
   const insert = db.prepareSync(
-    'INSERT INTO clubs (id, name, short_name, loft_rank, sort_order, enabled) VALUES (?, ?, ?, ?, ?, 1)',
+    'INSERT INTO clubs (id, name, short_name, loft_rank, sort_order, enabled, typical_carry_yards) VALUES (?, ?, ?, ?, ?, 1, ?)',
   );
   try {
     for (const club of DEFAULT_BAG) {
       if (existing.has(club.id)) {
         db.runSync(
-          'UPDATE clubs SET name = ?, short_name = ?, loft_rank = ?, sort_order = ?, enabled = 1 WHERE id = ?',
-          [club.name, club.shortName, club.loftRank, club.sortOrder, club.id],
+          'UPDATE clubs SET name = ?, short_name = ?, loft_rank = ?, sort_order = ?, enabled = 1, typical_carry_yards = ? WHERE id = ?',
+          [club.name, club.shortName, club.loftRank, club.sortOrder, club.typicalCarryYards, club.id],
         );
       } else {
-        insert.executeSync([club.id, club.name, club.shortName, club.loftRank, club.sortOrder]);
+        insert.executeSync([
+          club.id,
+          club.name,
+          club.shortName,
+          club.loftRank,
+          club.sortOrder,
+          club.typicalCarryYards,
+        ]);
       }
     }
   } finally {
@@ -842,7 +877,7 @@ export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
         yards: s.distance_yards,
         fixQuality: s.fix_quality as FixQuality,
       }));
-    return { club, typicalCarryYards: typicalCarryForClub(club.id), ...averageWithBadges(forClub) };
+    return { club, typicalCarryYards: typicalCarrySeedForClub(club), ...averageWithBadges(forClub) };
   });
 }
 
