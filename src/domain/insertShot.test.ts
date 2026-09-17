@@ -3,13 +3,14 @@ import { test } from 'node:test';
 import { haversineYards, roundYards } from './haversine';
 import {
   insertMovesNeighborPins,
+  insertRewritesNeighborYards,
   insertSharesEndpoints,
   planInsertPlacedShot,
   planInsertSlots,
   planRenumberAfterInsert,
   yardsFromShotPins,
 } from './insertShot';
-import { placedShotRunsAcceptFix } from './shotSource';
+import { confirmPlacedShot, includeInDistanceAverages, placedShotRunsAcceptFix } from './shotSource';
 import type { Shot } from './types';
 
 function shot(partial: Partial<Shot> & { id: string; seq: number }): Shot {
@@ -126,9 +127,32 @@ test('insert does not change neighbor coordinates or yards', () => {
   });
   assert.equal(planned.ok, true);
   if (!planned.ok) return;
+  assert.equal(planned.plan.source, 'placed');
+  assert.equal(planned.plan.fixQuality, null);
+  assert.equal(planned.plan.startLat, from.lat);
+  assert.equal(planned.plan.startLng, from.lng);
+  assert.equal(planned.plan.endLat, to.lat);
+  assert.equal(planned.plan.endLng, to.lng);
   assert.equal(planned.plan.distanceYards, roundYards(haversineYards(from, to)));
+  assert.notEqual(planned.plan.distanceYards, first.distanceYards);
+  assert.notEqual(planned.plan.distanceYards, second.distanceYards);
   assert.notEqual(planned.plan.startLat, first.endLat);
   assert.notEqual(planned.plan.endLat, second.startLat);
+  assert.equal(placedShotRunsAcceptFix(), false);
+  assert.equal(insertMovesNeighborPins(), false);
+  assert.equal(insertSharesEndpoints(), false);
+  assert.equal(insertRewritesNeighborYards(), false);
+  assert.equal(
+    includeInDistanceAverages({
+      source: planned.plan.source,
+      distanceYards: planned.plan.distanceYards,
+      fixQuality: planned.plan.fixQuality,
+      clubId: planned.clubId,
+    }),
+    true,
+  );
+  assert.notEqual(first.distanceYards, yardsFromShotPins(first));
+  assert.notEqual(second.distanceYards, yardsFromShotPins(second));
   for (const neighbor of planned.neighbors) {
     const prior = neighbor.id === 's1' ? first : second;
     assert.equal(neighbor.startLat, prior.startLat);
@@ -137,6 +161,24 @@ test('insert does not change neighbor coordinates or yards', () => {
     assert.equal(neighbor.endLng, prior.endLng);
     assert.equal(neighbor.distanceYards, prior.distanceYards);
   }
+  const farTo = { lat: from.lat + 0.01, lng: from.lng };
+  const far = planInsertPlacedShot({
+    shots: [first, second],
+    seq: 2,
+    from,
+    to: farTo,
+    clubId: 'club_6i',
+  });
+  assert.equal(far.ok, true);
+  if (!far.ok) return;
+  assert.equal(far.plan.impossibleJump, true);
+  assert.deepEqual(confirmPlacedShot(far.plan, false), {
+    status: 'needs_confirm',
+    yards: far.plan.distanceYards,
+  });
+  assert.deepEqual(confirmPlacedShot(far.plan, true), { status: 'commit' });
+  assert.equal(far.neighbors[0]?.distanceYards, 188);
+  assert.equal(far.neighbors[1]?.distanceYards, 77);
 });
 
 test('append-after adds at the end without moving earlier seqs', () => {

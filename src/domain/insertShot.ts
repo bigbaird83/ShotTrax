@@ -82,6 +82,10 @@ export function insertSharesEndpoints(): false {
   return false;
 }
 
+export function insertRewritesNeighborYards(): false {
+  return false;
+}
+
 /**
  * Insert a catch-up Placed shot at `seq` (between or append).
  * Yards = haversine of that shot's own from/to taps. Neighbors keep pins and yards.
