@@ -96,6 +96,8 @@ export type Shot = {
   startedAt: string;
   endedAt: string | null;
   source: ShotSource;
+  /** Walk-away auto-mark with the #1 suggested club. */
+  suggested: boolean;
 };
 
 export type PenaltyKind = 'drop' | 'penalty';

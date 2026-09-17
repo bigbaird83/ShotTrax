@@ -23,7 +23,7 @@ import {
   updateHoleScore,
 } from '@/src/db/repo';
 import { pinOrNull, formatFmbRow, hasApiFmb, yardsToGreenDepth } from '@/src/domain/greenDepth';
-import { COPY, formatHoleHeader } from '@/src/domain/playerCopy';
+import { COPY, formatHoleHeader, markedSuggestedMessage } from '@/src/domain/playerCopy';
 import { formatPenaltyRow, PENALTY_REASONS, totalPenaltyStrokes } from '@/src/domain/penalty';
 import { clubToRankInput, lastClosedShotYards, rankTopClubs, resolveDistanceTarget } from '@/src/domain/rankClubs';
 import { reconcileHoleScore, scoreMismatchMessage } from '@/src/domain/scoreReconcile';
@@ -63,6 +63,7 @@ export default function HoleScreen() {
   const [checkNonce, setCheckNonce] = useState(0);
   const [listening, setListening] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const sessionRef = useRef<ClubSpeechSession | null>(null);
   const autoOpened = useRef<number | null>(null);
 
@@ -98,6 +99,15 @@ export default function HoleScreen() {
       }),
     [clubs, round?.lastClubId, lastShotClubId],
   );
+  const toastedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const last = shots[shots.length - 1];
+    if (!last?.suggested || last.id === toastedRef.current) return;
+    toastedRef.current = last.id;
+    const name = last.clubId ? clubMap[last.clubId]?.shortName ?? 'club' : 'club';
+    setToast(markedSuggestedMessage(name));
+  }, [shots, clubMap]);
 
   useEffect(() => {
     navigation.setOptions({ headerShown: false, title: `Hole ${holeNumber}` });
@@ -436,18 +446,24 @@ export default function HoleScreen() {
       ) : null}
 
       {voiceError ? <Text style={styles.warn}>{voiceError}</Text> : null}
+      {toast ? <Text style={styles.toast}>{toast}</Text> : null}
 
       {!readOnly && ranked.length > 0 ? (
         <View style={styles.top3}>
-          {ranked.map((club) => (
+          {ranked.map((club, index) => (
             <Pressable
               key={club.id}
               onPress={() => {
                 const full = clubs.find((row) => row.id === club.id);
                 if (full) void markClub(full);
               }}
-              style={[styles.top3Chip, sticky?.id === club.id && styles.chipOn]}>
-              <Text style={styles.top3Text}>{club.shortName}</Text>
+              style={[
+                styles.top3Chip,
+                index === 0 && styles.top3Primary,
+                sticky?.id === club.id && styles.chipOn,
+              ]}>
+              <Text style={[styles.top3Text, index === 0 && styles.top3PrimaryText]}>{club.shortName}</Text>
+              {index === 0 ? <Text style={styles.suggest}>{COPY.suggested}</Text> : null}
             </Pressable>
           ))}
         </View>
@@ -571,7 +587,14 @@ export default function HoleScreen() {
               const openShot = shot.endedAt == null;
               const noGps = shot.source === 'no_gps' || shot.fixQuality === 'none';
               return (
-                <View key={shot.id} style={styles.shot}>
+                <Pressable
+                  key={shot.id}
+                  disabled={readOnly}
+                  onPress={() => {
+                    setScoreOpen(false);
+                    router.push(`/round/${id}/club-pick?hole=${holeNumber}&shot=${shot.id}`);
+                  }}
+                  style={styles.shot}>
                   <Text style={styles.shotSeq}>{shot.seq}</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.shotClub}>{club?.name ?? 'Club'}</Text>
@@ -583,10 +606,12 @@ export default function HoleScreen() {
                         : openShot
                           ? COPY.inPlay
                           : `${shot.distanceYards ?? '—'} yd`}
+                      {shot.suggested ? ` · ${COPY.suggested}` : ''}
                     </Text>
+                    {!readOnly ? <Text style={styles.meta}>{COPY.changeClub}</Text> : null}
                   </View>
                   <QualityBadge quality={shot.fixQuality} open={openShot && !noGps} source={shot.source} />
-                </View>
+                </Pressable>
               );
             })
           )}
@@ -748,7 +773,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.bgElevated,
   },
+  top3Primary: { flex: 1.7, minHeight: 58, borderColor: colors.lime, borderWidth: 2 },
   top3Text: { color: colors.cream, fontWeight: '800', fontSize: type.chip },
+  top3PrimaryText: { color: colors.lime, fontSize: type.button },
+  suggest: { color: colors.lime, fontSize: 10, fontWeight: '800' },
   clubRow: { flexDirection: 'row', gap: 8 },
   clubChip: {
     flex: 1,
@@ -776,6 +804,7 @@ const styles = StyleSheet.create({
   markWrap: { position: 'relative' },
   row: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   warn: { color: colors.orange, fontSize: type.meta, fontWeight: '700', paddingHorizontal: 16 },
+  toast: { color: colors.lime, fontSize: type.meta, fontWeight: '800', paddingHorizontal: 16, paddingTop: 6 },
   muted: { color: colors.muted, fontSize: type.body },
   meta: { color: colors.muted, fontSize: type.meta },
   label: { color: colors.cream, fontSize: type.meta, fontWeight: '800', letterSpacing: 0.6 },

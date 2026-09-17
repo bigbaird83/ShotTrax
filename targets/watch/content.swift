@@ -37,11 +37,13 @@ struct ContentView: View {
 
         if !session.list.top3.isEmpty {
           HStack(spacing: 6) {
-            ForEach(session.list.top3, id: \.self) { clubId in
+            ForEach(Array(session.list.top3.enumerated()), id: \.element) { index, clubId in
               Button(session.list.label(for: clubId)) {
                 session.pick(clubId: clubId)
               }
               .buttonStyle(.bordered)
+              .font(index == 0 ? .headline.weight(.black) : .body.weight(.bold)
+              )
             }
           }
         }

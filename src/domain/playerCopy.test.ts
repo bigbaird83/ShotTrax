@@ -26,6 +26,8 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.top3Unlock, 'Top clubs unlock after a few shots');
   assert.equal(COPY.stickyClub, 'Same club');
   assert.equal(COPY.undoLast, 'Undo last');
+  assert.equal(COPY.suggested, 'Suggested');
+  assert.equal(COPY.changeClub, 'Change club');
 });
 
 test('player copy never mentions API, OSM, invent, centroid, or meters', () => {

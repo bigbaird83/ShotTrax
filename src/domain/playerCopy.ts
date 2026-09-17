@@ -48,6 +48,8 @@ export const COPY = {
   inPlay: 'In play',
   logged: 'Logged',
   didntCatchClub: 'Didn’t catch a club. Say it again or pick one.',
+  suggested: 'Suggested',
+  changeClub: 'Change club',
   weakLocation: 'Location is weak. Mark anyway?',
   tooFar: 'That looks too far. Mark anyway?',
   markAnyway: 'Mark anyway',
@@ -61,6 +63,10 @@ export const COPY = {
   noClosedShots: 'No marked shots yet',
   summaryHome: 'Home',
 } as const;
+
+export function markedSuggestedMessage(shortName: string): string {
+  return `Marked ${shortName} (suggested) · Change club.`;
+}
 
 export function formatParLabel(par: number | null): string {
   return par == null ? 'Par unknown' : `Par ${par}`;

@@ -93,6 +93,7 @@ type ShotRow = {
   started_at: string;
   ended_at: string | null;
   source: string | null;
+  suggested: number | null;
 };
 
 type PenaltyRow = {
@@ -199,6 +200,7 @@ function mapShot(row: ShotRow): Shot {
     startedAt: row.started_at,
     endedAt: row.ended_at,
     source,
+    suggested: row.suggested === 1,
   };
 }
 
@@ -558,6 +560,7 @@ export function insertOpenShot(
     lng: number;
     accuracyM: number | null;
     startFixQuality: FixQuality;
+    suggested?: boolean;
   },
 ): string {
   const id = newId();
@@ -565,8 +568,8 @@ export function insertOpenShot(
     `INSERT INTO shots (
       id, hole_id, club_id, seq,
       start_lat, start_lng, start_accuracy_m, start_fix_quality,
-      distance_yards, fix_quality, impossible_jump, started_at, source
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 0, ?, 'gps')`,
+      distance_yards, fix_quality, impossible_jump, started_at, source, suggested
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 0, ?, 'gps', ?)`,
     [
       id,
       args.holeId,
@@ -578,9 +581,14 @@ export function insertOpenShot(
       args.startFixQuality,
       args.startFixQuality,
       new Date().toISOString(),
+      args.suggested ? 1 : 0,
     ],
   );
   return id;
+}
+
+export function updateShotClub(db: SQLiteDatabase, shotId: string, clubId: string): void {
+  db.runSync('UPDATE shots SET club_id = ?, suggested = 0 WHERE id = ?', [clubId, shotId]);
 }
 
 export function reopenShot(db: SQLiteDatabase, shotId: string): void {

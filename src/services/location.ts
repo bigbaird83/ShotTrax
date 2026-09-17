@@ -48,3 +48,32 @@ export function describeGpsSource(fix: Pick<GpsFix, 'mocked' | 'isSimulator'>): 
   }
   return null;
 }
+
+export async function watchFixes(onFix: (fix: GpsFix) => void): Promise<() => void> {
+  const granted = await requestLocationPermission();
+  if (!granted) return () => undefined;
+
+  const isSimulator = Device.isDevice === false;
+  const sub = await Location.watchPositionAsync(
+    {
+      accuracy: Location.Accuracy.BestForNavigation,
+      timeInterval: 1000,
+      distanceInterval: 1,
+    },
+    (loc) => {
+      const lat = loc.coords.latitude;
+      const lng = loc.coords.longitude;
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      onFix({
+        lat,
+        lng,
+        accuracyM: loc.coords.accuracy ?? null,
+        mocked: Boolean(loc.mocked) || isSimulator,
+        isSimulator,
+        timestamp: loc.timestamp,
+      });
+    },
+  );
+  return () => sub.remove();
+}
+

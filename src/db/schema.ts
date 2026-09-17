@@ -232,6 +232,7 @@ export function migrate(db: SQLiteDatabase): void {
   migrateShotsP3(db);
   ensureColumn(db, 'shots', 'source', "TEXT NOT NULL DEFAULT 'gps'");
   ensureColumn(db, 'shots', 'typed_yards', 'INTEGER');
+  ensureColumn(db, 'shots', 'suggested', 'INTEGER NOT NULL DEFAULT 0');
   migrateNoGpsSensingLock(db);
 
   const clubCount = db.getFirstSync<{ n: number }>('SELECT COUNT(*) AS n FROM clubs');

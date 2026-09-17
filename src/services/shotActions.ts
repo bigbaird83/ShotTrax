@@ -10,6 +10,7 @@ import {
   nextShotSeq,
   setRoundLastClub,
   undoLastShot as undoLastShotInRepo,
+  updateShotClub,
 } from '../db/repo';
 import { planDrop } from '../domain/drop';
 import { worstFixQuality } from '../domain/fixQuality';
@@ -107,13 +108,15 @@ export async function markShotWithClub(
     clubId: string | null;
     force?: boolean;
     watchFix?: GpsFix | null;
+    fixOverride?: GpsFix | null;
+    suggested?: boolean;
   },
 ): Promise<{ plan: MarkPlan; fix: GpsFix }> {
   const hole = getHole(db, args.roundId, args.holeNumber);
   if (!hole) {
     throw new Error(`Hole ${args.holeNumber} not found`);
   }
-  const fix = await resolveMarkFix(args.watchFix);
+  const fix = args.fixOverride ?? (await resolveMarkFix(args.watchFix));
   const open = getOpenShotForHole(db, hole.id);
   const plan = decide(fix, open, Boolean(args.force));
   if (plan.status !== 'commit') {
@@ -132,6 +135,7 @@ export async function markShotWithClub(
       lng: fix.lng,
       accuracyM: fix.accuracyM,
       startFixQuality: plan.startFixQuality,
+      suggested: Boolean(args.suggested),
     });
     if (args.clubId) {
       setRoundLastClub(db, args.roundId, args.clubId);
@@ -184,6 +188,14 @@ export function undoLastShot(
   args: { roundId: string; holeNumber: number },
 ): boolean {
   return undoLastShotInRepo(db, args.roundId, args.holeNumber).ok;
+}
+
+export function changeShotClub(
+  db: SQLiteDatabase,
+  args: { roundId: string; shotId: string; clubId: string },
+): void {
+  updateShotClub(db, args.shotId, args.clubId);
+  setRoundLastClub(db, args.roundId, args.clubId);
 }
 
 export async function takeDrop(
