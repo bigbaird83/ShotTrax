@@ -116,9 +116,12 @@ eas submit -p ios
 
 | Permission | When |
 | --- | --- |
-| **Location When In Use** | Picking a club marks where you hit from. The next club pick closes the prior shot. Green estimate can reuse the current GPS. ShotTraxx does not invent coordinates. |
-| **Microphone** | Only after **Say a club**. Used to capture the utterance. |
+| **Location When In Use** | Picking a club marks where you hit from. The next club pick closes the prior shot. Green estimate can reuse the current GPS. ShotTraxx does not invent coordinates. Watch location is the same purpose, used only when Watch GPS is more accurate than the phone. |
+| **Photo Library** (iOS) | Not used. `NSPhotoLibraryUsageDescription` is in the plist so App Store review (ITMS-90683) can ship. Photos prompts stay out of scope. No add/save key — we do not write to the library. |
+| **Microphone** | Only after **Say a club**. Used to capture the utterance. Not on Watch. |
 | **Speech Recognition** (iOS) | Maps the utterance to a bag club and applies it immediately. |
+
+Not in this IPA (and not in the plist): Always location, Bluetooth, motion, Watch mic. Watch Connectivity does not need Bluetooth purpose strings.
 
 ## Apple Watch (ships in this IPA)
 

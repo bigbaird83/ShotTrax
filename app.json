@@ -18,6 +18,7 @@
         "CFBundleDisplayName": "ShotTraxx",
         "CFBundleName": "ShotTraxx",
         "NSLocationWhenInUseUsageDescription": "ShotTraxx captures GPS when you pick a club to mark where you hit from.",
+        "NSPhotoLibraryUsageDescription": "ShotTraxx does not use your photo library. This description is required to ship on the App Store.",
         "NSMicrophoneUsageDescription": "ShotTraxx uses the microphone only when you tap Say a club so you can name a club like “seven iron”.",
         "NSSpeechRecognitionUsageDescription": "ShotTraxx uses speech recognition to match what you say to a club in your bag."
       }
