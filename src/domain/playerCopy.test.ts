@@ -7,6 +7,7 @@ import {
   formatSiLabel,
   formatTeeMeta,
   markedSuggestedMessage,
+  voiceFailRecovery,
   yardsToGreenPlayerLabel,
 } from './playerCopy';
 
@@ -24,6 +25,8 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.pickClub, 'Pick a club');
   assert.equal(COPY.pickClubLede, 'Picking a club marks where you hit from.');
   assert.equal(COPY.sayClub, 'Say a club');
+  assert.equal(COPY.sayAgain, 'Say again');
+  assert.equal(COPY.allClubs, 'All clubs');
   assert.equal(COPY.top3Unlock, 'Top clubs unlock after a few shots');
   assert.equal(COPY.stickyClub, 'Same club');
   assert.equal(COPY.undoLast, 'Undo last');
@@ -50,6 +53,15 @@ test('yards to green is a big number or — plus waiting copy', () => {
   );
   assert.equal(missing.value, '—');
   assert.equal(missing.detail, COPY.waitingOnGreen);
+});
+
+test('voice fail recovery is Pick a club plus Say again, never voice-only', () => {
+  const recovery = voiceFailRecovery();
+  assert.equal(recovery.banner, COPY.didntCatchClub);
+  assert.equal(recovery.primaryLabel, 'Pick a club');
+  assert.equal(recovery.secondaryLabel, 'Say again');
+  assert.equal(recovery.primaryLabel, COPY.pickClub);
+  assert.notEqual(recovery.primaryLabel, COPY.sayClub);
 });
 
 test('tee meta shows rating and slope in player voice when present', () => {

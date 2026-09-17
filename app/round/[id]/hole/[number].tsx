@@ -23,7 +23,7 @@ import {
   updateHoleScore,
 } from '@/src/db/repo';
 import { pinOrNull, formatFmbRow, hasApiFmb, yardsToGreenDepth } from '@/src/domain/greenDepth';
-import { COPY, formatHoleHeader, markedSuggestedMessage } from '@/src/domain/playerCopy';
+import { COPY, formatHoleHeader, markedSuggestedMessage, voiceFailRecovery } from '@/src/domain/playerCopy';
 import { formatPenaltyRow, PENALTY_REASONS, totalPenaltyStrokes } from '@/src/domain/penalty';
 import { clubToRankInput, lastClosedShotYards, rankTopClubs, resolveDistanceTarget } from '@/src/domain/rankClubs';
 import { reconcileHoleScore, scoreMismatchMessage } from '@/src/domain/scoreReconcile';
@@ -343,17 +343,20 @@ export default function HoleScreen() {
       return;
     }
     if (isFinal) {
+      sessionRef.current?.stop();
+      sessionRef.current = null;
+      setListening(false);
       setVoiceError(COPY.didntCatchClub);
     }
   };
 
-  const onListen = async () => {
-    if (listening) {
-      sessionRef.current?.stop();
-      sessionRef.current = null;
-      setListening(false);
-      return;
-    }
+  const stopListening = () => {
+    sessionRef.current?.stop();
+    sessionRef.current = null;
+    setListening(false);
+  };
+
+  const startListening = async () => {
     voiceCommitted.current = false;
     setVoiceError(null);
     setListening(true);
@@ -371,6 +374,27 @@ export default function HoleScreen() {
     sessionRef.current = session;
     if (!session) setListening(false);
   };
+
+  const onListen = () => {
+    if (listening) {
+      stopListening();
+      return;
+    }
+    void startListening();
+  };
+
+  const openBag = () => {
+    stopListening();
+    setVoiceError(null);
+    router.push(`/round/${id}/club-pick?hole=${holeNumber}`);
+  };
+
+  const retryVoice = () => {
+    stopListening();
+    void startListening();
+  };
+
+  const voiceFail = voiceFailRecovery();
 
   const teeLine = round.teeName
     ? formatTeeMeta({
@@ -431,7 +455,24 @@ export default function HoleScreen() {
         </View>
       ) : null}
 
-      {voiceError ? <Text style={styles.warn}>{voiceError}</Text> : null}
+      {voiceError ? (
+        <View style={styles.voiceFail}>
+          <Text style={styles.warn}>{voiceError}</Text>
+          <View style={styles.row}>
+            <BigButton
+              label={voiceFail.primaryLabel}
+              style={{ flex: 1 }}
+              onPress={openBag}
+            />
+            <BigButton
+              label={voiceFail.secondaryLabel}
+              variant="ghost"
+              style={{ flex: 1 }}
+              onPress={retryVoice}
+            />
+          </View>
+        </View>
+      ) : null}
       {toast ? <Text style={styles.toast}>{toast}</Text> : null}
 
       {!readOnly && ranked.length > 0 ? (
@@ -458,15 +499,28 @@ export default function HoleScreen() {
       <ThumbZone>
         <View style={styles.clubRow}>
           <Pressable
-            onPress={() => router.push(`/round/${id}/club-pick?hole=${holeNumber}`)}
+            accessibilityRole="button"
+            accessibilityLabel={sticky ? `${sticky.shortName}. ${COPY.allClubs}` : COPY.allClubs}
+            disabled={readOnly}
+            onPress={openBag}
             style={styles.clubChip}>
             <Text style={styles.clubShort}>{sticky?.shortName ?? 'Club'}</Text>
-            <Text style={styles.clubName}>{sticky?.name ?? COPY.bag}</Text>
+            <Text style={styles.clubName}>{COPY.allClubs}</Text>
           </Pressable>
-          <Pressable onPress={() => void onListen()} style={styles.sideBtn}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => void onListen()}
+            style={styles.sideBtn}>
             <Text style={styles.sideLabel}>{listening ? COPY.listening : COPY.sayClub}</Text>
           </Pressable>
         </View>
+
+        <BigButton
+          label={COPY.allClubs}
+          variant="secondary"
+          disabled={readOnly}
+          onPress={openBag}
+        />
 
         <View style={styles.markWrap}>
           <BigButton
@@ -793,7 +847,8 @@ const styles = StyleSheet.create({
   sideLabel: { color: colors.cream, fontWeight: '800', fontSize: type.meta, textAlign: 'center' },
   markWrap: { position: 'relative' },
   row: { flexDirection: 'row', gap: 10, alignItems: 'center' },
-  warn: { color: colors.orange, fontSize: type.meta, fontWeight: '700', paddingHorizontal: 16 },
+  warn: { color: colors.orange, fontSize: type.meta, fontWeight: '700' },
+  voiceFail: { paddingHorizontal: 16, paddingTop: 8, gap: 8 },
   toast: { color: colors.lime, fontSize: type.meta, fontWeight: '800', paddingHorizontal: 16, paddingTop: 6 },
   muted: { color: colors.muted, fontSize: type.body },
   meta: { color: colors.muted, fontSize: type.meta },
