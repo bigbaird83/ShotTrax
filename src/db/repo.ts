@@ -922,15 +922,15 @@ export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
                     : 'good',
           }),
       )
-      .map((s) => ({
-        yards: s.distance_yards,
-        fixQuality:
+      .map((s) => {
+        const quality: FixQuality | null =
           s.source === 'placed'
             ? null
             : s.fix_quality === 'soft' || s.fix_quality === 'forced' || s.fix_quality === 'good'
               ? s.fix_quality
-              : null,
-      }));
+              : null;
+        return { yards: s.distance_yards, fixQuality: quality };
+      });
     return { club, typicalCarryYards: typicalCarrySeedForClub(club), ...averageWithBadges(forClub) };
   });
 }
