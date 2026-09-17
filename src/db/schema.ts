@@ -233,6 +233,8 @@ export function migrate(db: SQLiteDatabase): void {
   ensureColumn(db, 'shots', 'source', "TEXT NOT NULL DEFAULT 'gps'");
   ensureColumn(db, 'shots', 'typed_yards', 'INTEGER');
   ensureColumn(db, 'shots', 'suggested', 'INTEGER NOT NULL DEFAULT 0');
+  ensureColumn(db, 'holes', 'putts', 'INTEGER NOT NULL DEFAULT 0');
+  ensureColumn(db, 'holes', 'putt_lengths', 'TEXT');
   migrateNoGpsSensingLock(db);
 
   ensureStockBag(db);

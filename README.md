@@ -131,6 +131,7 @@ Companion via `@bacons/apple-targets` (`targets/watch`, bundle `com.shottrax.app
   - Phone → Watch `clubList`: `{ type, top3, bag, labels, holeNumber, yardsToGreen, yardsQuality }` pushed on hole change / fix quality change / bag rank change (ranking stays on phone). `yardsToGreen` is `yardsToGreen().yards` (`null` when quality is none). `yardsQuality` is `good | soft | none` — same bands as the phone, never invent.
   - Watch → Phone `clubPick`: `{ type, clubId, at: ISO8601 }` plus optional Watch GPS (`lat`, `lng`, `accuracyM`) when the sample is ≤3 s old and accuracy > 0. Stretch prefer lock: `preferWatch = watchFix && ageSec <= 3 && watch.accuracyM > 0 && (phoneFix == null || watch.accuracyM <= phone.accuracyM)`; `markFix = preferWatch ? watchFix : phoneFix`. Then same `acceptFix` bands. Soft → Approximate. Quality none → wait / Mark anyway. Never invent / silent fail.
 - Watch status: **Hole N · XXX yd** (same yardsToGreen as phone); **—** when quality is none; tiny **Approximate** chip when soft (never SOFT on the wrist).
+- Watch club UI defaults to **top-3 Suggested only** (#1 larger). **All clubs** opens the full bag grid. Ranking matches the phone (typical-carry seed until ≥5 live GPS shots; putter never in top-3).
 - **Same club** is the big 1-tap mark on the wrist. Haptic on a successful mark (phone + Watch).
 - Watch feedback is **`7i marked ✓`** or **`Phone unavailable`** — never a silent fail.
 - Complication (stretch): **Hole N · XXX yd** (`—` when none), via the `ShotTraxxHole` widget.
@@ -160,7 +161,8 @@ EAS credentials for `com.shottrax.app.watch` and `com.shottrax.app.watch.widget`
 7. **End last shot** closes an open GPS shot without starting a new one.
 8. **+ Penalty** adds 1–5 penalty strokes to the hole score, with reason water / OB / unplayable / other (optional note). Shown as a penalty row — not a map polyline. A penalty is **not a Shot for distance**: it never hits `acceptFix`, haversine, club averages, or top-3.
 9. **Add shot without GPS** (forgotten swing / no fix): pick a club and optionally type yards (or leave blank). Stored as `source = no_gps`, `fixQuality = none`, **null** lat/lng, **null** `distance_yards`. Typed yards live in `typed_yards` (score/UI only) and are **excluded from distance averages and top-3**. No include-typed-yards toggle in MVP. Never invents a coordinate and never calls `acceptFix`.
-10. Finish the round for a scorecard. Club averages live on the Averages tab (putter is omitted — scoring / green play only). Stock wedges are **PW · 52° · 56° · 60°**.
+10. Near / on the green, a fat **Putts** stepper (0–5) stays on the hole sheet. Optional one-tap length buckets (**≤3′ · 3–10′ · 10–20′ · 20′+**) are stats only — no green GPS and not a map mark. **Hole done** advances to the next hole and opens Pick a club (summary after the last hole).
+11. Finish the round for a scorecard. Club averages live on the Averages tab (putter is omitted — scoring / green play only). Stock wedges are **PW · 52° · 56° · 60°**.
 
 Hole **score remains the source of truth**. If you also logged shots and/or penalties, the hole screen and round summary warn when `score ≠ shots + penalty strokes`.
 

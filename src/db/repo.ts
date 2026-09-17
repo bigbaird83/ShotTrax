@@ -8,6 +8,7 @@ import { DEFAULT_BAG, isPutterClubId, typicalCarryForClub } from '../domain/defa
 import { averageWithBadges, type ClubAverage } from '../domain/averages';
 import { isValidLatLng } from '../domain/latLng';
 import { clampPenaltyStrokes, scoreAfterPenalty } from '../domain/penalty';
+import { clampPutts, parsePuttLengths, serializePuttLengths, type PuttLengthId } from '../domain/putts';
 import { includeInDistanceAverages, planNoGpsShot } from '../domain/shotSource';
 import { planUndoLastShot } from '../domain/undoLastShot';
 import type {
@@ -71,6 +72,8 @@ type HoleRow = {
   green_back_lat: number | null;
   green_back_lng: number | null;
   green_depth_yards: number | null;
+  putts: number | null;
+  putt_lengths: string | null;
 };
 
 type ShotRow = {
@@ -165,6 +168,8 @@ function mapHole(row: HoleRow): Hole {
     greenBackLat: row.green_back_lat ?? null,
     greenBackLng: row.green_back_lng ?? null,
     greenDepthYards: row.green_depth_yards ?? null,
+    putts: clampPutts(row.putts ?? 0),
+    puttLengths: parsePuttLengths(row.putt_lengths),
   };
 }
 
@@ -499,6 +504,20 @@ export function updateHolePar(db: SQLiteDatabase, holeId: string, par: number | 
 
 export function updateHoleScore(db: SQLiteDatabase, holeId: string, score: number | null): void {
   db.runSync('UPDATE holes SET score = ? WHERE id = ?', [score, holeId]);
+}
+
+export function updateHolePutts(
+  db: SQLiteDatabase,
+  holeId: string,
+  putts: number,
+  lengths: PuttLengthId[],
+): void {
+  const next = clampPutts(putts);
+  db.runSync('UPDATE holes SET putts = ?, putt_lengths = ? WHERE id = ?', [
+    next,
+    serializePuttLengths(lengths.slice(0, next)),
+    holeId,
+  ]);
 }
 
 /** Green pin from current GPS, a map long-press, or a course centroid. Never invented. */
