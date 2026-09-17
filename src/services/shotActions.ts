@@ -4,10 +4,12 @@ import {
   applyClosedShot,
   getHole,
   getOpenShotForHole,
+  getOpenCoordShotForHole,
   insertNoGpsShot,
   insertOpenShot,
   insertPenalty,
-  insertPlacedShot,
+  insertPlacedOpenShot,
+  applyPlacedClose,
   nextShotSeq,
   sealOpenShotWithoutGps,
   setRoundLastClub,
@@ -20,7 +22,7 @@ import type { ClosedShotPlan, MarkPlan } from '../domain/markShot';
 import { preferWatchFix } from '../domain/preferWatchFix';
 import { isPutterClubId } from '../domain/defaultBag';
 import type { LatLng } from '../domain/latLng';
-import { confirmPlacedShot, planPlacedShot } from '../domain/shotSource';
+import { confirmPlacedMark, planPlacedMark } from '../domain/shotSource';
 import type { GpsFix, OpenShot, PenaltyReason } from '../domain/types';
 import { COPY } from '../domain/playerCopy';
 import { acceptFix, forceMark } from '../sensing/api';
@@ -229,28 +231,43 @@ export function addPlacedShot(
     holeNumber: number;
     clubId: string;
     from: LatLng;
-    to: LatLng;
     force?: boolean;
   },
 ): AddPlacedShotResult {
   if (isPutterClubId(args.clubId)) return { status: 'rejected' };
-  const plan = planPlacedShot(args.from, args.to);
-  if (!plan.ok) return { status: 'rejected' };
-  const gate = confirmPlacedShot(plan, Boolean(args.force));
-  if (gate.status !== 'commit') return gate;
   const hole = getHole(db, args.roundId, args.holeNumber);
   if (!hole) {
     throw new Error(`Hole ${args.holeNumber} not found`);
   }
-  const id = insertPlacedShot(db, {
-    holeId: hole.id,
-    clubId: args.clubId,
-    seq: nextShotSeq(db, hole.id),
-    from: args.from,
-    to: args.to,
+  const open = getOpenCoordShotForHole(db, hole.id);
+  const openStart = open ? { lat: open.startLat, lng: open.startLng } : null;
+  const plan = planPlacedMark(args.from, openStart);
+  if (!plan.ok) return { status: 'rejected' };
+  const gate = confirmPlacedMark(plan, Boolean(args.force));
+  if (gate.status !== 'commit') return gate;
+  let id: string | null = null;
+  db.withTransactionSync(() => {
+    if (open && plan.closePrior) {
+      applyPlacedClose(db, {
+        shotId: open.id,
+        endLat: plan.closePrior.endLat,
+        endLng: plan.closePrior.endLng,
+        distanceYards: plan.closePrior.distanceYards,
+        impossibleJump: plan.closePrior.impossibleJump,
+      });
+    }
+    id = insertPlacedOpenShot(db, {
+      holeId: hole.id,
+      clubId: args.clubId,
+      seq: nextShotSeq(db, hole.id),
+      from: args.from,
+    });
+    if (!id) {
+      throw new Error('Couldn’t place shot');
+    }
+    setRoundLastClub(db, args.roundId, args.clubId);
   });
   if (!id) return { status: 'rejected' };
-  setRoundLastClub(db, args.roundId, args.clubId);
   return { status: 'commit', id };
 }
 

@@ -74,9 +74,10 @@ export type PlacedShotPlan = {
 };
 
 /**
- * Catch-up Add shot: two player map taps. Yards are haversine between those
- * points — never invented GPS, never typed yards, never acceptFix, no
- * soft/good quality.
+ * Catch-up Add shot: one player map tap is the start (where you hit from),
+ * same as a live mark. Repeat: the next tap is the next start and the prior
+ * shot’s end. Yards are haversine between consecutive points — never invented
+ * GPS, never typed yards, never acceptFix, no soft/good quality.
  */
 export function planPlacedShot(from: LatLng, to: LatLng): { ok: false } | ({ ok: true } & PlacedShotPlan) {
   if (!isValidLatLng(from) || !isValidLatLng(to)) return { ok: false };
@@ -100,12 +101,52 @@ export function planPlacedShot(from: LatLng, to: LatLng): { ok: false } | ({ ok:
   };
 }
 
+export type PlacedMarkPlan = {
+  source: 'placed';
+  startLat: number;
+  startLng: number;
+  startAccuracyM: null;
+  startFixQuality: null;
+  typedYards: null;
+  fixQuality: null;
+  closePrior: PlacedShotPlan | null;
+};
+
 /**
- * 400-yard cap: ask before a silent save. Confirming still stores `placed`
- * with no GPS quality — never acceptFix / forceMark / forced.
+ * Live-style catch-up mark: this map point is the new start. If a prior open
+ * shot has a start pin, that shot closes here (haversine). The new shot stays
+ * open until the next point.
+ */
+export function planPlacedMark(
+  from: LatLng,
+  openStart: LatLng | null,
+): { ok: false } | ({ ok: true } & PlacedMarkPlan) {
+  if (!isValidLatLng(from)) return { ok: false };
+  let closePrior: PlacedShotPlan | null = null;
+  if (openStart) {
+    const closed = planPlacedShot(openStart, from);
+    if (!closed.ok) return { ok: false };
+    closePrior = closed;
+  }
+  return {
+    ok: true,
+    source: 'placed',
+    startLat: from.lat,
+    startLng: from.lng,
+    startAccuracyM: null,
+    startFixQuality: null,
+    typedYards: null,
+    fixQuality: null,
+    closePrior,
+  };
+}
+
+/**
+ * 400-yard cap: ask before a silent save when closing the prior shot.
+ * Confirming still stores `placed` with no GPS quality — never acceptFix.
  */
 export function confirmPlacedShot(
-  plan: { ok: true } & PlacedShotPlan,
+  plan: { impossibleJump: boolean; distanceYards: number },
   force: boolean,
 ): { status: 'commit' } | { status: 'needs_confirm'; yards: number } {
   if (plan.impossibleJump && !force) {
@@ -114,12 +155,21 @@ export function confirmPlacedShot(
   return { status: 'commit' };
 }
 
+export function confirmPlacedMark(
+  plan: { ok: true } & PlacedMarkPlan,
+  force: boolean,
+): { status: 'commit' } | { status: 'needs_confirm'; yards: number } {
+  if (!plan.closePrior) return { status: 'commit' };
+  return confirmPlacedShot(plan.closePrior, force);
+}
+
 /**
  * Distance averages and top-3 samples: closed GPS shots with haversine yards,
- * plus catch-up **Placed** shots (player confirmed both map points; no GPS
- * quality). `good` / `soft` / `forced` stay in. Penalties are not shots.
- * `none` / `no_gps` are excluded even if typed yards exist. Putter shots never
- * count — scoring / green play only. No include-typed-yards toggle in MVP.
+ * plus closed catch-up **Placed** shots (player confirmed consecutive map
+ * points; no GPS quality). Open placed shots have no yards yet. `good` /
+ * `soft` / `forced` stay in. Penalties are not shots. `none` / `no_gps` are
+ * excluded even if typed yards exist. Putter shots never count — scoring /
+ * green play only. No include-typed-yards toggle in MVP.
  */
 export function includeInDistanceAverages(shot: {
   source: ShotSource;
