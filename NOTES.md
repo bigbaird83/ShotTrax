@@ -38,3 +38,12 @@ When a key is present (P5 part 2):
 OSM fairway/green overlay is a stub hook in `src/course/osmOverlay.ts` (`fetchOsmOverlay` always returns `null` in part 1).
 
 Client interface: `src/course/types.ts` (`CourseDataClient`).
+
+## Yards to green (sensing)
+
+`yardsToGreen(fix, greenCentroid) → { yards, quality }` in `src/sensing/api.ts`.
+
+- Same haversine + good/soft bands as shot marks
+- No fix or no green → `{ yards: null, quality: 'none' }` (never invents a pin or range)
+- Top-3 `D` uses this yards value **only when `quality !== none`**
+

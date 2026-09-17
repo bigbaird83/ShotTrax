@@ -115,7 +115,7 @@ There is no Watch / motion / mic-shot-detect permission. Those assists are stubb
 - **iOS:** Apple Maps, `mapType="satellite"` (no Google API key).
 - Hole **number comes from the scorecard**, overlaid on the map. OSM fairway polygons are a stub hook (always empty in P5.1).
 - Polylines are **closed GPS shots only** (start→end). Penalties are list rows, not trails. `no_gps` shots have no coordinates and never draw.
-- **Yards to green** is haversine from the current phone GPS to the green pin (user GPS/map estimate or course centroid). Soft GPS (15–25 m) still shows the distance with a **SOFT** badge. When there is no course/green data, the map shows **yards to green — / unavailable** and does **not** invent a pin.
+- **Yards to green** uses the sensing hook `yardsToGreen(fix, greenCentroid) → { yards, quality }`. Same haversine and good (<15 m) / soft (15–25 m) bands as shot marks. No fix or no green pin → `{ yards: null, quality: 'none' }` (never invents a pin or a range). Poor GPS (>25 m) is also `none`, matching `acceptFix`. Soft GPS shows a **SOFT** badge. When quality is `none`, the map shows **yards to green — / unavailable**.
 - Long-press (or **Mark green (GPS)**) drops a **green pin** for yards-to-green. That pin is user-placed unless a course centroid was applied from the API.
 - **Android** satellite tiles typically need a Google Maps API key in the `react-native-maps` config plugin for store/dev binaries. iOS is the target.
 
@@ -160,7 +160,7 @@ Use this when you swung but have no GPS fix (or forgot to mark).
 
 After a club has **≥5** closed **GPS** shots with yards (soft and forced included, same as averages; `no_gps` / `fixQuality none` excluded):
 
-- **D** = yards-to-green if this hole has a green pin (course centroid or user estimate) and a current GPS fix — the same number shown on the hole map
+- **D** = `yardsToGreen(fix, greenCentroid).yards` **only when `quality !== none`** (good or soft GPS + a real green centroid)
 - else **D** = last closed **GPS** shot distance on this hole
 - else full bag (no ranking)
 
@@ -168,7 +168,7 @@ The 3 eligible clubs with the lowest `|avgYards − D|` are surfaced. Ties prefe
 
 ## Sensing gates (locked, unchanged from P1)
 
-Defined in `src/config/sensing.ts`. Mark path is `getFix` → `acceptFix`, then `forceMark` after UI confirm (`src/sensing/api.ts`).
+Defined in `src/config/sensing.ts`. Mark path is `getFix` → `acceptFix`, then `forceMark` after UI confirm (`src/sensing/api.ts`). P5 ranging hook is `yardsToGreen(fix, greenCentroid)` (same good/soft bands; `quality: 'none'` and no number when there is no usable fix or green).
 
 | Gate | Value | Behavior |
 | --- | --- | --- |

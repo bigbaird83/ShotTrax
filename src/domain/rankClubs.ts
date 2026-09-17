@@ -1,5 +1,4 @@
-import type { Club } from './types';
-import { measureYardsToGreen } from './yardsToGreen';
+import type { Club, ShotFixQuality } from './types';
 
 /** A club is rankable only after this many closed shots with yards. */
 export const MIN_CLOSED_SHOTS_FOR_RANK = 5;
@@ -39,20 +38,22 @@ export function clubToRankInput(
 
 /**
  * D for top-3 ranking:
- * 1. yards-to-green if we have a green pin/estimate and a current GPS
+ * 1. yards-to-green from `yardsToGreen(fix, greenCentroid)` only when `quality !== none`
  * 2. else last closed shot distance on this hole
  * 3. else null → caller shows the full bag
  */
 export function resolveDistanceTarget(args: {
-  from: { lat: number; lng: number } | null;
-  green: { lat: number; lng: number } | null;
+  toGreen: { yards: number | null; quality: ShotFixQuality };
   lastClosedYards: number | null;
 }): DistanceTarget | null {
-  const toGreen = measureYardsToGreen({ from: args.from, green: args.green });
-  if (toGreen.available) {
+  if (
+    args.toGreen.quality !== 'none' &&
+    args.toGreen.yards != null &&
+    Number.isFinite(args.toGreen.yards)
+  ) {
     return {
       source: 'yards_to_green',
-      dYards: toGreen.yards,
+      dYards: args.toGreen.yards,
     };
   }
   if (args.lastClosedYards != null && Number.isFinite(args.lastClosedYards)) {

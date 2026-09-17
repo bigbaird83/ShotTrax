@@ -1,23 +1,27 @@
 import { StyleSheet, Text, View } from 'react-native';
-import type { YardsToGreen } from '@/src/domain/yardsToGreen';
+import type { YardsToGreenResult } from '@/src/sensing/yardsToGreen';
 import { yardsToGreenLabel } from '@/src/domain/yardsToGreen';
 import { QualityBadge } from './Badge';
 import { colors } from './theme';
 
 export function YardsToGreenBadge({
   result,
+  hasFix,
+  hasGreen,
   compact = false,
 }: {
-  result: YardsToGreen;
+  result: YardsToGreenResult;
+  hasFix?: boolean;
+  hasGreen?: boolean;
   compact?: boolean;
 }) {
-  const copy = yardsToGreenLabel(result);
+  const copy = yardsToGreenLabel(result, { hasFix, hasGreen });
   return (
     <View style={[styles.wrap, compact && styles.compact]} accessibilityLabel={`${copy.heading} ${copy.value}`}>
       <Text style={styles.heading}>{copy.heading}</Text>
       <View style={styles.valueRow}>
         <Text style={styles.value}>{copy.value}</Text>
-        {result.available && result.accuracyClass === 'soft' ? <QualityBadge quality="soft" /> : null}
+        {result.quality === 'soft' ? <QualityBadge quality="soft" /> : null}
       </View>
       <Text style={styles.detail}>{copy.detail}</Text>
     </View>

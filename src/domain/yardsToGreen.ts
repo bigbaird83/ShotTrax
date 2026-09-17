@@ -1,26 +1,9 @@
-import { classifyAccuracyM, type AccuracyClass } from './fixQuality';
-import { haversineYards, roundYards } from './haversine';
+import type { ShotFixQuality } from './types';
 import { isValidLatLng, type LatLng } from './latLng';
 
 export type GreenPinSource = 'user_estimate' | 'course_centroid';
 
 export type GreenPin = LatLng & { source: GreenPinSource };
-
-export type YardsToGreenUnavailable = {
-  available: false;
-  yards: null;
-  accuracyClass: null;
-  reason: 'no_green' | 'no_gps';
-};
-
-export type YardsToGreenAvailable = {
-  available: true;
-  yards: number;
-  accuracyClass: AccuracyClass;
-  reason: null;
-};
-
-export type YardsToGreen = YardsToGreenUnavailable | YardsToGreenAvailable;
 
 /**
  * Prefer a user-dropped/GPS estimate over a course centroid. Never invent.
@@ -39,54 +22,26 @@ export function resolveGreenPin(args: {
   return null;
 }
 
-/**
- * Haversine phone GPS → green pin. Soft GPS (15–25 m) still yields a distance
- * and is classified `soft` for the badge — same accuracy window as marks.
- * Does not invent a green pin or apply MAX_SHOT_YD (remaining distance is not a shot).
- */
-export function measureYardsToGreen(args: {
-  from: LatLng | null;
-  green: LatLng | null;
-  accuracyM?: number | null;
-}): YardsToGreen {
-  if (!isValidLatLng(args.green)) {
-    return { available: false, yards: null, accuracyClass: null, reason: 'no_green' };
-  }
-  if (!isValidLatLng(args.from)) {
-    return { available: false, yards: null, accuracyClass: null, reason: 'no_gps' };
-  }
-  return {
-    available: true,
-    yards: roundYards(haversineYards(args.from, args.green)),
-    accuracyClass: classifyAccuracyM(args.accuracyM),
-    reason: null,
-  };
-}
-
-export function yardsToGreenLabel(result: YardsToGreen): {
+/** Copy for `yardsToGreen(fix, greenCentroid) → { yards, quality }`. */
+export function yardsToGreenLabel(
+  result: { yards: number | null; quality: ShotFixQuality },
+  ctx: { hasFix?: boolean; hasGreen?: boolean } = {},
+): {
   heading: string;
   value: string;
   detail: string;
 } {
-  if (!result.available) {
+  const heading = 'yards to green';
+  if (result.quality !== 'none' && result.yards != null) {
     return {
-      heading: 'yards to green',
-      value: '—',
-      detail:
-        result.reason === 'no_green'
-          ? 'unavailable — no course or green pin yet'
-          : 'unavailable — waiting for GPS',
+      heading,
+      value: `${result.yards} yd`,
+      detail: result.quality === 'soft' ? 'SOFT GPS 15–25 m' : 'to green pin',
     };
   }
-  const detail =
-    result.accuracyClass === 'soft'
-      ? 'SOFT GPS 15–25 m'
-      : result.accuracyClass === 'poor'
-        ? 'weak GPS (>25 m or unknown)'
-        : 'to green pin';
-  return {
-    heading: 'yards to green',
-    value: `${result.yards} yd`,
-    detail,
-  };
+  let detail = 'unavailable';
+  if (!ctx.hasGreen) detail = 'unavailable — no course or green pin yet';
+  else if (!ctx.hasFix) detail = 'unavailable — waiting for GPS';
+  else detail = 'unavailable — GPS not in good/soft window';
+  return { heading, value: '—', detail };
 }

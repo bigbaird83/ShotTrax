@@ -7,7 +7,7 @@ import { clubToRankInput, lastClosedShotYards, rankTopClubs, resolveDistanceTarg
 import { parseTypedYards } from '@/src/domain/shotSource';
 import { matchSpokenClub, speechContextualStrings } from '@/src/domain/voiceClub';
 import type { Club, GpsFix } from '@/src/domain/types';
-import { measureYardsToGreen } from '@/src/domain/yardsToGreen';
+import { yardsToGreen } from '@/src/sensing/api';
 import { speechRecognitionAvailable, startClubSpeech, type ClubSpeechSession } from '@/src/services/speechClub';
 import { getCurrentFix } from '@/src/services/location';
 import { addNoGpsShot, markShotWithClub, promptForPlan } from '@/src/services/shotActions';
@@ -71,14 +71,9 @@ export default function ClubPickScreen() {
     holeRow?.greenLat != null && holeRow.greenLng != null
       ? { lat: holeRow.greenLat, lng: holeRow.greenLng }
       : null;
-  const toGreen = measureYardsToGreen({
-    from: fix,
-    green,
-    accuracyM: fix?.accuracyM,
-  });
+  const toGreen = yardsToGreen(withoutGps ? null : fix, green);
   const target = resolveDistanceTarget({
-    from: fix,
-    green,
+    toGreen,
     lastClosedYards: lastClosedShotYards(shots),
   });
   const ranked = rankTopClubs(
@@ -172,7 +167,7 @@ export default function ClubPickScreen() {
   const targetLabel = !target
     ? 'No green pin and no closed shot on this hole yet — full bag.'
     : target.source === 'yards_to_green'
-      ? `${target.dYards} yd to green${toGreen.available && toGreen.accuracyClass === 'soft' ? ' · SOFT GPS' : ''}`
+      ? `${target.dYards} yd to green${toGreen.quality === 'soft' ? ' · SOFT GPS' : ''}`
       : `Last closed shot ${target.dYards} yd`;
 
   return (

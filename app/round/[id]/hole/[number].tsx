@@ -26,8 +26,8 @@ import {
   totalPenaltyStrokes,
 } from '@/src/domain/penalty';
 import { reconcileHoleScore, scoreMismatchMessage } from '@/src/domain/scoreReconcile';
-import { measureYardsToGreen } from '@/src/domain/yardsToGreen';
 import { MIC_SHOT_ASSIST, WATCH_ASSIST } from '@/src/sensing/assists';
+import { yardsToGreen } from '@/src/sensing/api';
 import { getCurrentFix } from '@/src/services/location';
 import { endOpenShot, promptForPlan } from '@/src/services/shotActions';
 import { QualityBadge } from '@/src/ui/Badge';
@@ -165,11 +165,7 @@ export default function HoleScreen() {
     hole.greenLat != null && hole.greenLng != null
       ? { lat: hole.greenLat, lng: hole.greenLng }
       : null;
-  const yardsToGreen = measureYardsToGreen({
-    from: fix,
-    green,
-    accuracyM: fix?.accuracyM,
-  });
+  const yardsToGreenResult = yardsToGreen(fix, green);
 
   const onMarkGreen = async () => {
     if (readOnly) return;
@@ -201,7 +197,7 @@ export default function HoleScreen() {
         shots={shots}
         userFix={fix}
         green={green}
-        yardsToGreen={yardsToGreen}
+        yardsToGreen={yardsToGreenResult}
         osmOverlay={osmOverlay}
         onDropGreenEstimate={
           readOnly
@@ -214,7 +210,11 @@ export default function HoleScreen() {
       />
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollBody} keyboardShouldPersistTaps="handled">
-      <YardsToGreenBadge result={yardsToGreen} />
+      <YardsToGreenBadge
+        result={yardsToGreenResult}
+        hasFix={Boolean(fix)}
+        hasGreen={Boolean(green)}
+      />
       {green ? (
         <Text style={styles.tiny}>
           Green pin: {hole.greenSource === 'course_centroid' ? 'course centroid' : 'user estimate'} — not
