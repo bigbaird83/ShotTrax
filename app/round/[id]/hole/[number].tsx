@@ -2,6 +2,8 @@ import * as Device from 'expo-device';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { getCourseDataClient } from '@/src/course/client';
+import type { OsmOverlay } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
 import {
   finishRound,
@@ -25,6 +27,7 @@ import {
 } from '@/src/domain/penalty';
 import { reconcileHoleScore, scoreMismatchMessage } from '@/src/domain/scoreReconcile';
 import { MIC_SHOT_ASSIST, WATCH_ASSIST } from '@/src/sensing/assists';
+import { yardsToGreen } from '@/src/sensing/api';
 import { getCurrentFix } from '@/src/services/location';
 import { endOpenShot, promptForPlan } from '@/src/services/shotActions';
 import { QualityBadge } from '@/src/ui/Badge';
@@ -32,6 +35,7 @@ import { BigButton } from '@/src/ui/BigButton';
 import { GpsBanner } from '@/src/ui/GpsBanner';
 import { HoleMap } from '@/src/ui/HoleMap';
 import { Screen } from '@/src/ui/Screen';
+import { YardsToGreenBadge } from '@/src/ui/YardsToGreenBadge';
 import { colors } from '@/src/ui/theme';
 
 export default function HoleScreen() {
@@ -46,6 +50,7 @@ export default function HoleScreen() {
   const [penaltyStrokes, setPenaltyStrokes] = useState(1);
   const [penaltyReason, setPenaltyReason] = useState<PenaltyReason>('water');
   const [penaltyNote, setPenaltyNote] = useState('');
+  const [osmOverlay, setOsmOverlay] = useState<OsmOverlay | null>(null);
 
   const round = useMemo(() => getRound(db, id), [db, id, revision]);
   const hole = useMemo(() => getHole(db, id, holeNumber), [db, id, holeNumber, revision]);
@@ -88,6 +93,25 @@ export default function HoleScreen() {
       live = false;
     };
   }, [revision]);
+
+  useEffect(() => {
+    if (!round?.courseApiId) {
+      setOsmOverlay(null);
+      return;
+    }
+    let live = true;
+    void getCourseDataClient()
+      .fetchOsmOverlay(round.courseApiId)
+      .then((overlay) => {
+        if (live) setOsmOverlay(overlay);
+      })
+      .catch(() => {
+        if (live) setOsmOverlay(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [round?.courseApiId]);
 
   if (!round || !hole) {
     return (
@@ -141,13 +165,14 @@ export default function HoleScreen() {
     hole.greenLat != null && hole.greenLng != null
       ? { lat: hole.greenLat, lng: hole.greenLng }
       : null;
+  const yardsToGreenResult = yardsToGreen(fix, green);
 
   const onMarkGreen = async () => {
     if (readOnly) return;
     setBusy(true);
     try {
       const next = await getCurrentFix();
-      setHoleGreen(db, hole.id, { lat: next.lat, lng: next.lng });
+      setHoleGreen(db, hole.id, { lat: next.lat, lng: next.lng, source: 'user_estimate' });
       bump();
     } catch (err) {
       Alert.alert('Could not mark green', err instanceof Error ? err.message : 'Unknown error');
@@ -172,17 +197,35 @@ export default function HoleScreen() {
         shots={shots}
         userFix={fix}
         green={green}
+        yardsToGreen={yardsToGreenResult}
+        osmOverlay={osmOverlay}
         onDropGreenEstimate={
           readOnly
             ? undefined
             : (coord) => {
-                setHoleGreen(db, hole.id, coord);
+                setHoleGreen(db, hole.id, { ...coord, source: 'user_estimate' });
                 bump();
               }
         }
       />
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollBody} keyboardShouldPersistTaps="handled">
+      <YardsToGreenBadge
+        result={yardsToGreenResult}
+        hasFix={Boolean(fix)}
+        hasGreen={Boolean(green)}
+      />
+      {green ? (
+        <Text style={styles.tiny}>
+          Green pin: {hole.greenSource === 'course_centroid' ? 'course centroid' : 'user estimate'} — not
+          invented. Soft GPS (15–25 m) shows a SOFT badge on yards to green.
+        </Text>
+      ) : (
+        <Text style={styles.tiny}>
+          No course or green pin yet. Long-press the map or Mark green (GPS). ShotTrax will not invent
+          coordinates.
+        </Text>
+      )}
       <Text style={styles.label}>Par</Text>
       <View style={styles.row}>
         {[3, 4, 5].map((par) => (

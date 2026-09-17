@@ -34,25 +34,45 @@ test('MIN_CLOSED_SHOTS_FOR_RANK is 5', () => {
   assert.equal(MIN_CLOSED_SHOTS_FOR_RANK, 5);
 });
 
+test('invalid 0,0 / quality none green is not D — ranking falls back instead of inventing a pin', () => {
+  const target = resolveDistanceTarget({
+    toGreen: { yards: null, quality: 'none' },
+    lastClosedYards: 140,
+  });
+  assert.deepEqual(target, { source: 'last_closed_shot', dYards: 140 });
+});
+
 test('no D (no green, no last closed shot) falls back to empty ranking / full bag', () => {
-  const target = resolveDistanceTarget({ from: null, green: null, lastClosedYards: null });
+  const target = resolveDistanceTarget({
+    toGreen: { yards: null, quality: 'none' },
+    lastClosedYards: null,
+  });
   assert.equal(target, null);
   assert.deepEqual(rankTopClubs(bag, target), []);
 });
 
-test('yards-to-green wins over last closed shot when both exist', () => {
+test('yards-to-green wins over last closed shot only when quality !== none', () => {
   const from = { lat: 37.0, lng: -122.0 };
   const green = { lat: 37.0 + 150 / 111_320, lng: -122.0 };
-  const target = resolveDistanceTarget({ from, green, lastClosedYards: 260 });
+  const dYards = roundYards(haversineYards(from, green));
+  const target = resolveDistanceTarget({
+    toGreen: { yards: dYards, quality: 'good' },
+    lastClosedYards: 260,
+  });
   assert.ok(target);
   assert.equal(target?.source, 'yards_to_green');
-  assert.equal(target?.dYards, roundYards(haversineYards(from, green)));
+  assert.equal(target?.dYards, dYards);
+
+  const skipped = resolveDistanceTarget({
+    toGreen: { yards: dYards, quality: 'none' },
+    lastClosedYards: 260,
+  });
+  assert.deepEqual(skipped, { source: 'last_closed_shot', dYards: 260 });
 });
 
 test('last closed shot on the hole is D when there is no green pin', () => {
   const target = resolveDistanceTarget({
-    from: { lat: 1, lng: 1 },
-    green: null,
+    toGreen: { yards: null, quality: 'none' },
     lastClosedYards: 148,
   });
   assert.deepEqual(target, { source: 'last_closed_shot', dYards: 148 });

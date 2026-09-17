@@ -1,8 +1,10 @@
 # ShotTrax
 
-Phone GPS golf shot tracker (no club sensors). **This branch is P3** on top of P1 (GPS mark-shot, scores, club averages) and P2 (hole map trails, voice club pick, top-3 ranking).
+Phone GPS golf shot tracker (no club sensors). **This branch is P5 part 1** on top of P1–P3 (GPS mark-shot, scores, club averages, hole map trails, voice club pick, top-3, penalties, no-GPS shots).
 
-P3 adds **+ Penalty** on the hole screen and **Add shot without GPS** (forgotten swing). Watch motion and mic shot-detect assists stay **out of scope** (stubs only).
+P5.1 adds a short **ShotTraxx** branded splash and **yards to green** on the hole map (haversine phone GPS → green pin). A Golf Courses API client is stubbed for nearby courses / par / green centroid; the picker stays disabled until `EXPO_PUBLIC_GOLF_COURSES_API_KEY` (or `expo.extra.golfCoursesApiKey`) is set. Watch motion, Plays Like, F/M/B pins, auto-detect, and Stracka scrape stay **out of scope**.
+
+The splash brand mark is **ShotTraxx**. The app/package name remains ShotTrax.
 
 ## Run (iOS first)
 
@@ -26,6 +28,20 @@ npx expo run:ios
 or an EAS development build (`eas build -p ios --profile development`). Tap targets remain if speech is unavailable.
 
 To install a store-signed build with voice on a physical iPhone, use **TestFlight** below (Expo Go is not enough).
+
+## Splash
+
+Cold start shows the native Expo splash, then a short JS branded open (**ShotTraxx**, under ~2s). It is not a video.
+
+## Golf Courses API (course picker)
+
+Nearby course search, hole par, and green centroids are behind [Golf Courses API](https://golfcoursesapi.com/). See `NOTES.md` and `.env.example`.
+
+```bash
+EXPO_PUBLIC_GOLF_COURSES_API_KEY=your_key_here
+```
+
+Or set `expo.extra.golfCoursesApiKey` (EAS). **Never commit a key.** Without a key the nearby picker is disabled; you can still type a course name and drop a green pin. Missing API par/green stay blank — ShotTrax does not invent them. OSM overlay is a no-op hook until part 2.
 
 ## Install on your iPhone (TestFlight)
 
@@ -97,9 +113,10 @@ There is no Watch / motion / mic-shot-detect permission. Those assists are stubb
 ## Maps (`react-native-maps`)
 
 - **iOS:** Apple Maps, `mapType="satellite"` (no Google API key).
-- Hole **number comes from the scorecard**, overlaid on the map. There are **no** licensed course polygons or OSM fairways.
+- Hole **number comes from the scorecard**, overlaid on the map. OSM fairway polygons are a stub hook (always empty in P5.1).
 - Polylines are **closed GPS shots only** (start→end). Penalties are list rows, not trails. `no_gps` shots have no coordinates and never draw.
-- Long-press (or **Mark green (GPS)**) drops a **green estimate** for yards-to-green ranking. That pin is user-placed, not a course database.
+- **Yards to green** uses the sensing hook `yardsToGreen(fix, greenCentroid) → { yards, quality }`. Same haversine and good (<15 m) / soft (15–25 m) bands as shot marks. No fix or no green pin → `{ yards: null, quality: 'none' }` (never invents a pin or a range). Poor GPS (>25 m) is also `none`, matching `acceptFix`. Soft GPS shows a **SOFT** badge. When quality is `none`, the map shows **yards to green — / unavailable**.
+- Long-press (or **Mark green (GPS)**) drops a **green pin** for yards-to-green. That pin is user-placed unless a course centroid was applied from the API.
 - **Android** satellite tiles typically need a Google Maps API key in the `react-native-maps` config plugin for store/dev binaries. iOS is the target.
 
 ## On-course flow
@@ -143,7 +160,7 @@ Use this when you swung but have no GPS fix (or forgot to mark).
 
 After a club has **≥5** closed **GPS** shots with yards (soft and forced included, same as averages; `no_gps` / `fixQuality none` excluded):
 
-- **D** = yards-to-green if this hole has a green estimate and a current GPS fix
+- **D** = `yardsToGreen(fix, greenCentroid).yards` **only when `quality !== none`** (good or soft GPS + a real green centroid)
 - else **D** = last closed **GPS** shot distance on this hole
 - else full bag (no ranking)
 
@@ -151,7 +168,7 @@ The 3 eligible clubs with the lowest `|avgYards − D|` are surfaced. Ties prefe
 
 ## Sensing gates (locked, unchanged from P1)
 
-Defined in `src/config/sensing.ts`. Mark path is `getFix` → `acceptFix`, then `forceMark` after UI confirm (`src/sensing/api.ts`).
+Defined in `src/config/sensing.ts`. Mark path is `getFix` → `acceptFix`, then `forceMark` after UI confirm (`src/sensing/api.ts`). P5 ranging hook is `yardsToGreen(fix, greenCentroid)` (same good/soft bands; `quality: 'none'` and no number when there is no usable fix or green).
 
 | Gate | Value | Behavior |
 | --- | --- | --- |
@@ -175,14 +192,15 @@ ShotTrax **does not synthesize a fairway or fake points**.
 
 ## Limitations
 
-- No licensed course polygons / OSM fairways.
-- No Watch motion or mic-based shot detect (stubs only).
+- No licensed course polygons / OSM fairways (overlay hook is stubbed).
+- No Watch motion, Plays Like, F/M/B pins, auto-detect, or mic-based shot detect (stubs only).
 - Local SQLite only (no account / cloud).
 - iOS is the target; Android location is wired but maps may need a Google key.
+- Nearby course picker requires a Golf Courses API key (see `NOTES.md`).
 
 ## Tests
 
 ```bash
-npm test          # domain tests + sensing smoke, including penalties, no-gps exclusion, top-3, voice
+npm test          # domain tests + sensing smoke + course client, including yards-to-green, penalties, no-gps exclusion, top-3, voice
 npm run typecheck
 ```

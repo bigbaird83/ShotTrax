@@ -148,6 +148,8 @@ export function migrate(db: SQLiteDatabase): void {
 
   ensureColumn(db, 'holes', 'green_lat', 'REAL');
   ensureColumn(db, 'holes', 'green_lng', 'REAL');
+  ensureColumn(db, 'holes', 'green_source', 'TEXT');
+  ensureColumn(db, 'rounds', 'course_api_id', 'TEXT');
   migrateShotsP3(db);
   ensureColumn(db, 'shots', 'source', "TEXT NOT NULL DEFAULT 'gps'");
   ensureColumn(db, 'shots', 'typed_yards', 'INTEGER');

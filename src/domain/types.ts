@@ -32,7 +32,11 @@ export type Round = {
   finishedAt: string | null;
   courseName: string | null;
   holeCount: number;
+  /** Golf Courses API id when a course was picked. Null if unnamed / typed. */
+  courseApiId: string | null;
 };
+
+export type GreenSource = 'user_estimate' | 'course_centroid';
 
 export type Hole = {
   id: string;
@@ -40,9 +44,10 @@ export type Hole = {
   number: number;
   par: number;
   score: number | null;
-  /** User GPS or map-dropped green estimate — not a licensed pin. */
+  /** User GPS/map pin or course centroid — never invented. */
   greenLat: number | null;
   greenLng: number | null;
+  greenSource: GreenSource | null;
 };
 
 export type Shot = {
