@@ -29,12 +29,28 @@ test('sticky club skips a club that was turned off', () => {
   assert.equal(sticky?.id, 'club_8i');
 });
 
-test('voice maps to a bag club without inventing a match', () => {
+test('voice selects a club for the next Mark and does not imply a commit', () => {
   const clubs = bag();
   const heard = matchSpokenClub('seven iron', clubs);
   const selected = selectClubForMark(heard, clubs);
   assert.equal(selected?.id, 'club_7i');
   assert.equal(selectClubForMark(null, clubs), null);
+});
+
+test('sticky after a Mark is that club, so the next Mark needs no club pick', () => {
+  const clubs = bag();
+  const afterMark = resolveStickyClub({
+    enabledClubs: clubs,
+    roundLastClubId: 'club_8i',
+    lastShotClubId: 'club_8i',
+  });
+  assert.equal(afterMark?.id, 'club_8i');
+  const nextHole = resolveStickyClub({
+    enabledClubs: clubs,
+    roundLastClubId: 'club_8i',
+    lastShotClubId: null,
+  });
+  assert.equal(nextHole?.id, 'club_8i');
 });
 
 test('default sticky is the first enabled club when nothing has been marked', () => {

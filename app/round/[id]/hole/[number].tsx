@@ -19,6 +19,7 @@ import {
   listPenaltiesForHole,
   listShotsForHole,
   setHoleGreen,
+  setRoundLastClub,
   updateHolePar,
   updateHoleScore,
 } from '@/src/db/repo';
@@ -241,6 +242,14 @@ export default function HoleScreen() {
     Device.isDevice === false || fix?.mocked ? COPY.simulator : describeGpsSource(fix ?? { mocked: false, isSimulator: false });
   const voiceReady = speechRecognitionAvailable();
 
+  const selectClub = (club: Club) => {
+    const next = selectClubForMark(club, clubs);
+    if (!next || readOnly) return;
+    hapticSelect();
+    setRoundLastClub(db, id, next.id);
+    bump();
+  };
+
   const markClub = async (club: Club | null, force = false) => {
     const next = club ? selectClubForMark(club, clubs) : null;
     if (readOnly) return;
@@ -349,7 +358,7 @@ export default function HoleScreen() {
     const matched = matchSpokenClub(text, clubs);
     if (matched) {
       setVoiceError(null);
-      void markClub(matched);
+      selectClub(matched);
       if (isFinal) {
         sessionRef.current?.stop();
         sessionRef.current = null;
@@ -455,7 +464,7 @@ export default function HoleScreen() {
               key={club.id}
               onPress={() => {
                 const full = clubs.find((row) => row.id === club.id);
-                if (full) void markClub(full);
+                if (full) selectClub(full);
               }}
               style={[
                 styles.top3Chip,
@@ -486,7 +495,7 @@ export default function HoleScreen() {
 
         <View style={styles.markWrap}>
           <BigButton
-            label={sticky ? `${COPY.stickyClub} · ${sticky.shortName}` : COPY.stickyClub}
+            label={sticky ? `${COPY.mark} · ${sticky.shortName}` : COPY.mark}
             disabled={busy || readOnly || !sticky}
             onPress={() => void onMark()}
           />
