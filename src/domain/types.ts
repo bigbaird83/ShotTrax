@@ -71,7 +71,7 @@ export type Shot = {
   holeId: string;
   clubId: string | null;
   seq: number;
-  /** Null on `no_gps` shots — ShotTrax does not invent coordinates. */
+  /** Null on `no_gps` shots — ShotTraxx does not invent coordinates. */
   startLat: number | null;
   startLng: number | null;
   startAccuracyM: number | null;
