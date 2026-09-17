@@ -126,7 +126,7 @@ Companion via `@bacons/apple-targets` (`targets/watch`, bundle `com.shottrax.app
 
 - Watch Connectivity only two types this cut:
   - Phone → Watch `clubList`: `{ type, top3, bag, labels, holeNumber, yardsToGreen, yardsQuality }` pushed on hole change / fix quality change / bag rank change (ranking stays on phone). `yardsToGreen` is `yardsToGreen().yards` (`null` when quality is none). `yardsQuality` is `good | soft | none` — same bands as the phone, never invent.
-  - Watch → Phone `clubPick`: `{ type, clubId, at: ISO8601 }` plus optional Watch GPS (`lat`, `lng`, `accuracyM`) when the sample is ≤3 s old and accuracy > 0. Phone prefers that fix when it is at least as accurate as the phone; otherwise phone GPS. Same `acceptFix` bands. Soft → Approximate. Quality none → phone Waiting / Mark anyway / no-GPS. Watch never silent-forces.
+  - Watch → Phone `clubPick`: `{ type, clubId, at: ISO8601 }` plus optional Watch GPS (`lat`, `lng`, `accuracyM`) when the sample is ≤3 s old and accuracy > 0. Stretch prefer lock: `preferWatch = watchFix && ageSec <= 3 && watch.accuracyM > 0 && (phoneFix == null || watch.accuracyM <= phone.accuracyM)`; `markFix = preferWatch ? watchFix : phoneFix`. Then same `acceptFix` bands. Soft → Approximate. Quality none → wait / Mark anyway. Never invent / silent fail.
 - Watch status: **Hole N · XXX yd** (same yardsToGreen as phone); **—** when quality is none; tiny **SOFT** chip when soft.
 - **Same club** is the big 1-tap mark on the wrist. Haptic on a successful mark (phone + Watch).
 - Watch feedback is **`7i marked ✓`** or **`Phone unavailable`** — never a silent fail.

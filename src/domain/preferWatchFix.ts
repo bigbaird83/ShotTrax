@@ -1,12 +1,19 @@
 import type { GpsFix } from './types';
 
-const WATCH_FIX_MAX_AGE_SEC = 3;
+/** Signal Lab lock. Stretch only. */
+export const WATCH_FIX_MAX_AGE_SEC = 3;
 
 /**
  * Stretch: prefer a Watch GPS fix when it is fresh and at least as accurate as the phone.
- * `preferWatch = watchFix && ageSec <= 3 && watch.accuracyM > 0
- *   && (phoneFix == null || watch.accuracyM <= phone.accuracyM)`
- * Never invents a coordinate. Caller still runs acceptFix bands.
+ *
+ * preferWatch = watchFix
+ *   && ageSec <= 3
+ *   && watch.accuracyM > 0
+ *   && (phoneFix == null || watch.accuracyM <= phone.accuracyM)
+ * markFix = preferWatch ? watchFix : phoneFix
+ *
+ * Never invents a coordinate. Caller still runs acceptFix bands
+ * (soft → Approximate; none → wait / Mark anyway).
  */
 export function preferWatchFix(args: {
   watchFix: GpsFix | null;
@@ -14,21 +21,17 @@ export function preferWatchFix(args: {
   nowMs?: number;
 }): { fix: GpsFix | null; usedWatch: boolean } {
   const now = args.nowMs ?? Date.now();
-  const watch = args.watchFix;
-  const phone = args.phoneFix;
-  const ageSec = watch ? (now - watch.timestamp) / 1000 : Number.POSITIVE_INFINITY;
-  const preferWatch =
-    watch != null &&
-    Number.isFinite(ageSec) &&
-    ageSec <= WATCH_FIX_MAX_AGE_SEC &&
-    watch.accuracyM != null &&
-    watch.accuracyM > 0 &&
-    (phone == null ||
-      (phone.accuracyM != null && watch.accuracyM <= phone.accuracyM));
-  if (preferWatch && watch) {
-    return { fix: watch, usedWatch: true };
-  }
-  return { fix: phone, usedWatch: false };
+  const watchFix = args.watchFix;
+  const phoneFix = args.phoneFix;
+  const ageSec = watchFix != null ? (now - watchFix.timestamp) / 1000 : Number.POSITIVE_INFINITY;
+  const preferWatch = Boolean(
+    watchFix &&
+      ageSec <= WATCH_FIX_MAX_AGE_SEC &&
+      Number(watchFix.accuracyM) > 0 &&
+      (phoneFix == null || Number(watchFix.accuracyM) <= Number(phoneFix.accuracyM)),
+  );
+  const markFix = preferWatch ? watchFix : phoneFix;
+  return { fix: markFix, usedWatch: preferWatch };
 }
 
 export function watchFixFromPick(pick: {
