@@ -23,7 +23,8 @@ export function preferWatchFix(args: {
     ageSec <= WATCH_FIX_MAX_AGE_SEC &&
     watch.accuracyM != null &&
     watch.accuracyM > 0 &&
-    (phone == null || phone.accuracyM == null || watch.accuracyM <= phone.accuracyM);
+    (phone == null ||
+      (phone.accuracyM != null && watch.accuracyM <= phone.accuracyM));
   if (preferWatch && watch) {
     return { fix: watch, usedWatch: true };
   }

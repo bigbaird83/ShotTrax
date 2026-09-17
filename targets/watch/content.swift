@@ -28,7 +28,8 @@ struct ContentView: View {
 
         Button(action: { session.pickSameClub() }) {
           Text(sameClubTitle)
-            .frame(maxWidth: .infinity)
+            .font(.headline.weight(.black))
+            .frame(maxWidth: .infinity, minHeight: 44)
         }
         .buttonStyle(.borderedProminent)
         .tint(Color("accent"))

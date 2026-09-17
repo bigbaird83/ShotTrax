@@ -58,12 +58,24 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   func pick(clubId: String) {
     sending = true
     feedback = ""
-    let payload: [String: Any] = [
+    var payload: [String: Any] = [
       "type": "clubPick",
       "clubId": clubId,
       "at": isoNow(),
     ]
+    attachWatchFix(&payload)
     sendPick(payload)
+  }
+
+  /// Stretch: attach Watch GPS only when the sample is fresh and accurate. Never invent.
+  private func attachWatchFix(_ payload: inout [String: Any]) {
+    guard let loc = lastFix else { return }
+    let age = Date().timeIntervalSince(loc.timestamp)
+    let acc = loc.horizontalAccuracy
+    guard age <= 3, acc > 0, CLLocationCoordinate2DIsValid(loc.coordinate) else { return }
+    payload["lat"] = loc.coordinate.latitude
+    payload["lng"] = loc.coordinate.longitude
+    payload["accuracyM"] = acc
   }
 
   func pickSameClub() {
@@ -107,7 +119,12 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   private func handleReply(_ reply: [String: Any], fallbackClubId: String?) {
     sending = false
     let ok = reply["ok"] as? Bool ?? false
-    let text = reply["feedback"] as? String ?? (ok ? "marked ✓" : "Phone unavailable")
+    let text: String
+    if ok {
+      text = reply["feedback"] as? String ?? "marked ✓"
+    } else {
+      text = "Phone unavailable"
+    }
     feedback = text
     haptic(ok ? .success : .failure)
     if ok, let clubId = fallbackClubId {

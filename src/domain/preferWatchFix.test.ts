@@ -45,6 +45,14 @@ test('rejects Watch accuracy of 0 and uses phone', () => {
   assert.equal(result.fix, phone);
 });
 
+test('falls back to phone when phone accuracy is unknown', () => {
+  const watch = fix({ lat: 1, lng: 2, accuracyM: 4, timestamp: 1_000_000 });
+  const phone = fix({ lat: 3, lng: 4, accuracyM: null, timestamp: 1_000_000 });
+  const result = preferWatchFix({ watchFix: watch, phoneFix: phone, nowMs: 1_001_000 });
+  assert.equal(result.usedWatch, false);
+  assert.equal(result.fix, phone);
+});
+
 test('uses Watch when phone fix is missing', () => {
   const watch = fix({ lat: 1, lng: 2, accuracyM: 6, timestamp: 1_000_000 });
   const result = preferWatchFix({ watchFix: watch, phoneFix: null, nowMs: 1_001_000 });

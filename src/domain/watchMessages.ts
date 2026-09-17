@@ -1,5 +1,6 @@
 /** Watch Connectivity club-pick messages. Only two types this cut: clubList and clubPick.
- * Phone owns GPS, undo, averages, Drop/Penalty. Ranking/seeds/avgs stay on phone.
+ * Phone owns undo, averages, Drop/Penalty. Ranking/seeds/avgs stay on phone.
+ * Stretch: prefer a fresh Watch GPS fix; else phone GPS. Same acceptFix bands.
  * Watch never marks alone, never silent-forces, no motion/mic.
  */
 
@@ -42,7 +43,7 @@ export type ClubPickMessage = {
   type: 'clubPick';
   clubId: string;
   at: string;
-  /** Stretch only — omitted on this club-pick cut. Phone owns GPS. */
+  /** Stretch: Watch GPS when age ≤ 3s and accuracy > 0. Phone prefers it if ≤ phone accuracy. */
   lat?: number;
   lng?: number;
   accuracyM?: number | null;

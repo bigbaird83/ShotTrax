@@ -5,7 +5,6 @@ import { SOFT_GPS_MAX_M, SOFT_GPS_MIN_M } from '../config/sensing';
 import { yardsToGreen } from '../sensing/yardsToGreen';
 import type { GpsFix } from './types';
 import {
-  CHECK_PHONE,
   CLUB_LIST_KEYS,
   PHONE_UNAVAILABLE,
   WATCH_MESSAGE_TYPES,
@@ -153,7 +152,7 @@ test('clubList push key changes on hole, fix quality, and bag rank', () => {
   assert.equal(clubListPushKey(base), clubListPushKey(sameYardsLastClub));
 });
 
-test('clubPick locked schema is type, clubId, ISO8601 at — phone owns GPS', () => {
+test('clubPick required keys are type, clubId, ISO8601 at; Watch GPS is optional stretch', () => {
   const pick = clubPickPayload({
     clubId: 'club_7i',
     at: '2026-09-17T18:00:00.000Z',
@@ -168,14 +167,27 @@ test('clubPick locked schema is type, clubId, ISO8601 at — phone owns GPS', ()
   assert.equal(parseClubPick({ type: 'mark', clubId: 'club_7i', at: '2026-09-17T18:00:00.000Z' }), null);
 });
 
+test('clubPick may carry Watch GPS; phone prefers it only when fresh and at least as accurate', () => {
+  const parsed = parseClubPick({
+    type: 'clubPick',
+    clubId: 'club_7i',
+    at: '2026-09-17T18:00:00.000Z',
+    lat: 37.1,
+    lng: -122.2,
+    accuracyM: 4,
+  });
+  assert.equal(parsed?.lat, 37.1);
+  assert.equal(parsed?.lng, -122.2);
+  assert.equal(parsed?.accuracyM, 4);
+});
+
 test('Watch Connectivity this cut is only clubList and clubPick', () => {
   assert.deepEqual([...WATCH_MESSAGE_TYPES], ['clubList', 'clubPick']);
 });
 
-test('Watch feedback copy', () => {
+test('Watch feedback is marked ✓ or Phone unavailable — never silent fail', () => {
   assert.equal(formatClubMarkedFeedback('7i'), '7i marked ✓');
   assert.equal(PHONE_UNAVAILABLE, 'Phone unavailable');
-  assert.equal(CHECK_PHONE, 'Check phone');
 });
 
 test('Watch companion is club-pick only — no motion or mic auto-mark', () => {

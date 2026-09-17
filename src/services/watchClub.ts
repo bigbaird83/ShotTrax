@@ -2,8 +2,8 @@ import { Alert } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getWatchBridgeNative } from '@/modules/watch-bridge';
 import { COPY } from '../domain/playerCopy';
+import { watchFixFromPick } from '../domain/preferWatchFix';
 import {
-  CHECK_PHONE,
   PHONE_UNAVAILABLE,
   clubListPayload,
   formatClubMarkedFeedback,
@@ -96,7 +96,7 @@ async function handlePick(token: string, json: string): Promise<void> {
     }
   })();
   if (!pick) {
-    await reply({ ok: false, feedback: CHECK_PHONE });
+    await reply({ ok: false, feedback: PHONE_UNAVAILABLE });
     return;
   }
   const ctx = context;
@@ -106,12 +106,14 @@ async function handlePick(token: string, json: string): Promise<void> {
   }
 
   const label = ctx.labelForClub(pick.clubId) ?? pick.clubId;
+  const watchFix = watchFixFromPick(pick);
   try {
-    // Phone owns GPS. Same club=mark as a phone tap: acceptFix now, never silent-force.
+    // Same club=mark as a phone tap (acceptFix). Prefer a fresh Watch fix; never silent-force.
     const { plan } = await markShotWithClub(ctx.db, {
       roundId: ctx.roundId,
       holeNumber: ctx.holeNumber,
       clubId: pick.clubId,
+      watchFix,
     });
     const waiting = promptForPlan(plan, () => {
       void (async () => {
@@ -121,6 +123,7 @@ async function handlePick(token: string, json: string): Promise<void> {
             holeNumber: ctx.holeNumber,
             clubId: pick.clubId,
             force: true,
+            watchFix,
           });
           if (forced.plan.status === 'commit') {
             hapticMark();
@@ -134,7 +137,7 @@ async function handlePick(token: string, json: string): Promise<void> {
     });
     if (waiting) {
       hapticWarn();
-      await reply({ ok: false, feedback: CHECK_PHONE });
+      await reply({ ok: false, feedback: PHONE_UNAVAILABLE });
       return;
     }
     if (plan.status === 'commit') {
@@ -144,11 +147,11 @@ async function handlePick(token: string, json: string): Promise<void> {
       await reply({ ok: true, feedback: formatClubMarkedFeedback(label) });
       return;
     }
-    await reply({ ok: false, feedback: CHECK_PHONE });
+    await reply({ ok: false, feedback: PHONE_UNAVAILABLE });
   } catch {
     hapticWarn();
     Alert.alert(COPY.waitingOnLocation, COPY.locationOff, [{ text: COPY.cancel, style: 'cancel' }]);
-    await reply({ ok: false, feedback: CHECK_PHONE });
+    await reply({ ok: false, feedback: PHONE_UNAVAILABLE });
   }
 }
 
