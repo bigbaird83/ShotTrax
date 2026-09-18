@@ -168,21 +168,12 @@ export function yardsToGreenLabel(
   return { heading, value: '—', detail };
 }
 
-/**
- * Play header yards. Same 600-yard check as live to-green / home club tap.
- * Couch (phone more than 600 from the green and the tee) → course
- * tee-to-center. Never the phone-to-green number (14,000).
- * On the course (within 600 of green or tee) → live remaining.
- * No green, or no course yardage and live over 600 → —.
- */
-export function planPlayHeaderYards(args: {
+/** Phone fix is on the course when it is within 600 of the tee or the green. */
+export function phoneFixIsOnCourse(args: {
   phone: LatLng | null | undefined;
   green: LatLng | null | undefined;
   tee: LatLng | null | undefined;
-  courseYards: number | null;
-}): ToGreenDisplay {
-  const hasGreen = isValidLatLng(args.green);
-  const course = courseTeeYards(args.courseYards);
+}): boolean {
   const distGreen =
     isValidLatLng(args.phone) && isValidLatLng(args.green)
       ? haversineYards(args.phone, args.green)
@@ -191,23 +182,39 @@ export function planPlayHeaderYards(args: {
     isValidLatLng(args.phone) && isValidLatLng(args.tee)
       ? haversineYards(args.phone, args.tee)
       : null;
-  const onCourse =
+  return (
     (distGreen != null && distGreen <= TO_GREEN_LIVE_MAX_YD) ||
-    (distTee != null && distTee <= TO_GREEN_LIVE_MAX_YD);
+    (distTee != null && distTee <= TO_GREEN_LIVE_MAX_YD)
+  );
+}
 
-  if (!hasGreen) return { yards: null, source: 'none', quality: 'none' };
+/**
+ * Phone and Watch share this number. 600 is the cutoff for using the phone
+ * fix, not a cap on the yards. A 620-yard card still reads 620.
+ * Before a shot: the card. After a shot: landing to green center only when
+ * the phone fix is within 600 of the course. Otherwise keep the card.
+ * Never the house (14,000). Never a fake 0. Never Watch GPS.
+ */
+export function planPlayHeaderYards(args: {
+  phone: LatLng | null | undefined;
+  green: LatLng | null | undefined;
+  tee: LatLng | null | undefined;
+  courseYards: number | null;
+  shots?: ClubLandingShot[];
+}): ToGreenDisplay {
+  const course = courseTeeYards(args.courseYards);
+  const onCourse = phoneFixIsOnCourse(args);
+  const shots = args.shots ?? [];
 
-  if (onCourse) {
-    const live = liveToGreenYards(distGreen, 'good');
-    if (live != null) return { yards: live, source: 'live', quality: 'good' };
-    if (course != null) return { yards: course, source: 'course', quality: 'good' };
-    return { yards: null, source: 'none', quality: 'none' };
+  if (shots.length > 0 && onCourse && isValidLatLng(args.green)) {
+    const landing = lastLandingMark(shots);
+    const live = markToGreen(landing, args.green);
+    if (live.yards != null && Number.isFinite(live.yards) && live.yards > 0) {
+      return { yards: live.yards, source: 'live', quality: 'good' };
+    }
   }
 
   if (course != null) return { yards: course, source: 'course', quality: 'good' };
-  if (distGreen != null && distGreen > TO_GREEN_LIVE_MAX_YD) {
-    return { yards: null, source: 'none', quality: 'none' };
-  }
   return { yards: null, source: 'none', quality: 'none' };
 }
 

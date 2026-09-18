@@ -43,12 +43,14 @@ struct NearbyTee: Identifiable, Equatable {
 
 struct NearbyState {
   var active: Bool = false
-  var openPhone: Bool = true
+  var awaitingSelect: Bool = true
+  var openPhone: Bool = false
   var line: String = "open the phone"
   var courses: [NearbyCourse] = []
   var tees: [NearbyTee] = []
   var courseId: String?
   var courseName: String?
+  var holeCount: Int?
 }
 
 struct PuttSheetState {
@@ -110,10 +112,19 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   func requestNearby() {
     sending = true
     feedback = ""
+    nearby.awaitingSelect = false
     sendPick([
       "type": "nearbyRequest",
       "at": isoNow(),
     ], keepPending: false)
+  }
+
+  func pickHoleCount(_ count: Int) {
+    guard count == 9 || count == 18 else { return }
+    nearby.holeCount = count
+    if nearby.tees.isEmpty {
+      startPickedRound(teeName: nil)
+    }
   }
 
   func pickCourse(courseId: String) {
@@ -128,6 +139,10 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   func pickTee(name: String) {
+    startPickedRound(teeName: name)
+  }
+
+  private func startPickedRound(teeName: String?) {
     sending = true
     feedback = ""
     guard let courseId = nearby.courseId else {
@@ -135,12 +150,17 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       sending = false
       return
     }
-    sendPick([
+    let holeCount = nearby.holeCount == 9 ? 9 : 18
+    var payload: [String: Any] = [
       "type": "startRound",
       "courseId": courseId,
-      "teeName": name,
+      "holeCount": holeCount,
       "at": isoNow(),
-    ], keepPending: false)
+    ]
+    if let teeName, !teeName.isEmpty {
+      payload["teeName"] = teeName
+    }
+    sendPick(payload, keepPending: false)
   }
 
   func pick(clubId: String) {
@@ -217,7 +237,13 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     if action == "home", hasLiveHole {
       nearbyFromHome = true
       nearby.active = true
-      requestNearby()
+      nearby.awaitingSelect = true
+      nearby.courseId = nil
+      nearby.courseName = nil
+      nearby.tees = []
+      nearby.courses = []
+      nearby.holeCount = nil
+      nearby.openPhone = false
     }
     sendPick([
       "type": "clubNav",
@@ -327,6 +353,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     if hasLiveHole && !nearbyFromHome { return }
     var next = NearbyState()
     next.active = true
+    next.awaitingSelect = false
     let status = message["status"] as? String ?? "open_phone"
     next.openPhone = status != "ok"
     next.line = (message["line"] as? String) ?? "open the phone"
@@ -351,6 +378,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     if hasLiveHole && !nearbyFromHome { return }
     var next = nearby
     next.active = true
+    next.awaitingSelect = false
     next.openPhone = false
     if let id = message["courseId"] as? String {
       next.courseId = id
@@ -366,11 +394,6 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       }
     }
     next.tees = tees
-    if tees.isEmpty {
-      next.openPhone = true
-      next.line = "open the phone"
-      next.courses = []
-    }
     nearby = next
   }
 
@@ -492,7 +515,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
           return
         }
         self.nearby.active = true
-        self.requestNearby()
+        self.nearby.awaitingSelect = true
+        self.nearby.openPhone = false
       }
     }
   }

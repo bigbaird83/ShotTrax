@@ -53,12 +53,21 @@ export function clubStripPutterIncluded(): false {
 }
 
 /**
- * Closest carry sits in the middle only when both a shorter and a longer club
- * exist. At the long or short end it stays where it falls — never wrap to
- * force it into the center.
+ * Closest carry sits in the middle when a shorter club and a longer club both
+ * exist. Do not implement a blanket "never center the closest club."
  */
 export function clubStripCenterIsClosestCarry(): true {
   return true;
+}
+
+/** Center the closest carry when both neighbors exist (100 yd: wedge in the middle). */
+export function clubStripCentersClosestWhenNeighborsExist(): true {
+  return true;
+}
+
+/** A shorter-only or longer-only end does not wrap just to put closest in the middle. */
+export function clubStripNeverCentersClosest(): false {
+  return false;
 }
 
 /** Do not wrap a wedge onto the right, or the driver onto the left, just to fill a side. */
@@ -221,9 +230,12 @@ export type ClubStripPlan = {
 };
 
 /**
- * Opening frame is three consecutive clubs in carry order. No wrap to fill
- * an empty side. Closest is centered only when a shorter and a longer club
- * both exist.
+ * Opening frame is three consecutive clubs in carry order.
+ * Closest sits in the middle when a shorter and a longer both exist
+ * (left = next shorter, right = next longer). At the long end the window
+ * is the three longest — do not wrap a wedge onto the right to force the
+ * driver into the middle. At the short end do not wrap the driver onto
+ * the left. The first frame is not the seam.
  */
 export function openingClubStripWindow(args: {
   count: number;

@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getCourseDataClient } from '@/src/course/client';
 import type { CourseDetail, CourseSummary } from '@/src/course/types';
-import { layoutFromTee, roundHoleCountFromCourse } from '@/src/course/layout';
+import { layoutFromTee } from '@/src/course/layout';
 import { startRound } from '@/src/db/repo';
 import type { GpsFix } from '@/src/domain/types';
 import {
@@ -162,14 +162,6 @@ export async function handleWatchNearbyJson(json: string): Promise<{ ok: boolean
         return { ok: false, feedback: 'open the phone' };
       }
       coursePickedHandler?.({ course: summaryFromDetail(detail), detail });
-      if (detail.tees.length === 0) {
-        const holeCount = roundHoleCountFromCourse(detail.holeCount, 18);
-        const layout = layoutFromTee(detail, null);
-        const round = startRound(ctx.db, holeCount, detail.name, layout);
-        ctx.bump();
-        router.push(`/round/${round.id}/hole/1`);
-        return { ok: true, feedback: `Started · ${detail.name}` };
-      }
       await pushNearbyJson(
         nearbyTeesPayload({
           courseId: detail.id,
@@ -191,14 +183,17 @@ export async function handleWatchNearbyJson(json: string): Promise<{ ok: boolean
     try {
       const detail = await getCourseDataClient().getCourse(start.courseId);
       if (!detail) return { ok: false, feedback: 'open the phone' };
-      const tee = detail.tees.find((row) => row.name === start.teeName) ?? null;
-      if (!tee) return { ok: false, feedback: 'open the phone' };
-      const holeCount = roundHoleCountFromCourse(detail.holeCount, 18);
+      const holeCount = start.holeCount === 9 ? 9 : 18;
+      const tee = start.teeName
+        ? detail.tees.find((row) => row.name === start.teeName) ?? null
+        : null;
+      if (start.teeName && !tee) return { ok: false, feedback: 'open the phone' };
+      if (detail.tees.length > 0 && !tee) return { ok: false, feedback: 'open the phone' };
       const layout = layoutFromTee(detail, tee);
       const round = startRound(ctx.db, holeCount, detail.name, layout);
       ctx.bump();
       router.push(`/round/${round.id}/hole/1`);
-      return { ok: true, feedback: `${detail.name} · ${tee.name}` };
+      return { ok: true, feedback: tee ? `${detail.name} · ${tee.name}` : detail.name };
     } catch {
       return { ok: false, feedback: PHONE_UNAVAILABLE };
     }

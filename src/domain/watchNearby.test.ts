@@ -30,6 +30,12 @@ import {
   watchOpenCoversLiveHoleWithCourses,
   startDifferentRoundLivesUnderHome,
   planWatchOpenFace,
+  SELECT_COURSE,
+  holesForWatchRound,
+  watchEighteenIsFullCard,
+  watchFirstScreenIsSelectCourse,
+  watchNineIsFrontOrBack,
+  watchNineIsHoles1Through9,
 } from './watchNearby';
 import {
   WATCH_MESSAGE_TYPES,
@@ -86,7 +92,9 @@ test('nearby courses use the phone fix only — never the Watch', () => {
 
 test('no fresh phone fix or an empty list is one line: open the phone', () => {
   assert.equal(OPEN_PHONE, 'open the phone');
+  assert.equal(SELECT_COURSE, 'Select course');
   assert.equal(COPY.openPhone, 'open the phone');
+  assert.equal(COPY.selectCourse, 'Select course');
   assert.equal(nearbyCourseFixIsFresh(phone, 1_000_000 + NEARBY_COURSE_FIX_MAX_AGE_MS + 1), false);
   assert.equal(nearbyCourseFixIsFresh(null, 1_000_000), false);
   assert.equal(nearbyCourseFixIsFresh({ timestamp: 0 }, 1_000_000), false);
@@ -167,7 +175,7 @@ test('Watch start messages never run acceptFix and never send Watch GPS', () => 
   const at = '2026-09-18T13:00:00.000Z';
   const request = parseWatchNearbyIntent(nearbyRequestPayload({ at }));
   const pick = parseWatchNearbyIntent(nearbyCoursePickPayload({ courseId: 'c1', at }));
-  const start = parseWatchNearbyIntent(startRoundPayload({ courseId: 'c1', teeName: 'Blue', at }));
+  const start = parseWatchNearbyIntent(startRoundPayload({ courseId: 'c1', teeName: 'Blue', holeCount: 18, at }));
   assert.equal(request?.kind, 'nearbyRequest');
   assert.equal(request?.runsAcceptFix, false);
   assert.equal(request?.usesWatchFix, false);
@@ -176,10 +184,14 @@ test('Watch start messages never run acceptFix and never send Watch GPS', () => 
   assert.equal(start?.kind, 'startRound');
   assert.equal(start?.runsAcceptFix, false);
   assert.equal(watchPayloadRunsAcceptFix(nearbyRequestPayload({ at })), false);
-  assert.equal(watchPayloadRunsAcceptFix(startRoundPayload({ courseId: 'c1', teeName: 'Blue', at })), false);
+  assert.equal(watchPayloadRunsAcceptFix(startRoundPayload({ courseId: 'c1', teeName: 'Blue', holeCount: 18, at })), false);
   assert.equal('lat' in nearbyRequestPayload({ at }), false);
-  assert.equal('lng' in startRoundPayload({ courseId: 'c1', teeName: 'Blue', at }), false);
+  assert.equal('lng' in startRoundPayload({ courseId: 'c1', teeName: 'Blue', holeCount: 18, at }), false);
   assert.equal(parseStartRound({ type: 'startRound', courseId: 'c1', teeName: '', at }), null);
+  assert.equal(parseStartRound(startRoundPayload({ courseId: 'c1', holeCount: 9, at }))?.holeCount, 9);
+  assert.deepEqual(holesForWatchRound(9), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  assert.equal(holesForWatchRound(18).length, 18);
+  assert.ok(!holesForWatchRound(9).includes(10));
   assert.ok(WATCH_MESSAGE_TYPES.includes('nearbyCourses'));
   assert.ok(WATCH_MESSAGE_TYPES.includes('startRound'));
 
@@ -198,11 +210,38 @@ test('a live round opens that hole; a different round lives under Home', () => {
   assert.equal(liveRoundReplacedByWatchCoursePick(), false);
   assert.equal(watchCoursePickSetsPhoneCourse(), true);
   assert.equal(startDifferentRoundLivesUnderHome(), true);
+  assert.equal(watchFirstScreenIsSelectCourse(), true);
+  assert.equal(watchNineIsHoles1Through9(), true);
+  assert.equal(watchNineIsFrontOrBack(), false);
+  assert.equal(watchEighteenIsFullCard(), true);
   assert.equal(planWatchOpenFace({ hasLiveRound: true }), 'hole');
   assert.equal(planWatchOpenFace({ hasLiveRound: true, openedFromHome: false }), 'hole');
-  assert.equal(planWatchOpenFace({ hasLiveRound: false }), 'nearby');
-  assert.equal(planWatchOpenFace({ hasLiveRound: true, openedFromHome: true }), 'nearby');
+  assert.equal(planWatchOpenFace({ hasLiveRound: false }), 'select_course');
+  assert.equal(planWatchOpenFace({ hasLiveRound: true, openedFromHome: true }), 'select_course');
+  assert.equal(
+    planWatchOpenFace({ hasLiveRound: false, selectCourseTapped: true }),
+    'nearby',
+  );
+  assert.equal(
+    planWatchOpenFace({
+      hasLiveRound: false,
+      selectCourseTapped: true,
+      courseId: 'c1',
+    }),
+    'hole_count',
+  );
+  assert.equal(
+    planWatchOpenFace({
+      hasLiveRound: false,
+      selectCourseTapped: true,
+      courseId: 'c1',
+      holeCount: 9,
+      hasTees: true,
+    }),
+    'tees',
+  );
   assert.notEqual(planWatchOpenFace({ hasLiveRound: true }), 'nearby');
+  assert.notEqual(planWatchOpenFace({ hasLiveRound: true }), 'select_course');
 
   const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
   assert.match(session, /var active: Bool = false/);
@@ -213,8 +252,15 @@ test('a live round opens that hole; a different round lives under Home', () => {
   assert.match(session, /if hasLiveHole && !nearbyFromHome \{ return \}/);
   const leaveFn = session.slice(session.indexOf('func leave('), session.indexOf('func dismissNearbyToHole'));
   assert.match(leaveFn, /nearbyFromHome = true/);
-  assert.match(leaveFn, /requestNearby/);
+  assert.match(leaveFn, /awaitingSelect = true/);
+  assert.doesNotMatch(leaveFn, /requestNearby/);
   assert.match(leaveFn, /"type": "clubNav"/);
+  assert.match(session, /func pickHoleCount/);
+  assert.match(session, /"holeCount"/);
+  assert.match(session, /awaitingSelect/);
+  const activate = session.slice(session.indexOf('activationDidCompleteWith'), session.indexOf('didReceiveApplicationContext'));
+  assert.match(activate, /awaitingSelect = true/);
+  assert.doesNotMatch(activate, /requestNearby/);
   const replyFn = session.slice(session.indexOf('private func handleReply'), session.indexOf('private func failUnavailable'));
   assert.match(replyFn, /type == "startRound"/);
   assert.match(replyFn, /nearbyFromHome = false/);
@@ -224,6 +270,10 @@ test('a live round opens that hole; a different round lives under Home', () => {
   assert.match(watchUi, /session\.showsNearby/);
   assert.match(watchUi, /session\.hasLiveHole/);
   assert.match(watchUi, /dismissNearbyToHole/);
+  assert.match(watchUi, /Text\("Select course"\)/);
+  assert.match(watchUi, /session\.pickHoleCount\(9\)/);
+  assert.match(watchUi, /session\.pickHoleCount\(18\)/);
+  assert.doesNotMatch(watchUi, /Front nine|Back nine|front nine|back nine/);
   const pick = watchUi.slice(watchUi.indexOf('private var clubPick'), watchUi.indexOf('private var moreClubs'));
   assert.doesNotMatch(pick, /session\.nearby\.active/);
   assert.equal((pick.match(/Text\("Home"\)/g) ?? []).length, 1);
@@ -234,6 +284,8 @@ test('a live round opens that hole; a different round lives under Home', () => {
   assert.match(service, /hasActiveRound\(\) && !replaceLiveRoundAllowed/);
   assert.match(service, /coursePickedHandler/);
   assert.match(service, /Round in progress/);
+  assert.match(service, /start\.holeCount/);
+  assert.doesNotMatch(service, /roundHoleCountFromCourse/);
 
   const home = readFileSync(new URL('../../app/(tabs)/index.tsx', import.meta.url), 'utf8');
   assert.match(home, /setWatchCoursePickedHandler/);
@@ -248,6 +300,7 @@ test('Watch nearby UI is a short list — no search, bag, settings, or scoring',
 
   const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
   assert.match(watchUi, /open the phone/);
+  assert.match(watchUi, /Select course/);
   assert.doesNotMatch(watchUi, /TextField|searchable|Search/);
   assert.doesNotMatch(watchUi, /Bag|Settings|Scorecard|Averages/);
   assert.match(watchUi, /nearbyCourses|session\.nearby/);

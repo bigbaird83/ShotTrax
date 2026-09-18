@@ -69,6 +69,7 @@ export const COPY = {
   cancelPlace: 'Cancel',
   confirmPlace: 'Confirm shot',
   openPhone: 'open the phone',
+  selectCourse: 'Select course',
   score: 'Score',
   shots: 'Shots',
   noShots: 'No shots yet.',

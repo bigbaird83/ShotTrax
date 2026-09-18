@@ -13,7 +13,21 @@ struct ContentView: View {
 
   var body: some View {
     Group {
-      if session.showsNearby, session.nearby.openPhone || (session.nearby.courses.isEmpty && session.nearby.tees.isEmpty) {
+      if session.showsNearby, session.nearby.awaitingSelect {
+        VStack(alignment: .leading, spacing: 8) {
+          if session.hasLiveHole {
+            nearbyBack
+          }
+          Button(action: { session.requestNearby() }) {
+            Text("Select course")
+              .font(.headline.weight(.heavy))
+              .frame(maxWidth: .infinity, minHeight: 44)
+          }
+          .buttonStyle(.bordered)
+          .disabled(session.sending)
+        }
+        .padding(.horizontal, 4)
+      } else if session.showsNearby, session.nearby.openPhone {
         VStack(alignment: .leading, spacing: 8) {
           if session.hasLiveHole {
             nearbyBack
@@ -88,7 +102,27 @@ struct ContentView: View {
 
   @ViewBuilder
   private var nearbyStart: some View {
-    if !session.nearby.tees.isEmpty {
+    if session.nearby.courseId != nil, session.nearby.holeCount == nil {
+      if let name = session.nearby.courseName {
+        Text(name)
+          .font(.footnote.weight(.bold))
+          .foregroundStyle(Color("cream"))
+      }
+      Button(action: { session.pickHoleCount(9) }) {
+        Text("9")
+          .font(.headline.weight(.heavy))
+          .frame(maxWidth: .infinity, minHeight: 40)
+      }
+      .buttonStyle(.bordered)
+      .disabled(session.sending)
+      Button(action: { session.pickHoleCount(18) }) {
+        Text("18")
+          .font(.headline.weight(.heavy))
+          .frame(maxWidth: .infinity, minHeight: 40)
+      }
+      .buttonStyle(.bordered)
+      .disabled(session.sending)
+    } else if !session.nearby.tees.isEmpty {
       if let name = session.nearby.courseName {
         Text(name)
           .font(.footnote.weight(.bold))

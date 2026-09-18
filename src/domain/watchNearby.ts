@@ -11,6 +11,7 @@ import type { GpsFix } from './types';
 export const NEARBY_COURSE_FIX_MAX_AGE_MS = 30_000;
 export const NEARBY_COURSE_LIST_MAX = 8;
 export const OPEN_PHONE = COPY.openPhone;
+export const SELECT_COURSE = COPY.selectCourse;
 
 export function nearbyCoursesUsesPhoneFixOnly(): true {
   return true;
@@ -64,15 +65,48 @@ export function watchCoursePickSetsPhoneCourse(): true {
   return true;
 }
 
-export type WatchOpenFace = 'hole' | 'nearby';
+export type WatchOpenFace = 'hole' | 'select_course' | 'nearby' | 'hole_count' | 'tees';
 
-/** A live round opens that hole. Nearby / a different round lives under Home. */
+export function watchFirstScreenIsSelectCourse(): true {
+  return true;
+}
+
+export function watchNineIsHoles1Through9(): true {
+  return true;
+}
+
+export function watchNineIsFrontOrBack(): false {
+  return false;
+}
+
+export function watchEighteenIsFullCard(): true {
+  return true;
+}
+
+/** 9 is holes 1–9. 18 is the full card. Never a front-or-back nine picker. */
+export function holesForWatchRound(holeCount: 9 | 18): number[] {
+  const count = holeCount === 9 ? 9 : 18;
+  return Array.from({ length: count }, (_, i) => i + 1);
+}
+
+/**
+ * A live round opens that hole. No course and no round starts on Select course,
+ * not the list. After that: nearby → course → 9 or 18 → tees.
+ */
 export function planWatchOpenFace(args: {
   hasLiveRound: boolean;
   openedFromHome?: boolean;
+  selectCourseTapped?: boolean;
+  courseId?: string | null;
+  holeCount?: 9 | 18 | null;
+  hasTees?: boolean;
 }): WatchOpenFace {
   if (args.hasLiveRound && !args.openedFromHome) return 'hole';
-  return 'nearby';
+  if (!args.selectCourseTapped) return 'select_course';
+  if (!args.courseId) return 'nearby';
+  if (args.holeCount !== 9 && args.holeCount !== 18) return 'hole_count';
+  if (args.hasTees) return 'tees';
+  return 'hole';
 }
 
 export function nearbyCourseFixMaxAgeMs(): typeof NEARBY_COURSE_FIX_MAX_AGE_MS {

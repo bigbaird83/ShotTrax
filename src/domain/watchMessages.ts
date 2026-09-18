@@ -477,18 +477,26 @@ export type NearbyCoursePickMessage = {
   at: string;
 };
 
-/** Watch → Phone. Player tapped a tee. Phone opens that round. */
+/** Watch → Phone. Player tapped 9 or 18, then a tee (or no-tee start). */
 export type StartRoundMessage = {
   type: 'startRound';
   courseId: string;
-  teeName: string;
+  teeName?: string;
+  holeCount: 9 | 18;
   at: string;
 };
 
 export type WatchNearbyIntent =
   | { kind: 'nearbyRequest'; runsAcceptFix: false; usesWatchFix: false }
   | { kind: 'nearbyCoursePick'; courseId: string; runsAcceptFix: false; usesWatchFix: false }
-  | { kind: 'startRound'; courseId: string; teeName: string; runsAcceptFix: false; usesWatchFix: false };
+  | {
+      kind: 'startRound';
+      courseId: string;
+      teeName?: string;
+      holeCount: 9 | 18;
+      runsAcceptFix: false;
+      usesWatchFix: false;
+    };
 
 export function nearbyRequestPayload(args?: { at?: string }): NearbyRequestMessage {
   return {
@@ -507,14 +515,16 @@ export function nearbyCoursePickPayload(args: { courseId: string; at?: string })
 
 export function startRoundPayload(args: {
   courseId: string;
-  teeName: string;
+  teeName?: string;
+  holeCount: 9 | 18;
   at?: string;
 }): StartRoundMessage {
   return {
     type: 'startRound',
     courseId: args.courseId,
-    teeName: args.teeName,
+    holeCount: args.holeCount,
     at: args.at ?? new Date().toISOString(),
+    ...(args.teeName?.trim() ? { teeName: args.teeName.trim() } : {}),
   };
 }
 
@@ -540,13 +550,16 @@ export function parseStartRound(raw: unknown): StartRoundMessage | null {
   const row = raw as Record<string, unknown>;
   if (row.type !== 'startRound') return null;
   if (typeof row.courseId !== 'string' || !row.courseId.trim()) return null;
-  if (typeof row.teeName !== 'string' || !row.teeName.trim()) return null;
+  if (row.holeCount !== 9 && row.holeCount !== 18) return null;
   if (typeof row.at !== 'string' || !isIso8601(row.at)) return null;
+  const teeName =
+    typeof row.teeName === 'string' && row.teeName.trim() ? row.teeName.trim() : undefined;
   return {
     type: 'startRound',
     courseId: row.courseId.trim(),
-    teeName: row.teeName.trim(),
+    holeCount: row.holeCount,
     at: row.at,
+    ...(teeName ? { teeName } : {}),
   };
 }
 
@@ -629,9 +642,10 @@ export function parseWatchNearbyIntent(raw: unknown): WatchNearbyIntent | null {
     return {
       kind: 'startRound',
       courseId: start.courseId,
-      teeName: start.teeName,
+      holeCount: start.holeCount,
       runsAcceptFix: false,
       usesWatchFix: false,
+      ...(start.teeName ? { teeName: start.teeName } : {}),
     };
   }
   return null;

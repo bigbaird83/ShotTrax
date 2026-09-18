@@ -36,6 +36,8 @@ import {
   clubStripEstimatedEntersWheel,
   clubStripSeamGapOnly,
   clubStripWrapsToFillEmptySide,
+  clubStripCentersClosestWhenNeighborsExist,
+  clubStripNeverCentersClosest,
   clubStripOpensOnSeam,
   clubStripOpeningWindowIsThree,
   clubStripNeighborPillsShowCarry,
@@ -71,6 +73,8 @@ test('strip is carry-sorted, full bag, putter off, center is closest to yards le
   assert.equal(clubStripOnlyTapMarks(), false);
   assert.equal(clubStripPutterIncluded(), false);
   assert.equal(clubStripCenterIsClosestCarry(), true);
+  assert.equal(clubStripCentersClosestWhenNeighborsExist(), true);
+  assert.equal(clubStripNeverCentersClosest(), false);
   assert.equal(clubStripWrapsToFillEmptySide(), false);
   assert.equal(clubStripOpensOnSeam(), false);
   assert.equal(clubStripOpeningWindowIsThree(), true);
@@ -439,6 +443,8 @@ test('fill estimated carries before sort; estimable iron is in, outside the span
 
 test('282-yard hole opens 2i, 3W, Dr with no wedge; 100-yard hole centers the closest wedge', () => {
   assert.equal(clubStripWrapsToFillEmptySide(), false);
+  assert.equal(clubStripNeverCentersClosest(), false);
+  assert.equal(clubStripCentersClosestWhenNeighborsExist(), true);
   assert.equal(clubStripOpensOnSeam(), false);
   assert.equal(clubStripOpeningWindowIsThree(), true);
   assert.equal(clubStripNeighborPillsShowCarry(), true);
@@ -489,6 +495,24 @@ test('282-yard hole opens 2i, 3W, Dr with no wedge; 100-yard hole centers the cl
   assert.equal(wedge.ids[wedge.openIndex - 1], 'club_sw');
   assert.equal(wedge.ids[wedge.openIndex + 1], 'club_pw');
   assert.ok(!clubStripOpeningIds(wedge.ids, wedge.windowStart).includes('club_driver'));
+
+  const shortEnd = planClubStrip({
+    clubs: [
+      { id: 'club_driver', carry: 280 },
+      { id: 'club_pw', carry: 120 },
+      { id: 'club_gw', carry: 105 },
+      { id: 'club_sw', carry: 90 },
+      { id: 'club_lw', carry: 75 },
+    ],
+    yardsLeft: 70,
+  });
+  assert.equal(shortEnd.pickId, 'club_lw');
+  assert.deepEqual(clubStripOpeningIds(shortEnd.ids, shortEnd.windowStart), [
+    'club_lw',
+    'club_sw',
+    'club_gw',
+  ]);
+  assert.ok(!clubStripOpeningIds(shortEnd.ids, shortEnd.windowStart).includes('club_driver'));
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   assert.match(hole, /windowStart=\{stripPlan\.windowStart\}/);

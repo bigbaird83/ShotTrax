@@ -447,6 +447,7 @@ export default function HoleScreen() {
     green,
     tee: holeTee,
     courseYards: hole?.yards ?? null,
+    shots,
   });
 
   const openPuttSheet = useCallback(
@@ -587,8 +588,8 @@ export default function HoleScreen() {
         shortName: formatSuggestedClubChip(club.shortName, stripPlan.carries[club.id] ?? null),
       })),
       holeNumber,
-      yardsToGreen: target?.dYards ?? toGreen.yards,
-      yardsQuality: toGreen.quality,
+      yardsToGreen: playHeaderYards.yards,
+      yardsQuality: playHeaderYards.quality,
       lastClubId: sticky?.id ?? null,
       selectedClubId: wheelSelectedId,
     },
