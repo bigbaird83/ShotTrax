@@ -36,7 +36,7 @@ import { lockHoleCamera, resolveHoleTee, shotPinsForHoleCamera, type LockedHoleC
 import { deleteShotPrompt } from '@/src/domain/deleteShot';
 import { planInsertSlots } from '@/src/domain/insertShot';
 import { confirmUndoIsLive, planConfirmUndo, type ConfirmUndoWindow } from '@/src/domain/confirmUndo';
-import { confirmPlaceToDraft, resolveAddShotFromPin } from '@/src/domain/placeToDrag';
+import { confirmPlaceToDraft, courseGreenCenterForLine, resolveAddShotFromPin } from '@/src/domain/placeToDrag';
 import { planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
 import { planPlayLayout } from '@/src/domain/playLayout';
 import { planPlacedShot } from '@/src/domain/shotSource';
@@ -427,9 +427,14 @@ export default function HoleScreen() {
     previous: lastHoleCamera.current,
   });
   if (holeCamera) lastHoleCamera.current = holeCamera;
-  addShotFromRef.current = resolveAddShotFromPin({
+  const addShotFrom = resolveAddShotFromPin({
     tee: holeTee,
     lastLanding: lastLandingMark(shots),
+  });
+  addShotFromRef.current = addShotFrom;
+  const courseGreen = courseGreenCenterForLine({
+    green,
+    source: hole?.greenSource ?? null,
   });
   const insertSlots = planInsertSlots(shots);
   const playLayout = planPlayLayout();
@@ -955,8 +960,10 @@ export default function HoleScreen() {
           yardsToGreen={yardsToGreenResult}
           fmb={fmb}
           osmOverlay={osmOverlay}
-          placedFrom={placeFrom}
+          placedFrom={placeMode === 'edit-from' || placeMode === 'edit-to' ? placeFrom : addShotFrom}
           placedTo={placeToDraft ?? placeTo}
+          lineFrom={placeMode === 'edit-from' || placeMode === 'edit-to' ? placeFrom : addShotFrom}
+          lineGreen={courseGreen}
           freezePan={placeMode === 'to' || placeMode === 'edit-to'}
           onPlaceToDrag={
             placeMode === 'to' || placeMode === 'edit-to'
@@ -966,7 +973,7 @@ export default function HoleScreen() {
           lockFrame
           showPhonePin={!catchUpFullScreen}
           allowMapsChrome={!catchUpFullScreen}
-          hideYardsOverlay={!catchUpFullScreen}
+          hideYardsOverlay
           frameEpoch={catchUpFullScreen ? 'catchup' : `play-${hole.number}-${playFrameNonce}`}
           onFrameReady={setMapFramed}
           heading={holeCamera?.heading ?? null}
@@ -987,7 +994,8 @@ export default function HoleScreen() {
                   const tap = catchUpPinFromTap(coord, fix);
                   if (!tap) return;
                   if (placeMode === 'from') {
-                    setPlaceFrom(tap);
+                    if (!addShotFrom) return;
+                    setPlaceFrom(addShotFrom);
                     setPlaceMode('to');
                     return;
                   }

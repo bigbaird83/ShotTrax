@@ -151,6 +151,27 @@ export function addShotFromUsesHousePin(): false {
   return false;
 }
 
+export function dragLineStartsAtHousePin(): false {
+  return false;
+}
+
+export function dragLineEndsAtTreePin(): false {
+  return false;
+}
+
+export function dragLineReusesVisiblePinSpan(): false {
+  return false;
+}
+
+/** Second line ends on course green only. A user-dropped tree pin is not the green. */
+export function courseGreenCenterForLine(args: {
+  green: LatLng | null;
+  source?: 'user_estimate' | 'course_centroid' | null;
+}): LatLng | null {
+  if (args.source === 'user_estimate') return null;
+  return isValidLatLng(args.green) ? args.green : null;
+}
+
 export function resolveAddShotFromPin(args: {
   tee: LatLng | null;
   lastLanding: LatLng | null;

@@ -40,6 +40,10 @@ import {
   planDragShotLines,
   planPlaceToDragPreview,
   resolveAddShotFromPin,
+  courseGreenCenterForLine,
+  dragLineEndsAtTreePin,
+  dragLineReusesVisiblePinSpan,
+  dragLineStartsAtHousePin,
   addShotFollowsUser,
   addShotFromUsesHousePin,
   addShotFromUsesPhone,
@@ -94,7 +98,7 @@ test('preview is this shot from pin to the finger, not the prior shot', () => {
   assert.equal(placeToAskOn(), 'never');
   assert.equal(placeToFilterOn(), 'confirm');
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
-  const fromPin = hole.slice(hole.indexOf('addShotFromRef.current = resolveAddShotFromPin'), hole.indexOf('const insertSlots'));
+  const fromPin = hole.slice(hole.indexOf('const addShotFrom = resolveAddShotFromPin'), hole.indexOf('const insertSlots'));
   assert.match(fromPin, /tee: holeTee/);
   assert.match(fromPin, /lastLanding: lastLandingMark\(shots\)/);
   assert.doesNotMatch(fromPin, /phone:/);
@@ -151,8 +155,15 @@ test('shot and to-green yards sit on the two dotted lines, not the header or pin
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   assert.doesNotMatch(hole, /dragPreview\.shotLabel/);
   assert.doesNotMatch(hole, /Shot \$\{dragPreview/);
-  const confirm = hole.slice(hole.indexOf('styles.confirmDock'), hole.indexOf('styles.sticky'));
-  assert.doesNotMatch(confirm, /shotLabel|toGreenLabel|107 yd/);
+  assert.doesNotMatch(hole, /COPY\.shot\} \$\{dragPreview|COPY\.toGreen\} \$\{dragPreview/);
+  const header = hole.slice(hole.indexOf('styles.catchUpBar'), hole.indexOf('placeHint ?'));
+  assert.doesNotMatch(header, /COPY\.shot|COPY\.toGreen|107 yd|162 yd/);
+  const confirm = hole.slice(hole.indexOf('label={COPY.confirmPlace}'), hole.indexOf('{!hideHoleButtons'));
+  assert.match(confirm, /COPY\.confirmPlace/);
+  assert.doesNotMatch(confirm, /shotLabel|toGreenLabel|107 yd|placeHint|COPY\.shot|COPY\.toGreen/);
+  assert.match(hole, /lineFrom=\{placeMode === 'edit-from'/);
+  assert.match(hole, /lineGreen=\{courseGreen\}/);
+  assert.doesNotMatch(hole, /addShotFrom \?\? placeFrom/);
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   assert.match(map, /planDragShotLines/);
   assert.match(map, /lineDashPattern/);
@@ -161,6 +172,7 @@ test('shot and to-green yards sit on the two dotted lines, not the header or pin
   assert.match(map, /dragLines\.shot\.mid/);
   assert.match(map, /dragLines\.toGreen\.mid/);
   assert.doesNotMatch(map, /dragPreview\.pinAt|dragChip|COPY\.shot/);
+  assert.doesNotMatch(map, /title="Green"|title="From"|title="Landed"/);
 });
 
 test('finger preview has no GPS quality and does not run acceptFix', () => {
@@ -189,7 +201,7 @@ test('finger preview has no GPS quality and does not run acceptFix', () => {
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const dragBlock = hole.slice(hole.indexOf("if (placeMode === 'to')"), hole.indexOf("if (placeMode === 'edit-from')"));
   assert.doesNotMatch(dragBlock, /acceptFix|getFix|good|soft|forceMark/);
-  const call = hole.slice(hole.indexOf('addShotFromRef.current = resolveAddShotFromPin'), hole.indexOf('const insertSlots'));
+  const call = hole.slice(hole.indexOf('const addShotFrom = resolveAddShotFromPin'), hole.indexOf('const insertSlots'));
   assert.doesNotMatch(call, /phone:|fixQuality|acceptFix|screen:|camera:/);
   assert.match(call, /tee: holeTee/);
   assert.match(hole, /resolveAddShotFromPin/);
@@ -327,7 +339,7 @@ test('panning the map leaves shot and to-green unchanged unless the landing pin 
   assert.match(map, /planDragShotLines/);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
-  const call = hole.slice(hole.indexOf('addShotFromRef.current = resolveAddShotFromPin'), hole.indexOf('const insertSlots'));
+  const call = hole.slice(hole.indexOf('const addShotFrom = resolveAddShotFromPin'), hole.indexOf('const insertSlots'));
   assert.match(call, /tee: holeTee/);
   assert.doesNotMatch(call, /screen:|camera:|locationX|pageX/);
 });
@@ -404,7 +416,7 @@ test('to pin follows the finger; live yards are this shot only; nothing stores b
   );
   assert.match(editToTap, /setPlaceToDraft\(tap\)/);
   assert.doesNotMatch(editToTap, /commitMovePin|addPlacedShot/);
-  const dragCall = hole.slice(hole.indexOf('addShotFromRef.current = resolveAddShotFromPin'), hole.indexOf('const insertSlots'));
+  const dragCall = hole.slice(hole.indexOf('const addShotFrom = resolveAddShotFromPin'), hole.indexOf('const insertSlots'));
   assert.match(dragCall, /tee: holeTee/);
   assert.doesNotMatch(dragCall, /previousFrom|phone:/);
 });
@@ -431,14 +443,28 @@ test('Add shot from-pin is tee or last landing, never the house, phone, or puck'
   assert.notDeepEqual(teeFrom.shot?.from, phone);
   assert.deepEqual(teeFrom.toGreen?.to, green);
   assert.notDeepEqual(teeFrom.toGreen?.to, phone);
+  assert.notEqual(teeFrom.toGreen?.yards, houseFrom.shot?.yards);
+  assert.equal(dragLineStartsAtHousePin(), false);
+  assert.equal(dragLineEndsAtTreePin(), false);
+  assert.equal(dragLineReusesVisiblePinSpan(), false);
+  assert.equal(courseGreenCenterForLine({ green, source: 'course_centroid' })?.lat, green.lat);
+  assert.equal(courseGreenCenterForLine({ green, source: 'user_estimate' }), null);
+  assert.deepEqual(courseGreenCenterForLine({ green, source: null }), green);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   assert.match(hole, /showPhonePin=\{!catchUpFullScreen\}/);
   assert.match(hole, /allowMapsChrome=\{!catchUpFullScreen\}/);
   assert.match(hole, /addShotFromRef\.current/);
+  assert.match(hole, /courseGreenCenterForLine/);
+  assert.match(hole, /lineFrom=/);
+  assert.match(hole, /lineGreen=\{courseGreen\}/);
+  assert.doesNotMatch(hole, /addShotFrom \?\? placeFrom/);
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   assert.match(map, /followsUserLocation=\{false\}/);
   assert.match(map, /showPhonePin && userDot/);
   assert.match(map, /styles\.legalCover/);
+  assert.match(map, /from: lineFrom/);
+  assert.match(map, /green: lineGreen/);
+  assert.doesNotMatch(map, /from: placedFrom/);
   assert.doesNotMatch(map, /showsUserLocation=\{true\}/);
 });
