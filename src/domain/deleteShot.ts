@@ -58,6 +58,11 @@ export function deleteShotPrompt(): DeleteShotPrompt {
   };
 }
 
+/** Delete is on the opened shot. Not a dock action and not a new dock row. */
+export function deleteIsDockRow(): false {
+  return false;
+}
+
 export function deleteMovesNeighborPins(): false {
   return false;
 }

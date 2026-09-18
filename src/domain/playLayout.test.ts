@@ -15,6 +15,7 @@ import {
   playShowsTallSameClub,
   playUsesAddShotCamera,
   anyEarlierShotCanOpenEdit,
+  playDeleteIsDockRow,
   playEditIsDockRow,
 } from './playLayout';
 
@@ -105,4 +106,20 @@ test('All clubs and Say a club are chips in row 1; edit is tap a shot, not a doc
   const editSheet = hole.slice(hole.indexOf('visible={editOpen && !editClubOpen}'), hole.indexOf('visible={scoreOpen}'));
   assert.match(editSheet, /COPY\.deleteShot/);
   assert.match(editSheet, /onDeleteShot\(editingShot\.id\)/);
+});
+
+test('tapping a previous shot shows Delete on that shot, not the dock', () => {
+  assert.equal(playDeleteIsDockRow(), false);
+  assert.equal(playEditIsDockRow(), false);
+  assert.equal(playDockRowCount(), 2);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const dock = hole.slice(hole.indexOf('styles.dock'), hole.indexOf('<FullSheet'));
+  assert.equal((dock.match(/styles\.dockRow/g) ?? []).length, 2);
+  assert.doesNotMatch(dock, /COPY\.deleteShot|onDeleteShot|Delete this shot/);
+  const editSheet = hole.slice(hole.indexOf('visible={editOpen && !editClubOpen}'), hole.indexOf('visible={scoreOpen}'));
+  assert.match(editSheet, /label=\{COPY\.deleteShot\}/);
+  assert.match(editSheet, /onDeleteShot\(editingShot\.id\)/);
+  assert.match(hole, /deleteShotPrompt/);
+  assert.match(hole, /prompt\.cancel/);
 });

@@ -9,6 +9,7 @@ import {
   carryAfterDelete,
   deleteFillsGap,
   deleteInventsPoints,
+  deleteIsDockRow,
   deleteMovesNeighborPins,
   deleteReopensNeighbor,
   deleteReplacesSeedAt,
@@ -90,6 +91,8 @@ test('cancel leaves the shot exactly as it was', () => {
   assert.equal(deleteShotPrompt().title, 'Delete this shot?');
   assert.equal(deleteShotPrompt().cancel, COPY.cancel);
   assert.equal(deleteShotPrompt().cancelIsDefault, true);
+  assert.equal(deleteIsDockRow(), false);
+  assert.equal(deleteMovesNeighborPins(), false);
 });
 
 test('confirm removes the shot from the hole and from the average', () => {

@@ -82,6 +82,11 @@ export function playEditIsDockRow(): false {
   return false;
 }
 
+/** Delete lives on the opened shot, not a dock button or a third row. */
+export function playDeleteIsDockRow(): false {
+  return false;
+}
+
 export function anyEarlierShotCanOpenEdit(): true {
   return true;
 }
