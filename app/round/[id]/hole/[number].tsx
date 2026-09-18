@@ -5,7 +5,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCourseDataClient } from '@/src/course/client';
 import { teePointForHole, teePointFromHoleFeature } from '@/src/course/osmOverlay';
-import { formatParLabel, formatSiLabel } from '@/src/course/layout';
+import { formatParLabel } from '@/src/course/layout';
 import type { OsmOverlay } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
 import {
@@ -28,7 +28,7 @@ import {
 } from '@/src/db/repo';
 import { pinOrNull, formatFmbRow, hasApiFmb, yardsToGreenDepth } from '@/src/domain/greenDepth';
 import { clubPickLeaveHref, clubPickLeaveRunsAcceptFix, planClubPickLeave } from '@/src/domain/clubPickNav';
-import { COPY, finishPuttsChip, finishShotChip, formatHoleHeader, formatSuggestedClubChip, markedSuggestedMessage, voiceFailRecovery, yardsToGreenPlayerLabel } from '@/src/domain/playerCopy';
+import { COPY, finishPuttsChip, finishShotChip, formatHoleHeader, formatPlayHeader, formatSuggestedClubChip, markedSuggestedMessage, voiceFailRecovery } from '@/src/domain/playerCopy';
 import { canAdvanceHole, holesNeedingOpenShots } from '@/src/domain/holeAdvance';
 import { isPutterClubId } from '@/src/domain/defaultBag';
 import { catchUpPinFromTap, planCancelCatchUp, planCatchUpSheet } from '@/src/domain/catchUpMap';
@@ -63,7 +63,7 @@ import { reconcileHoleScore, scoreMismatchMessage } from '@/src/domain/scoreReco
 import { resolveStickyClub, selectClubForMark } from '@/src/domain/stickyClub';
 import type { Club, PenaltyReason } from '@/src/domain/types';
 import { matchSpokenClub, speechContextualStrings } from '@/src/domain/voiceClub';
-import { lastLandingMark, markToGreen, toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
+import { lastLandingMark, markToGreen, planPlayHeaderYards, toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
 import { describeGpsSource } from '@/src/services/location';
 import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, undoShotEdit, deleteHoleShot } from '@/src/services/shotActions';
 import { startClubSpeech, type ClubSpeechSession } from '@/src/services/speechClub';
@@ -397,9 +397,11 @@ export default function HoleScreen() {
   });
   const insertSlots = planInsertSlots(shots);
   const playLayout = planPlayLayout();
-  const toGreenCopy = yardsToGreenPlayerLabel(yardsToGreenResult, {
-    hasFix: Boolean(fix),
-    hasGreen: Boolean(green),
+  const playHeaderYards = planPlayHeaderYards({
+    phone: fix ? { lat: fix.lat, lng: fix.lng } : null,
+    green,
+    tee: holeTee,
+    courseYards: hole?.yards ?? null,
   });
 
   const openPuttSheet = useCallback(
@@ -1009,15 +1011,9 @@ export default function HoleScreen() {
                   <Text style={styles.backLabel}>{COPY.menu}</Text>
                 </Pressable>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.holeTitle}>{formatHoleHeader(hole.number, hole.par)}</Text>
-                  <Text style={styles.stickyMeta}>
-                    {formatSiLabel(hole.handicap)}
-                    {hole.yards != null ? ` · ${hole.yards} yd` : ''}
+                  <Text style={styles.holeTitle} numberOfLines={1}>
+                    {formatPlayHeader(hole.number, hole.par, playHeaderYards.yards)}
                   </Text>
-                </View>
-                <View style={styles.toGreenChip}>
-                  <Text style={styles.toGreenHeading}>{toGreenCopy.heading}</Text>
-                  <Text style={styles.toGreenValue}>{toGreenCopy.value}</Text>
                 </View>
               </View>
               {playLayout.shotLine === 'header' ? (
@@ -1700,22 +1696,7 @@ const styles = StyleSheet.create({
   back: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 },
   backLabel: { color: colors.lime, fontWeight: '800', fontSize: type.meta },
   holeTitle: { color: colors.cream, fontSize: type.body, fontWeight: '900' },
-  stickyMeta: { color: colors.muted, fontSize: type.tiny },
-  toGreenChip: {
-    minHeight: 44,
-    paddingHorizontal: 8,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-  toGreenHeading: {
-    color: colors.lime,
-    fontSize: type.tiny,
-    fontWeight: '800',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  toGreenValue: { color: colors.cream, fontSize: 22, fontWeight: '900' },
-  shotLine: { marginTop: 6, maxHeight: 36 },
+  shotLine: { marginTop: 6, maxHeight: 36, flexGrow: 0 },
   shotLineInner: { alignItems: 'center', gap: 6, paddingRight: 8 },
   shotLineItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   shotLineShot: {

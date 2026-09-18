@@ -5,6 +5,7 @@ import {
   finishPuttsChip,
   finishShotChip,
   formatHoleHeader,
+  formatPlayHeader,
   formatParLabel,
   formatPickerLeftYards,
   formatSiLabel,
@@ -22,6 +23,9 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(formatSiLabel(7), 'SI 7');
   assert.equal(formatHoleHeader(1, null), 'Hole 1 · Par unknown');
   assert.equal(formatHoleHeader(1, 4), 'Hole 1 · Par 4');
+  assert.equal(formatPlayHeader(1, 4, 371), 'Hole 1 · Par 4 · 371 yd');
+  assert.equal(formatPlayHeader(1, 4, null), 'Hole 1 · Par 4 · —');
+  assert.doesNotMatch(formatPlayHeader(1, 4, 371), /SI |Rating |Slope /);
   assert.equal(COPY.homeLede, 'Find a course nearby, pick your tee, start the round.');
   assert.equal(COPY.nearbyHint, 'Courses near you — pull to refresh.');
   assert.equal(COPY.waitingOnGreen, 'Waiting on green location.');

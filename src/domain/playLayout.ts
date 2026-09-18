@@ -12,7 +12,8 @@ export type PlayLayout = {
   map: 'fill';
   mapMinRatio: typeof PLAY_MAP_MIN_RATIO;
   header: 'overlay';
-  headerItems: readonly ['menu', 'hole', 'to-green', 'shots'];
+  headerItems: readonly ['menu', 'hole', 'shots'];
+  headerLines: 1;
   dockRows: readonly ['chips', 'actions'];
   dockActions: readonly PlayDockAction[];
   allClubs: 'chip';
@@ -28,7 +29,8 @@ export function planPlayLayout(): PlayLayout {
     map: 'fill',
     mapMinRatio: PLAY_MAP_MIN_RATIO,
     header: 'overlay',
-    headerItems: ['menu', 'hole', 'to-green', 'shots'],
+    headerItems: ['menu', 'hole', 'shots'],
+    headerLines: 1,
     dockRows: ['chips', 'actions'],
     dockActions: PLAY_DOCK_ACTIONS,
     allClubs: 'chip',
@@ -113,4 +115,40 @@ export function nextSuggestedIsNewButton(): false {
 
 export function nextSuggestedIsPrimaryChip(): true {
   return true;
+}
+
+/** Hole N · Par X plus yards. No SI. No tee rating. */
+export function playHeaderIsOneLine(): true {
+  return true;
+}
+
+export function playShowsSi(): false {
+  return false;
+}
+
+export function playShowsTeeRating(): false {
+  return false;
+}
+
+/** Shot list is one overlay row. Never a column under the map. */
+export function playShotLineIsColumn(): false {
+  return false;
+}
+
+export function playInsertPlusIsOwnBand(): false {
+  return false;
+}
+
+/** In play is the shot-row text only. Not text plus a badge. */
+export function playInPlayShowsTwice(): false {
+  return false;
+}
+
+/** Apple Maps Legal and compass stay. Header yards do not hide them. */
+export function playHidesMapsLegal(): false {
+  return false;
+}
+
+export function playHidesMapsCompass(): false {
+  return false;
 }

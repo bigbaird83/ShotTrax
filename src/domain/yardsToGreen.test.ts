@@ -7,6 +7,7 @@ import {
   lastClubMark,
   lastLandingMark,
   markToGreen,
+  planPlayHeaderYards,
   planToGreenDisplay,
   resolveGreenPin,
   toGreenDisplayFromHole,
@@ -233,6 +234,60 @@ test('lastClubMark is the latest shot start, never invented', () => {
       { seq: 2, startLat: 37.1, startLng: -122.1 },
     ]),
     { lat: 37.1, lng: -122.1 },
+  );
+});
+
+test('play header yards use the 600-yard check: couch is course, never 14,000', () => {
+  const tee = from;
+  const holeGreen = northOf(from, 371);
+  const couch = northOf(from, 14_000);
+  assert.ok(haversineYards(couch, holeGreen) > 600);
+  assert.ok(haversineYards(couch, tee) > 600);
+
+  const home = planPlayHeaderYards({
+    phone: couch,
+    green: holeGreen,
+    tee,
+    courseYards: 371,
+  });
+  assert.deepEqual(home, { yards: 371, source: 'course', quality: 'good' });
+  assert.notEqual(home.yards, Math.round(haversineYards(couch, holeGreen)));
+
+  const onTee = planPlayHeaderYards({
+    phone: tee,
+    green: holeGreen,
+    tee,
+    courseYards: 371,
+  });
+  assert.equal(onTee.source, 'live');
+  assert.equal(onTee.yards, roundYards(haversineYards(tee, holeGreen)));
+
+  const onFairway = planPlayHeaderYards({
+    phone: northOf(from, 200),
+    green: holeGreen,
+    tee,
+    courseYards: 371,
+  });
+  assert.equal(onFairway.source, 'live');
+  assert.ok((onFairway.yards ?? 0) <= 600);
+
+  assert.deepEqual(
+    planPlayHeaderYards({
+      phone: couch,
+      green: holeGreen,
+      tee,
+      courseYards: null,
+    }),
+    { yards: null, source: 'none', quality: 'none' },
+  );
+  assert.deepEqual(
+    planPlayHeaderYards({
+      phone: tee,
+      green: null,
+      tee,
+      courseYards: 371,
+    }),
+    { yards: null, source: 'none', quality: 'none' },
   );
 });
 

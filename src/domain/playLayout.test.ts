@@ -23,6 +23,14 @@ import {
   PLAY_REFRAME_ON,
   nextSuggestedIsNewButton,
   nextSuggestedIsPrimaryChip,
+  playHeaderIsOneLine,
+  playShowsSi,
+  playShowsTeeRating,
+  playShotLineIsColumn,
+  playInsertPlusIsOwnBand,
+  playInPlayShowsTwice,
+  playHidesMapsLegal,
+  playHidesMapsCompass,
 } from './playLayout';
 
 test('play map fills at least 60% down to a two-row dock; header is overlay', () => {
@@ -32,7 +40,9 @@ test('play map fills at least 60% down to a two-row dock; header is overlay', ()
   assert.equal(playMapMinRatio(), PLAY_MAP_MIN_RATIO);
   assert.ok(playMapMinRatio() >= 0.6);
   assert.equal(layout.header, 'overlay');
-  assert.deepEqual(layout.headerItems, ['menu', 'hole', 'to-green', 'shots']);
+  assert.deepEqual(layout.headerItems, ['menu', 'hole', 'shots']);
+  assert.equal(layout.headerLines, 1);
+  assert.equal(playHeaderIsOneLine(), true);
   assert.deepEqual(layout.dockRows, ['chips', 'actions']);
   assert.equal(playDockRowCount(), 2);
   assert.deepEqual(layout.dockActions, PLAY_DOCK_ACTIONS);
@@ -116,7 +126,11 @@ test('All clubs and Say a club are chips in row 1; edit is tap a shot, not a doc
   assert.match(hole, /toGreenDisplayFromHole/);
   assert.match(hole, /lastLandingMark/);
   assert.match(hole, /resolveNextShotDistanceTarget/);
-  assert.match(hole, /yardsToGreenPlayerLabel/);
+  assert.match(hole, /formatPlayHeader/);
+  assert.match(hole, /planPlayHeaderYards/);
+  assert.doesNotMatch(hole, /formatSiLabel/);
+  assert.doesNotMatch(hole, /formatTeeMeta/);
+  assert.doesNotMatch(hole, /styles\.stickyMeta|styles\.toGreenChip/);
   assert.doesNotMatch(dock, /COPY\.deleteShot/);
   const editSheet = hole.slice(hole.indexOf('visible={editOpen && !editClubOpen}'), hole.indexOf('visible={scoreOpen}'));
   assert.match(editSheet, /COPY\.deleteShot/);
@@ -169,4 +183,38 @@ test('tapping a previous shot shows Delete on that shot, not the dock', () => {
   assert.match(editSheet, /onDeleteShot\(editingShot\.id\)/);
   assert.match(hole, /deleteShotPrompt/);
   assert.match(hole, /prompt\.cancel/);
+});
+
+test('play header is one line; shot list is one overlay row with + and In play once', () => {
+  assert.equal(playHeaderIsOneLine(), true);
+  assert.equal(playShowsSi(), false);
+  assert.equal(playShowsTeeRating(), false);
+  assert.equal(playShotLineIsColumn(), false);
+  assert.equal(playInsertPlusIsOwnBand(), false);
+  assert.equal(playInPlayShowsTwice(), false);
+  assert.equal(playHidesMapsLegal(), false);
+  assert.equal(playHidesMapsCompass(), false);
+  assert.equal(playHeaderEatsMap(), false);
+  assert.ok(playMapMinRatio() >= 0.6);
+  assert.equal(playDockRowCount(), 2);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const play = hole.slice(0, hole.indexOf('<FullSheet'));
+  assert.match(play, /formatPlayHeader\(hole\.number, hole\.par, playHeaderYards\.yards\)/);
+  assert.match(play, /numberOfLines=\{1\}/);
+  assert.doesNotMatch(play, /formatSiLabel|SI unknown/);
+  assert.doesNotMatch(play, /formatTeeMeta|Rating |Slope /);
+  assert.match(play, /styles\.shotLine/);
+  assert.match(play, /horizontal/);
+  assert.match(play, /styles\.shotLinePlus/);
+  assert.doesNotMatch(play, /styles\.insertPlus/);
+  assert.doesNotMatch(play, /styles\.shotList/);
+  const overlayShots = play.slice(play.indexOf('playLayout.shotLine'), play.indexOf('!hideHoleButtons'));
+  assert.match(overlayShots, /COPY\.inPlay/);
+  assert.doesNotMatch(overlayShots, /QualityBadge/);
+  assert.match(overlayShots, /styles\.shotLinePlus/);
+
+  const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(map, /showsCompass=\{false\}/);
+  assert.doesNotMatch(map, /legalLabelInsets/);
 });

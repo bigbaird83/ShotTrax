@@ -167,6 +167,17 @@ export function formatHoleHeader(holeNumber: number, par: number | null): string
   return `Hole ${holeNumber} · ${formatParLabel(par)}`;
 }
 
+/** Play header: Hole N · Par X plus the yards. No SI. No tee rating. */
+export function formatPlayHeader(
+  holeNumber: number,
+  par: number | null,
+  yards: number | null,
+): string {
+  const yardsBit =
+    yards != null && Number.isFinite(yards) ? `${Math.round(yards)} yd` : '—';
+  return `${formatHoleHeader(holeNumber, par)} · ${yardsBit}`;
+}
+
 export function formatTeeMeta(tee: {
   name: string;
   rating: number | null;
