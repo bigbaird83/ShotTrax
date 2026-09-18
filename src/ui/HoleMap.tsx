@@ -22,7 +22,7 @@ import {
   regionIsHoleFrame,
 } from '@/src/domain/holeCamera';
 import { planDragShotLines } from '@/src/domain/placeToDrag';
-import { COPY } from '@/src/domain/playerCopy';
+import { COPY, showWaitingOnLocationLine } from '@/src/domain/playerCopy';
 import { isValidLatLng } from '@/src/domain/latLng';
 import { hasClosedGpsTrail, hasGpsStart } from '@/src/domain/shotSource';
 import { FmbRow } from './FmbRow';
@@ -114,13 +114,22 @@ function TrailFallback({
   hasFix?: boolean;
   hasGreen?: boolean;
 }) {
+  const yardsOnCard = Boolean(yardsToGreen && yardsToGreen.yards != null && Number.isFinite(yardsToGreen.yards));
+  const waiting = showWaitingOnLocationLine({
+    yards: yardsToGreen?.yards ?? null,
+    quality: yardsToGreen?.quality,
+    hasFix,
+    hasGreen,
+  });
   return (
     <View style={styles.fallback}>
       <Text style={styles.holeBadgeText}>Hole {holeNumber}</Text>
       {yardsToGreen ? (
         <YardsToGreenBadge result={yardsToGreen} hasFix={hasFix} hasGreen={hasGreen} />
       ) : null}
-      <Text style={styles.fallbackMsg}>{hasGreen ? COPY.waitingOnLocation : COPY.longPressGreen}</Text>
+      {!yardsOnCard ? (
+        <Text style={styles.fallbackMsg}>{waiting ? COPY.waitingOnLocation : hasGreen ? COPY.waitingOnGreen : COPY.longPressGreen}</Text>
+      ) : null}
     </View>
   );
 }
@@ -235,16 +244,12 @@ function NativeHoleMap({
 
   const lockedRegion = useMemo(() => {
     if (lockedPoints.length > 0) return holeFrameRegion(lockedPoints);
-    // Lock frame with no hole points: do not invent a phone/house region.
+    // Hole geometry (green / OSM / shot pins) still frames the map. Never the phone.
+    if (coords.length > 0) {
+      return holeFrameRegion(coords.map((point) => ({ lat: point.latitude, lng: point.longitude })));
+    }
     if (lockFrame) return null;
-    const fallback = coords[0];
-    if (!fallback) return null;
-    return {
-      latitude: fallback.latitude,
-      longitude: fallback.longitude,
-      latitudeDelta: 0.004,
-      longitudeDelta: 0.004,
-    };
+    return null;
   }, [lockedPoints, lockFrame, coords]);
 
   const dragLines = useMemo(() => {

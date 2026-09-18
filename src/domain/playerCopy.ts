@@ -193,6 +193,26 @@ export function formatTeeMeta(tee: {
   return bits.length ? `${tee.name} · ${bits.join(' · ')}` : tee.name;
 }
 
+/** Card yards already on screen → never also say we are waiting on location. */
+export function waitingOnLocationWhenYardsShown(): false {
+  return false;
+}
+
+export function yardsAreOnTheCard(result: { yards: number | null; quality?: string } | null | undefined): boolean {
+  return result?.yards != null && Number.isFinite(result.yards);
+}
+
+export function showWaitingOnLocationLine(args: {
+  yards: number | null;
+  quality?: string;
+  hasFix?: boolean;
+  hasGreen?: boolean;
+}): boolean {
+  if (yardsAreOnTheCard(args)) return false;
+  if (!args.hasGreen) return false;
+  return !args.hasFix;
+}
+
 export function yardsToGreenPlayerLabel(
   result: { yards: number | null; quality: string },
   ctx: { hasGreen?: boolean; hasFix?: boolean } = {},

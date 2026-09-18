@@ -197,12 +197,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   func pickSameClub() {
-    let clubId = list.lastClubId ?? list.top3.first ?? list.bag.first
-    guard let clubId else {
-      feedback = "Phone unavailable"
-      haptic(.failure)
-      return
-    }
+    guard let clubId = list.lastClubId else { return }
     pick(clubId: clubId)
   }
 
@@ -405,7 +400,11 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       next.yardsToGreen = nil
     }
     next.yardsQuality = message["yardsQuality"] as? String ?? "none"
-    next.lastClubId = message["lastClubId"] as? String ?? list.lastClubId
+    if let last = message["lastClubId"] as? String, !last.isEmpty {
+      next.lastClubId = last
+    } else {
+      next.lastClubId = nil
+    }
     list = next
     persist(next)
   }
@@ -438,6 +437,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     defaults?.set(state.yardsQuality, forKey: "yardsQuality")
     if let last = state.lastClubId {
       defaults?.set(last, forKey: "lastClubId")
+    } else {
+      defaults?.removeObject(forKey: "lastClubId")
     }
     defaults?.synchronize()
   }
@@ -451,7 +452,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       next.yardsToGreen = defaults?.integer(forKey: "yardsToGreen")
     }
     next.yardsQuality = defaults?.string(forKey: "yardsQuality") ?? "none"
-    next.lastClubId = defaults?.string(forKey: "lastClubId")
+    next.lastClubId = nil
     if hole > 0 {
       list = next
       receivedClubList = true

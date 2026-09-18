@@ -35,8 +35,16 @@ import {
   clubStripFillsBeforeSort,
   clubStripEstimatedEntersWheel,
   clubStripSeamGapOnly,
+  clubStripWrapsToFillEmptySide,
+  clubStripOpensOnSeam,
+  clubStripOpeningWindowIsThree,
+  clubStripNeighborPillsShowCarry,
+  clubStripVisiblePills,
+  clubStripOpeningIds,
+  openingClubStripWindow,
   CLUB_STRIP_GAP,
   CLUB_STRIP_SEAM_GAP,
+  CLUB_STRIP_VISIBLE_PILLS,
   PHONE_WHEEL_PILL_HEIGHT,
   WATCH_WHEEL_PILL_HEIGHT,
   phoneWheelPillTallerThanWatch,
@@ -63,6 +71,12 @@ test('strip is carry-sorted, full bag, putter off, center is closest to yards le
   assert.equal(clubStripOnlyTapMarks(), true);
   assert.equal(clubStripPutterIncluded(), false);
   assert.equal(clubStripCenterIsClosestCarry(), true);
+  assert.equal(clubStripWrapsToFillEmptySide(), false);
+  assert.equal(clubStripOpensOnSeam(), false);
+  assert.equal(clubStripOpeningWindowIsThree(), true);
+  assert.equal(clubStripNeighborPillsShowCarry(), true);
+  assert.equal(clubStripVisiblePills(), 3);
+  assert.equal(CLUB_STRIP_VISIBLE_PILLS, 3);
   assert.equal(clubStripCenterIsTeeClub(), false);
   assert.equal(clubStripPhoneMatchesWatch(), true);
   assert.equal(clubStripTapMarksLikeChip(), true);
@@ -227,10 +241,13 @@ test('phone strip tap is the old chip mark, and the center pill is closest to ho
 
 test('phone and Watch strip UIs peek neighbors and mark only on tap', () => {
   const phone = readFileSync(new URL('../ui/ClubStrip.tsx', import.meta.url), 'utf8');
-  assert.match(phone, /PILL_RATIO = 0\.62/);
+  assert.match(phone, /CLUB_STRIP_VISIBLE_PILLS/);
+  assert.match(phone, /windowStart/);
   assert.match(phone, /onPress=\{\(\) => onPick\(item\.id\)\}/);
   assert.match(phone, /scrollTo/);
-  assert.match(phone, /paddingHorizontal: Math.max\(0, \(width - pillWidth\) \/ 2\)/);
+  assert.match(phone, /paddingHorizontal: 0/);
+  assert.doesNotMatch(phone, /PILL_RATIO = 0\.62/);
+  assert.doesNotMatch(phone, /width \* 0\.62/);
   assert.match(phone, /onMomentumScrollEnd=\{onWrapSettle\}/);
   assert.match(phone, /onScrollEndDrag=\{onWrapSettle\}/);
   assert.match(phone, /wrapClubStripIndex/);
@@ -269,8 +286,8 @@ test('phone and Watch strip UIs peek neighbors and mark only on tap', () => {
   assert.match(watch, /height: 36/);
   assert.match(watch, /ScrollView\(\.horizontal/);
   assert.match(watch, /onTapGesture/);
-  assert.match(watch, /scrollTo\(stripPickToken/);
-  assert.match(watch, /anchor: \.center/);
+  assert.match(watch, /scrollTo\(stripWindowToken/);
+  assert.match(watch, /anchor: \.leading/);
   assert.match(watch, /sorted \{ \$0\.carry < \$1\.carry \}/);
   assert.match(watch, /session\.list\.bag/);
   assert.match(watch, /compactMap/);
@@ -415,4 +432,69 @@ test('fill estimated carries before sort; estimable iron is in, outside the span
   const resolve = src.slice(src.indexOf('export function resolveWheelCarries'), src.indexOf('export function planClubStrip'));
   assert.match(resolve, /fillEstimatedCarries/);
   assert.ok(resolve.indexOf('fillEstimatedCarries') < src.indexOf('.sort((a, b) => a.carry - b.carry)'));
+});
+
+test('282-yard hole opens 2i, 3W, Dr with no wedge; 100-yard hole centers the closest wedge', () => {
+  assert.equal(clubStripWrapsToFillEmptySide(), false);
+  assert.equal(clubStripOpensOnSeam(), false);
+  assert.equal(clubStripOpeningWindowIsThree(), true);
+  assert.equal(clubStripNeighborPillsShowCarry(), true);
+  assert.deepEqual(openingClubStripWindow({ count: 5, closestIndex: 4 }), { windowStart: 2, openIndex: 3 });
+  assert.deepEqual(openingClubStripWindow({ count: 5, closestIndex: 1 }), { windowStart: 0, openIndex: 1 });
+
+  const tee = planClubStrip({
+    clubs: [
+      { id: 'club_driver', carry: 280 },
+      { id: 'club_3w', carry: 260 },
+      { id: 'club_2i', carry: 243 },
+      { id: 'club_pw', carry: 130 },
+      { id: 'club_gw', carry: 110 },
+      { id: PUTTER_CLUB_ID, carry: 8 },
+    ],
+    yardsLeft: 282,
+  });
+  assert.deepEqual(tee.ids, ['club_gw', 'club_pw', 'club_2i', 'club_3w', 'club_driver']);
+  assert.equal(tee.pickId, 'club_driver');
+  assert.notEqual(tee.pickId, 'club_2i');
+  assert.deepEqual(clubStripOpeningIds(tee.ids, tee.windowStart), ['club_2i', 'club_3w', 'club_driver']);
+  assert.equal(tee.ids[tee.openIndex], 'club_3w');
+  assert.equal(tee.ids[tee.windowStart], 'club_2i');
+  assert.equal(tee.ids[tee.windowStart + 2], 'club_driver');
+  assert.ok(!clubStripOpeningIds(tee.ids, tee.windowStart).includes('club_gw'));
+  assert.ok(!clubStripOpeningIds(tee.ids, tee.windowStart).includes('club_pw'));
+  assert.ok(!tee.ids.includes(PUTTER_CLUB_ID));
+  assert.equal(tee.carries.club_driver, 280);
+  assert.equal(tee.carries.club_2i, 243);
+  assert.equal(formatSuggestedClubChip('2i', 243), '2i · 243');
+  assert.equal(formatSuggestedClubChip('3W', 260), '3W · 260');
+  assert.equal(formatSuggestedClubChip('Dr', 280), 'Dr · 280');
+
+  const wedge = planClubStrip({
+    clubs: [
+      { id: 'club_driver', carry: 280 },
+      { id: 'club_pw', carry: 120 },
+      { id: 'club_gw', carry: 105 },
+      { id: 'club_sw', carry: 90 },
+      { id: 'club_lw', carry: 75 },
+    ],
+    yardsLeft: 100,
+  });
+  assert.equal(wedge.pickId, 'club_gw');
+  assert.notEqual(wedge.pickId, 'club_driver');
+  assert.equal(wedge.ids[wedge.openIndex], 'club_gw');
+  assert.deepEqual(clubStripOpeningIds(wedge.ids, wedge.windowStart), ['club_sw', 'club_gw', 'club_pw']);
+  assert.equal(wedge.ids[wedge.openIndex - 1], 'club_sw');
+  assert.equal(wedge.ids[wedge.openIndex + 1], 'club_pw');
+  assert.ok(!clubStripOpeningIds(wedge.ids, wedge.windowStart).includes('club_driver'));
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  assert.match(hole, /windowStart=\{stripPlan\.windowStart\}/);
+  const phone = readFileSync(new URL('../ui/ClubStrip.tsx', import.meta.url), 'utf8');
+  assert.match(phone, /windowStart/);
+  assert.match(phone, /item\.label/);
+  const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  assert.match(watch, /stripWindowStart/);
+  assert.match(watch, /stripWindowToken/);
+  assert.match(watch, /anchor: \.leading/);
+  assert.doesNotMatch(watch, /0\.62/);
 });

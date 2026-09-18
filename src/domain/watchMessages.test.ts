@@ -159,7 +159,7 @@ test('clubList push key changes on hole, fix quality, and bag rank', () => {
   assert.notEqual(clubListPushKey(base), clubListPushKey(quality));
   assert.notEqual(clubListPushKey(base), clubListPushKey(none));
   assert.notEqual(clubListPushKey(base), clubListPushKey(rank));
-  assert.equal(clubListPushKey(base), clubListPushKey(sameYardsLastClub));
+  assert.notEqual(clubListPushKey(base), clubListPushKey(sameYardsLastClub));
 });
 
 test('clubPick required keys are type, clubId, ISO8601 at; Watch GPS is optional stretch', () => {

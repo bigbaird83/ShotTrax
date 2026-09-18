@@ -1171,6 +1171,7 @@ export default function HoleScreen() {
               <ClubStrip
                 items={stripItems}
                 pickId={stripPlan.pickId}
+                windowStart={stripPlan.windowStart}
                 disabled={readOnly || placing}
                 onPick={(id) => {
                   if (placing) return;
@@ -1181,23 +1182,27 @@ export default function HoleScreen() {
             </View>
           </View>
           <View style={styles.dockRow}>
-            <Pressable
-              accessibilityRole="button"
-              disabled={busy || readOnly || !sticky || placing}
-              onPress={() => void onMark()}
-              style={styles.dockAction}>
-              <Text style={styles.dockActionText}>
-                {sticky ? `${COPY.stickyClub} · ${sticky.shortName}` : COPY.stickyClub}
-              </Text>
-              <MarkCheck nonce={checkNonce} />
-            </Pressable>
+            {sticky ? (
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy || readOnly || placing}
+                onPress={() => void onMark()}
+                style={styles.dockAction}>
+                <Text style={styles.dockActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                  {`${COPY.stickyClub} · ${sticky.shortName}`}
+                </Text>
+                <MarkCheck nonce={checkNonce} />
+              </Pressable>
+            ) : null}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={COPY.allClubs}
               disabled={readOnly || placing}
               onPress={openBag}
               style={styles.dockAction}>
-              <Text style={styles.dockActionText}>{COPY.allClubs}</Text>
+              <Text style={styles.dockActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                {COPY.allClubs}
+              </Text>
             </Pressable>
             {!readOnly ? (
               <Pressable
@@ -1205,28 +1210,36 @@ export default function HoleScreen() {
                 disabled={placing}
                 onPress={() => startCatchUp(null)}
                 style={styles.dockAction}>
-                <Text style={styles.dockActionText}>{COPY.addShot}</Text>
+                <Text style={styles.dockActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                  {COPY.addShot}
+                </Text>
               </Pressable>
             ) : null}
             <Pressable
               accessibilityRole="button"
               onPress={() => setScorecardOpen(true)}
-              style={styles.dockAction}>
-              <Text style={styles.dockActionText}>{COPY.scorecard}</Text>
+              style={[styles.dockAction, styles.dockScorecard]}>
+              <Text style={styles.dockScorecardText} numberOfLines={1}>
+                {COPY.scorecard}
+              </Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
               disabled={readOnly || holeNumber <= 1}
               onPress={() => goToHole(holeNumber - 1)}
               style={styles.dockAction}>
-              <Text style={styles.dockActionText}>{COPY.prevHole}</Text>
+              <Text style={styles.dockActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                {COPY.prevHole}
+              </Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
               disabled={readOnly || !canAdvanceHole({ holeNumber, holeCount: round.holeCount })}
               onPress={() => goToHole(holeNumber + 1)}
               style={styles.dockAction}>
-              <Text style={styles.dockActionText}>{COPY.nextHole}</Text>
+              <Text style={styles.dockActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                {COPY.nextHole}
+              </Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
@@ -1234,7 +1247,9 @@ export default function HoleScreen() {
               disabled={placing}
               onPress={() => void onListen()}
               style={styles.dockAction}>
-              <Text style={styles.dockActionText}>{listening ? COPY.listening : COPY.sayClub}</Text>
+              <Text style={styles.dockActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                {listening ? COPY.listening : COPY.sayClub}
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -1805,7 +1820,7 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     gap: 8,
   },
-  dockRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dockRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'nowrap', gap: 6 },
   dockStrip: { flex: 1, minWidth: 0, height: 60 },
   dockChip: {
     flex: 1,
@@ -1845,6 +1860,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   dockActionText: { color: colors.cream, fontWeight: '800', fontSize: 11, textAlign: 'center' },
+  dockScorecard: { flexGrow: 1.15, flexShrink: 0, minWidth: 72, paddingHorizontal: 4 },
+  dockScorecardText: {
+    color: colors.cream,
+    fontWeight: '800',
+    fontSize: 11,
+    textAlign: 'center',
+  },
   top3: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingTop: 8 },
   top3Chip: {
     flex: 1,

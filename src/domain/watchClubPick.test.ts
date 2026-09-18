@@ -58,6 +58,7 @@ import {
   watchStripInventZero,
   watchOneHomeOnly,
   watchSameClubSharesRowWithAllClubs,
+  watchSameClubVisibleWithoutShot,
   watchBackHomeAreTinyText,
   wrapWatchClubStripIndex,
 } from './watchClubPick';
@@ -75,6 +76,7 @@ test('Watch opens on the same top 3 as the phone; no scroll to hit one', () => {
   assert.equal(watchRestOfBagBelowAllClubs(), true);
   assert.equal(watchSameClubSitsAboveTop3(), false);
   assert.equal(watchSameClubSitsOnFirstScreen(), true);
+  assert.equal(watchSameClubVisibleWithoutShot(), false);
   assert.equal(watchFirstScreenFitsWithoutScroll(), true);
   assert.equal(watchBackHomeDarkensRows(), false);
   assert.equal(watchSameClubIsLightOnDark(), true);
@@ -122,6 +124,7 @@ test('Watch opens on the same top 3 as the phone; no scroll to hit one', () => {
   const sameClub = pick.slice(sameAt, allClubsAt);
   assert.match(sameClub, /Color\("cream"\)/);
   assert.doesNotMatch(sameClub, /Color\.black|borderedProminent/);
+  assert.match(pick.slice(pick.indexOf('HStack(spacing: 6)'), pick.indexOf('if showAllClubs')), /lastClubId/);
   assert.match(pick.slice(pick.indexOf('HStack(spacing: 6)'), pick.indexOf('if showAllClubs')), /pickSameClub/);
   assert.match(pick.slice(pick.indexOf('HStack(spacing: 6)'), pick.indexOf('if showAllClubs')), /Text\("All clubs"\)/);
   assert.match(watchUi, /"Same club · \\\(name\)"/);
@@ -227,6 +230,42 @@ test('Watch suggested strip shows carry, opens on the pick, and is not stacked r
   assert.equal(strip.ids[strip.openIndex], 'club_6i');
   assert.equal(strip.ids[strip.openIndex - 1], 'club_7i');
   assert.equal(strip.ids[strip.openIndex + 1], 'club_5i');
+  const tee282 = planWatchClubStrip({
+    bag: ['club_driver', 'club_3w', 'club_2i', 'club_pw', 'club_gw', PUTTER_CLUB_ID],
+    labels: {
+      club_driver: 'Dr · 280',
+      club_3w: '3W · 260',
+      club_2i: '2i · 243',
+      club_pw: 'PW · 130',
+      club_gw: 'GW · 110',
+    },
+    holeYards: 282,
+  });
+  assert.deepEqual(tee282.ids.slice(tee282.windowStart, tee282.windowStart + 3), [
+    'club_2i',
+    'club_3w',
+    'club_driver',
+  ]);
+  assert.equal(tee282.pickId, 'club_driver');
+  assert.ok(!tee282.ids.slice(tee282.windowStart, tee282.windowStart + 3).includes('club_gw'));
+
+  const mid100 = planWatchClubStrip({
+    bag: ['club_driver', 'club_pw', 'club_gw', 'club_sw', 'club_lw'],
+    labels: {
+      club_driver: 'Dr · 280',
+      club_pw: 'PW · 120',
+      club_gw: 'GW · 105',
+      club_sw: 'SW · 90',
+      club_lw: 'LW · 75',
+    },
+    holeYards: 100,
+  });
+  assert.equal(mid100.pickId, 'club_gw');
+  assert.equal(mid100.ids[mid100.openIndex], 'club_gw');
+  assert.equal(mid100.ids[mid100.openIndex - 1], 'club_sw');
+  assert.equal(mid100.ids[mid100.openIndex + 1], 'club_pw');
+  assert.ok(!mid100.ids.slice(mid100.windowStart, mid100.windowStart + 3).includes('club_driver'));
+
   assert.ok((watchCarryFromLabel('5i · 205') ?? 0) > (watchCarryFromLabel('6i · 185') ?? 0));
   assert.ok((watchCarryFromLabel('7i · 165') ?? 0) < (watchCarryFromLabel('6i · 185') ?? 0));
   assert.deepEqual(
@@ -246,8 +285,9 @@ test('Watch suggested strip shows carry, opens on the pick, and is not stacked r
   const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
   const stripUi = watchUi.slice(watchUi.indexOf('ScrollView(.horizontal'), watchUi.indexOf('pickSameClub'));
   assert.match(stripUi, /onTapGesture/);
-  assert.match(stripUi, /scrollTo\(stripPickToken/);
-  assert.match(stripUi, /anchor: \.center/);
+  assert.match(stripUi, /scrollTo\(stripWindowToken/);
+  assert.match(stripUi, /anchor: \.leading/);
+  assert.match(stripUi, /stripWindowStart/);
   assert.match(stripUi, /stripPickId/);
   assert.match(watchUi, /wheelClubs/);
   assert.match(watchUi, /seamAfter/);
@@ -376,6 +416,9 @@ test('a bag club under All clubs marks with the same rules as a top-3 tap', () =
   assert.doesNotMatch(bagBtn, /leave\(|clubNav/);
 
   const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+  const sameFn = session.slice(session.indexOf('func pickSameClub'), session.indexOf('func leave'));
+  assert.match(sameFn, /guard let clubId = list.lastClubId/);
+  assert.doesNotMatch(sameFn, /top3\.first|bag\.first/);
   const pickFn = session.slice(session.indexOf('func pick(clubId: String)'), session.indexOf('func addPutt'));
   assert.match(pickFn, /"type": "clubPick"/);
   assert.match(pickFn, /attachWatchFix/);

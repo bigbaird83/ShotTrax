@@ -14,6 +14,9 @@ import {
   markedSuggestedMessage,
   voiceFailRecovery,
   yardsToGreenPlayerLabel,
+  showWaitingOnLocationLine,
+  waitingOnLocationWhenYardsShown,
+  yardsAreOnTheCard,
 } from './playerCopy';
 
 test('player copy uses words, never ? or SI jargon dump', () => {
@@ -104,6 +107,17 @@ test('yards to green is a big number or — plus waiting copy', () => {
   );
   assert.equal(missing.value, '—');
   assert.equal(missing.detail, COPY.waitingOnGreen);
+
+  assert.equal(waitingOnLocationWhenYardsShown(), false);
+  assert.equal(yardsAreOnTheCard({ yards: 282, quality: 'good' }), true);
+  assert.equal(
+    showWaitingOnLocationLine({ yards: 282, quality: 'good', hasFix: false, hasGreen: true }),
+    false,
+  );
+  assert.equal(
+    showWaitingOnLocationLine({ yards: null, quality: 'none', hasFix: false, hasGreen: true }),
+    true,
+  );
 });
 
 test('voice fail recovery is Pick a club plus Say again, never voice-only', () => {

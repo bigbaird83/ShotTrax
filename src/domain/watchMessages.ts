@@ -268,6 +268,7 @@ export function clubListPushKey(msg: ClubListMessage): string {
     holeNumber: msg.holeNumber,
     yardsToGreen: msg.yardsToGreen,
     yardsQuality: msg.yardsQuality,
+    lastClubId: msg.lastClubId ?? null,
   });
 }
 
