@@ -14,6 +14,9 @@ import {
   markedSuggestedMessage,
   voiceFailRecovery,
   yardsToGreenPlayerLabel,
+  showWaitingOnLocationLine,
+  waitingOnLocationWhenYardsShown,
+  yardsAreOnTheCard,
 } from './playerCopy';
 
 test('player copy uses words, never ? or SI jargon dump', () => {
@@ -77,6 +80,7 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.cancelPlace, 'Cancel');
   assert.equal(COPY.confirmPlace, 'Confirm shot');
   assert.equal(COPY.openPhone, 'open the phone');
+  assert.equal(COPY.selectCourse, 'Select course');
   assert.equal(COPY.prevHole, 'Prev hole');
   assert.equal(COPY.nextHole, 'Next hole');
   assert.equal(COPY.courseDistance, 'Course distance');
@@ -104,6 +108,19 @@ test('yards to green is a big number or — plus waiting copy', () => {
   );
   assert.equal(missing.value, '—');
   assert.equal(missing.detail, COPY.waitingOnGreen);
+
+  assert.equal(waitingOnLocationWhenYardsShown(), false);
+  assert.equal(yardsAreOnTheCard({ yards: 282, quality: 'good' }), true);
+  assert.equal(
+    showWaitingOnLocationLine({ yards: 282, quality: 'good', hasFix: false, hasGreen: true }),
+    false,
+  );
+  assert.equal(yardsToGreenPlayerLabel({ yards: 282, quality: 'none' }).value, '282');
+  assert.doesNotMatch(yardsToGreenPlayerLabel({ yards: 282, quality: 'none' }).detail, /Waiting/);
+  assert.equal(
+    showWaitingOnLocationLine({ yards: null, quality: 'none', hasFix: false, hasGreen: true }),
+    true,
+  );
 });
 
 test('voice fail recovery is Pick a club plus Say again, never voice-only', () => {

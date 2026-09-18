@@ -2,7 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { GpsFix, Shot } from '@/src/domain/types';
 import type { YardsToGreenResult } from '@/src/sensing/yardsToGreen';
 import type { OsmOverlay } from '@/src/course/types';
-import { COPY } from '@/src/domain/playerCopy';
+import { COPY, showWaitingOnLocationLine, yardsAreOnTheCard } from '@/src/domain/playerCopy';
 import { YardsToGreenBadge } from './YardsToGreenBadge';
 import { colors, type } from './theme';
 
@@ -32,18 +32,38 @@ type Props = {
   style?: object;
 };
 
-export function HoleMap({ holeNumber, userFix, green, yardsToGreen, placeHint }: Props) {
+export function HoleMap({
+  holeNumber,
+  userFix,
+  green,
+  yardsToGreen,
+  placeHint,
+  hideYardsOverlay,
+}: Props) {
   return (
     <View style={styles.fallback}>
       <Text style={styles.title}>Hole {holeNumber}</Text>
-      <YardsToGreenBadge
-        result={yardsToGreen}
-        hasFix={Boolean(userFix)}
-        hasGreen={Boolean(green)}
-      />
-      <Text style={styles.msg}>
-        {placeHint ?? (green ? COPY.waitingOnLocation : COPY.longPressGreen)}
-      </Text>
+      {!hideYardsOverlay ? (
+        <YardsToGreenBadge
+          result={yardsToGreen}
+          hasFix={Boolean(userFix)}
+          hasGreen={Boolean(green)}
+        />
+      ) : null}
+      {!hideYardsOverlay && !placeHint && !yardsAreOnTheCard(yardsToGreen) ? (
+        <Text style={styles.msg}>
+          {showWaitingOnLocationLine({
+            yards: yardsToGreen.yards,
+            quality: yardsToGreen.quality,
+            hasFix: Boolean(userFix),
+            hasGreen: Boolean(green),
+          })
+            ? COPY.waitingOnLocation
+            : green
+              ? COPY.waitingOnGreen
+              : COPY.longPressGreen}
+        </Text>
+      ) : null}
     </View>
   );
 }

@@ -100,6 +100,19 @@ export function playShowsTallSameClub(): false {
   return false;
 }
 
+/** Scorecard is one word on one line. It does not wrap to "Scoreca" / "rd". */
+export function playScorecardWraps(): false {
+  return false;
+}
+
+export function playSameClubHiddenUntilShot(): true {
+  return true;
+}
+
+export function playMapMountsWhenYardsShown(): true {
+  return true;
+}
+
 export function playEmptyMiddle(): false {
   return false;
 }

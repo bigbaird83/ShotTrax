@@ -3,7 +3,9 @@ import { NativeSyntheticEvent, NativeScrollEvent, Pressable, ScrollView, StyleSh
 import {
   CLUB_STRIP_GAP,
   CLUB_STRIP_SEAM_GAP,
+  CLUB_STRIP_VISIBLE_PILLS,
   PHONE_WHEEL_PILL_HEIGHT,
+  clubStripWindowKey,
   wrapClubStripIndex,
 } from '../domain/clubStrip';
 import { colors, type } from './theme';
@@ -16,25 +18,31 @@ export type ClubStripItem = {
 type Props = {
   items: ClubStripItem[];
   pickId: string | null;
+  /** First fully visible club in the opening window. Not a wrap/seam. */
+  windowStart?: number;
   onPick: (id: string) => void;
   disabled?: boolean;
   compact?: boolean;
 };
 
-const PILL_RATIO = 0.62;
 const LOOP_COPIES = 3;
 
-/** Sideways carry wheel. Peek shorter left / longer right. Tap marks; swipe does not. */
-export function ClubStrip({ items, pickId, onPick, disabled, compact }: Props) {
+function pillWidthForStrip(width: number, count: number, compact?: boolean): number {
+  if (width <= 0) return 0;
+  const visible = Math.min(CLUB_STRIP_VISIBLE_PILLS, Math.max(count, 1));
+  const gaps = Math.max(0, visible - 1);
+  const raw = (width - CLUB_STRIP_GAP * gaps) / visible;
+  return Math.max(compact ? 56 : 72, raw);
+}
+
+/** Sideways carry wheel. Three full pills. Tap selects; swipe does not mark. */
+export function ClubStrip({ items, pickId, windowStart = 0, onPick, disabled, compact }: Props) {
   const scrollRef = useRef<ScrollView>(null);
   const [width, setWidth] = useState(0);
-  const pillWidth = Math.max(compact ? 72 : 96, width * PILL_RATIO);
+  const pillWidth = pillWidthForStrip(width, items.length, compact);
   const loops = items.length > 1 ? LOOP_COPIES : 1;
   const origin = items.length > 1 ? items.length : 0;
-  const openIndex = Math.max(
-    0,
-    items.findIndex((item) => item.id === pickId),
-  );
+  const start = Math.max(0, Math.min(windowStart, Math.max(items.length - 1, 0)));
   const looped = Array.from({ length: loops }, (_, copy) =>
     items.map((item, index) => ({
       ...item,
@@ -71,10 +79,17 @@ export function ClubStrip({ items, pickId, onPick, disabled, compact }: Props) {
     });
   };
 
+  const windowKey = clubStripWindowKey(
+    items.map((item) => item.id),
+    start,
+  );
+
   useEffect(() => {
     if (width <= 0 || items.length === 0) return;
-    scrollToIndex(origin + openIndex, false);
-  }, [items, openIndex, origin, pickId, pillWidth, width]);
+    scrollToIndex(origin + start, false);
+    // Selection / label changes do not re-open the window. A new hole updates windowKey.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [windowKey, origin, pillWidth, width]);
 
   const settleWrap = (x: number) => {
     if (items.length <= 1 || width <= 0) return;
@@ -104,7 +119,7 @@ export function ClubStrip({ items, pickId, onPick, disabled, compact }: Props) {
           onMomentumScrollEnd={onWrapSettle}
           onScrollEndDrag={onWrapSettle}
           contentContainerStyle={{
-            paddingHorizontal: Math.max(0, (width - pillWidth) / 2),
+            paddingHorizontal: 0,
             alignItems: 'center',
           }}>
           {looped.map((item) => {
@@ -123,6 +138,8 @@ export function ClubStrip({ items, pickId, onPick, disabled, compact }: Props) {
                 ]}>
                 <Text
                   numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
                   style={[styles.label, compact && styles.labelCompact, pick && styles.labelPick]}>
                   {item.label}
                 </Text>
@@ -146,7 +163,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgElevated,
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
   },
   pillCompact: { height: 36, borderRadius: 10 },
   pillPick: { borderColor: colors.lime, borderWidth: 2, backgroundColor: '#1C3A24' },

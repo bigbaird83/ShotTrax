@@ -51,6 +51,9 @@ import {
   playSameClubSitsUnderWheel,
   playAllClubsSitsUnderWheel,
   playAllClubsSitsBesideWheel,
+  playScorecardWraps,
+  playSameClubHiddenUntilShot,
+  playMapMountsWhenYardsShown,
 } from './playLayout';
 
 test('play map fills at least 60% down to a two-row dock; header is overlay', () => {
@@ -117,16 +120,16 @@ test('play hole screen uses the fill layout and does not keep the empty middle',
   assert.equal(playShowsUserLocationFit(), false);
   assert.deepEqual([...PLAY_REFRAME_ON], ['open', 'prev', 'next', 'scorecard_return', 'menu_return']);
   assert.match(hole, /resolveHoleTee/);
-  assert.match(hole, /teePointFromHoleFeature/);
+  assert.match(hole, /resolveOverlayTee/);
   assert.equal(playUsesAddShotCamera(), true);
 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   assert.match(map, /holeMapShowsUserLocation\(Boolean\(lockFrame\)\)/);
   assert.match(map, /styles\.mapCover/);
-  assert.match(map, /if \(lockFrame\) return null;/);
+  assert.match(map, /tee \+ green only/);
   assert.doesNotMatch(
     map.slice(map.indexOf('const lockedRegion'), map.indexOf('const dragLines')),
-    /userFix/,
+    /userFix|coords\.length/,
   );
   const fitBlock = map.slice(map.indexOf('if (lockFrame) {'), map.indexOf('mapRef.current?.fitToCoordinates'));
   assert.match(fitBlock, /if \(framedOnce\.current\) return;/);
@@ -234,7 +237,8 @@ test('after a shot lands the next suggested club is already the primary chip', (
   assert.match(hole, /<ClubStrip/);
   assert.match(hole, /planClubStrip/);
   assert.match(hole, /target\?\.dYards/);
-  assert.match(hole, /void markClub\(full\)/);
+  assert.match(hole, /applyWheelSelection/);
+  assert.doesNotMatch(hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.allClubs')), /void markClub\(full\)/);
   assert.match(hole, /resolveNextShotDistanceTarget/);
   assert.match(hole, /lastLandingMark/);
   assert.doesNotMatch(hole, /nextClub|Next club|suggestedButton/);
@@ -274,6 +278,8 @@ test('play header is one line; shot list is one overlay row with + and In play o
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const play = hole.slice(0, hole.indexOf('<FullSheet'));
   assert.match(play, /formatPlayHeader\(hole\.number, hole\.par, playHeaderYards\.yards\)/);
+  assert.match(play, /yardsToGreen: playHeaderYards\.yards/);
+  assert.match(hole, /planPlayHeaderYards\(\{[\s\S]*?shots,/);
   assert.match(play, /numberOfLines=\{1\}/);
   assert.doesNotMatch(play, /formatSiLabel|SI unknown/);
   assert.doesNotMatch(play, /formatTeeMeta|Rating |Slope /);
@@ -321,4 +327,37 @@ test('Add shot hides the user puck, Legal, and compass; play and edit wait for a
   assert.match(map, /showsCompass=\{allowMapsChrome && mapsChrome\}/);
   assert.doesNotMatch(map, /followsUserLocation=\{true\}/);
   assert.doesNotMatch(map, /showsUserLocation=\{true\}/);
+});
+
+test('play map still mounts; waiting line is off when 282 is on the card; Scorecard is one word; Same club waits for a shot', () => {
+  assert.equal(playMapMountsWhenYardsShown(), true);
+  assert.equal(playScorecardWraps(), false);
+  assert.equal(playSameClubHiddenUntilShot(), true);
+  assert.ok(playMapMinRatio() >= 0.6);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const play = hole.slice(0, hole.indexOf('<FullSheet'));
+  assert.match(play, /<HoleMap/);
+  assert.match(play, /styles\.mapFill/);
+  assert.match(hole, /minHeight: '60%'/);
+  assert.match(play, /\{sticky \? \(/);
+  assert.match(hole, /styles\.dockScorecard/);
+  assert.match(play, /numberOfLines=\{1\}/);
+  assert.match(play, /COPY\.scorecard/);
+  assert.doesNotMatch(hole, /'Scoreca'|"Scoreca"/);
+
+  const dock = hole.slice(hole.indexOf('styles.dock'), hole.indexOf('<FullSheet'));
+  const scorecard = dock.slice(dock.indexOf('COPY.scorecard') - 120, dock.indexOf('COPY.scorecard') + 40);
+  assert.match(scorecard, /numberOfLines=\{1\}/);
+  assert.match(scorecard, /dockScorecard/);
+
+  const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
+  assert.match(map, /MapView/);
+  assert.match(map, /showWaitingOnLocationLine/);
+  assert.match(map, /!yardsOnCard/);
+  assert.match(map.slice(map.indexOf('function TrailFallback'), map.indexOf('function NativeHoleMap')), /yardsOnCard/);
+  assert.doesNotMatch(
+    map.slice(map.indexOf('function TrailFallback'), map.indexOf('function NativeHoleMap')),
+    /hasGreen \? COPY\.waitingOnLocation/,
+  );
 });

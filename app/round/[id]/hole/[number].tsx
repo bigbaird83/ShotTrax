@@ -4,7 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCourseDataClient } from '@/src/course/client';
-import { teePointForHole, teePointFromHoleFeature } from '@/src/course/osmOverlay';
+import {
+  cachedOsmOverlay,
+  cachedResolvedTee,
+  rememberOsmOverlay,
+  rememberResolvedTee,
+  resolveOverlayTee,
+} from '@/src/course/osmOverlay';
 import { formatParLabel } from '@/src/course/layout';
 import type { OsmOverlay } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
@@ -32,11 +38,12 @@ import { COPY, finishPuttsChip, finishShotChip, formatHoleHeader, formatPlayHead
 import { canAdvanceHole, holesNeedingOpenShots } from '@/src/domain/holeAdvance';
 import { isPutterClubId } from '@/src/domain/defaultBag';
 import { catchUpPinFromTap, planCancelCatchUp, planCatchUpSheet } from '@/src/domain/catchUpMap';
-import { lockHoleCamera, resolveHoleTee, shotPinsForHoleCamera, type LockedHoleCamera } from '@/src/domain/holeCamera';
+import { addShotFramePoints, lockHoleCamera, resolveHoleTee, shotPinsForHoleCamera, type LockedHoleCamera } from '@/src/domain/holeCamera';
 import { deleteShotPrompt } from '@/src/domain/deleteShot';
 import { planInsertSlots } from '@/src/domain/insertShot';
 import { confirmUndoIsLive, planConfirmUndo, type ConfirmUndoWindow } from '@/src/domain/confirmUndo';
 import { confirmPlaceToDraft, courseGreenCenterForLine, resolveAddShotFromPin } from '@/src/domain/placeToDrag';
+import { applyWheelSelection } from '@/src/domain/clubSelect';
 import { planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
 import { planPlayLayout } from '@/src/domain/playLayout';
 import { planPlacedShot } from '@/src/domain/shotSource';
@@ -102,6 +109,7 @@ export default function HoleScreen() {
   const [penaltyOpen, setPenaltyOpen] = useState(false);
   const [scoreOpen, setScoreOpen] = useState(false);
   const [scorecardOpen, setScorecardOpen] = useState(false);
+  const [selectedClubId, setSelectedClubId] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [playFrameNonce, setPlayFrameNonce] = useState(0);
   const [mapFramed, setMapFramed] = useState(false);
@@ -288,6 +296,7 @@ export default function HoleScreen() {
   useEffect(() => {
     setMapFramed(false);
     lastHoleCamera.current = null;
+    setSelectedClubId(null);
   }, [holeNumber]);
 
   useEffect(() => {
@@ -309,11 +318,8 @@ export default function HoleScreen() {
     const location =
       hole?.greenLat != null && hole.greenLng != null
         ? { lat: hole.greenLat, lng: hole.greenLng }
-        : round?.courseLat != null && round.courseLng != null
-          ? { lat: round.courseLat, lng: round.courseLng }
-          : null;
+        : null;
     if (!location) {
-      setOsmOverlay(null);
       return;
     }
     let live = true;
@@ -325,22 +331,22 @@ export default function HoleScreen() {
         radiusM: 1000,
       })
       .then((overlay) => {
-        if (live) setOsmOverlay(overlay);
+        if (!live || !overlay) return;
+        rememberOsmOverlay(
+          { courseId: round?.courseApiId, holeNumber, green: location },
+          overlay,
+        );
+        const tee = resolveOverlayTee(overlay, holeNumber, location);
+        if (tee) rememberResolvedTee({ courseId: round?.courseApiId, holeNumber, green: location }, tee);
+        setOsmOverlay(overlay);
       })
       .catch(() => {
-        if (live) setOsmOverlay(null);
+        // Keep the last overlay. Do not fall back to the clubhouse / phone.
       });
     return () => {
       live = false;
     };
-  }, [
-    round?.courseApiId,
-    round?.courseLat,
-    round?.courseLng,
-    hole?.greenLat,
-    hole?.greenLng,
-    holeNumber,
-  ]);
+  }, [round?.courseApiId, hole?.greenLat, hole?.greenLng, holeNumber]);
 
   useEffect(() => {
     return () => {
@@ -414,18 +420,28 @@ export default function HoleScreen() {
     const club = clubs.find((row) => row.id === id);
     return { id, label: formatSuggestedClubChip(club?.shortName ?? id, stripPlan.carries[id]) };
   });
+  const wheelSelectedId = selectedClubId ?? stripPlan.pickId;
+  const overlay =
+    osmOverlay ??
+    cachedOsmOverlay({ courseId: round?.courseApiId, holeNumber, green });
+  const overlayTee = resolveOverlayTee(overlay, holeNumber, green);
+  const cachedTee = cachedResolvedTee({ courseId: round?.courseApiId, holeNumber, green });
   const holeTee = resolveHoleTee({
-    holeTee: teePointFromHoleFeature(osmOverlay, holeNumber, green),
-    osmTee: teePointForHole(osmOverlay, holeNumber),
+    holeTee: overlayTee ?? cachedTee,
+    osmTee: cachedTee,
     green,
   });
+  if (holeTee) {
+    rememberResolvedTee({ courseId: round?.courseApiId, holeNumber, green }, holeTee);
+  }
   const holeCamera = lockHoleCamera({
     tee: holeTee,
     green,
     shotPins: shotPinsForHoleCamera(shots),
-    phone: fix ? { lat: fix.lat, lng: fix.lng } : null,
+    phone: null,
     previous: lastHoleCamera.current,
   });
+  const addShotPoints = addShotFramePoints({ tee: holeTee, green, phone: null });
   if (holeCamera) lastHoleCamera.current = holeCamera;
   const addShotFrom = resolveAddShotFromPin({
     tee: holeTee,
@@ -443,6 +459,7 @@ export default function HoleScreen() {
     green,
     tee: holeTee,
     courseYards: hole?.yards ?? null,
+    shots,
   });
 
   const openPuttSheet = useCallback(
@@ -568,6 +585,9 @@ export default function HoleScreen() {
         }
       },
       onPuttPick: onWatchPuttPick,
+      onSelectClub: (clubId) => {
+        setSelectedClubId(applyWheelSelection(clubId));
+      },
       labelForClub: (clubId) => clubMap[clubId]?.shortName ?? clubs.find((club) => club.id === clubId)?.shortName ?? null,
     },
     {
@@ -580,9 +600,10 @@ export default function HoleScreen() {
         shortName: formatSuggestedClubChip(club.shortName, stripPlan.carries[club.id] ?? null),
       })),
       holeNumber,
-      yardsToGreen: target?.dYards ?? toGreen.yards,
-      yardsQuality: toGreen.quality,
+      yardsToGreen: playHeaderYards.yards,
+      yardsQuality: playHeaderYards.quality,
       lastClubId: sticky?.id ?? null,
+      selectedClubId: wheelSelectedId,
     },
   );
 
@@ -955,11 +976,14 @@ export default function HoleScreen() {
           fullBleed
           holeNumber={hole.number}
           shots={shots}
-          userFix={fix}
+          userFix={catchUpFullScreen ? null : fix}
           green={green}
-          yardsToGreen={yardsToGreenResult}
+          yardsToGreen={{
+            yards: playHeaderYards.yards,
+            quality: playHeaderYards.quality,
+          }}
           fmb={fmb}
-          osmOverlay={osmOverlay}
+          osmOverlay={overlay}
           placedFrom={placeMode === 'edit-from' || placeMode === 'edit-to' ? placeFrom : addShotFrom}
           placedTo={placeToDraft ?? placeTo}
           lineFrom={placeMode === 'edit-from' || placeMode === 'edit-to' ? placeFrom : addShotFrom}
@@ -978,12 +1002,10 @@ export default function HoleScreen() {
           onFrameReady={setMapFramed}
           heading={holeCamera?.heading ?? null}
           framePoints={
-            holeCamera
-              ? holeCamera.points.map((point) => ({
-                  latitude: point.lat,
-                  longitude: point.lng,
-                }))
-              : undefined
+            (addShotPoints ?? holeCamera?.points)?.map((point) => ({
+              latitude: point.lat,
+              longitude: point.lng,
+            }))
           }
           placeHint={placeHint}
           onShotPress={placing ? undefined : openEdit}
@@ -1029,7 +1051,9 @@ export default function HoleScreen() {
                   <Text style={styles.backLabel}>{COPY.cancelPlace}</Text>
                 </Pressable>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.holeTitle}>{formatHoleHeader(hole.number, hole.par)}</Text>
+                  <Text style={styles.holeTitle}>
+                    {formatPlayHeader(hole.number, hole.par, playHeaderYards.yards)}
+                  </Text>
                 </View>
               </View>
               {placeHint ? <Text style={styles.catchUpHint}>{placeHint}</Text> : null}
@@ -1170,34 +1194,38 @@ export default function HoleScreen() {
             <View style={styles.dockStrip}>
               <ClubStrip
                 items={stripItems}
-                pickId={stripPlan.pickId}
+                pickId={wheelSelectedId}
+                windowStart={stripPlan.windowStart}
                 disabled={readOnly || placing}
                 onPick={(id) => {
                   if (placing) return;
-                  const full = clubs.find((row) => row.id === id);
-                  if (full) void markClub(full);
+                  setSelectedClubId(applyWheelSelection(id));
                 }}
               />
             </View>
           </View>
           <View style={styles.dockRow}>
-            <Pressable
-              accessibilityRole="button"
-              disabled={busy || readOnly || !sticky || placing}
-              onPress={() => void onMark()}
-              style={styles.dockAction}>
-              <Text style={styles.dockActionText}>
-                {sticky ? `${COPY.stickyClub} · ${sticky.shortName}` : COPY.stickyClub}
-              </Text>
-              <MarkCheck nonce={checkNonce} />
-            </Pressable>
+            {sticky ? (
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy || readOnly || placing}
+                onPress={() => void onMark()}
+                style={styles.dockAction}>
+                <Text style={styles.dockActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                  {`${COPY.stickyClub} · ${sticky.shortName}`}
+                </Text>
+                <MarkCheck nonce={checkNonce} />
+              </Pressable>
+            ) : null}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={COPY.allClubs}
               disabled={readOnly || placing}
               onPress={openBag}
               style={styles.dockAction}>
-              <Text style={styles.dockActionText}>{COPY.allClubs}</Text>
+              <Text style={styles.dockActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                {COPY.allClubs}
+              </Text>
             </Pressable>
             {!readOnly ? (
               <Pressable
@@ -1205,28 +1233,36 @@ export default function HoleScreen() {
                 disabled={placing}
                 onPress={() => startCatchUp(null)}
                 style={styles.dockAction}>
-                <Text style={styles.dockActionText}>{COPY.addShot}</Text>
+                <Text style={styles.dockActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                  {COPY.addShot}
+                </Text>
               </Pressable>
             ) : null}
             <Pressable
               accessibilityRole="button"
               onPress={() => setScorecardOpen(true)}
-              style={styles.dockAction}>
-              <Text style={styles.dockActionText}>{COPY.scorecard}</Text>
+              style={[styles.dockAction, styles.dockScorecard]}>
+              <Text style={styles.dockScorecardText} numberOfLines={1}>
+                {COPY.scorecard}
+              </Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
               disabled={readOnly || holeNumber <= 1}
               onPress={() => goToHole(holeNumber - 1)}
               style={styles.dockAction}>
-              <Text style={styles.dockActionText}>{COPY.prevHole}</Text>
+              <Text style={styles.dockActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                {COPY.prevHole}
+              </Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
               disabled={readOnly || !canAdvanceHole({ holeNumber, holeCount: round.holeCount })}
               onPress={() => goToHole(holeNumber + 1)}
               style={styles.dockAction}>
-              <Text style={styles.dockActionText}>{COPY.nextHole}</Text>
+              <Text style={styles.dockActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                {COPY.nextHole}
+              </Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
@@ -1234,7 +1270,9 @@ export default function HoleScreen() {
               disabled={placing}
               onPress={() => void onListen()}
               style={styles.dockAction}>
-              <Text style={styles.dockActionText}>{listening ? COPY.listening : COPY.sayClub}</Text>
+              <Text style={styles.dockActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                {listening ? COPY.listening : COPY.sayClub}
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -1421,7 +1459,10 @@ export default function HoleScreen() {
             shots={shots}
             userFix={fix}
             green={green}
-            yardsToGreen={yardsToGreenResult}
+            yardsToGreen={{
+              yards: playHeaderYards.yards,
+              quality: playHeaderYards.quality,
+            }}
             osmOverlay={osmOverlay}
             lockFrame
             hideYardsOverlay
@@ -1805,7 +1846,7 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     gap: 8,
   },
-  dockRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dockRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'nowrap', gap: 6 },
   dockStrip: { flex: 1, minWidth: 0, height: 60 },
   dockChip: {
     flex: 1,
@@ -1845,6 +1886,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   dockActionText: { color: colors.cream, fontWeight: '800', fontSize: 11, textAlign: 'center' },
+  dockScorecard: { flexGrow: 1.15, flexShrink: 0, minWidth: 72, paddingHorizontal: 4 },
+  dockScorecardText: {
+    color: colors.cream,
+    fontWeight: '800',
+    fontSize: 11,
+    textAlign: 'center',
+  },
   top3: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingTop: 8 },
   top3Chip: {
     flex: 1,

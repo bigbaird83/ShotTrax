@@ -28,6 +28,8 @@ export type HoleCourseData = {
   greenBack: LatLng | null;
   /** Green depth in yards when the API provides it — never derived. */
   greenDepthYards: number | null;
+  /** Tee coordinate when the API provides one — never invented, never the phone. */
+  teeCentroid: LatLng | null;
 };
 
 export type TeeSet = {

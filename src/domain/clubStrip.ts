@@ -44,17 +44,54 @@ export function clubStripScrollMarksShot(): false {
   return false;
 }
 
-export function clubStripOnlyTapMarks(): true {
-  return true;
+export function clubStripOnlyTapMarks(): false {
+  return false;
 }
 
 export function clubStripPutterIncluded(): false {
   return false;
 }
 
-/** Center pill is the carry closest to yards left — not the tee club after a shot lands. */
+/**
+ * Closest carry sits in the middle when a shorter club and a longer club both
+ * exist. Do not implement a blanket "never center the closest club."
+ */
 export function clubStripCenterIsClosestCarry(): true {
   return true;
+}
+
+/** Center the closest carry when both neighbors exist (100 yd: wedge in the middle). */
+export function clubStripCentersClosestWhenNeighborsExist(): true {
+  return true;
+}
+
+/** A shorter-only or longer-only end does not wrap just to put closest in the middle. */
+export function clubStripNeverCentersClosest(): false {
+  return false;
+}
+
+/** Do not wrap a wedge onto the right, or the driver onto the left, just to fill a side. */
+export function clubStripWrapsToFillEmptySide(): false {
+  return false;
+}
+
+export function clubStripOpensOnSeam(): false {
+  return false;
+}
+
+export function clubStripOpeningWindowIsThree(): true {
+  return true;
+}
+
+export function clubStripNeighborPillsShowCarry(): true {
+  return true;
+}
+
+/** Three opening pills are fully on screen. Not a 62% center with clipped peeks. */
+export const CLUB_STRIP_VISIBLE_PILLS = 3;
+
+export function clubStripVisiblePills(): number {
+  return CLUB_STRIP_VISIBLE_PILLS;
 }
 
 export function clubStripCenterIsTeeClub(): false {
@@ -65,9 +102,9 @@ export function clubStripPhoneMatchesWatch(): true {
   return true;
 }
 
-/** A phone strip tap is the same mark as the old suggested chip, including the 600-yard check. */
-export function clubStripTapMarksLikeChip(): true {
-  return true;
+/** Play-wheel tap selects. It does not mark like the old suggested chip. */
+export function clubStripTapMarksLikeChip(): false {
+  return false;
 }
 
 export function clubStripTapUsesHomeClubTap(): true {
@@ -184,10 +221,50 @@ export type ClubStripClub = {
 
 export type ClubStripPlan = {
   ids: string[];
+  /** Visual-center index: closest when both neighbors exist, else the middle of the three-club window. */
   openIndex: number;
+  /** First fully visible club in the opening frame. */
+  windowStart: number;
   pickId: string | null;
   carries: Record<string, number>;
 };
+
+/**
+ * Opening frame is three consecutive clubs in carry order.
+ * Closest sits in the middle when a shorter and a longer both exist
+ * (left = next shorter, right = next longer). At the long end the window
+ * is the three longest — do not wrap a wedge onto the right to force the
+ * driver into the middle. At the short end do not wrap the driver onto
+ * the left. The first frame is not the seam.
+ */
+export function openingClubStripWindow(args: {
+  count: number;
+  closestIndex: number;
+}): { windowStart: number; openIndex: number } {
+  const n = args.count;
+  const closest = args.closestIndex;
+  if (n <= 0) return { windowStart: 0, openIndex: 0 };
+  if (n === 1) return { windowStart: 0, openIndex: 0 };
+  if (n === 2) return { windowStart: 0, openIndex: closest > 0 ? 1 : 0 };
+  if (closest > 0 && closest < n - 1) {
+    return { windowStart: closest - 1, openIndex: closest };
+  }
+  if (closest >= n - 1) {
+    return { windowStart: n - 3, openIndex: n - 2 };
+  }
+  return { windowStart: 0, openIndex: 1 };
+}
+
+export function clubStripOpeningIds(ids: string[], windowStart: number): string[] {
+  if (ids.length <= CLUB_STRIP_VISIBLE_PILLS) return ids.slice();
+  const start = Math.max(0, Math.min(windowStart, ids.length - CLUB_STRIP_VISIBLE_PILLS));
+  return ids.slice(start, start + CLUB_STRIP_VISIBLE_PILLS);
+}
+
+/** Re-open only when the bag or hole window changes — never when a tap selects. */
+export function clubStripWindowKey(ids: string[], windowStart: number): string {
+  return `${ids.join('|')}@${windowStart}`;
+}
 
 export function resolveWheelCarries(clubs: ClubStripClub[]): Record<string, number> {
   const canFill = clubs.some((club) => club.loftRank != null);
@@ -247,6 +324,13 @@ export function planClubStrip(args: {
     }
   }
   if (!pick) pick = ordered[0]?.id ?? null;
-  const openIndex = pick ? Math.max(0, ordered.findIndex((club) => club.id === pick)) : 0;
-  return { ids: ordered.map((club) => club.id), openIndex, pickId: pick, carries };
+  const closestIndex = pick ? Math.max(0, ordered.findIndex((club) => club.id === pick)) : 0;
+  const window = openingClubStripWindow({ count: ordered.length, closestIndex });
+  return {
+    ids: ordered.map((club) => club.id),
+    openIndex: window.openIndex,
+    windowStart: window.windowStart,
+    pickId: pick,
+    carries,
+  };
 }

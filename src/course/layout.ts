@@ -27,6 +27,7 @@ export type CourseLayoutSeed = {
     greenFront?: LatLng | null;
     greenBack?: LatLng | null;
     greenDepthYards?: number | null;
+    teeCentroid?: LatLng | null;
   }>;
 };
 
@@ -72,6 +73,9 @@ export function layoutFromTee(detail: CourseDetail, tee: TeeSet | null): CourseL
         greenFront: pinOrNull(hole.greenFront) ?? pinOrNull(fromDetail?.greenFront),
         greenBack: pinOrNull(hole.greenBack) ?? pinOrNull(fromDetail?.greenBack),
         greenDepthYards: hole.greenDepthYards ?? fromDetail?.greenDepthYards ?? null,
+        teeCentroid: isValidLatLng(hole.teeCentroid)
+          ? hole.teeCentroid
+          : fromDetail?.teeCentroid ?? null,
       };
     }),
   };
@@ -99,6 +103,7 @@ export function layoutFromHoles(
       greenFront: hole.greenFront,
       greenBack: hole.greenBack,
       greenDepthYards: hole.greenDepthYards,
+      teeCentroid: hole.teeCentroid,
     })),
   };
 }

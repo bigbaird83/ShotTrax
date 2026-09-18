@@ -149,6 +149,45 @@ export function teePointFromHoleFeature(
   return first;
 }
 
+/**
+ * Fairway vertex farthest from the green. Used only when the tee box and
+ * hole line are missing. Never the phone. No green → null.
+ */
+export function teePointFromFairway(
+  overlay: OsmOverlay | null,
+  holeNumber: number,
+  green?: LatLng | null,
+): LatLng | null {
+  if (!isValidLatLng(green)) return null;
+  let best: LatLng | null = null;
+  let bestYards = -1;
+  for (const feature of featuresForHole(overlay, holeNumber)) {
+    if (feature.kind !== 'fairway') continue;
+    for (const point of feature.coordinates) {
+      if (!isValidLatLng(point)) continue;
+      const yards = haversineYards(point, green);
+      if (yards > bestYards) {
+        bestYards = yards;
+        best = point;
+      }
+    }
+  }
+  return best;
+}
+
+/** Tee box, then hole line, then fairway. Never the phone or the clubhouse. */
+export function resolveOverlayTee(
+  overlay: OsmOverlay | null,
+  holeNumber: number,
+  green?: LatLng | null,
+): LatLng | null {
+  return (
+    teePointFromHoleFeature(overlay, holeNumber, green) ??
+    teePointForHole(overlay, holeNumber) ??
+    teePointFromFairway(overlay, holeNumber, green)
+  );
+}
+
 function overpassQuery(location: LatLng, radiusM: number): string {
   const r = Math.max(50, Math.min(3000, Math.round(radiusM)));
   const lat = location.lat;
@@ -204,6 +243,65 @@ export async function fetchOsmOverlay(
   } catch {
     return null;
   }
+}
+
+const overlayCache = new Map<string, OsmOverlay>();
+const teeCache = new Map<string, LatLng>();
+
+export function osmOverlayCacheKey(args: {
+  courseId?: string | null;
+  holeNumber: number;
+  green: LatLng | null;
+}): string | null {
+  if (!isValidLatLng(args.green)) return null;
+  return `${args.courseId ?? ''}:${args.holeNumber}:${args.green.lat.toFixed(5)},${args.green.lng.toFixed(5)}`;
+}
+
+/** Sync tee so Add shot can draw tee + green without waiting on a fetch or a phone fix. */
+export function cachedResolvedTee(args: {
+  courseId?: string | null;
+  holeNumber: number;
+  green: LatLng | null;
+}): LatLng | null {
+  const key = osmOverlayCacheKey(args);
+  const tee = key ? teeCache.get(key) ?? null : null;
+  return isValidLatLng(tee) ? tee : null;
+}
+
+export function rememberResolvedTee(
+  args: {
+    courseId?: string | null;
+    holeNumber: number;
+    green: LatLng | null;
+  },
+  tee: LatLng | null,
+): void {
+  const key = osmOverlayCacheKey(args);
+  if (!key || !isValidLatLng(tee)) return;
+  teeCache.set(key, tee);
+}
+
+/** Sync cache so Add shot can frame tee + green without waiting on a new fetch or a phone fix. */
+export function cachedOsmOverlay(args: {
+  courseId?: string | null;
+  holeNumber: number;
+  green: LatLng | null;
+}): OsmOverlay | null {
+  const key = osmOverlayCacheKey(args);
+  return key ? overlayCache.get(key) ?? null : null;
+}
+
+export function rememberOsmOverlay(
+  args: {
+    courseId?: string | null;
+    holeNumber: number;
+    green: LatLng | null;
+  },
+  overlay: OsmOverlay | null,
+): void {
+  const key = osmOverlayCacheKey(args);
+  if (!key || !overlay) return;
+  overlayCache.set(key, overlay);
 }
 
 export const osmOverlayHook: OsmOverlayHook = {

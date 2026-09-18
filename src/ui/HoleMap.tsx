@@ -10,19 +10,20 @@ import {
 } from 'react-native';
 import MapView, { Marker, Polygon, Polyline } from 'react-native-maps';
 import type { OsmFeature, OsmGolfKind, OsmOverlay } from '@/src/course/types';
-import { featuresForHole } from '@/src/course/osmOverlay';
+import { featuresForHole, resolveOverlayTee } from '@/src/course/osmOverlay';
 import type { GpsFix, Shot } from '@/src/domain/types';
 import type { YardsToGreenResult } from '@/src/sensing/yardsToGreen';
 import {
   applyHoleMapCamera,
   holeCameraFramedAfterApply,
+  holeCameraHeading,
   holeFrameRegion,
   holeMapShowsUserLocation,
   holeNativeCamera,
   regionIsHoleFrame,
 } from '@/src/domain/holeCamera';
 import { planDragShotLines } from '@/src/domain/placeToDrag';
-import { COPY } from '@/src/domain/playerCopy';
+import { COPY, showWaitingOnLocationLine } from '@/src/domain/playerCopy';
 import { isValidLatLng } from '@/src/domain/latLng';
 import { hasClosedGpsTrail, hasGpsStart } from '@/src/domain/shotSource';
 import { FmbRow } from './FmbRow';
@@ -108,19 +109,31 @@ function TrailFallback({
   yardsToGreen,
   hasFix,
   hasGreen,
+  hideYardsOverlay,
 }: {
   holeNumber: number;
   yardsToGreen?: YardsToGreenResult;
   hasFix?: boolean;
   hasGreen?: boolean;
+  hideYardsOverlay?: boolean;
 }) {
+  const yardsOnCard = Boolean(yardsToGreen && yardsToGreen.yards != null && Number.isFinite(yardsToGreen.yards));
+  const waiting =
+    !hideYardsOverlay &&
+    !yardsOnCard &&
+    showWaitingOnLocationLine({
+      yards: yardsToGreen?.yards ?? null,
+      quality: yardsToGreen?.quality,
+      hasFix,
+      hasGreen,
+    });
   return (
     <View style={styles.fallback}>
       <Text style={styles.holeBadgeText}>Hole {holeNumber}</Text>
-      {yardsToGreen ? (
+      {yardsToGreen && !hideYardsOverlay ? (
         <YardsToGreenBadge result={yardsToGreen} hasFix={hasFix} hasGreen={hasGreen} />
       ) : null}
-      <Text style={styles.fallbackMsg}>{hasGreen ? COPY.waitingOnLocation : COPY.longPressGreen}</Text>
+      {waiting ? <Text style={styles.fallbackMsg}>{COPY.waitingOnLocation}</Text> : null}
     </View>
   );
 }
@@ -222,30 +235,37 @@ function NativeHoleMap({
   }, [shots, green, osmFeatures, placedFrom, placedTo]);
 
   const lockedPoints = useMemo(() => {
-    if (!lockFrame || !framePoints || framePoints.length === 0) return [];
-    return framePoints
+    if (!lockFrame) return [];
+    const fromParent = (framePoints ?? [])
       .map((point) => ({ lat: point.latitude, lng: point.longitude }))
       .filter((point) => isValidLatLng(point));
-  }, [lockFrame, framePoints]);
+    if (fromParent.length >= 2) return fromParent;
+    const overlayTee = resolveOverlayTee(osmOverlay ?? null, holeNumber, green);
+    if (isValidLatLng(overlayTee) && isValidLatLng(green)) return [overlayTee, green];
+    if (fromParent.length > 0) return fromParent;
+    // Green is enough to put a map on screen. Never wait on a phone fix.
+    if (isValidLatLng(green)) return [green];
+    return [];
+  }, [lockFrame, framePoints, osmOverlay, holeNumber, green]);
 
   const holeUpCamera = useMemo(() => {
-    if (heading == null || !Number.isFinite(heading) || lockedPoints.length === 0) return null;
-    return holeNativeCamera(lockedPoints, heading);
+    const cameraHeading =
+      heading != null && Number.isFinite(heading)
+        ? heading
+        : lockedPoints.length >= 2
+          ? holeCameraHeading(lockedPoints[0], lockedPoints[1])
+          : null;
+    if (cameraHeading == null || lockedPoints.length === 0) return null;
+    return holeNativeCamera(lockedPoints, cameraHeading);
   }, [lockedPoints, heading]);
 
   const lockedRegion = useMemo(() => {
     if (lockedPoints.length > 0) return holeFrameRegion(lockedPoints);
-    // Lock frame with no hole points: do not invent a phone/house region.
-    if (lockFrame) return null;
-    const fallback = coords[0];
-    if (!fallback) return null;
-    return {
-      latitude: fallback.latitude,
-      longitude: fallback.longitude,
-      latitudeDelta: 0.004,
-      longitudeDelta: 0.004,
-    };
-  }, [lockedPoints, lockFrame, coords]);
+    // Lock-frame maps use tee + green only. Do not zoom a lone pin or the phone.
+    return null;
+  }, [lockedPoints]);
+
+  const holeFrameOnScreen = Boolean(holeUpCamera || lockedRegion);
 
   const dragLines = useMemo(() => {
     if (!onPlaceToDrag || !placedTo) return { shot: null, toGreen: null };
@@ -353,6 +373,7 @@ function NativeHoleMap({
         yardsToGreen={yardsToGreen}
         hasFix={Boolean(userFix)}
         hasGreen={Boolean(green)}
+        hideYardsOverlay={hideYardsOverlay}
       />
     );
   }
@@ -370,7 +391,7 @@ function NativeHoleMap({
     <View
       style={[fullBleed ? styles.bleed : styles.wrap, style]}
       onLayout={onMapLayout}
-      pointerEvents={lockFrame && !holeCameraReady ? 'none' : 'auto'}
+      pointerEvents={lockFrame && !holeCameraReady && !holeFrameOnScreen ? 'none' : 'auto'}
       onTouchStart={(event) => {
         if (event.nativeEvent.touches.length >= 2) setMapOwnsGesture(true);
       }}
@@ -380,7 +401,7 @@ function NativeHoleMap({
       onTouchCancel={() => setMapOwnsGesture(false)}>
       <MapView
         ref={mapRef}
-        style={[styles.map, lockFrame && !holeCameraReady ? styles.mapHidden : null]}
+        style={[styles.map, lockFrame && !holeCameraReady && !holeFrameOnScreen ? styles.mapHidden : null]}
         mapType="satellite"
         {...(lockFrame
           ? lockedCameraProps
@@ -604,7 +625,9 @@ function NativeHoleMap({
           }}
         />
       ) : null}
-      {lockFrame && !holeCameraReady ? <View pointerEvents="none" style={styles.mapCover} /> : null}
+      {lockFrame && !holeCameraReady && !holeFrameOnScreen ? (
+        <View pointerEvents="none" style={styles.mapCover} />
+      ) : null}
       {!allowMapsChrome ? <View pointerEvents="none" style={styles.legalCover} /> : null}
       {!placeHint && !hideYardsOverlay ? (
         <View pointerEvents="none" style={styles.toGreen}>
@@ -633,6 +656,7 @@ export function HoleMap(props: Props) {
       yardsToGreen={props.yardsToGreen}
       hasFix={Boolean(props.userFix)}
       hasGreen={Boolean(props.green)}
+      hideYardsOverlay={props.hideYardsOverlay}
     />
   );
 

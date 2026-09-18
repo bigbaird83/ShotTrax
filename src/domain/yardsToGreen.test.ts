@@ -9,6 +9,8 @@ import {
   markToGreen,
   planPlayHeaderYards,
   planToGreenDisplay,
+  toGreenSixHundredCapsTheNumber,
+  toGreenSixHundredIsPhoneFixCutoff,
   resolveGreenPin,
   toGreenDisplayFromHole,
   yardsToGreenLabel,
@@ -238,9 +240,12 @@ test('lastClubMark is the latest shot start, never invented', () => {
 });
 
 test('play header yards use the 600-yard check: couch is course, never 14,000', () => {
+  assert.equal(toGreenSixHundredCapsTheNumber(), false);
+  assert.equal(toGreenSixHundredIsPhoneFixCutoff(), true);
   const tee = from;
   const holeGreen = northOf(from, 371);
   const couch = northOf(from, 14_000);
+  const landing = northOf(from, 180);
   assert.ok(haversineYards(couch, holeGreen) > 600);
   assert.ok(haversineYards(couch, tee) > 600);
 
@@ -259,17 +264,104 @@ test('play header yards use the 600-yard check: couch is course, never 14,000', 
     tee,
     courseYards: 371,
   });
-  assert.equal(onTee.source, 'live');
-  assert.equal(onTee.yards, roundYards(haversineYards(tee, holeGreen)));
+  assert.equal(onTee.source, 'course');
+  assert.equal(onTee.yards, 371);
+  assert.notEqual(onTee.yards, 0);
 
-  const onFairway = planPlayHeaderYards({
-    phone: northOf(from, 200),
+  const card620 = planPlayHeaderYards({
+    phone: couch,
+    green: holeGreen,
+    tee,
+    courseYards: 620,
+  });
+  assert.equal(card620.yards, 620);
+  assert.equal(card620.source, 'course');
+
+  const longHoleGreen = northOf(from, 800);
+  const longLanding = northOf(from, 100);
+  const liveOver600 = markToGreen(longLanding, longHoleGreen);
+  assert.ok((liveOver600.yards ?? 0) > 600);
+  const afterShotLongCard = planPlayHeaderYards({
+    phone: tee,
+    green: longHoleGreen,
+    tee,
+    courseYards: 800,
+    shots: [
+      {
+        seq: 1,
+        endLat: longLanding.lat,
+        endLng: longLanding.lng,
+        endedAt: '2026-09-18T11:00:00.000Z',
+        source: 'gps',
+        fixQuality: 'good',
+      },
+    ],
+  });
+  assert.equal(afterShotLongCard.source, 'live');
+  assert.equal(afterShotLongCard.yards, liveOver600.yards);
+  assert.notEqual(afterShotLongCard.yards, 0);
+
+  const afterShotOnCourse = planPlayHeaderYards({
+    phone: landing,
     green: holeGreen,
     tee,
     courseYards: 371,
+    shots: [
+      {
+        seq: 1,
+        endLat: landing.lat,
+        endLng: landing.lng,
+        endedAt: '2026-09-18T11:00:00.000Z',
+        source: 'gps',
+        fixQuality: 'good',
+      },
+    ],
   });
-  assert.equal(onFairway.source, 'live');
-  assert.ok((onFairway.yards ?? 0) <= 600);
+  assert.equal(afterShotOnCourse.source, 'live');
+  assert.equal(afterShotOnCourse.yards, markToGreen(landing, holeGreen).yards);
+  assert.notEqual(afterShotOnCourse.yards, 371);
+
+  const afterShotAtHouse = planPlayHeaderYards({
+    phone: couch,
+    green: holeGreen,
+    tee,
+    courseYards: 371,
+    shots: [
+      {
+        seq: 1,
+        endLat: landing.lat,
+        endLng: landing.lng,
+        endedAt: '2026-09-18T11:00:00.000Z',
+        source: 'gps',
+        fixQuality: 'good',
+      },
+    ],
+  });
+  assert.equal(afterShotAtHouse.source, 'course');
+  assert.equal(afterShotAtHouse.yards, 371);
+  assert.notEqual(afterShotAtHouse.yards, Math.round(haversineYards(couch, holeGreen)));
+  assert.notEqual(afterShotAtHouse.yards, 0);
+
+  const farLanding = northOf(from, 14_000);
+  const houseFixKeepsCard = planPlayHeaderYards({
+    phone: farLanding,
+    green: holeGreen,
+    tee,
+    courseYards: 371,
+    shots: [
+      {
+        seq: 1,
+        endLat: farLanding.lat,
+        endLng: farLanding.lng,
+        endedAt: '2026-09-18T11:00:00.000Z',
+        source: 'gps',
+        fixQuality: 'good',
+      },
+    ],
+  });
+  assert.equal(houseFixKeepsCard.source, 'course');
+  assert.equal(houseFixKeepsCard.yards, 371);
+  assert.notEqual(houseFixKeepsCard.yards, Math.round(haversineYards(farLanding, holeGreen)));
 
   assert.deepEqual(
     planPlayHeaderYards({
@@ -287,7 +379,7 @@ test('play header yards use the 600-yard check: couch is course, never 14,000', 
       tee,
       courseYards: 371,
     }),
-    { yards: null, source: 'none', quality: 'none' },
+    { yards: 371, source: 'course', quality: 'good' },
   );
 });
 

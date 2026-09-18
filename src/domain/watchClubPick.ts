@@ -82,9 +82,13 @@ export function watchTop3NumberIsYardsLeft(): false {
   return false;
 }
 
-/** The strip opens on the closest carry to the hole yards — that pill is the pick. */
+/** The strip opens on the closest-carry window. Closest is the pick; it is centered only when both neighbors exist. */
 export function watchFirstSuggestedIsThePick(): true {
   return true;
+}
+
+export function watchSameClubVisibleWithoutShot(): false {
+  return false;
 }
 
 export function watchSuggestedPillsLookTheSame(): false {
@@ -132,7 +136,7 @@ export function watchStripScrollMarksShot(): false {
   return false;
 }
 
-export function watchStripOnlyTapMarks(): true {
+export function watchStripOnlyTapMarks(): false {
   return clubStripOnlyTapMarks();
 }
 
@@ -194,15 +198,16 @@ export function wrapWatchClubStripIndex(index: number, count: number): number {
 
 /**
  * Sideways strip of the bag, sorted by carry (short left, long right) —
- * never by club name, never capped at three. Opens centered on the carry
- * closest to yards left. Putter never enters. Swipe / scroll does not mark.
+ * never by club name, never capped at three. Opens on the three-club
+ * window around the closest carry — no wrap to fill a side. Putter never
+ * enters. Swipe / scroll does not mark.
  */
 export function planWatchClubStrip(args: {
   top3?: string[];
   bag?: string[];
   labels: Record<string, string>;
   holeYards?: number | null;
-}): { ids: string[]; openIndex: number; pickId: string | null } {
+}): { ids: string[]; openIndex: number; windowStart: number; pickId: string | null } {
   const source = args.bag ?? args.top3 ?? [];
   return planClubStrip({
     clubs: source.map((id) => ({ id, carry: watchCarryFromLabel(args.labels[id] ?? '') })),

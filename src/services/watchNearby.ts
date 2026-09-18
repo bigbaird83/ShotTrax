@@ -1,7 +1,8 @@
 import { router } from 'expo-router';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getCourseDataClient } from '@/src/course/client';
-import { layoutFromTee, roundHoleCountFromCourse } from '@/src/course/layout';
+import type { CourseDetail, CourseSummary } from '@/src/course/types';
+import { layoutFromTee } from '@/src/course/layout';
 import { startRound } from '@/src/db/repo';
 import type { GpsFix } from '@/src/domain/types';
 import {
@@ -32,6 +33,28 @@ export type WatchNearbyContext = {
 
 let context: WatchNearbyContext | null = null;
 let lastNearbyJson = '';
+let replaceLiveRoundAllowed = false;
+let coursePickedHandler: ((pick: { course: CourseSummary; detail: CourseDetail }) => void) | null =
+  null;
+
+export function setWatchCoursePickedHandler(
+  fn: ((pick: { course: CourseSummary; detail: CourseDetail }) => void) | null,
+): void {
+  coursePickedHandler = fn;
+}
+
+function summaryFromDetail(detail: CourseDetail): CourseSummary {
+  return {
+    id: detail.id,
+    name: detail.name,
+    club: null,
+    city: null,
+    state: null,
+    country: null,
+    location: detail.location,
+    distanceMeters: null,
+  };
+}
 
 export function setWatchNearbyContext(next: WatchNearbyContext | null): void {
   context = next;
@@ -61,18 +84,18 @@ async function pushNearbyJson(msg: NearbyCoursesMessage | NearbyTeesMessage): Pr
 }
 
 async function resolvePhoneFix(ctx: WatchNearbyContext): Promise<GpsFix | null> {
-  const live = ctx.phoneFix() ?? getLastLiveFix();
   const nowMs = ctx.nowMs?.() ?? Date.now();
-  if (phoneFixForNearbyCourses({ phoneFix: live, nowMs })) return live;
   try {
-    const fresh = await getCurrentFix();
-    if (phoneFixForNearbyCourses({ phoneFix: fresh, nowMs: ctx.nowMs?.() ?? Date.now() })) {
-      return fresh;
+    const woken = await getCurrentFix();
+    if (phoneFixForNearbyCourses({ phoneFix: woken, nowMs: ctx.nowMs?.() ?? Date.now() })) {
+      return woken;
     }
   } catch {
-    // Permission off or no sample — open the phone.
+    // Permission off or no sample — last live phone fix only if it is still fresh.
   }
-  return live;
+  const live = ctx.phoneFix() ?? getLastLiveFix();
+  if (phoneFixForNearbyCourses({ phoneFix: live, nowMs })) return live;
+  return null;
 }
 
 export async function pushWatchNearbyCourses(opts?: {
@@ -86,6 +109,7 @@ export async function pushWatchNearbyCourses(opts?: {
     await pushNearbyJson(msg);
     return msg;
   }
+  replaceLiveRoundAllowed = Boolean(opts?.allowDuringRound);
   if (ctx.hasActiveRound() && !opts?.allowDuringRound) {
     const plan = planNearbyCourses({ phoneFix: null, courses: [], nowMs });
     return nearbyCoursesPayload(plan);
@@ -127,6 +151,9 @@ export async function handleWatchNearbyJson(json: string): Promise<{ ok: boolean
 
   const pick = parseNearbyCoursePick(raw);
   if (pick) {
+    if (ctx.hasActiveRound() && !replaceLiveRoundAllowed) {
+      return { ok: true, feedback: 'Round in progress' };
+    }
     try {
       const detail = await getCourseDataClient().getCourse(pick.courseId);
       if (!detail) {
@@ -134,14 +161,7 @@ export async function handleWatchNearbyJson(json: string): Promise<{ ok: boolean
         await pushNearbyJson(nearbyCoursesPayload(plan));
         return { ok: false, feedback: 'open the phone' };
       }
-      if (detail.tees.length === 0) {
-        const holeCount = roundHoleCountFromCourse(detail.holeCount, 18);
-        const layout = layoutFromTee(detail, null);
-        const round = startRound(ctx.db, holeCount, detail.name, layout);
-        ctx.bump();
-        router.push(`/round/${round.id}/hole/1`);
-        return { ok: true, feedback: `Started · ${detail.name}` };
-      }
+      coursePickedHandler?.({ course: summaryFromDetail(detail), detail });
       await pushNearbyJson(
         nearbyTeesPayload({
           courseId: detail.id,
@@ -157,17 +177,23 @@ export async function handleWatchNearbyJson(json: string): Promise<{ ok: boolean
 
   const start = parseStartRound(raw);
   if (start) {
+    if (ctx.hasActiveRound() && !replaceLiveRoundAllowed) {
+      return { ok: true, feedback: 'Round in progress' };
+    }
     try {
       const detail = await getCourseDataClient().getCourse(start.courseId);
       if (!detail) return { ok: false, feedback: 'open the phone' };
-      const tee = detail.tees.find((row) => row.name === start.teeName) ?? null;
-      if (!tee) return { ok: false, feedback: 'open the phone' };
-      const holeCount = roundHoleCountFromCourse(detail.holeCount, 18);
+      const holeCount = start.holeCount === 9 ? 9 : 18;
+      const tee = start.teeName
+        ? detail.tees.find((row) => row.name === start.teeName) ?? null
+        : null;
+      if (start.teeName && !tee) return { ok: false, feedback: 'open the phone' };
+      if (detail.tees.length > 0 && !tee) return { ok: false, feedback: 'open the phone' };
       const layout = layoutFromTee(detail, tee);
       const round = startRound(ctx.db, holeCount, detail.name, layout);
       ctx.bump();
       router.push(`/round/${round.id}/hole/1`);
-      return { ok: true, feedback: `${detail.name} · ${tee.name}` };
+      return { ok: true, feedback: tee ? `${detail.name} · ${tee.name}` : detail.name };
     } catch {
       return { ok: false, feedback: PHONE_UNAVAILABLE };
     }

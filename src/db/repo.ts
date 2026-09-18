@@ -14,6 +14,7 @@ import {
   type CourseDistanceUnit,
 } from '../domain/courseDistance';
 import { clubAverageFromShots, type ClubAverage } from '../domain/averages';
+import { rememberResolvedTee } from '../course/osmOverlay';
 import { isValidLatLng } from '../domain/latLng';
 import { clampPenaltyStrokes, scoreAfterPenalty } from '../domain/penalty';
 import { clampPutts, planMadeIt, parsePuttLengths, serializePuttLengths, type PuttLengthId } from '../domain/putts';
@@ -441,6 +442,11 @@ export function startRound(
           applied.greenDepthYards,
         ],
       );
+      const tee = isValidLatLng(seed?.teeCentroid ?? null) ? seed?.teeCentroid ?? null : null;
+      const green = applied.green;
+      if (tee && green) {
+        rememberResolvedTee({ courseId: courseApiId, holeNumber: n, green }, tee);
+      }
     }
   });
   return {
@@ -520,6 +526,10 @@ export function attachCourseToRound(
           row.id,
         ],
       );
+      const tee = isValidLatLng(seed?.teeCentroid ?? null) ? seed?.teeCentroid ?? null : null;
+      if (tee && applied.green) {
+        rememberResolvedTee({ courseId: layout.apiId, holeNumber: row.number, green: applied.green }, tee);
+      }
     }
   });
 }

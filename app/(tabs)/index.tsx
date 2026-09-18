@@ -1,6 +1,6 @@
 import * as Device from 'expo-device';
 import { router } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -38,6 +38,7 @@ import { Screen } from '@/src/ui/Screen';
 import { FullSheet } from '@/src/ui/Sheet';
 import { colors, tapTarget, type } from '@/src/ui/theme';
 import { getCurrentFix } from '@/src/services/location';
+import { setWatchCoursePickedHandler } from '@/src/services/watchNearby';
 
 async function loadLayout(
   course: CourseSummary,
@@ -76,6 +77,16 @@ export default function HomeScreen() {
   const courseDistanceUnit = useMemo(() => getCourseDistanceUnit(db), [db, revision]);
   const clubs = useMemo(() => listClubs(db), [db, revision]);
   const bagPromptOpen = useMemo(() => !hasSeenBagCustomize(db), [db, revision]);
+
+  useEffect(() => {
+    setWatchCoursePickedHandler((pick) => {
+      setPicked(pick.course);
+      setPickedDetail(pick.detail);
+      setPickedTee(null);
+      setCourseName(pick.course.name);
+    });
+    return () => setWatchCoursePickedHandler(null);
+  }, []);
 
   const finishBagPrompt = () => {
     markBagCustomizeSeen(db);

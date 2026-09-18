@@ -33,4 +33,9 @@ test('Watch status uses an em dash when quality is none', () => {
     soft: false,
     chip: null,
   });
+  assert.deepEqual(formatWatchStatusLine({ holeNumber: 1, yardsToGreen: 0, yardsQuality: 'good' }), {
+    line: 'Hole 1 · —',
+    soft: false,
+    chip: null,
+  });
 });

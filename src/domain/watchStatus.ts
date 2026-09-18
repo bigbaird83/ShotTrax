@@ -10,7 +10,10 @@ export function formatWatchStatusLine(args: {
   yardsQuality: YardsQuality;
 }): { line: string; soft: boolean; chip: string | null } {
   const yards =
-    args.yardsQuality !== 'none' && args.yardsToGreen != null
+    args.yardsQuality !== 'none' &&
+    args.yardsToGreen != null &&
+    Number.isFinite(args.yardsToGreen) &&
+    args.yardsToGreen > 0
       ? `${Math.round(args.yardsToGreen)} yd`
       : '—';
   const soft = args.yardsQuality === 'soft';

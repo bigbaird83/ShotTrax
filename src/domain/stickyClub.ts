@@ -3,7 +3,16 @@ import type { Club } from './types';
 /**
  * Last marked club stays selected so Same club is one tap.
  * Say/tap a club marks GPS immediately (club=mark). Same club is the escape.
+ * No logged shot → no Same club. Do not invent a leftover driver or wedge.
  */
+export function sameClubVisibleWithoutShot(): false {
+  return false;
+}
+
+export function sameClubNeedsLoggedShot(): true {
+  return true;
+}
+
 export function resolveStickyClub(args: {
   enabledClubs: Club[];
   roundLastClubId?: string | null;
@@ -19,8 +28,8 @@ export function resolveStickyClub(args: {
     (args.previousRoundLastClubId && ids.has(args.previousRoundLastClubId)
       ? args.previousRoundLastClubId
       : null);
-  if (pick) return enabled.find((club) => club.id === pick) ?? enabled[0];
-  return [...enabled].sort((a, b) => a.sortOrder - b.sortOrder)[0] ?? null;
+  if (!pick) return null;
+  return enabled.find((club) => club.id === pick) ?? null;
 }
 
 /** Resolve a tapped or spoken club against the enabled bag. */

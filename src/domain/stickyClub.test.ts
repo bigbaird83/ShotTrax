@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DEFAULT_BAG } from './defaultBag';
-import { resolveStickyClub, selectClubForMark } from './stickyClub';
+import { resolveStickyClub, sameClubNeedsLoggedShot, sameClubVisibleWithoutShot, selectClubForMark } from './stickyClub';
 import type { Club } from './types';
 import { matchSpokenClub } from './voiceClub';
 
@@ -53,7 +53,9 @@ test('sticky after a mark is that club, so Same club is one tap', () => {
   assert.equal(nextHole?.id, 'club_8i');
 });
 
-test('default sticky is the first enabled club when nothing has been marked', () => {
+test('Same club is hidden when nothing has been marked', () => {
+  assert.equal(sameClubVisibleWithoutShot(), false);
+  assert.equal(sameClubNeedsLoggedShot(), true);
   const sticky = resolveStickyClub({ enabledClubs: bag() });
-  assert.equal(sticky?.id, 'club_driver');
+  assert.equal(sticky, null);
 });

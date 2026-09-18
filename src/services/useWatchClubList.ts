@@ -30,13 +30,14 @@ export function useWatchClubList(
     yardsToGreen: number | null;
     yardsQuality: 'good' | 'soft' | 'forced' | 'none';
     lastClubId?: string | null;
+    selectedClubId?: string | null;
   },
 ): void {
   const ctxRef = useRef(ctx);
   ctxRef.current = ctx;
   const payload = buildClubList(list);
   // Push clubList on hole change / fix quality change / bag rank change (plus labels / Same club).
-  const json = `${clubListPushKey(payload)}\0${payload.lastClubId ?? ''}`;
+  const json = `${clubListPushKey(payload)}\0${payload.lastClubId ?? ''}\0${payload.selectedClubId ?? ''}`;
 
   useEffect(() => {
     startWatchClubBridge();
@@ -61,6 +62,7 @@ export function useWatchClubList(
       onPutter: () => ctxRef.current.onPutter?.(),
       onLeave: (action) => ctxRef.current.onLeave?.(action),
       onPuttPick: (msg) => ctxRef.current.onPuttPick?.(msg) ?? { ok: false, feedback: 'Phone unavailable' },
+      onSelectClub: (clubId) => ctxRef.current.onSelectClub?.(clubId),
       labelForClub: (clubId) => ctxRef.current.labelForClub(clubId),
     };
     pushCtx(adapter);

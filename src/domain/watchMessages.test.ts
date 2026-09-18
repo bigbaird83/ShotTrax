@@ -120,6 +120,7 @@ test('clubList allows null yards and none quality; rejects invalid hole, type, o
   );
   assert.equal(parseClubList(msg)?.yardsToGreen, null);
   assert.equal(parseClubList({ ...msg, yardsToGreen: 90, yardsQuality: 'none' })?.yardsToGreen, null);
+  assert.equal(clubListPayload({ ...msg, yardsToGreen: 0, yardsQuality: 'good' }).yardsToGreen, null);
   assert.equal(parseClubList({ ...msg, holeNumber: 0 }), null);
   assert.equal(parseClubList({ ...msg, type: 'nope' }), null);
   assert.equal(parseClubList({ ...msg, yardsQuality: 'forced' }), null);
@@ -159,7 +160,7 @@ test('clubList push key changes on hole, fix quality, and bag rank', () => {
   assert.notEqual(clubListPushKey(base), clubListPushKey(quality));
   assert.notEqual(clubListPushKey(base), clubListPushKey(none));
   assert.notEqual(clubListPushKey(base), clubListPushKey(rank));
-  assert.equal(clubListPushKey(base), clubListPushKey(sameYardsLastClub));
+  assert.notEqual(clubListPushKey(base), clubListPushKey(sameYardsLastClub));
 });
 
 test('clubPick required keys are type, clubId, ISO8601 at; Watch GPS is optional stretch', () => {
@@ -197,6 +198,7 @@ test('Watch Connectivity this cut is clubList, clubPick, puttSheet, puttPick, cl
     [
       'clubList',
       'clubPick',
+      'clubSelect',
       'puttSheet',
       'puttPick',
       'clubNav',

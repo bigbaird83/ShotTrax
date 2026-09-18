@@ -1,7 +1,7 @@
 /** Watch starts the round from a short nearby-course list.
- * The list uses the phone fix only. Watch GPS never chooses a course.
- * Finding a course skips the 15 m / 25 m mark gates. No search box.
- * No fresh phone fix, or an empty list → one line: open the phone.
+ * The list uses a fresh phone fix only. Wake the phone for that fix.
+ * Watch GPS never chooses a course. Finding a course skips the 15 m / 25 m
+ * mark gates. No search box. No fresh phone fix, or an empty list → open the phone.
  */
 
 import { COPY } from './playerCopy';
@@ -11,6 +11,7 @@ import type { GpsFix } from './types';
 export const NEARBY_COURSE_FIX_MAX_AGE_MS = 30_000;
 export const NEARBY_COURSE_LIST_MAX = 8;
 export const OPEN_PHONE = COPY.openPhone;
+export const SELECT_COURSE = COPY.selectCourse;
 
 export function nearbyCoursesUsesPhoneFixOnly(): true {
   return true;
@@ -56,15 +57,69 @@ export function startDifferentRoundLivesUnderHome(): true {
   return true;
 }
 
-export type WatchOpenFace = 'hole' | 'nearby';
+export function liveRoundReplacedByWatchCoursePick(): false {
+  return false;
+}
 
-/** A live round opens that hole. Nearby / a different round lives under Home. */
+export function watchCoursePickSetsPhoneCourse(): true {
+  return true;
+}
+
+/** A stale or missing phone fix does not reuse a list the Watch or phone built. */
+export function watchStartsFromBuiltListWithoutPhoneFix(): false {
+  return false;
+}
+
+export function planWatchCoursePick(args: {
+  hasLiveRound: boolean;
+  replaceAllowed?: boolean;
+}): 'keep_live_round' | 'set_phone_course' {
+  if (args.hasLiveRound && !args.replaceAllowed) return 'keep_live_round';
+  return 'set_phone_course';
+}
+
+export type WatchOpenFace = 'hole' | 'select_course' | 'nearby' | 'hole_count' | 'tees';
+
+export function watchFirstScreenIsSelectCourse(): true {
+  return true;
+}
+
+export function watchNineIsHoles1Through9(): true {
+  return true;
+}
+
+export function watchNineIsFrontOrBack(): false {
+  return false;
+}
+
+export function watchEighteenIsFullCard(): true {
+  return true;
+}
+
+/** 9 is holes 1–9. 18 is the full card. Never a front-or-back nine picker. */
+export function holesForWatchRound(holeCount: 9 | 18): number[] {
+  const count = holeCount === 9 ? 9 : 18;
+  return Array.from({ length: count }, (_, i) => i + 1);
+}
+
+/**
+ * A live round opens that hole. No course and no round starts on Select course,
+ * not the list. After that: nearby → course → 9 or 18 → tees.
+ */
 export function planWatchOpenFace(args: {
   hasLiveRound: boolean;
   openedFromHome?: boolean;
+  selectCourseTapped?: boolean;
+  courseId?: string | null;
+  holeCount?: 9 | 18 | null;
+  hasTees?: boolean;
 }): WatchOpenFace {
   if (args.hasLiveRound && !args.openedFromHome) return 'hole';
-  return 'nearby';
+  if (!args.selectCourseTapped) return 'select_course';
+  if (!args.courseId) return 'nearby';
+  if (args.holeCount !== 9 && args.holeCount !== 18) return 'hole_count';
+  if (args.hasTees) return 'tees';
+  return 'hole';
 }
 
 export function nearbyCourseFixMaxAgeMs(): typeof NEARBY_COURSE_FIX_MAX_AGE_MS {
@@ -118,17 +173,8 @@ export type NearbyCoursesPlan =
   | { status: 'ok'; line: null; courses: WatchNearbyCourse[] }
   | { status: 'open_phone'; line: typeof OPEN_PHONE; courses: [] };
 
-export function planNearbyCourses(args: {
-  phoneFix: GpsFix | null | undefined;
-  watchFix?: GpsFix | null;
-  courses: WatchNearbyCourse[];
-  nowMs: number;
-}): NearbyCoursesPlan {
-  const phone = phoneFixForNearbyCourses(args);
-  if (!phone) {
-    return { status: 'open_phone', line: OPEN_PHONE, courses: [] };
-  }
-  const courses = args.courses
+function normalizeNearbyCourses(courses: WatchNearbyCourse[]): WatchNearbyCourse[] {
+  return courses
     .filter((course) => typeof course.id === 'string' && course.id.trim() && course.name.trim())
     .slice(0, NEARBY_COURSE_LIST_MAX)
     .map((course) => ({
@@ -139,6 +185,19 @@ export function planNearbyCourses(args: {
           ? course.distanceMeters
           : null,
     }));
+}
+
+export function planNearbyCourses(args: {
+  phoneFix: GpsFix | null | undefined;
+  watchFix?: GpsFix | null;
+  courses: WatchNearbyCourse[];
+  nowMs: number;
+}): NearbyCoursesPlan {
+  const phone = phoneFixForNearbyCourses(args);
+  if (!phone) {
+    return { status: 'open_phone', line: OPEN_PHONE, courses: [] };
+  }
+  const courses = normalizeNearbyCourses(args.courses);
   if (courses.length === 0) {
     return { status: 'open_phone', line: OPEN_PHONE, courses: [] };
   }
