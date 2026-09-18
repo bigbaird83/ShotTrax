@@ -8,14 +8,29 @@ export function homeClubTapMaxYards(): typeof HOME_CLUB_TAP_MAX_YD {
   return HOME_CLUB_TAP_MAX_YD;
 }
 
-/** Home-scale club tap / Same club never runs acceptFix. On-course taps still do. */
+/** Home-scale club tap never runs acceptFix. On-course taps still do. */
 export function homeClubTapRunsAcceptFix(): false {
+  return false;
+}
+
+/** A Placed tee start is not a GPS fix — no 15 m / 25 m accuracy gates. */
+export function placedStartRunsAccuracyGates(): false {
+  return false;
+}
+
+/** 600 from the tee, not the 400-yard shot-save confirm. */
+export function homeClubTapUsesShotSaveGate(): false {
   return false;
 }
 
 /** Never write the house GPS as the ball. */
 export function homeClubTapUsesHouseStart(): false {
   return false;
+}
+
+/** Suggested, Same club, Say a club, and Watch all use this 600-yard rule. */
+export function homeClubTapPaths(): readonly ['suggested', 'same_club', 'say_club', 'watch'] {
+  return ['suggested', 'same_club', 'say_club', 'watch'];
 }
 
 export function phoneIsHomeFromTee(

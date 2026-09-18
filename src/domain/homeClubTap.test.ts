@@ -6,9 +6,12 @@ import { haversineYards } from './haversine';
 import {
   HOME_CLUB_TAP_MAX_YD,
   homeClubTapMaxYards,
+  homeClubTapPaths,
   homeClubTapRunsAcceptFix,
   homeClubTapUsesHouseStart,
+  homeClubTapUsesShotSaveGate,
   phoneIsHomeFromTee,
+  placedStartRunsAccuracyGates,
   planClubTapStart,
 } from './homeClubTap';
 import { preferWatchFix } from './preferWatchFix';
@@ -21,9 +24,12 @@ const home = { lat: 40.7128, lng: -74.006 };
 test('home-scale phone starts the shot at the tee, not the house', () => {
   assert.equal(homeClubTapMaxYards(), 600);
   assert.equal(HOME_CLUB_TAP_MAX_YD, 600);
+  assert.equal(homeClubTapUsesShotSaveGate(), false);
+  assert.notEqual(HOME_CLUB_TAP_MAX_YD, MAX_SHOT_YD);
   assert.ok(haversineYards(home, tee) > 600);
   assert.equal(phoneIsHomeFromTee(home, tee), true);
   assert.equal(homeClubTapRunsAcceptFix(), false);
+  assert.equal(placedStartRunsAccuracyGates(), false);
   assert.equal(homeClubTapUsesHouseStart(), false);
 
   const start = planClubTapStart({ phone: home, tee });
@@ -41,11 +47,13 @@ test('on-course phone within 600 yards of the tee still uses the phone', () => {
   assert.equal(start?.start.lng, onCourse.lng);
 });
 
-test('500 yards from the tee is still on-course — not the 400-yard shot-save gate', () => {
+test('a 500-yard-from-tee fix still uses the phone', () => {
+  assert.equal(homeClubTapUsesShotSaveGate(), false);
   assert.notEqual(HOME_CLUB_TAP_MAX_YD, MAX_SHOT_YD);
   const fiveHundred = { lat: 37.0 + (500 * 0.9144) / 111_320, lng: -122.0 };
-  assert.ok(haversineYards(fiveHundred, tee) > 400);
-  assert.ok(haversineYards(fiveHundred, tee) < 600);
+  const yards = haversineYards(fiveHundred, tee);
+  assert.ok(yards > MAX_SHOT_YD);
+  assert.ok(yards < HOME_CLUB_TAP_MAX_YD);
   const start = planClubTapStart({ phone: fiveHundred, tee });
   assert.equal(start?.kind, 'phone');
   assert.equal(start?.source, 'gps');
@@ -89,6 +97,7 @@ test('missing tee does not invent a point or save the house', () => {
 });
 
 test('suggested, Same club, Say a club, and Watch picks all use the 600-yard tee rule', () => {
+  assert.deepEqual([...homeClubTapPaths()], ['suggested', 'same_club', 'say_club', 'watch']);
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   assert.match(hole, /tee: holeTee/);
   assert.match(hole, /markShotWithClub/);
@@ -96,6 +105,8 @@ test('suggested, Same club, Say a club, and Watch picks all use the 600-yard tee
   assert.match(hole, /void markClub\(matched\)/);
   assert.match(hole, /onMark/);
   assert.match(hole, /COPY\.sayClub/);
+  const say = hole.slice(hole.indexOf('const applyTranscript'), hole.indexOf('const startListening'));
+  assert.match(say, /markClub\(matched\)/);
   const watch = readFileSync(new URL('../services/watchClub.ts', import.meta.url), 'utf8');
   assert.match(watch, /tee: ctx\.tee/);
   assert.match(watch, /markShotWithClub/);
