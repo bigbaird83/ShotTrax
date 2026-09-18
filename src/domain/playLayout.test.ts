@@ -35,6 +35,10 @@ import {
   playSuggestedIsSidewaysStrip,
   playStackedSuggestionChips,
   playStripCappedAtThree,
+  playUnderWheelIncludes,
+  playSameClubSitsUnderWheel,
+  playAllClubsSitsUnderWheel,
+  playAllClubsSitsBesideWheel,
 } from './playLayout';
 
 test('play map fills at least 60% down to a two-row dock; header is overlay', () => {
@@ -63,7 +67,11 @@ test('dock is not fat All clubs, Say a club, or a tall Same club', () => {
   assert.equal(layout.allClubs, 'chip');
   assert.equal(layout.sayClub, 'chip');
   assert.equal(layout.sameClub, 'short');
-  assert.deepEqual(playChipRowIncludes(), ['suggested', 'all_clubs', 'say_club']);
+  assert.deepEqual(playChipRowIncludes(), ['suggested']);
+  assert.deepEqual(playUnderWheelIncludes(), ['same_club', 'all_clubs']);
+  assert.equal(playSameClubSitsUnderWheel(), true);
+  assert.equal(playAllClubsSitsUnderWheel(), true);
+  assert.equal(playAllClubsSitsBesideWheel(), false);
   assert.equal(playShowsFatAllClubs(), false);
   assert.equal(playShowsFatSayClub(), false);
   assert.equal(playShowsTallSameClub(), false);
@@ -75,11 +83,13 @@ test('play hole screen uses the fill layout and does not keep the empty middle',
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   assert.match(hole, /planPlayLayout/);
   assert.match(hole, /styles\.mapFill/);
+  assert.match(hole, /minHeight: '60%'/);
+  assert.match(hole, /flexBasis: '60%'/);
   assert.match(hole, /styles\.dock/);
   assert.match(hole, /styles\.shotLine/);
   assert.match(hole, /COPY\.allClubs/);
   assert.match(hole, /COPY\.sayClub/);
-  assert.match(hole, /styles\.dockChip/);
+  assert.match(hole, /styles\.dockAction/);
   assert.doesNotMatch(hole, /ThumbZone/);
   assert.doesNotMatch(hole, /styles\.shotList/);
   assert.doesNotMatch(hole, /styles\.clubChip/);
@@ -112,7 +122,8 @@ test('play hole screen uses the fill layout and does not keep the empty middle',
 
 test('All clubs and Say a club are chips in row 1; edit is tap a shot, not a dock row', () => {
   assert.equal(playDockRowCount(), 2);
-  assert.deepEqual(playChipRowIncludes(), ['suggested', 'all_clubs', 'say_club']);
+  assert.deepEqual(playChipRowIncludes(), ['suggested']);
+  assert.deepEqual(playUnderWheelIncludes(), ['same_club', 'all_clubs']);
   assert.equal(playEditIsDockRow(), false);
   assert.equal(anyEarlierShotCanOpenEdit(), true);
 
@@ -121,7 +132,10 @@ test('All clubs and Say a club are chips in row 1; edit is tap a shot, not a doc
   assert.equal((dock.match(/styles\.dockRow/g) ?? []).length, 2);
   assert.match(dock, /COPY\.allClubs/);
   assert.match(dock, /COPY\.sayClub/);
-  assert.match(dock, /styles\.dockChip/);
+  const wheelAt = dock.indexOf('<ClubStrip');
+  const sameAt = dock.indexOf('COPY.stickyClub');
+  const allAt = dock.indexOf('COPY.allClubs');
+  assert.ok(wheelAt >= 0 && sameAt > wheelAt && allAt > sameAt);
   assert.doesNotMatch(dock, /COPY\.editShot|COPY\.changeClub|COPY\.moveFrom|COPY\.moveTo/);
   assert.match(hole, /shots\.map\(\(shot\) => \{[\s\S]*openEdit\(shot\.id\)/);
   assert.match(hole, /label=\{COPY\.changeClub\}/);

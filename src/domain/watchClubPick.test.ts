@@ -264,8 +264,9 @@ test('Watch suggested strip shows carry, opens on the pick, and is not stacked r
   assert.match(watchUi, /session\.list\.yardsToGreen/);
   assert.match(watchUi, /session\.list\.bag/);
 
+  const phoneHole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  assert.match(phoneHole, /<ClubStrip/);
   const phonePick = readFileSync(new URL('../../app/round/[id]/club-pick.tsx', import.meta.url), 'utf8');
-  assert.match(phonePick, /<ClubStrip/);
   assert.doesNotMatch(phonePick, /TabView|tabViewStyle|styles\.top3/);
 
   const rankSrc = readFileSync(new URL('./rankClubs.ts', import.meta.url), 'utf8');

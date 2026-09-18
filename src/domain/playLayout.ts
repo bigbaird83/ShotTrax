@@ -62,8 +62,25 @@ export function playShowsFatSayClub(): false {
   return false;
 }
 
-export function playChipRowIncludes(): readonly ['suggested', 'all_clubs', 'say_club'] {
-  return ['suggested', 'all_clubs', 'say_club'];
+/** Wheel is the first dock row. Same club and All clubs sit under it. */
+export function playChipRowIncludes(): readonly ['suggested'] {
+  return ['suggested'];
+}
+
+export function playUnderWheelIncludes(): readonly ['same_club', 'all_clubs'] {
+  return ['same_club', 'all_clubs'];
+}
+
+export function playSameClubSitsUnderWheel(): true {
+  return true;
+}
+
+export function playAllClubsSitsUnderWheel(): true {
+  return true;
+}
+
+export function playAllClubsSitsBesideWheel(): false {
+  return false;
 }
 
 /** Suggested slot is the sideways carry strip, not stacked chips. */

@@ -1164,7 +1164,6 @@ export default function HoleScreen() {
           <View style={styles.dockRow}>
             <View style={styles.dockStrip}>
               <ClubStrip
-                compact
                 items={stripItems}
                 pickId={stripPlan.pickId}
                 disabled={readOnly || placing}
@@ -1175,22 +1174,6 @@ export default function HoleScreen() {
                 }}
               />
             </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={COPY.allClubs}
-              disabled={readOnly || placing}
-              onPress={openBag}
-              style={styles.dockChipSide}>
-              <Text style={styles.dockChipText}>{COPY.allClubs}</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={COPY.sayClub}
-              disabled={placing}
-              onPress={() => void onListen()}
-              style={styles.dockChipSide}>
-              <Text style={styles.dockChipText}>{listening ? COPY.listening : COPY.sayClub}</Text>
-            </Pressable>
           </View>
           <View style={styles.dockRow}>
             <Pressable
@@ -1202,6 +1185,14 @@ export default function HoleScreen() {
                 {sticky ? `${COPY.stickyClub} · ${sticky.shortName}` : COPY.stickyClub}
               </Text>
               <MarkCheck nonce={checkNonce} />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={COPY.allClubs}
+              disabled={readOnly || placing}
+              onPress={openBag}
+              style={styles.dockAction}>
+              <Text style={styles.dockActionText}>{COPY.allClubs}</Text>
             </Pressable>
             {!readOnly ? (
               <Pressable
@@ -1231,6 +1222,14 @@ export default function HoleScreen() {
               onPress={() => goToHole(holeNumber + 1)}
               style={styles.dockAction}>
               <Text style={styles.dockActionText}>{COPY.nextHole}</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={COPY.sayClub}
+              disabled={placing}
+              onPress={() => void onListen()}
+              style={styles.dockAction}>
+              <Text style={styles.dockActionText}>{listening ? COPY.listening : COPY.sayClub}</Text>
             </Pressable>
           </View>
         </View>
@@ -1694,7 +1693,7 @@ export default function HoleScreen() {
 
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: colors.bg },
-  mapFill: { flex: 1, minHeight: 0, flexGrow: 1, flexBasis: '60%' },
+  mapFill: { flex: 1, minHeight: '60%', flexGrow: 1, flexBasis: '60%' },
   mapWrapFull: { flex: 1, minHeight: 0 },
   catchUpBar: {
     flexDirection: 'row',
@@ -1800,7 +1799,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   dockRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  dockStrip: { flex: 1, minWidth: 0, height: 40 },
+  dockStrip: { flex: 1, minWidth: 0, height: 60 },
   dockChip: {
     flex: 1,
     minHeight: 36,

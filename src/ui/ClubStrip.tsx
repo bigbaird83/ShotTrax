@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { NativeSyntheticEvent, NativeScrollEvent, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { wrapClubStripIndex } from '../domain/clubStrip';
+import { PHONE_WHEEL_PILL_HEIGHT, wrapClubStripIndex } from '../domain/clubStrip';
 import { colors, type } from './theme';
 
 export type ClubStripItem = {
@@ -109,10 +109,10 @@ export function ClubStrip({ items, pickId, onPick, disabled, compact }: Props) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { width: '100%', height: 52 },
+  wrap: { width: '100%', height: PHONE_WHEEL_PILL_HEIGHT + 8 },
   wrapCompact: { height: 40 },
   pill: {
-    height: 44,
+    height: PHONE_WHEEL_PILL_HEIGHT,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.line,

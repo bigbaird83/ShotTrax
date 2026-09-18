@@ -32,6 +32,9 @@ import {
   clubStripUsesFullBag,
   clubStripUsesRankedTop3,
   clubStripWraps,
+  PHONE_WHEEL_PILL_HEIGHT,
+  WATCH_WHEEL_PILL_HEIGHT,
+  phoneWheelPillTallerThanWatch,
   planClubStrip,
   wrapClubStripIndex,
 } from './clubStrip';
@@ -149,10 +152,9 @@ test('after a shot lands the middle pill is closest to yards left, and the strip
   assert.match(hole, /openBag/);
 
   const pick = readFileSync(new URL('../../app/round/[id]/club-pick.tsx', import.meta.url), 'utf8');
-  const pickPlan = pick.slice(pick.indexOf('const stripPlan'), pick.indexOf('const stripItems'));
-  assert.match(pickPlan, /clubs\.map/);
-  assert.match(pickPlan, /target\?\.dYards/);
-  assert.doesNotMatch(pickPlan, /rankTopClubs|slice\(0,\s*3\)/);
+  assert.match(pick, /clubs\.map/);
+  assert.match(pick, /scroll=\{false\}/);
+  assert.doesNotMatch(pick, /rankTopClubs[\s\S]*slice\(0,\s*3\)/);
 
   const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
   const stripClubs = watch.slice(watch.indexOf('private var stripClubs'), watch.indexOf('private func carryFromLabel'));
@@ -211,8 +213,7 @@ test('phone strip tap is the old chip mark, and the center pill is closest to ho
   assert.doesNotMatch(mark, /skipHomeClubTap|withoutTee/);
 
   const pick = readFileSync(new URL('../../app/round/[id]/club-pick.tsx', import.meta.url), 'utf8');
-  const pickStrip = pick.slice(pick.indexOf('<ClubStrip'), pick.indexOf('styles.grid'));
-  assert.match(pickStrip, /void markClub\(full\)/);
+  assert.match(pick, /void markClub\(club\)/);
   const pickMark = pick.slice(pick.indexOf('const markClub'), pick.indexOf('const rankedRef'));
   assert.match(pickMark, /markShotWithClub/);
   assert.match(pickMark, /tee: holeTee/);
@@ -245,14 +246,19 @@ test('phone and Watch strip UIs peek neighbors and mark only on tap', () => {
   assert.equal(HOME_CLUB_TAP_MAX_YD, 600);
 
   const pick = readFileSync(new URL('../../app/round/[id]/club-pick.tsx', import.meta.url), 'utf8');
-  assert.match(pick, /<ClubStrip/);
-  assert.match(pick, /planClubStrip/);
-  assert.match(pick, /void markClub\(full\)/);
+  assert.match(pick, /void markClub\(club\)/);
   assert.match(pick, /void markClub\(matched\)/);
   assert.doesNotMatch(pick, /styles\.top3/);
   assert.doesNotMatch(pick.slice(pick.indexOf('return ('), pick.length), /ranked\.map\(\(club, index\)/);
 
+  assert.equal(phoneWheelPillTallerThanWatch(), true);
+  assert.ok(PHONE_WHEEL_PILL_HEIGHT > WATCH_WHEEL_PILL_HEIGHT);
+  assert.equal(WATCH_WHEEL_PILL_HEIGHT, 36);
+  assert.match(phone, /PHONE_WHEEL_PILL_HEIGHT/);
+  assert.doesNotMatch(dock, /compact/);
+
   const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  assert.match(watch, /height: 36/);
   assert.match(watch, /ScrollView\(\.horizontal/);
   assert.match(watch, /onTapGesture/);
   assert.match(watch, /scrollTo\(stripPickToken/);

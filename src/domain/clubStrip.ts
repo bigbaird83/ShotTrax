@@ -1,5 +1,13 @@
 import { isPutterClubId } from './defaultBag';
 
+/** Phone wheel pills are taller than the Watch pills. */
+export const PHONE_WHEEL_PILL_HEIGHT = 52;
+export const WATCH_WHEEL_PILL_HEIGHT = 36;
+
+export function phoneWheelPillTallerThanWatch(): true {
+  return true;
+}
+
 /** Phone and Watch share this strip. Sorted by carry, not name or iron number. */
 export function clubStripSortedByCarry(): true {
   return true;
