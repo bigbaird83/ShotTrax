@@ -41,7 +41,7 @@ export function catchUpFrameIncludesUserFix(): false {
   return false;
 }
 
-export type CatchUpSheetMap = 'fullscreen' | 'strip';
+export type CatchUpSheetMap = 'fullscreen' | 'fill';
 export type CatchUpSheetButtons = 'hidden' | 'visible';
 
 export type CatchUpSheet = {
@@ -58,7 +58,7 @@ export function planCatchUpSheet(active: boolean): CatchUpSheet {
   if (active) {
     return { map: 'fullscreen', holeButtons: 'hidden', cancelMarks: 'nothing' };
   }
-  return { map: 'strip', holeButtons: 'visible', cancelMarks: 'nothing' };
+  return { map: 'fill', holeButtons: 'visible', cancelMarks: 'nothing' };
 }
 
 /** Cancel catch-up: no from, no to, no club, no saved shot. Neighbors stay put. */

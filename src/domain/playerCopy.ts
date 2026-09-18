@@ -17,6 +17,8 @@ export const COPY = {
   finishRound: 'Finish round',
   deleteRound: 'Delete round',
   deleteRoundConfirm: 'Delete this round? Shots and scores go with it.',
+  deleteShot: 'Delete shot',
+  deleteShotConfirm: 'Delete this shot?',
   roundHistory: 'Round history',
   noRounds: 'No rounds yet.',
   roundInProgress: 'Round in progress',
@@ -60,10 +62,12 @@ export const COPY = {
   undoPutt: 'Undo putt',
   forgotShot: 'Log a missed shot',
   addShot: 'Add shot',
+  shot: 'Shot',
   placed: 'Placed',
   placeFromHint: 'Tap where you hit from.',
   placeToHint: 'Tap where it landed.',
   cancelPlace: 'Cancel',
+  confirmPlace: 'Confirm',
   score: 'Score',
   shots: 'Shots',
   noShots: 'No shots yet.',
@@ -161,6 +165,17 @@ export function formatSiLabel(handicap: number | null): string {
 
 export function formatHoleHeader(holeNumber: number, par: number | null): string {
   return `Hole ${holeNumber} · ${formatParLabel(par)}`;
+}
+
+/** Play header: Hole N · Par X plus the yards. No SI. No tee rating. */
+export function formatPlayHeader(
+  holeNumber: number,
+  par: number | null,
+  yards: number | null,
+): string {
+  const yardsBit =
+    yards != null && Number.isFinite(yards) ? `${Math.round(yards)} yd` : '—';
+  return `${formatHoleHeader(holeNumber, par)} · ${yardsBit}`;
 }
 
 export function formatTeeMeta(tee: {

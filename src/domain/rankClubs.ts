@@ -22,7 +22,7 @@ export type DistanceTarget = {
 
 /**
  * Catch-up / edit club picker D: this shot's haversine yards, never yards-to-green.
- * Live play still uses `resolveDistanceTarget`.
+ * Live play uses `resolveNextShotDistanceTarget` (landing → green).
  */
 export function shotYardsDistanceTarget(dYards: number | null | undefined): DistanceTarget | null {
   if (dYards == null || !Number.isFinite(dYards)) return null;
@@ -107,6 +107,32 @@ export function resolveDistanceTarget(args: {
     return { source: 'last_closed_shot', dYards: Math.round(args.lastClosedYards) };
   }
   return null;
+}
+
+/**
+ * Next suggested club (big chip): remaining yards from the new landing to the
+ * green. Not the card / tee number. No landing yet → existing tee / last-closed
+ * fallback. The 20% rule still lives on `rankDistanceYards`.
+ */
+export function resolveNextShotDistanceTarget(args: {
+  landingToGreen: { yards: number | null; quality: ShotFixQuality };
+  courseToGreen: { yards: number | null; quality: ShotFixQuality };
+  lastClosedYards: number | null;
+}): DistanceTarget | null {
+  if (
+    args.landingToGreen.quality !== 'none' &&
+    args.landingToGreen.yards != null &&
+    Number.isFinite(args.landingToGreen.yards)
+  ) {
+    return {
+      source: 'yards_to_green',
+      dYards: args.landingToGreen.yards,
+    };
+  }
+  return resolveDistanceTarget({
+    toGreen: args.courseToGreen,
+    lastClosedYards: args.lastClosedYards,
+  });
 }
 
 /** Most recent closed GPS or Placed shot with haversine yards. `no_gps` / `none` / putter never rank. */

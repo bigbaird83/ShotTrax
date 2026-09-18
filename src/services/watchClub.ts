@@ -28,6 +28,7 @@ export type WatchClubContext = {
   roundId: string;
   holeNumber: number;
   readOnly: boolean;
+  tee?: { lat: number; lng: number } | null;
   bump: () => void;
   onMarked?: () => void;
   onPutter?: () => void;
@@ -164,6 +165,7 @@ async function handlePick(token: string, json: string): Promise<void> {
       holeNumber: ctx.holeNumber,
       clubId: pick.clubId,
       watchFix,
+      tee: ctx.tee ?? null,
     });
     const waiting = promptForPlan(plan, () => {
       void (async () => {
@@ -174,6 +176,7 @@ async function handlePick(token: string, json: string): Promise<void> {
             clubId: pick.clubId,
             force: true,
             watchFix,
+            tee: ctx.tee ?? null,
           });
           if (forced.plan.status === 'commit') {
             hapticMark();

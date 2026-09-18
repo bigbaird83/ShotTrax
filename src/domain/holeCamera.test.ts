@@ -9,11 +9,21 @@ import {
   holeCameraIsCameraOnly,
   holeCameraUsesPhoneHeading,
   holeFrameRegion,
+  holeCameraNullRefIsFramed,
+  holeMapFitsToCoordinates,
+  holeMapRevealsBeforeHoleFrame,
+  holeMapShowsUserLocation,
   holeNativeCamera,
+  lockFrameRegionIncludesPhone,
   lockHoleCamera,
+  nerdOutTrailUsesLockFrame,
   planHoleCamera,
   regionIsHoleFrame,
   resolveHoleTee,
+  shotPinsForHoleCamera,
+  editShotMapUsesLockFrame,
+  everyHoleMapUsesLockFrame,
+  holeMapInventPhonePoint,
 } from './holeCamera';
 
 const tee = { lat: 37.0, lng: -122.0 };
@@ -226,4 +236,19 @@ test('null map ref does not stick framed; home GPS stays out; hole tee still fra
     true,
   );
   assert.equal(resolveHoleTee({ holeTee: null, osmTee: null }), null);
+  assert.equal(holeMapRevealsBeforeHoleFrame(), false);
+  assert.equal(holeMapShowsUserLocation(true), false);
+  assert.equal(holeMapFitsToCoordinates(true), false);
+  assert.equal(lockFrameRegionIncludesPhone(), false);
+  assert.equal(holeCameraNullRefIsFramed(), false);
+  assert.equal(everyHoleMapUsesLockFrame(), true);
+  assert.equal(editShotMapUsesLockFrame(), true);
+  assert.equal(nerdOutTrailUsesLockFrame(), true);
+  assert.equal(holeMapInventPhonePoint(), false);
+  assert.deepEqual(
+    shotPinsForHoleCamera([
+      { startLat: tee.lat, startLng: tee.lng, endLat: greenNorth.lat, endLng: greenNorth.lng },
+    ]),
+    [tee, greenNorth],
+  );
 });

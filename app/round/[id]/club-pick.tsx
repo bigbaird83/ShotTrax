@@ -1,18 +1,22 @@
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { getCourseDataClient } from '@/src/course/client';
+import { teePointForHole, teePointFromHoleFeature } from '@/src/course/osmOverlay';
+import type { OsmOverlay } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
-import { getHole, listClubAverages, listClubs, listShotsForHole } from '@/src/db/repo';
+import { getHole, getRound, listClubAverages, listClubs, listShotsForHole } from '@/src/db/repo';
+import { resolveHoleTee } from '@/src/domain/holeCamera';
 import { COPY, formatPickerLeftYards, formatSuggestedClubChip } from '@/src/domain/playerCopy';
 import { clubPickLeaveHref, clubPickLeaveRunsAcceptFix, planClubPickLeave } from '@/src/domain/clubPickNav';
 import { putterOpensPuttSheet } from '@/src/domain/putts';
-import { clubToRankInput, lastClosedShotYards, rankDistanceYards, rankTopClubs, resolveDistanceTarget } from '@/src/domain/rankClubs';
+import { clubToRankInput, lastClosedShotYards, rankDistanceYards, rankTopClubs, resolveNextShotDistanceTarget } from '@/src/domain/rankClubs';
 import { parseTypedYards } from '@/src/domain/shotSource';
 import { selectClubForMark } from '@/src/domain/stickyClub';
 import { matchSpokenClub, speechContextualStrings } from '@/src/domain/voiceClub';
 import { emptyWalkAway, stepWalkAway, walkAwayEligible } from '@/src/domain/walkAway';
 import type { Club, GpsFix } from '@/src/domain/types';
-import { toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
+import { lastLandingMark, markToGreen, toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
 import { startClubSpeech, type ClubSpeechSession } from '@/src/services/speechClub';
 import { addNoGpsShot, changeShotClub, markShotWithClub, promptForPlan } from '@/src/services/shotActions';
 import { useLiveFix } from '@/src/services/useLiveFix';
@@ -63,6 +67,8 @@ export default function ClubPickScreen() {
   };
   const clubs = useMemo(() => listClubs(db, true), [db, revision]);
   const holeRow = useMemo(() => getHole(db, id, holeNumber), [db, id, holeNumber, revision]);
+  const round = useMemo(() => getRound(db, id), [db, id, revision]);
+  const [osmOverlay, setOsmOverlay] = useState<OsmOverlay | null>(null);
   const shots = useMemo(
     () => (holeRow ? listShotsForHole(db, holeRow.id) : []),
     [db, holeRow, revision],
@@ -118,15 +124,48 @@ export default function ClubPickScreen() {
     holeRow?.greenLat != null && holeRow.greenLng != null
       ? { lat: holeRow.greenLat, lng: holeRow.greenLng }
       : null;
+  const holeTee = resolveHoleTee({
+    holeTee: teePointFromHoleFeature(osmOverlay, holeNumber, green),
+    osmTee: teePointForHole(osmOverlay, holeNumber),
+  });
   const fix = useLiveFix(!withoutGps);
+
+  useEffect(() => {
+    const location =
+      green ??
+      (round?.courseLat != null && round.courseLng != null
+        ? { lat: round.courseLat, lng: round.courseLng }
+        : null);
+    if (!location) {
+      setOsmOverlay(null);
+      return;
+    }
+    let live = true;
+    void getCourseDataClient()
+      .fetchOsmOverlay({
+        courseId: round?.courseApiId,
+        location,
+        holeNumber,
+      })
+      .then((overlay) => {
+        if (live) setOsmOverlay(overlay);
+      })
+      .catch(() => {
+        if (live) setOsmOverlay(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [green, round?.courseApiId, round?.courseLat, round?.courseLng, holeNumber]);
 
   const toGreen = toGreenDisplayFromHole({
     courseYards: holeRow?.yards ?? null,
     green,
     shots,
   });
-  const target = resolveDistanceTarget({
-    toGreen,
+  const target = resolveNextShotDistanceTarget({
+    landingToGreen: markToGreen(lastLandingMark(shots), green),
+    courseToGreen: toGreen,
     lastClosedYards: lastClosedShotYards(shots),
   });
   const ranked = rankTopClubs(
@@ -146,6 +185,7 @@ export default function ClubPickScreen() {
       roundId: id,
       holeNumber,
       readOnly: false,
+      tee: holeTee,
       bump,
       onMarked: () => {
         if (!withoutGps) router.back();
@@ -205,6 +245,7 @@ export default function ClubPickScreen() {
         force,
         fixOverride: opts.fixOverride,
         suggested: opts.suggested,
+        tee: holeTee,
       });
       const waiting = promptForPlan(plan, () => {
         void markClub(next, true, opts);

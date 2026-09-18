@@ -107,6 +107,12 @@ export type Shot = {
   source: ShotSource;
   /** Walk-away auto-mark with the #1 suggested club. */
   suggested: boolean;
+  /**
+   * ISO time after which this shot may enter club averages / the seed-five.
+   * Null on live GPS and older rows — already eligible. Set on Confirm so the
+   * 5s Undo window never moves the average.
+   */
+  averageEligibleAt?: string | null;
 };
 
 export type PenaltyKind = 'drop' | 'penalty';
@@ -127,5 +133,6 @@ export type OpenShot = {
   id: string;
   startLat: number;
   startLng: number;
-  startFixQuality: FixQuality;
+  /** Null on a home-scale Placed tee start — no GPS quality. */
+  startFixQuality: FixQuality | null;
 };

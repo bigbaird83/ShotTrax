@@ -1,6 +1,6 @@
 import { haversineYards, roundYards } from './haversine';
 import { isValidLatLng, type LatLng } from './latLng';
-import type { ShotFixQuality } from './types';
+import type { ShotFixQuality, ShotSource } from './types';
 
 export type GreenPinSource = 'user_estimate' | 'course_centroid';
 
@@ -71,6 +71,33 @@ export function lastClubStartQuality(shots: ClubStartShot[]): ShotFixQuality {
   return last?.fixQuality === 'none' ? 'none' : last?.fixQuality === 'soft' ? 'soft' : 'good';
 }
 
+export type ClubLandingShot = {
+  seq: number;
+  endLat: number | null;
+  endLng: number | null;
+  endedAt?: string | null;
+  source?: ShotSource;
+  fixQuality?: ShotFixQuality | null;
+};
+
+/**
+ * Latest closed landing (where the ball finished). Never the tee, never the
+ * phone, never invented. `no_gps` / quality none / open shots do not count.
+ */
+export function lastLandingMark(shots: ClubLandingShot[]): LatLng | null {
+  const last = [...shots]
+    .filter((shot) => {
+      if (shot.endedAt === null) return false;
+      if (shot.source === 'no_gps' || shot.fixQuality === 'none') return false;
+      return true;
+    })
+    .sort((a, b) => a.seq - b.seq)
+    .at(-1);
+  if (!last) return null;
+  const mark = { lat: last.endLat ?? Number.NaN, lng: last.endLng ?? Number.NaN };
+  return isValidLatLng(mark) ? mark : null;
+}
+
 export function markToGreen(
   mark: LatLng | null,
   green: LatLng | null,
@@ -139,6 +166,49 @@ export function yardsToGreenLabel(
   else if (!ctx.hasFix) detail = 'Waiting on your location.';
   else detail = 'Waiting on green location.';
   return { heading, value: '—', detail };
+}
+
+/**
+ * Play header yards. Same 600-yard check as live to-green / home club tap.
+ * Couch (phone more than 600 from the green and the tee) → course
+ * tee-to-center. Never the phone-to-green number (14,000).
+ * On the course (within 600 of green or tee) → live remaining.
+ * No green, or no course yardage and live over 600 → —.
+ */
+export function planPlayHeaderYards(args: {
+  phone: LatLng | null | undefined;
+  green: LatLng | null | undefined;
+  tee: LatLng | null | undefined;
+  courseYards: number | null;
+}): ToGreenDisplay {
+  const hasGreen = isValidLatLng(args.green);
+  const course = courseTeeYards(args.courseYards);
+  const distGreen =
+    isValidLatLng(args.phone) && isValidLatLng(args.green)
+      ? haversineYards(args.phone, args.green)
+      : null;
+  const distTee =
+    isValidLatLng(args.phone) && isValidLatLng(args.tee)
+      ? haversineYards(args.phone, args.tee)
+      : null;
+  const onCourse =
+    (distGreen != null && distGreen <= TO_GREEN_LIVE_MAX_YD) ||
+    (distTee != null && distTee <= TO_GREEN_LIVE_MAX_YD);
+
+  if (!hasGreen) return { yards: null, source: 'none', quality: 'none' };
+
+  if (onCourse) {
+    const live = liveToGreenYards(distGreen, 'good');
+    if (live != null) return { yards: live, source: 'live', quality: 'good' };
+    if (course != null) return { yards: course, source: 'course', quality: 'good' };
+    return { yards: null, source: 'none', quality: 'none' };
+  }
+
+  if (course != null) return { yards: course, source: 'course', quality: 'good' };
+  if (distGreen != null && distGreen > TO_GREEN_LIVE_MAX_YD) {
+    return { yards: null, source: 'none', quality: 'none' };
+  }
+  return { yards: null, source: 'none', quality: 'none' };
 }
 
 export function toGreenDisplayFromHole(args: {

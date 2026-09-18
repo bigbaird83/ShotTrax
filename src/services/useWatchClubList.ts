@@ -50,6 +50,9 @@ export function useWatchClubList(
       get holeNumber() {
         return ctxRef.current.holeNumber;
       },
+      get tee() {
+        return ctxRef.current.tee ?? null;
+      },
       get readOnly() {
         return ctxRef.current.readOnly;
       },

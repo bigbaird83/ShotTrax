@@ -5,6 +5,7 @@ import {
   finishPuttsChip,
   finishShotChip,
   formatHoleHeader,
+  formatPlayHeader,
   formatParLabel,
   formatPickerLeftYards,
   formatSiLabel,
@@ -22,6 +23,9 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(formatSiLabel(7), 'SI 7');
   assert.equal(formatHoleHeader(1, null), 'Hole 1 · Par unknown');
   assert.equal(formatHoleHeader(1, 4), 'Hole 1 · Par 4');
+  assert.equal(formatPlayHeader(1, 4, 371), 'Hole 1 · Par 4 · 371 yd');
+  assert.equal(formatPlayHeader(1, 4, null), 'Hole 1 · Par 4 · —');
+  assert.doesNotMatch(formatPlayHeader(1, 4, 371), /SI |Rating |Slope /);
   assert.equal(COPY.homeLede, 'Find a course nearby, pick your tee, start the round.');
   assert.equal(COPY.nearbyHint, 'Courses near you — pull to refresh.');
   assert.equal(COPY.waitingOnGreen, 'Waiting on green location.');
@@ -42,6 +46,8 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.moveFrom, 'Move from');
   assert.equal(COPY.moveTo, 'Move to');
   assert.equal(COPY.undoEdit, 'Undo edit');
+  assert.equal(COPY.deleteShot, 'Delete shot');
+  assert.equal(COPY.deleteShotConfirm, 'Delete this shot?');
   assert.equal(COPY.editFromHint, 'Tap the new from pin.');
   assert.equal(COPY.editToHint, 'Tap the new landing pin.');
   assert.equal(COPY.bagLede, 'Your bag. Turn off what you don’t carry. Carry is on each row.');
@@ -64,10 +70,12 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.home, 'Home');
   assert.equal(COPY.back, 'Back');
   assert.equal(COPY.addShot, 'Add shot');
+  assert.equal(COPY.shot, 'Shot');
   assert.equal(COPY.placed, 'Placed');
   assert.equal(COPY.placeFromHint, 'Tap where you hit from.');
   assert.equal(COPY.placeToHint, 'Tap where it landed.');
   assert.equal(COPY.cancelPlace, 'Cancel');
+  assert.equal(COPY.confirmPlace, 'Confirm');
   assert.equal(COPY.nextHole, 'Next');
   assert.equal(COPY.courseDistance, 'Course distance');
   assert.equal(COPY.courseDistanceSetting, 'Course distance: Miles / Kilometers');
@@ -109,6 +117,7 @@ test('suggested chips show that club’s carry, not yards-to-green', () => {
   assert.equal(formatSuggestedClubChip('7i', 155), '7i · 155');
   assert.equal(formatSuggestedClubChip('7i', null), '7i · —');
   assert.equal(formatSuggestedClubChip('7i', undefined), '7i · —');
+  assert.equal('chipYardsDuringUndo' in COPY, false);
 });
 
 test('picker remaining yards are 148 left only when quality is good or soft', () => {

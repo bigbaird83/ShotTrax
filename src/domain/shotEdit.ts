@@ -23,6 +23,15 @@ export type ShotEditSnapshot = {
   suggested: boolean;
 };
 
+/** Edit uses stored pins or a map tap. Never the phone GPS. */
+export function editReadsPhoneFix(): false {
+  return false;
+}
+
+export function editRunsAcceptFix(): false {
+  return false;
+}
+
 export function snapshotShot(shot: Shot): ShotEditSnapshot {
   return {
     id: shot.id,

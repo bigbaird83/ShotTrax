@@ -19,12 +19,16 @@ type Props = {
   onShotPress?: (shotId: string) => void;
   placedFrom?: { lat: number; lng: number } | null;
   placedTo?: { lat: number; lng: number } | null;
+  onPlaceToDrag?: (coord: { lat: number; lng: number }) => void;
   placeHint?: string | null;
   fullBleed?: boolean;
   framePoints?: { latitude: number; longitude: number }[] | null;
   lockFrame?: boolean;
   heading?: number | null;
   frameEpoch?: string;
+  hideYardsOverlay?: boolean;
+  onFrameReady?: (ready: boolean) => void;
+  style?: object;
 };
 
 export function HoleMap({ holeNumber, userFix, green, yardsToGreen, placeHint }: Props) {

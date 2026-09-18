@@ -11,9 +11,11 @@ import {
   rankDistanceYards,
   rankTopClubs,
   resolveDistanceTarget,
+  resolveNextShotDistanceTarget,
   shotYardsDistanceTarget,
   type RankClubInput,
 } from './rankClubs';
+import { lastLandingMark, markToGreen, toGreenDisplayFromHole } from './yardsToGreen';
 
 function club(
   partial: Partial<RankClubInput> & Pick<RankClubInput, 'id' | 'loftRank' | 'avgYards' | 'count'>,
@@ -357,6 +359,48 @@ test('bag-edited typical carry is the seed until 5 GPS shots; live avg then repl
   const cleared = clubToRankInput({ ...seven, typicalCarryYards: null }, { avgYards: 150, count: 3 });
   assert.equal(cleared.typicalCarryYards, null);
   assert.equal(rankDistanceYards(cleared), null);
+});
+
+test('next suggested ranks from the new landing, not the card tee number', () => {
+  const tee = { lat: 37.0, lng: -122.0 };
+  const landing = { lat: 37.0 + (200 * 0.9144) / 111_320, lng: -122.0 };
+  const green = { lat: 37.0 + (371 * 0.9144) / 111_320, lng: -122.0 };
+  const course = toGreenDisplayFromHole({
+    courseYards: 371,
+    green,
+    shots: [{ seq: 1, startLat: tee.lat, startLng: tee.lng, fixQuality: 'good' }],
+  });
+  assert.equal(course.yards, 371);
+  const landingToGreen = markToGreen(
+    lastLandingMark([
+      {
+        seq: 1,
+        endLat: landing.lat,
+        endLng: landing.lng,
+        endedAt: 'a',
+        source: 'placed',
+        fixQuality: null,
+      },
+    ]),
+    green,
+  );
+  assert.ok(landingToGreen.yards != null);
+  assert.ok(Math.abs((landingToGreen.yards ?? 0) - 171) < 8);
+  const target = resolveNextShotDistanceTarget({
+    landingToGreen,
+    courseToGreen: { yards: course.yards, quality: course.quality },
+    lastClosedYards: 200,
+  });
+  assert.equal(target?.source, 'yards_to_green');
+  assert.equal(target?.dYards, landingToGreen.yards);
+  assert.notEqual(target?.dYards, 371);
+
+  const before = resolveNextShotDistanceTarget({
+    landingToGreen: { yards: null, quality: 'none' },
+    courseToGreen: { yards: 371, quality: 'good' },
+    lastClosedYards: null,
+  });
+  assert.deepEqual(before, { source: 'yards_to_green', dYards: 371 });
 });
 
 test('typical-carry seed ranks a stock club before 5 live shots; live avg takes over after', () => {

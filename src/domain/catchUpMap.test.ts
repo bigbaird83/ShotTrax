@@ -42,7 +42,7 @@ test('add-shot catch-up is fullscreen and hides hole buttons; cancel marks nothi
     cancelMarks: 'nothing',
   });
   assert.deepEqual(planCatchUpSheet(false), {
-    map: 'strip',
+    map: 'fill',
     holeButtons: 'visible',
     cancelMarks: 'nothing',
   });
