@@ -49,6 +49,8 @@ type Props = {
   frameEpoch?: string;
   /** Play header already shows to-green. Keep the map badge for Add shot. */
   hideYardsOverlay?: boolean;
+  /** Parent hides the dock until the hole — not the house — is on screen. */
+  onFrameReady?: (ready: boolean) => void;
 };
 
 class MapGuard extends Component<{ children: ReactNode; fallback: ReactNode }, { failed: boolean }> {
@@ -127,6 +129,7 @@ function NativeHoleMap({
   heading,
   frameEpoch,
   hideYardsOverlay,
+  onFrameReady,
 }: Props) {
   const mapRef = useRef<MapView | null>(null);
   const framedOnce = useRef(false);
@@ -232,6 +235,10 @@ function NativeHoleMap({
     pendingLocked.current = true;
     if (lockFrame) setHoleCameraReady(false);
   }, [lockFrame, lockKey, heading, frameEpoch]);
+
+  useEffect(() => {
+    onFrameReady?.(lockFrame ? holeCameraReady : true);
+  }, [lockFrame, holeCameraReady, onFrameReady]);
 
   useEffect(() => {
     if (lockFrame) {

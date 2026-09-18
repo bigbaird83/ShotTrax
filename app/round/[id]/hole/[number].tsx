@@ -35,6 +35,7 @@ import { catchUpPinFromTap, planCancelCatchUp, planCatchUpSheet } from '@/src/do
 import { lockHoleCamera, resolveHoleTee } from '@/src/domain/holeCamera';
 import { deleteShotPrompt } from '@/src/domain/deleteShot';
 import { planInsertSlots } from '@/src/domain/insertShot';
+import { confirmUndoIsLive, planConfirmUndo, type ConfirmUndoWindow } from '@/src/domain/confirmUndo';
 import { confirmPlaceToDraft, planPlaceToDragPreview } from '@/src/domain/placeToDrag';
 import { planPlayLayout } from '@/src/domain/playLayout';
 import { planPlacedShot } from '@/src/domain/shotSource';
@@ -95,6 +96,10 @@ export default function HoleScreen() {
   const [scoreOpen, setScoreOpen] = useState(false);
   const [scorecardOpen, setScorecardOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [playFrameNonce, setPlayFrameNonce] = useState(0);
+  const [mapFramed, setMapFramed] = useState(false);
+  const [confirmUndo, setConfirmUndo] = useState<ConfirmUndoWindow | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [placeFrom, setPlaceFrom] = useState<LatLng | null>(null);
   const [placeTo, setPlaceTo] = useState<LatLng | null>(null);
   const [placeToDraft, setPlaceToDraft] = useState<LatLng | null>(null);
@@ -215,10 +220,17 @@ export default function HoleScreen() {
     setEditOpen(true);
   };
 
+  const bumpPlayFrame = useCallback(() => {
+    setMapFramed(false);
+    setPlayFrameNonce((nonce) => nonce + 1);
+  }, []);
+
   const goToHole = (nextNumber: number) => {
     resetPlace();
     closeEdit();
     setEditUndo(null);
+    setConfirmUndo(null);
+    setMapFramed(false);
     router.replace(`/round/${id}/hole/${nextNumber}`);
   };
 
@@ -251,6 +263,22 @@ export default function HoleScreen() {
   useEffect(() => {
     navigation.setOptions({ headerShown: false, title: `Hole ${holeNumber}` });
   }, [navigation, holeNumber]);
+
+  useEffect(() => {
+    setMapFramed(false);
+  }, [holeNumber]);
+
+  useEffect(() => {
+    if (!confirmUndo) return undefined;
+    const tick = () => {
+      const now = Date.now();
+      setNowMs(now);
+      if (!confirmUndoIsLive(confirmUndo, now)) setConfirmUndo(null);
+    };
+    tick();
+    const id = setInterval(tick, 250);
+    return () => clearInterval(id);
+  }, [confirmUndo]);
 
   useEffect(() => {
     const location =
@@ -566,6 +594,7 @@ export default function HoleScreen() {
       return;
     }
     setScorecardOpen(false);
+    bumpPlayFrame();
   };
 
   const onUndo = () => {
@@ -770,7 +799,25 @@ export default function HoleScreen() {
       return;
     }
     hapticMark();
+    setConfirmUndo(planConfirmUndo(result.id, Date.now()));
     resetPlace();
+    bump();
+  };
+
+  const onConfirmUndo = () => {
+    if (!confirmUndo || !confirmUndoIsLive(confirmUndo, Date.now())) {
+      setConfirmUndo(null);
+      return;
+    }
+    const result = deleteHoleShot(db, {
+      roundId: id,
+      holeNumber,
+      shotId: confirmUndo.shotId,
+      confirmed: true,
+    });
+    if (result.status !== 'commit') return;
+    setConfirmUndo(null);
+    hapticTap();
     bump();
   };
 
@@ -893,7 +940,8 @@ export default function HoleScreen() {
           onPlaceToDrag={placeMode === 'to' ? (point) => setPlaceToDraft(point) : undefined}
           lockFrame
           hideYardsOverlay={!catchUpFullScreen}
-          frameEpoch={catchUpFullScreen ? 'catchup' : 'play'}
+          frameEpoch={catchUpFullScreen ? 'catchup' : `play-${hole.number}-${playFrameNonce}`}
+          onFrameReady={setMapFramed}
           heading={holeCamera?.heading ?? null}
           framePoints={
             holeCamera
@@ -1038,6 +1086,11 @@ export default function HoleScreen() {
                 </View>
               ) : null}
               {toast ? <Text style={styles.overlayToast}>{toast}</Text> : null}
+              {!readOnly && confirmUndoIsLive(confirmUndo, nowMs) ? (
+                <Pressable onPress={onConfirmUndo} style={styles.overlayLink}>
+                  <Text style={styles.backLabel}>{COPY.undoLast}</Text>
+                </Pressable>
+              ) : null}
               {!readOnly && editUndo ? (
                 <Pressable onPress={onUndoEdit} style={styles.overlayLink}>
                   <Text style={styles.backLabel}>{COPY.undoEdit}</Text>
@@ -1068,7 +1121,7 @@ export default function HoleScreen() {
         </View>
       </View>
 
-      {!hideHoleButtons ? (
+      {!hideHoleButtons && (catchUpFullScreen || !holeCamera || mapFramed) ? (
         <View style={[styles.dock, { paddingBottom: Math.max(insets.bottom, 8) }]}>
           <View style={styles.dockRow}>
             {ranked.map((club, index) => (
@@ -1153,7 +1206,10 @@ export default function HoleScreen() {
       <FullSheet
         visible={menuOpen}
         title={COPY.menu}
-        onClose={() => setMenuOpen(false)}>
+        onClose={() => {
+          setMenuOpen(false);
+          bumpPlayFrame();
+        }}>
         <View style={styles.sheetPad}>
           <BigButton
             label={COPY.home}

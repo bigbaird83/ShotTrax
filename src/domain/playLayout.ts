@@ -90,3 +90,27 @@ export function playDeleteIsDockRow(): false {
 export function anyEarlierShotCanOpenEdit(): true {
   return true;
 }
+
+export const PLAY_REFRAME_ON = ['open', 'prev', 'next', 'scorecard_return', 'menu_return'] as const;
+
+/** Dock waits until that hole is framed. First visible frame is the hole. */
+export function playButtonsWaitForHoleFrame(): true {
+  return true;
+}
+
+export function playPhonePinMovesCamera(): false {
+  return false;
+}
+
+export function playShowsUserLocationFit(): false {
+  return false;
+}
+
+/** After a shot lands, #1 suggested is already the primary chip. Same control. */
+export function nextSuggestedIsNewButton(): false {
+  return false;
+}
+
+export function nextSuggestedIsPrimaryChip(): true {
+  return true;
+}

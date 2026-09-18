@@ -247,6 +247,11 @@ export function lockFrameRegionIncludesPhone(): false {
   return false;
 }
 
+/** A null map ref must not stick framedOnce. */
+export function holeCameraNullRefIsFramed(): false {
+  return false;
+}
+
 /**
  * True when the visible region is already the hole, not a home-scale GPS fix.
  * Used so the first thing shown is tee-to-green, not a later correction.

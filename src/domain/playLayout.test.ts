@@ -17,6 +17,12 @@ import {
   anyEarlierShotCanOpenEdit,
   playDeleteIsDockRow,
   playEditIsDockRow,
+  playButtonsWaitForHoleFrame,
+  playPhonePinMovesCamera,
+  playShowsUserLocationFit,
+  PLAY_REFRAME_ON,
+  nextSuggestedIsNewButton,
+  nextSuggestedIsPrimaryChip,
 } from './playLayout';
 
 test('play map fills at least 60% down to a two-row dock; header is overlay', () => {
@@ -66,7 +72,14 @@ test('play hole screen uses the fill layout and does not keep the empty middle',
   assert.match(hole, /lockHoleCamera/);
   assert.match(hole, /lockFrame/);
   assert.doesNotMatch(hole, /lockFrame=\{catchUpFullScreen|lockFrame=\{placing/);
-  assert.match(hole, /frameEpoch=\{catchUpFullScreen \? 'catchup' : 'play'\}/);
+  assert.match(hole, /catchUpFullScreen \? 'catchup'/);
+  assert.match(hole, /play-\$\{hole\.number\}-\$\{playFrameNonce\}/);
+  assert.match(hole, /onFrameReady=\{setMapFramed\}/);
+  assert.match(hole, /bumpPlayFrame/);
+  assert.equal(playButtonsWaitForHoleFrame(), true);
+  assert.equal(playPhonePinMovesCamera(), false);
+  assert.equal(playShowsUserLocationFit(), false);
+  assert.deepEqual([...PLAY_REFRAME_ON], ['open', 'prev', 'next', 'scorecard_return', 'menu_return']);
   assert.match(hole, /resolveHoleTee/);
   assert.match(hole, /teePointFromHoleFeature/);
   assert.equal(playUsesAddShotCamera(), true);
@@ -106,6 +119,33 @@ test('All clubs and Say a club are chips in row 1; edit is tap a shot, not a doc
   const editSheet = hole.slice(hole.indexOf('visible={editOpen && !editClubOpen}'), hole.indexOf('visible={scoreOpen}'));
   assert.match(editSheet, /COPY\.deleteShot/);
   assert.match(editSheet, /onDeleteShot\(editingShot\.id\)/);
+});
+
+test('opening, Prev/Next, and Scorecard or Menu return reframe before the dock comes back', () => {
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  assert.match(hole, /setMapFramed\(false\)/);
+  assert.match(hole, /bumpPlayFrame/);
+  assert.match(hole, /dismissScorecard/);
+  assert.match(hole, /goToHole/);
+  assert.match(hole, /!hideHoleButtons && \(catchUpFullScreen \|\| !holeCamera \|\| mapFramed\)/);
+  const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
+  assert.match(map, /onFrameReady/);
+  assert.match(map, /styles\.userDot/);
+  assert.match(map, /holeMapShowsUserLocation\(Boolean\(lockFrame\)\)/);
+  assert.doesNotMatch(
+    map.slice(map.indexOf('const coords = useMemo'), map.indexOf('const lockedPoints')),
+    /userFix/,
+  );
+});
+
+test('after a shot lands the next suggested club is already the primary chip', () => {
+  assert.equal(nextSuggestedIsNewButton(), false);
+  assert.equal(nextSuggestedIsPrimaryChip(), true);
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  assert.match(hole, /ranked\.map\(\(club, index\) => \(/);
+  assert.match(hole, /index === 0 && styles\.dockChipPrimary/);
+  assert.match(hole, /void markClub\(full\)/);
+  assert.doesNotMatch(hole, /nextClub|Next club|suggestedButton/);
 });
 
 test('tapping a previous shot shows Delete on that shot, not the dock', () => {
