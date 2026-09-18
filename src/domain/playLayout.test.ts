@@ -238,7 +238,8 @@ test('after a shot lands the next suggested club is already the primary chip', (
   assert.match(hole, /<ClubStrip/);
   assert.match(hole, /planClubStrip/);
   assert.match(hole, /target\?\.dYards/);
-  assert.match(hole, /void markClub\(full\)/);
+  assert.match(hole, /applyWheelSelection/);
+  assert.doesNotMatch(hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.allClubs')), /void markClub\(full\)/);
   assert.match(hole, /resolveNextShotDistanceTarget/);
   assert.match(hole, /lastLandingMark/);
   assert.doesNotMatch(hole, /nextClub|Next club|suggestedButton/);

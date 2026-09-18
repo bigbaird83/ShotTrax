@@ -36,6 +36,7 @@ export type WatchClubContext = {
   onPutter?: () => void;
   onLeave?: (action: 'back' | 'home') => void;
   onPuttPick?: (msg: PuttPickMessage) => PuttPickReply | Promise<PuttPickReply>;
+  onSelectClub?: (clubId: string) => void;
   labelForClub: (clubId: string) => string | null;
 };
 
@@ -98,6 +99,7 @@ export function buildClubList(args: {
   yardsToGreen: number | null;
   yardsQuality: 'good' | 'soft' | 'forced' | 'none';
   lastClubId?: string | null;
+  selectedClubId?: string | null;
 }): ClubListMessage {
   const labels: Record<string, string> = {};
   for (const club of [...args.top3, ...args.bag]) {
@@ -111,6 +113,7 @@ export function buildClubList(args: {
     yardsToGreen: args.yardsToGreen,
     yardsQuality: toWatchYardsQuality(args.yardsQuality),
     lastClubId: args.lastClubId ?? null,
+    selectedClubId: args.selectedClubId ?? null,
   });
 }
 
@@ -145,6 +148,13 @@ async function handlePick(token: string, json: string): Promise<void> {
   const ctx = context;
   if (!ctx || ctx.readOnly) {
     await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
+    return;
+  }
+
+  if (intent.kind === 'select') {
+    ctx.onSelectClub?.(intent.clubId);
+    const label = ctx.labelForClub(intent.clubId) ?? intent.clubId;
+    await replyToken(token, { ok: true, feedback: label });
     return;
   }
 

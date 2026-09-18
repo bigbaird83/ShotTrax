@@ -213,19 +213,19 @@ struct ContentView: View {
               ForEach(wheelClubs, id: \.token) { club in
                 Text(session.list.label(for: club.id))
                   .font(.system(size: 15, weight: .black))
-                  .foregroundStyle(club.id == stripPickId ? Color("accent") : Color("cream"))
+                  .foregroundStyle(club.id == stripSelectedId ? Color("accent") : Color("cream"))
                   .lineLimit(1)
                   .minimumScaleFactor(0.7)
                   .frame(width: pillWidth, height: 36)
                   .background(Color("bg"))
                   .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                      .stroke(club.id == stripPickId ? Color("accent") : Color("cream"), lineWidth: 1)
+                      .stroke(club.id == stripSelectedId ? Color("accent") : Color("cream"), lineWidth: 1)
                   )
                   .padding(.trailing, club.seamAfter ? 24 : 0)
                   .id(club.token)
                   .onTapGesture {
-                    if !session.sending { session.pick(clubId: club.id) }
+                    if !session.sending { session.select(club.id) }
                   }
               }
             }
@@ -305,6 +305,10 @@ struct ContentView: View {
     guard !clubs.isEmpty else { return nil }
     guard let hole = session.list.yardsToGreen else { return clubs.first?.id }
     return clubs.min { abs($0.carry - hole) < abs($1.carry - hole) }?.id
+  }
+
+  private var stripSelectedId: String? {
+    session.list.selectedClubId ?? stripPickId
   }
 
   private var stripWindowStart: Int {

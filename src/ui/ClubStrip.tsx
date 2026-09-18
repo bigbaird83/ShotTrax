@@ -81,7 +81,9 @@ export function ClubStrip({ items, pickId, windowStart = 0, onPick, disabled, co
   useEffect(() => {
     if (width <= 0 || items.length === 0) return;
     scrollToIndex(origin + start, false);
-  }, [items, start, origin, pickId, pillWidth, width]);
+    // Selection changes do not re-open the window. A new hole / yards key updates windowStart.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, start, origin, pillWidth, width]);
 
   const settleWrap = (x: number) => {
     if (items.length <= 1 || width <= 0) return;

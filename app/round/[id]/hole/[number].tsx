@@ -37,6 +37,7 @@ import { deleteShotPrompt } from '@/src/domain/deleteShot';
 import { planInsertSlots } from '@/src/domain/insertShot';
 import { confirmUndoIsLive, planConfirmUndo, type ConfirmUndoWindow } from '@/src/domain/confirmUndo';
 import { confirmPlaceToDraft, courseGreenCenterForLine, resolveAddShotFromPin } from '@/src/domain/placeToDrag';
+import { applyWheelSelection } from '@/src/domain/clubSelect';
 import { planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
 import { planPlayLayout } from '@/src/domain/playLayout';
 import { planPlacedShot } from '@/src/domain/shotSource';
@@ -102,6 +103,7 @@ export default function HoleScreen() {
   const [penaltyOpen, setPenaltyOpen] = useState(false);
   const [scoreOpen, setScoreOpen] = useState(false);
   const [scorecardOpen, setScorecardOpen] = useState(false);
+  const [selectedClubId, setSelectedClubId] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [playFrameNonce, setPlayFrameNonce] = useState(0);
   const [mapFramed, setMapFramed] = useState(false);
@@ -288,6 +290,7 @@ export default function HoleScreen() {
   useEffect(() => {
     setMapFramed(false);
     lastHoleCamera.current = null;
+    setSelectedClubId(null);
   }, [holeNumber]);
 
   useEffect(() => {
@@ -414,6 +417,7 @@ export default function HoleScreen() {
     const club = clubs.find((row) => row.id === id);
     return { id, label: formatSuggestedClubChip(club?.shortName ?? id, stripPlan.carries[id]) };
   });
+  const wheelSelectedId = selectedClubId ?? stripPlan.pickId;
   const holeTee = resolveHoleTee({
     holeTee: teePointFromHoleFeature(osmOverlay, holeNumber, green),
     osmTee: teePointForHole(osmOverlay, holeNumber),
@@ -568,6 +572,9 @@ export default function HoleScreen() {
         }
       },
       onPuttPick: onWatchPuttPick,
+      onSelectClub: (clubId) => {
+        setSelectedClubId(applyWheelSelection(clubId));
+      },
       labelForClub: (clubId) => clubMap[clubId]?.shortName ?? clubs.find((club) => club.id === clubId)?.shortName ?? null,
     },
     {
@@ -583,6 +590,7 @@ export default function HoleScreen() {
       yardsToGreen: target?.dYards ?? toGreen.yards,
       yardsQuality: toGreen.quality,
       lastClubId: sticky?.id ?? null,
+      selectedClubId: wheelSelectedId,
     },
   );
 
@@ -1170,13 +1178,12 @@ export default function HoleScreen() {
             <View style={styles.dockStrip}>
               <ClubStrip
                 items={stripItems}
-                pickId={stripPlan.pickId}
+                pickId={wheelSelectedId}
                 windowStart={stripPlan.windowStart}
                 disabled={readOnly || placing}
                 onPick={(id) => {
                   if (placing) return;
-                  const full = clubs.find((row) => row.id === id);
-                  if (full) void markClub(full);
+                  setSelectedClubId(applyWheelSelection(id));
                 }}
               />
             </View>

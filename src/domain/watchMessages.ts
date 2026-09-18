@@ -20,6 +20,7 @@ export type YardsQuality = 'good' | 'soft' | 'none';
 export const WATCH_MESSAGE_TYPES = [
   'clubList',
   'clubPick',
+  'clubSelect',
   'puttSheet',
   'puttPick',
   'clubNav',
@@ -46,6 +47,7 @@ export type ClubListMessage = {
   yardsToGreen: number | null;
   yardsQuality: YardsQuality;
   lastClubId?: ClubId | null;
+  selectedClubId?: ClubId | null;
 };
 
 export const CLUB_LIST_KEYS = [
@@ -57,6 +59,30 @@ export const CLUB_LIST_KEYS = [
   'yardsToGreen',
   'yardsQuality',
 ] as const;
+
+/** Watch wheel tap. Selects only — never a mark. */
+export type ClubSelectMessage = {
+  type: 'clubSelect';
+  clubId: string;
+  at: string;
+};
+
+export function parseClubSelect(raw: unknown): ClubSelectMessage | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as Record<string, unknown>;
+  if (row.type !== 'clubSelect') return null;
+  if (typeof row.clubId !== 'string' || !row.clubId.trim()) return null;
+  if (typeof row.at !== 'string' || !isIso8601(row.at)) return null;
+  return { type: 'clubSelect', clubId: row.clubId.trim(), at: row.at };
+}
+
+export function clubSelectPayload(args: { clubId: string; at?: string }): ClubSelectMessage {
+  return {
+    type: 'clubSelect',
+    clubId: args.clubId,
+    at: args.at ?? new Date().toISOString(),
+  };
+}
 
 /** Watch → Phone on tap. Phone runs the same club=mark as a phone tap (acceptFix). */
 export type ClubPickMessage = {
@@ -137,6 +163,9 @@ export function parseClubList(raw: unknown): ClubListMessage | null {
   };
   const lastClubId = typeof row.lastClubId === 'string' && row.lastClubId.trim() ? row.lastClubId : undefined;
   if (lastClubId) msg.lastClubId = lastClubId;
+  const selectedClubId =
+    typeof row.selectedClubId === 'string' && row.selectedClubId.trim() ? row.selectedClubId : undefined;
+  if (selectedClubId) msg.selectedClubId = selectedClubId;
   return msg;
 }
 
@@ -198,6 +227,13 @@ export type WatchInboundIntent =
       closesPendingShot: false;
     }
   | {
+      kind: 'select';
+      clubId: string;
+      runsAcceptFix: false;
+      savesGps: false;
+      closesPendingShot: false;
+    }
+  | {
       kind: 'club';
       pick: ClubPickMessage;
       runsAcceptFix: true;
@@ -209,6 +245,16 @@ export function parseWatchInboundIntent(raw: unknown): WatchInboundIntent | null
     return {
       kind: 'leave',
       action: nav.action,
+      runsAcceptFix: false,
+      savesGps: false,
+      closesPendingShot: false,
+    };
+  }
+  const select = parseClubSelect(raw);
+  if (select) {
+    return {
+      kind: 'select',
+      clubId: select.clubId,
       runsAcceptFix: false,
       savesGps: false,
       closesPendingShot: false,
@@ -241,6 +287,7 @@ export function clubListPayload(args: {
   yardsToGreen: number | null;
   yardsQuality: YardsQuality;
   lastClubId?: ClubId | null;
+  selectedClubId?: ClubId | null;
 }): ClubListMessage {
   const yardsToGreen =
     args.yardsQuality === 'none' || args.yardsToGreen == null
@@ -255,6 +302,7 @@ export function clubListPayload(args: {
     yardsToGreen,
     yardsQuality: args.yardsQuality,
     ...(args.lastClubId ? { lastClubId: args.lastClubId } : {}),
+    ...(args.selectedClubId ? { selectedClubId: args.selectedClubId } : {}),
   };
 }
 
@@ -269,6 +317,7 @@ export function clubListPushKey(msg: ClubListMessage): string {
     yardsToGreen: msg.yardsToGreen,
     yardsQuality: msg.yardsQuality,
     lastClubId: msg.lastClubId ?? null,
+    selectedClubId: msg.selectedClubId ?? null,
   });
 }
 

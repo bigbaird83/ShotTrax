@@ -68,7 +68,7 @@ test('strip is carry-sorted, full bag, putter off, center is closest to yards le
   assert.equal(clubStripLongerPeeksRight(), true);
   assert.equal(clubStripSwipeMarksShot(), false);
   assert.equal(clubStripScrollMarksShot(), false);
-  assert.equal(clubStripOnlyTapMarks(), true);
+  assert.equal(clubStripOnlyTapMarks(), false);
   assert.equal(clubStripPutterIncluded(), false);
   assert.equal(clubStripCenterIsClosestCarry(), true);
   assert.equal(clubStripWrapsToFillEmptySide(), false);
@@ -79,7 +79,7 @@ test('strip is carry-sorted, full bag, putter off, center is closest to yards le
   assert.equal(CLUB_STRIP_VISIBLE_PILLS, 3);
   assert.equal(clubStripCenterIsTeeClub(), false);
   assert.equal(clubStripPhoneMatchesWatch(), true);
-  assert.equal(clubStripTapMarksLikeChip(), true);
+  assert.equal(clubStripTapMarksLikeChip(), false);
   assert.equal(clubStripTapUsesHomeClubTap(), true);
   assert.equal(clubStripCenterUsesHoleYards(), true);
   assert.equal(clubStripCenterUsesYardsLeft(), true);
@@ -140,7 +140,7 @@ test('after a shot lands the middle pill is closest to yards left, and the strip
   assert.equal(clubStripUsesRankedTop3(), false);
   assert.equal(clubStripPutterIncluded(), false);
   assert.equal(clubStripSwipeMarksShot(), false);
-  assert.equal(clubStripOnlyTapMarks(), true);
+  assert.equal(clubStripOnlyTapMarks(), false);
 
   const afterShot = planClubStrip({
     clubs: [
@@ -191,7 +191,7 @@ test('after a shot lands the middle pill is closest to yards left, and the strip
 });
 
 test('phone strip tap is the old chip mark, and the center pill is closest to hole yards', () => {
-  assert.equal(clubStripTapMarksLikeChip(), true);
+  assert.equal(clubStripTapMarksLikeChip(), false);
   assert.equal(clubStripTapUsesHomeClubTap(), true);
   assert.equal(clubStripCenterUsesHoleYards(), true);
   assert.equal(clubStripCenterIsTeeClub(), false);
@@ -226,7 +226,8 @@ test('phone strip tap is the old chip mark, and the center pill is closest to ho
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const strip = hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.allClubs'));
-  assert.match(strip, /void markClub\(full\)/);
+  assert.match(strip, /applyWheelSelection/);
+  assert.doesNotMatch(strip, /void markClub\(full\)/);
   const mark = hole.slice(hole.indexOf('const markClub'), hole.indexOf('const onMark'));
   assert.match(mark, /markShotWithClub/);
   assert.match(mark, /tee: holeTee/);
@@ -261,7 +262,8 @@ test('phone and Watch strip UIs peek neighbors and mark only on tap', () => {
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const dock = hole.slice(hole.indexOf('styles.dock'), hole.indexOf('<FullSheet'));
   assert.match(dock, /<ClubStrip/);
-  assert.match(dock, /void markClub\(full\)/);
+  assert.match(dock, /applyWheelSelection/);
+  assert.doesNotMatch(dock, /void markClub\(full\)/);
   assert.match(dock, /COPY\.allClubs/);
   assert.match(dock, /COPY\.sayClub/);
   assert.doesNotMatch(dock, /ranked\.map\(\(club, index\)/);

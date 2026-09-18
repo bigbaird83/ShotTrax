@@ -44,8 +44,8 @@ export function clubStripScrollMarksShot(): false {
   return false;
 }
 
-export function clubStripOnlyTapMarks(): true {
-  return true;
+export function clubStripOnlyTapMarks(): false {
+  return false;
 }
 
 export function clubStripPutterIncluded(): false {
@@ -93,9 +93,9 @@ export function clubStripPhoneMatchesWatch(): true {
   return true;
 }
 
-/** A phone strip tap is the same mark as the old suggested chip, including the 600-yard check. */
-export function clubStripTapMarksLikeChip(): true {
-  return true;
+/** Play-wheel tap selects. It does not mark like the old suggested chip. */
+export function clubStripTapMarksLikeChip(): false {
+  return false;
 }
 
 export function clubStripTapUsesHomeClubTap(): true {

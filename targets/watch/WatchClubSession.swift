@@ -14,6 +14,7 @@ struct ClubListState {
   var yardsToGreen: Int? = nil
   var yardsQuality: String = "none"
   var lastClubId: String? = nil
+  var selectedClubId: String? = nil
 
   var statusLine: String {
     if yardsQuality != "none", let yards = yardsToGreen {
@@ -152,6 +153,15 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     ]
     attachWatchFix(&payload)
     sendPick(payload)
+  }
+
+  func select(_ clubId: String) {
+    list.selectedClubId = clubId
+    sendPick([
+      "type": "clubSelect",
+      "clubId": clubId,
+      "at": isoNow(),
+    ], keepPending: false)
   }
 
   func addPutt(lengthId: String) {
@@ -404,6 +414,11 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       next.lastClubId = last
     } else {
       next.lastClubId = nil
+    }
+    if let selected = message["selectedClubId"] as? String, !selected.isEmpty {
+      next.selectedClubId = selected
+    } else {
+      next.selectedClubId = nil
     }
     list = next
     persist(next)

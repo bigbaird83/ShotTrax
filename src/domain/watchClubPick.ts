@@ -136,7 +136,7 @@ export function watchStripScrollMarksShot(): false {
   return false;
 }
 
-export function watchStripOnlyTapMarks(): true {
+export function watchStripOnlyTapMarks(): false {
   return clubStripOnlyTapMarks();
 }
 

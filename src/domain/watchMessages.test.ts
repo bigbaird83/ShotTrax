@@ -197,6 +197,7 @@ test('Watch Connectivity this cut is clubList, clubPick, puttSheet, puttPick, cl
     [
       'clubList',
       'clubPick',
+      'clubSelect',
       'puttSheet',
       'puttPick',
       'clubNav',

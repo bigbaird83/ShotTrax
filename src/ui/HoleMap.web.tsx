@@ -41,7 +41,6 @@ export function HoleMap({ holeNumber, userFix, green, yardsToGreen, placeHint }:
         hasFix={Boolean(userFix)}
         hasGreen={Boolean(green)}
       />
-      {placeHint ? <Text style={styles.msg}>{placeHint}</Text> : null}
       {!placeHint && !yardsAreOnTheCard(yardsToGreen) ? (
         <Text style={styles.msg}>
           {showWaitingOnLocationLine({
