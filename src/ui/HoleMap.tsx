@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type ReactNode, useEffect, useMemo, useRef } from 'react';
+import { Component, type ErrorInfo, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 import MapView, { Marker, Polygon, Polyline } from 'react-native-maps';
 import type { OsmFeature, OsmGolfKind, OsmOverlay } from '@/src/course/types';
@@ -6,7 +6,13 @@ import { featuresForHole } from '@/src/course/osmOverlay';
 import { COPY } from '@/src/domain/playerCopy';
 import type { GpsFix, Shot } from '@/src/domain/types';
 import type { YardsToGreenResult } from '@/src/sensing/yardsToGreen';
-import { holeFrameRegion, holeNativeCamera } from '@/src/domain/holeCamera';
+import {
+  applyHoleMapCamera,
+  holeCameraFramedAfterApply,
+  holeFrameRegion,
+  holeNativeCamera,
+  regionIsHoleFrame,
+} from '@/src/domain/holeCamera';
 import { isValidLatLng } from '@/src/domain/latLng';
 import { hasClosedGpsTrail, hasGpsStart } from '@/src/domain/shotSource';
 import { FmbRow } from './FmbRow';
@@ -118,6 +124,7 @@ function NativeHoleMap({
   const mapRef = useRef<MapView | null>(null);
   const framedOnce = useRef(false);
   const pendingLocked = useRef(false);
+  const [holeCameraReady, setHoleCameraReady] = useState(false);
 
   const closed = useMemo(() => shots.filter(hasClosedGpsTrail), [shots]);
   const osmFeatures = useMemo(
@@ -179,24 +186,22 @@ function NativeHoleMap({
   lockedCameraRef.current = holeUpCamera;
   const lockedRegionRef = useRef(lockedRegion);
   lockedRegionRef.current = lockedRegion;
+  const holeCenter = useMemo(() => {
+    if (holeUpCamera) {
+      return { lat: holeUpCamera.center.latitude, lng: holeUpCamera.center.longitude };
+    }
+    if (lockedRegion) return { lat: lockedRegion.latitude, lng: lockedRegion.longitude };
+    return null;
+  }, [holeUpCamera, lockedRegion]);
+  const holeCenterRef = useRef(holeCenter);
+  holeCenterRef.current = holeCenter;
 
   const lockKey = lockFrame
     ? `${(framePoints ?? []).map((point) => `${point.latitude},${point.longitude}`).join('|')}|h:${heading ?? 'none'}|e:${frameEpoch ?? ''}`
     : '';
 
-  const applyLockedCamera = () => {
-    const camera = lockedCameraRef.current;
-    const region = lockedRegionRef.current;
-    if (camera) {
-      mapRef.current?.setCamera(camera);
-      return true;
-    }
-    if (region) {
-      mapRef.current?.animateToRegion(region, 0);
-      return true;
-    }
-    return false;
-  };
+  const applyLockedCamera = () =>
+    applyHoleMapCamera(mapRef.current, lockedCameraRef.current, lockedRegionRef.current);
 
   const frameLockedMap = () => {
     if (lockedPoints.length === 0 && !lockedRegion) return false;
@@ -204,15 +209,22 @@ function NativeHoleMap({
     return applyLockedCamera();
   };
 
+  const markFramedIfLive = (applied: boolean) => {
+    const framed = holeCameraFramedAfterApply(applied);
+    if (framed) framedOnce.current = true;
+    return framed;
+  };
+
   useEffect(() => {
     framedOnce.current = false;
     pendingLocked.current = true;
+    if (lockFrame) setHoleCameraReady(false);
   }, [lockFrame, lockKey, heading, frameEpoch]);
 
   useEffect(() => {
     if (lockFrame) {
       if (framedOnce.current) return;
-      if (frameLockedMap()) framedOnce.current = true;
+      markFramedIfLive(frameLockedMap());
       return;
     }
     if (coords.length < 2) return;
@@ -227,13 +239,21 @@ function NativeHoleMap({
     const { width, height } = event.nativeEvent.layout;
     if (width < 80 || height < 80) return;
     if (framedOnce.current) return;
-    if (frameLockedMap()) framedOnce.current = true;
+    markFramedIfLive(frameLockedMap());
   };
 
-  const onRegionSettled = () => {
-    if (!lockFrame || !pendingLocked.current) return;
-    pendingLocked.current = false;
-    applyLockedCamera();
+  const onRegionSettled = (region: { latitude: number; longitude: number }) => {
+    if (!lockFrame) return;
+    if (regionIsHoleFrame(region, holeCenterRef.current)) {
+      framedOnce.current = true;
+      pendingLocked.current = false;
+      setHoleCameraReady(true);
+      return;
+    }
+    // House / default GPS region is not framed. Do not stick. Re-apply the hole.
+    framedOnce.current = false;
+    pendingLocked.current = true;
+    markFramedIfLive(frameLockedMap());
   };
 
   if (!lockedRegion) {
@@ -252,15 +272,28 @@ function NativeHoleMap({
       ? toCoord(userFix.lat, userFix.lng)
       : null;
 
+  const lockedCameraProps = holeUpCamera
+    ? holeCameraReady
+      ? { initialCamera: holeUpCamera }
+      : { camera: holeUpCamera }
+    : holeCameraReady
+      ? { initialRegion: lockedRegion }
+      : { region: lockedRegion };
+
   return (
-    <View style={[fullBleed ? styles.bleed : styles.wrap, style]} onLayout={onMapLayout}>
+    <View
+      style={[fullBleed ? styles.bleed : styles.wrap, style]}
+      onLayout={onMapLayout}
+      pointerEvents={lockFrame && !holeCameraReady ? 'none' : 'auto'}>
       <MapView
         ref={mapRef}
-        style={styles.map}
+        style={[styles.map, lockFrame && !holeCameraReady ? styles.mapHidden : null]}
         mapType="satellite"
-        {...(holeUpCamera
-          ? { initialCamera: holeUpCamera }
-          : { initialRegion: lockedRegion })}
+        {...(lockFrame
+          ? lockedCameraProps
+          : holeUpCamera
+            ? { initialCamera: holeUpCamera }
+            : { initialRegion: lockedRegion })}
         showsUserLocation={!lockFrame && Boolean(userDot)}
         showsMyLocationButton={false}
         followsUserLocation={false}
@@ -270,8 +303,11 @@ function NativeHoleMap({
         rotateEnabled={false}
         onMapReady={() => {
           if (!lockFrame) return;
-          if (framedOnce.current) return;
-          if (frameLockedMap()) framedOnce.current = true;
+          if (framedOnce.current) {
+            applyLockedCamera();
+            return;
+          }
+          markFramedIfLive(frameLockedMap());
         }}
         onRegionChangeComplete={onRegionSettled}
         onPress={(event) => {
@@ -425,6 +461,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgElevated,
   },
   map: { flex: 1 },
+  mapHidden: { opacity: 0 },
   holeBadgeText: {
     color: colors.cream,
     fontSize: 18,

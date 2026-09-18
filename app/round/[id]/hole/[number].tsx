@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCourseDataClient } from '@/src/course/client';
-import { teePointForHole } from '@/src/course/osmOverlay';
+import { teePointForHole, teePointFromHoleFeature } from '@/src/course/osmOverlay';
 import { formatParLabel, formatSiLabel, formatTeeMeta } from '@/src/course/layout';
 import type { OsmOverlay } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
@@ -32,7 +32,7 @@ import { COPY, finishPuttsChip, finishShotChip, formatHoleHeader, formatSuggeste
 import { canAdvanceHole, holesNeedingOpenShots } from '@/src/domain/holeAdvance';
 import { isPutterClubId } from '@/src/domain/defaultBag';
 import { catchUpPinFromTap, planCancelCatchUp, planCatchUpSheet } from '@/src/domain/catchUpMap';
-import { lockHoleCamera } from '@/src/domain/holeCamera';
+import { lockHoleCamera, resolveHoleTee } from '@/src/domain/holeCamera';
 import { planInsertSlots } from '@/src/domain/insertShot';
 import { planPlacedShot } from '@/src/domain/shotSource';
 import { planUndoPlacePins } from '@/src/domain/undoLastShot';
@@ -345,7 +345,10 @@ export default function HoleScreen() {
     target,
   );
   const holeCamera = lockHoleCamera({
-    tee: teePointForHole(osmOverlay, holeNumber),
+    tee: resolveHoleTee({
+      holeTee: teePointFromHoleFeature(osmOverlay, holeNumber, green),
+      osmTee: teePointForHole(osmOverlay, holeNumber),
+    }),
     green,
     shotPins: shots.flatMap((shot) => {
       const pins: { lat: number; lng: number }[] = [];
