@@ -1,8 +1,7 @@
 /** Watch starts the round from a short nearby-course list.
- * The list uses the phone fix when the phone has one. Watch GPS never
- * chooses a course. Finding a course skips the 15 m / 25 m mark gates.
- * No search box. An empty list → one line: open the phone.
- * No phone fix still starts from the last list the phone built.
+ * The list uses a fresh phone fix only. Wake the phone for that fix.
+ * Watch GPS never chooses a course. Finding a course skips the 15 m / 25 m
+ * mark gates. No search box. No fresh phone fix, or an empty list → open the phone.
  */
 
 import { COPY } from './playerCopy';
@@ -66,9 +65,9 @@ export function watchCoursePickSetsPhoneCourse(): true {
   return true;
 }
 
-/** No phone fix still uses the last phone-built list. Never a Watch guess. */
-export function watchStartsFromBuiltListWithoutPhoneFix(): true {
-  return true;
+/** A stale or missing phone fix does not reuse a list the Watch or phone built. */
+export function watchStartsFromBuiltListWithoutPhoneFix(): false {
+  return false;
 }
 
 export function planWatchCoursePick(args: {
@@ -188,30 +187,16 @@ function normalizeNearbyCourses(courses: WatchNearbyCourse[]): WatchNearbyCourse
     }));
 }
 
-let lastBuiltNearby: WatchNearbyCourse[] = [];
-
-/** Last nearby list the phone built. Watch GPS never writes this. */
-export function rememberBuiltNearbyCourses(courses: WatchNearbyCourse[]): void {
-  lastBuiltNearby = normalizeNearbyCourses(courses);
-}
-
-export function builtNearbyCourses(): WatchNearbyCourse[] {
-  return lastBuiltNearby.slice();
-}
-
-export function resetBuiltNearbyCourses(): void {
-  lastBuiltNearby = [];
-}
-
 export function planNearbyCourses(args: {
   phoneFix: GpsFix | null | undefined;
   watchFix?: GpsFix | null;
   courses: WatchNearbyCourse[];
   nowMs: number;
 }): NearbyCoursesPlan {
-  void args.watchFix;
-  void args.phoneFix;
-  void args.nowMs;
+  const phone = phoneFixForNearbyCourses(args);
+  if (!phone) {
+    return { status: 'open_phone', line: OPEN_PHONE, courses: [] };
+  }
   const courses = normalizeNearbyCourses(args.courses);
   if (courses.length === 0) {
     return { status: 'open_phone', line: OPEN_PHONE, courses: [] };

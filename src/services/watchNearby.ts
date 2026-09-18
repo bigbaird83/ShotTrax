@@ -6,12 +6,10 @@ import { layoutFromTee } from '@/src/course/layout';
 import { startRound } from '@/src/db/repo';
 import type { GpsFix } from '@/src/domain/types';
 import {
-  builtNearbyCourses,
   nearbyCoursesPayload,
   nearbyTeesPayload,
   phoneFixForNearbyCourses,
   planNearbyCourses,
-  rememberBuiltNearbyCourses,
 } from '@/src/domain/watchNearby';
 import {
   PHONE_UNAVAILABLE,
@@ -86,18 +84,18 @@ async function pushNearbyJson(msg: NearbyCoursesMessage | NearbyTeesMessage): Pr
 }
 
 async function resolvePhoneFix(ctx: WatchNearbyContext): Promise<GpsFix | null> {
-  const live = ctx.phoneFix() ?? getLastLiveFix();
   const nowMs = ctx.nowMs?.() ?? Date.now();
-  if (phoneFixForNearbyCourses({ phoneFix: live, nowMs })) return live;
   try {
-    const fresh = await getCurrentFix();
-    if (phoneFixForNearbyCourses({ phoneFix: fresh, nowMs: ctx.nowMs?.() ?? Date.now() })) {
-      return fresh;
+    const woken = await getCurrentFix();
+    if (phoneFixForNearbyCourses({ phoneFix: woken, nowMs: ctx.nowMs?.() ?? Date.now() })) {
+      return woken;
     }
   } catch {
-    // Permission off or no sample — open the phone.
+    // Permission off or no sample — last live phone fix only if it is still fresh.
   }
-  return live;
+  const live = ctx.phoneFix() ?? getLastLiveFix();
+  if (phoneFixForNearbyCourses({ phoneFix: live, nowMs })) return live;
+  return null;
 }
 
 export async function pushWatchNearbyCourses(opts?: {
@@ -122,12 +120,9 @@ export async function pushWatchNearbyCourses(opts?: {
   if (chosen) {
     try {
       courses = await getCourseDataClient().nearbyCourses(chosen);
-      rememberBuiltNearbyCourses(courses);
     } catch {
-      courses = builtNearbyCourses();
+      courses = [];
     }
-  } else {
-    courses = builtNearbyCourses();
   }
   const plan = planNearbyCourses({
     phoneFix,

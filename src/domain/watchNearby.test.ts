@@ -22,9 +22,6 @@ import {
   phoneFixForNearbyCourses,
   planNearbyCourses,
   planWatchCoursePick,
-  builtNearbyCourses,
-  rememberBuiltNearbyCourses,
-  resetBuiltNearbyCourses,
   watchStartsFromBuiltListWithoutPhoneFix,
   watchShowsBag,
   watchShowsScoring,
@@ -95,9 +92,8 @@ test('nearby courses use the phone fix only — never the Watch', () => {
   assert.equal(noPhone, null);
 });
 
-test('no phone fix still starts from the list the phone built; empty says open the phone', () => {
-  resetBuiltNearbyCourses();
-  assert.equal(watchStartsFromBuiltListWithoutPhoneFix(), true);
+test('no fresh phone fix or an empty list is one line: open the phone', () => {
+  assert.equal(watchStartsFromBuiltListWithoutPhoneFix(), false);
   assert.equal(OPEN_PHONE, 'open the phone');
   assert.equal(SELECT_COURSE, 'Select course');
   assert.equal(COPY.openPhone, 'open the phone');
@@ -106,30 +102,24 @@ test('no phone fix still starts from the list the phone built; empty says open t
   assert.equal(nearbyCourseFixIsFresh(null, 1_000_000), false);
   assert.equal(nearbyCourseFixIsFresh({ timestamp: 0 }, 1_000_000), false);
 
-  const fromPhoneList = planNearbyCourses({
+  const stale = planNearbyCourses({
+    phoneFix: { ...phone, timestamp: 1_000_000 - NEARBY_COURSE_FIX_MAX_AGE_MS - 1 },
+    watchFix: watch,
+    courses,
+    nowMs: 1_000_000,
+  });
+  assert.deepEqual(stale, { status: 'open_phone', line: OPEN_PHONE, courses: [] });
+  assert.equal(guessNearbyCourse(stale), null);
+
+  const missing = planNearbyCourses({
     phoneFix: null,
     watchFix: watch,
     courses,
     nowMs: 1_000_000,
   });
-  assert.equal(fromPhoneList.status, 'ok');
-  assert.equal(fromPhoneList.line, null);
-  assert.equal(fromPhoneList.courses.length, 2);
-  assert.equal(fromPhoneList.courses[0].id, 'c1');
-  assert.notEqual(fromPhoneList.courses[0].id, 'watch-guess');
-  assert.equal(guessNearbyCourse(fromPhoneList), null);
+  assert.deepEqual(missing, { status: 'open_phone', line: OPEN_PHONE, courses: [] });
+  assert.equal(guessNearbyCourse(missing), null);
 
-  rememberBuiltNearbyCourses(courses);
-  const fromCache = planNearbyCourses({
-    phoneFix: null,
-    watchFix: watch,
-    courses: builtNearbyCourses(),
-    nowMs: 1_000_000,
-  });
-  assert.equal(fromCache.status, 'ok');
-  assert.equal(fromCache.courses[0].id, 'c1');
-
-  resetBuiltNearbyCourses();
   const empty = planNearbyCourses({
     phoneFix: phone,
     watchFix: watch,
@@ -138,14 +128,6 @@ test('no phone fix still starts from the list the phone built; empty says open t
   });
   assert.deepEqual(empty, { status: 'open_phone', line: OPEN_PHONE, courses: [] });
   assert.equal(guessNearbyCourse(empty), null);
-
-  const noListNoFix = planNearbyCourses({
-    phoneFix: null,
-    watchFix: watch,
-    courses: [],
-    nowMs: 1_000_000,
-  });
-  assert.deepEqual(noListNoFix, { status: 'open_phone', line: OPEN_PHONE, courses: [] });
 
   const msg = nearbyCoursesPayload(empty);
   assert.equal(msg.type, 'nearbyCourses');
@@ -338,7 +320,8 @@ test('a live round opens that hole; a different round lives under Home', () => {
   assert.match(service, /coursePickedHandler/);
   assert.match(service, /Round in progress/);
   assert.match(service, /start\.holeCount/);
-  assert.match(service, /rememberBuiltNearbyCourses|builtNearbyCourses/);
+  assert.match(service, /getCurrentFix/);
+  assert.doesNotMatch(service, /rememberBuiltNearbyCourses|builtNearbyCourses/);
   assert.doesNotMatch(service, /roundHoleCountFromCourse/);
 
   const home = readFileSync(new URL('../../app/(tabs)/index.tsx', import.meta.url), 'utf8');
