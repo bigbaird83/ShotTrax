@@ -17,6 +17,7 @@ export type ClosedShotPlan = {
 export type MarkPlan =
   | { status: 'needs_force_poor_gps'; accuracyM: number | null }
   | { status: 'needs_force_impossible_jump'; yards: number }
+  | { status: 'blocked' }
   | {
       status: 'commit';
       startFixQuality: FixQuality | null;

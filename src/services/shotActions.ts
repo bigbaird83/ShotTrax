@@ -127,6 +127,7 @@ export async function markShotWithClub(
     fixOverride?: GpsFix | null;
     suggested?: boolean;
     tee?: { lat: number; lng: number } | null;
+    holePin?: { lat: number; lng: number } | null;
   },
 ): Promise<{ plan: MarkPlan; fix: GpsFix }> {
   const hole = getHole(db, args.roundId, args.holeNumber);
@@ -135,10 +136,19 @@ export async function markShotWithClub(
   }
   // Prefer Watch vs phone first. Then measure that chosen fix to the tee.
   const fix = args.fixOverride ?? (await resolveMarkFix(args.watchFix));
+  const holePin =
+    args.holePin ??
+    (hole.greenLat != null && hole.greenLng != null
+      ? { lat: hole.greenLat, lng: hole.greenLng }
+      : null);
   const tap = planClubTapStart({
     phone: { lat: fix.lat, lng: fix.lng },
     tee: args.tee ?? null,
+    holePin,
   });
+  if (tap?.kind === 'blocked') {
+    return { plan: { status: 'blocked' }, fix };
+  }
   if (tap?.kind === 'tee') {
     if (homeClubTapRunsAcceptFix()) {
       throw new Error('Home club tap must not run acceptFix.');

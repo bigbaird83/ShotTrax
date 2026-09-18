@@ -28,22 +28,31 @@ export function phoneIsHomeFromTee(
 
 export type ClubTapStart =
   | { kind: 'phone'; start: LatLng; source: 'gps'; runsAcceptFix: true }
-  | { kind: 'tee'; start: LatLng; source: 'placed'; runsAcceptFix: false };
+  | { kind: 'tee'; start: LatLng; source: 'placed'; runsAcceptFix: false }
+  | { kind: 'blocked' };
 
 /**
  * Suggested club / Same club start.
  * Phone > 600 yd from the tee → start at the tee, badge Placed, skip acceptFix.
  * On the course (≤ 600 yd) → phone, GPS, acceptFix as today.
- * No tee → cannot detect home; keep the phone (do not invent a tee).
+ * Home-scale but no tee → blocked. Do not invent a tee and do not save the house.
+ * `holePin` (green / course) is only used to detect home when tee is missing.
  * No phone → null (caller still needs a fix).
  */
 export function planClubTapStart(args: {
   phone: LatLng | null | undefined;
   tee: LatLng | null | undefined;
+  holePin?: LatLng | null;
 }): ClubTapStart | null {
   if (!isValidLatLng(args.phone)) return null;
-  if (phoneIsHomeFromTee(args.phone, args.tee) && isValidLatLng(args.tee)) {
-    return { kind: 'tee', start: args.tee, source: 'placed', runsAcceptFix: false };
+  if (isValidLatLng(args.tee)) {
+    if (phoneIsHomeFromTee(args.phone, args.tee)) {
+      return { kind: 'tee', start: args.tee, source: 'placed', runsAcceptFix: false };
+    }
+    return { kind: 'phone', start: args.phone, source: 'gps', runsAcceptFix: true };
+  }
+  if (phoneIsHomeFromTee(args.phone, args.holePin)) {
+    return { kind: 'blocked' };
   }
   return { kind: 'phone', start: args.phone, source: 'gps', runsAcceptFix: true };
 }

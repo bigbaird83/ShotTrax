@@ -78,11 +78,14 @@ test('Watch pick is chosen first, then measured to the tee; home Watch starts at
   assert.deepEqual(tap?.start, tee);
 });
 
-test('missing tee does not invent a point; missing phone is not a start', () => {
+test('missing tee does not invent a point or save the house', () => {
   assert.equal(phoneIsHomeFromTee(home, null), false);
-  const noTee = planClubTapStart({ phone: home, tee: null });
-  assert.deepEqual(noTee, { kind: 'phone', start: home, source: 'gps', runsAcceptFix: true });
   assert.equal(planClubTapStart({ phone: null, tee }), null);
+  const blocked = planClubTapStart({ phone: home, tee: null, holePin: tee });
+  assert.deepEqual(blocked, { kind: 'blocked' });
+  assert.notEqual(blocked && 'start' in blocked ? blocked.start : null, home);
+  const noPin = planClubTapStart({ phone: home, tee: null });
+  assert.deepEqual(noPin, { kind: 'phone', start: home, source: 'gps', runsAcceptFix: true });
 });
 
 test('suggested, Same club, Say a club, and Watch picks all use the 600-yard tee rule', () => {
@@ -103,6 +106,7 @@ test('suggested, Same club, Say a club, and Watch picks all use the 600-yard tee
   assert.ok(markFn.indexOf('resolveMarkFix') < markFn.indexOf('planClubTapStart'));
   assert.match(markFn, /homeClubTapRunsAcceptFix/);
   assert.match(markFn, /source: 'placed'/);
+  assert.match(markFn, /tap\?\.kind === 'blocked'/);
   const homeBlock = markFn.slice(markFn.indexOf("tap?.kind === 'tee'"), markFn.indexOf('const plan = decide'));
   assert.doesNotMatch(homeBlock, /acceptFix\(/);
   assert.doesNotMatch(homeBlock, /decide\(/);
