@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { NativeSyntheticEvent, NativeScrollEvent, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { PHONE_WHEEL_PILL_HEIGHT, wrapClubStripIndex } from '../domain/clubStrip';
+import {
+  CLUB_STRIP_GAP,
+  CLUB_STRIP_SEAM_GAP,
+  PHONE_WHEEL_PILL_HEIGHT,
+  wrapClubStripIndex,
+} from '../domain/clubStrip';
 import { colors, type } from './theme';
 
 export type ClubStripItem = {
@@ -17,7 +22,6 @@ type Props = {
 };
 
 const PILL_RATIO = 0.62;
-const GAP = 8;
 const LOOP_COPIES = 3;
 
 /** Sideways carry wheel. Peek shorter left / longer right. Tap marks; swipe does not. */
@@ -25,7 +29,6 @@ export function ClubStrip({ items, pickId, onPick, disabled, compact }: Props) {
   const scrollRef = useRef<ScrollView>(null);
   const [width, setWidth] = useState(0);
   const pillWidth = Math.max(compact ? 72 : 96, width * PILL_RATIO);
-  const step = pillWidth + GAP;
   const loops = items.length > 1 ? LOOP_COPIES : 1;
   const origin = items.length > 1 ? items.length : 0;
   const openIndex = Math.max(
@@ -33,12 +36,37 @@ export function ClubStrip({ items, pickId, onPick, disabled, compact }: Props) {
     items.findIndex((item) => item.id === pickId),
   );
   const looped = Array.from({ length: loops }, (_, copy) =>
-    items.map((item) => ({ ...item, token: `${item.id}#${copy}` })),
+    items.map((item, index) => ({
+      ...item,
+      token: `${item.id}#${copy}`,
+      seamAfter: items.length > 1 && index === items.length - 1,
+    })),
   ).flat();
+
+  const gapAfter = (index: number) => {
+    if (items.length <= 1) return CLUB_STRIP_GAP;
+    return index % items.length === items.length - 1 ? CLUB_STRIP_SEAM_GAP : CLUB_STRIP_GAP;
+  };
+
+  const offsetForIndex = (index: number) => {
+    let x = 0;
+    for (let i = 0; i < index; i += 1) x += pillWidth + gapAfter(i);
+    return x;
+  };
+
+  const indexForOffset = (x: number) => {
+    let pos = 0;
+    for (let i = 0; i < looped.length; i += 1) {
+      const step = pillWidth + gapAfter(i);
+      if (x < pos + step / 2) return i;
+      pos += step;
+    }
+    return Math.max(0, looped.length - 1);
+  };
 
   const scrollToIndex = (index: number, animated: boolean) => {
     scrollRef.current?.scrollTo({
-      x: index * step,
+      x: offsetForIndex(index),
       animated,
     });
   };
@@ -46,11 +74,11 @@ export function ClubStrip({ items, pickId, onPick, disabled, compact }: Props) {
   useEffect(() => {
     if (width <= 0 || items.length === 0) return;
     scrollToIndex(origin + openIndex, false);
-  }, [items, openIndex, origin, pickId, step, width]);
+  }, [items, openIndex, origin, pickId, pillWidth, width]);
 
   const settleWrap = (x: number) => {
     if (items.length <= 1 || width <= 0) return;
-    const raw = Math.round(x / step);
+    const raw = indexForOffset(x);
     const wrapped = wrapClubStripIndex(raw, items.length);
     const target = origin + wrapped;
     if (raw < items.length || raw >= items.length * 2) {
@@ -77,7 +105,6 @@ export function ClubStrip({ items, pickId, onPick, disabled, compact }: Props) {
           onScrollEndDrag={onWrapSettle}
           contentContainerStyle={{
             paddingHorizontal: Math.max(0, (width - pillWidth) / 2),
-            gap: GAP,
             alignItems: 'center',
           }}>
           {looped.map((item) => {
@@ -91,7 +118,7 @@ export function ClubStrip({ items, pickId, onPick, disabled, compact }: Props) {
                 style={[
                   styles.pill,
                   compact && styles.pillCompact,
-                  { width: pillWidth },
+                  { width: pillWidth, marginRight: item.seamAfter ? CLUB_STRIP_SEAM_GAP : CLUB_STRIP_GAP },
                   pick && styles.pillPick,
                 ]}>
                 <Text

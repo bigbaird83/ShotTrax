@@ -219,6 +219,7 @@ struct ContentView: View {
                     RoundedRectangle(cornerRadius: 10)
                       .stroke(club.id == stripPickId ? Color("accent") : Color("cream"), lineWidth: 1)
                   )
+                  .padding(.trailing, club.seamAfter ? 16 : 0)
                   .id(club.token)
                   .onTapGesture {
                     if !session.sending { session.pick(clubId: club.id) }
@@ -317,13 +318,20 @@ struct ContentView: View {
       .sorted { $0.carry < $1.carry }
   }
 
-  private var wheelClubs: [(token: String, id: String, carry: Int)] {
+  private var wheelClubs: [(token: String, id: String, carry: Int, seamAfter: Bool)] {
     let base = stripClubs
     guard base.count > 1 else {
-      return base.map { (token: $0.id, id: $0.id, carry: $0.carry) }
+      return base.map { (token: $0.id, id: $0.id, carry: $0.carry, seamAfter: false) }
     }
     return (0..<3).flatMap { copy in
-      base.map { (token: "\($0.id)#\(copy)", id: $0.id, carry: $0.carry) }
+      base.enumerated().map { index, club in
+        (
+          token: "\(club.id)#\(copy)",
+          id: club.id,
+          carry: club.carry,
+          seamAfter: index == base.count - 1
+        )
+      }
     }
   }
 

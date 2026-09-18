@@ -1,4 +1,6 @@
+import { fillEstimatedCarries, type CarryClub } from './carryFill';
 import { isPutterClubId } from './defaultBag';
+import { MIN_CLOSED_SHOTS_FOR_RANK } from './rankClubs';
 
 /** Phone wheel pills are taller than the Watch pills. */
 export const PHONE_WHEEL_PILL_HEIGHT = 52;
@@ -115,6 +117,23 @@ export function clubStripHasEmptySlot(): false {
   return false;
 }
 
+/** Fill estimated carries before the wheel sorts. Typed wins. Outside the span stays out. */
+export function clubStripFillsBeforeSort(): true {
+  return true;
+}
+
+export function clubStripEstimatedEntersWheel(): true {
+  return true;
+}
+
+/** Clubs sit together. One extra gap only between longest and shortest at the wrap. */
+export const CLUB_STRIP_GAP = 8;
+export const CLUB_STRIP_SEAM_GAP = 24;
+
+export function clubStripSeamGapOnly(): true {
+  return true;
+}
+
 export function carryFromClubLabel(label: string): number | null {
   const raw = label.split(' · ')[1]?.trim();
   if (!raw || raw === '—' || raw === '-') return null;
@@ -133,29 +152,86 @@ export function wrapClubStripIndex(index: number, count: number): number {
   return ((index % count) + count) % count;
 }
 
+export function toWheelFillClub(
+  club: {
+    id: string;
+    loftRank: number;
+    sortOrder?: number;
+    typicalCarryYards?: number | null;
+  },
+  live?: { count: number; avgYards: number } | null,
+): ClubStripClub {
+  const count = live?.count ?? 0;
+  const avg = live?.avgYards;
+  return {
+    id: club.id,
+    loftRank: club.loftRank,
+    sortOrder: club.sortOrder,
+    typicalCarryYards: club.typicalCarryYards ?? null,
+    liveCarry:
+      count >= MIN_CLOSED_SHOTS_FOR_RANK && avg != null && Number.isFinite(avg) && avg > 0 ? avg : null,
+  };
+}
+
 export type ClubStripClub = {
   id: string;
-  carry: number | null;
+  carry?: number | null;
+  loftRank?: number;
+  sortOrder?: number;
+  typicalCarryYards?: number | null;
+  liveCarry?: number | null;
 };
 
 export type ClubStripPlan = {
   ids: string[];
   openIndex: number;
   pickId: string | null;
+  carries: Record<string, number>;
 };
 
+export function resolveWheelCarries(clubs: ClubStripClub[]): Record<string, number> {
+  const canFill = clubs.some((club) => club.loftRank != null);
+  const filled = canFill
+    ? fillEstimatedCarries(
+        clubs.map((club) => ({
+          id: club.id,
+          loftRank: club.loftRank ?? 0,
+          sortOrder: club.sortOrder,
+          typicalCarryYards: club.typicalCarryYards ?? null,
+        }) satisfies CarryClub),
+      )
+    : null;
+  const carries: Record<string, number> = {};
+  for (const club of clubs) {
+    if (isPutterClubId(club.id)) continue;
+    if (clubHasWheelCarry(club.liveCarry)) {
+      carries[club.id] = club.liveCarry as number;
+      continue;
+    }
+    const estimated = filled?.get(club.id)?.yards ?? null;
+    if (clubHasWheelCarry(estimated)) {
+      carries[club.id] = estimated as number;
+      continue;
+    }
+    if (clubHasWheelCarry(club.carry)) {
+      carries[club.id] = club.carry as number;
+    }
+  }
+  return carries;
+}
+
 /**
- * Full-bag wheel (putter out, blank/dash carries out). Short carry on the
- * left, long on the right. Opens on the club whose carry is closest to
- * yards left. No empty slots. Scrolling past the longest wraps to the shortest.
+ * Fill first (typed / estimated / live), then sort shorter to longer.
+ * Putter and clubs that still have no number stay out. No dash. No invented 0.
  */
 export function planClubStrip(args: {
   clubs: ClubStripClub[];
   yardsLeft?: number | null;
 }): ClubStripPlan {
+  const carries = resolveWheelCarries(args.clubs);
   const ordered = args.clubs
-    .filter((club) => !isPutterClubId(club.id) && clubHasWheelCarry(club.carry))
-    .map((club) => ({ id: club.id, carry: club.carry as number }))
+    .filter((club) => !isPutterClubId(club.id) && clubHasWheelCarry(carries[club.id]))
+    .map((club) => ({ id: club.id, carry: carries[club.id] }))
     .sort((a, b) => a.carry - b.carry);
 
   const yards = args.yardsLeft;
@@ -172,5 +248,5 @@ export function planClubStrip(args: {
   }
   if (!pick) pick = ordered[0]?.id ?? null;
   const openIndex = pick ? Math.max(0, ordered.findIndex((club) => club.id === pick)) : 0;
-  return { ids: ordered.map((club) => club.id), openIndex, pickId: pick };
+  return { ids: ordered.map((club) => club.id), openIndex, pickId: pick, carries };
 }

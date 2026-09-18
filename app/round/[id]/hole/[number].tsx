@@ -37,7 +37,7 @@ import { deleteShotPrompt } from '@/src/domain/deleteShot';
 import { planInsertSlots } from '@/src/domain/insertShot';
 import { confirmUndoIsLive, planConfirmUndo, type ConfirmUndoWindow } from '@/src/domain/confirmUndo';
 import { confirmPlaceToDraft, planPlaceToDragPreview } from '@/src/domain/placeToDrag';
-import { planClubStrip } from '@/src/domain/clubStrip';
+import { planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
 import { planPlayLayout } from '@/src/domain/playLayout';
 import { planPlacedShot } from '@/src/domain/shotSource';
 import { planUndoPlacePins } from '@/src/domain/undoLastShot';
@@ -188,18 +188,13 @@ export default function HoleScreen() {
   const placeStripPlan = planClubStrip({
     clubs: clubs.map((club) => {
       const row = averages.find((item) => item.club.id === club.id);
-      return {
-        id: club.id,
-        carry: row ? rankDistanceYards(clubToRankInput(row.club, row)) : null,
-      };
+      return toWheelFillClub(club, row);
     }),
     yardsLeft: pickerYards,
   });
   const placeStripItems = placeStripPlan.ids.map((id) => {
     const club = clubs.find((row) => row.id === id);
-    const row = averages.find((item) => item.club.id === id);
-    const carry = row ? rankDistanceYards(clubToRankInput(row.club, row)) : null;
-    return { id, label: formatSuggestedClubChip(club?.shortName ?? id, carry) };
+    return { id, label: formatSuggestedClubChip(club?.shortName ?? id, placeStripPlan.carries[id]) };
   });
   const placeBag = clubs.filter((club) => !isPutterClubId(club.id));
 
@@ -401,18 +396,13 @@ export default function HoleScreen() {
   const stripPlan = planClubStrip({
     clubs: clubs.map((club) => {
       const row = averages.find((item) => item.club.id === club.id);
-      return {
-        id: club.id,
-        carry: row ? rankDistanceYards(clubToRankInput(row.club, row)) : null,
-      };
+      return toWheelFillClub(club, row);
     }),
     yardsLeft: target?.dYards ?? toGreen.yards,
   });
   const stripItems = stripPlan.ids.map((id) => {
     const club = clubs.find((row) => row.id === id);
-    const row = averages.find((item) => item.club.id === id);
-    const carry = row ? rankDistanceYards(clubToRankInput(row.club, row)) : null;
-    return { id, label: formatSuggestedClubChip(club?.shortName ?? id, carry) };
+    return { id, label: formatSuggestedClubChip(club?.shortName ?? id, stripPlan.carries[id]) };
   });
   const dragPreview = planPlaceToDragPreview({
     from: placeFrom,
@@ -568,11 +558,10 @@ export default function HoleScreen() {
         id: club.id,
         shortName: formatSuggestedClubChip(club.shortName, rankDistanceYards(club)),
       })),
-      bag: clubs.map((club) => {
-        const row = averages.find((item) => item.club.id === club.id);
-        const carry = row ? rankDistanceYards(clubToRankInput(row.club, row)) : null;
-        return { id: club.id, shortName: formatSuggestedClubChip(club.shortName, carry) };
-      }),
+      bag: clubs.map((club) => ({
+        id: club.id,
+        shortName: formatSuggestedClubChip(club.shortName, stripPlan.carries[club.id] ?? null),
+      })),
       holeNumber,
       yardsToGreen: target?.dYards ?? toGreen.yards,
       yardsQuality: toGreen.quality,

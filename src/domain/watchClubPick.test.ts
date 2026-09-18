@@ -250,6 +250,7 @@ test('Watch suggested strip shows carry, opens on the pick, and is not stacked r
   assert.match(stripUi, /anchor: \.center/);
   assert.match(stripUi, /stripPickId/);
   assert.match(watchUi, /wheelClubs/);
+  assert.match(watchUi, /seamAfter/);
   assert.equal(watchStripIsWheel(), true);
   assert.equal(watchStripWraps(), true);
   assert.equal(watchStripSortedByIronNumber(), false);

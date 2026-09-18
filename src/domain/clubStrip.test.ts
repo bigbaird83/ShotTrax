@@ -32,6 +32,11 @@ import {
   clubStripUsesFullBag,
   clubStripUsesRankedTop3,
   clubStripWraps,
+  clubStripFillsBeforeSort,
+  clubStripEstimatedEntersWheel,
+  clubStripSeamGapOnly,
+  CLUB_STRIP_GAP,
+  CLUB_STRIP_SEAM_GAP,
   PHONE_WHEEL_PILL_HEIGHT,
   WATCH_WHEEL_PILL_HEIGHT,
   phoneWheelPillTallerThanWatch,
@@ -146,6 +151,7 @@ test('after a shot lands the middle pill is closest to yards left, and the strip
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const plan = hole.slice(hole.indexOf('const stripPlan'), hole.indexOf('const stripItems'));
   assert.match(plan, /clubs\.map/);
+  assert.match(plan, /toWheelFillClub/);
   assert.match(plan, /target\?\.dYards/);
   assert.doesNotMatch(plan, /rankTopClubs|ranked\.slice|slice\(0,\s*3\)/);
   assert.match(hole, /COPY\.allClubs/);
@@ -228,6 +234,8 @@ test('phone and Watch strip UIs peek neighbors and mark only on tap', () => {
   assert.match(phone, /onMomentumScrollEnd=\{onWrapSettle\}/);
   assert.match(phone, /onScrollEndDrag=\{onWrapSettle\}/);
   assert.match(phone, /wrapClubStripIndex/);
+  assert.match(phone, /CLUB_STRIP_SEAM_GAP/);
+  assert.match(phone, /seamAfter/);
   assert.doesNotMatch(phone, /onScroll=\{/);
   const wrapFn = phone.slice(phone.indexOf('const onWrapSettle'), phone.indexOf('return ('));
   assert.doesNotMatch(wrapFn, /onPick/);
@@ -356,7 +364,55 @@ test('scrolling past the longest wraps to the shortest', () => {
   const phone = readFileSync(new URL('../ui/ClubStrip.tsx', import.meta.url), 'utf8');
   assert.match(phone, /LOOP_COPIES = 3/);
   assert.match(phone, /wrapClubStripIndex/);
+  assert.equal(clubStripSeamGapOnly(), true);
+  assert.ok(CLUB_STRIP_SEAM_GAP > CLUB_STRIP_GAP);
+  assert.match(phone, /CLUB_STRIP_SEAM_GAP/);
+  assert.match(phone, /seamAfter/);
   const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
   assert.match(watch, /wheelClubs/);
   assert.match(watch, /0\.\.<3/);
+  assert.match(watch, /seamAfter/);
+  assert.match(watch, /padding\(\.trailing, club\.seamAfter/);
+});
+
+test('fill estimated carries before sort; estimable iron is in, outside the span is out', () => {
+  assert.equal(clubStripFillsBeforeSort(), true);
+  assert.equal(clubStripEstimatedEntersWheel(), true);
+  assert.equal(clubStripSortedByCarry(), true);
+  assert.equal(clubStripSortedByIronNumber(), false);
+  assert.equal(clubStripSortedByName(), false);
+  assert.equal(clubStripAllowsDashPill(), false);
+  assert.equal(clubStripInventZero(), false);
+
+  const filled = planClubStrip({
+    clubs: [
+      { id: 'club_driver', loftRank: 0, typicalCarryYards: 230 },
+      { id: 'club_3w', loftRank: 1, typicalCarryYards: null },
+      { id: 'club_4i', loftRank: 6, typicalCarryYards: null },
+      { id: 'club_7i', loftRank: 9, typicalCarryYards: 150 },
+      { id: 'club_pw', loftRank: 12, typicalCarryYards: 110 },
+      { id: 'club_48', loftRank: 13, typicalCarryYards: null },
+      { id: PUTTER_CLUB_ID, loftRank: 18, typicalCarryYards: 8 },
+    ],
+    yardsLeft: 165,
+  });
+  assert.ok(filled.ids.includes('club_4i'));
+  assert.ok(filled.ids.includes('club_7i'));
+  assert.ok(filled.ids.includes('club_3w'));
+  assert.ok(filled.carries['club_4i'] != null && filled.carries['club_4i'] > 0);
+  assert.equal(filled.carries['club_7i'], 150);
+  assert.ok(!filled.ids.includes('club_48'));
+  assert.ok(!filled.ids.includes(PUTTER_CLUB_ID));
+  assert.equal(filled.carries['club_48'], undefined);
+  assert.deepEqual(filled.ids, ['club_pw', 'club_7i', 'club_4i', 'club_3w', 'club_driver']);
+  assert.notDeepEqual(filled.ids, ['club_3w', 'club_4i', 'club_7i', 'club_pw', 'club_driver']);
+  assert.ok(filled.ids.indexOf('club_7i') < filled.ids.indexOf('club_4i'));
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  assert.match(hole, /toWheelFillClub/);
+  assert.match(hole, /stripPlan\.carries/);
+  const src = readFileSync(new URL('./clubStrip.ts', import.meta.url), 'utf8');
+  const resolve = src.slice(src.indexOf('export function resolveWheelCarries'), src.indexOf('export function planClubStrip'));
+  assert.match(resolve, /fillEstimatedCarries/);
+  assert.ok(resolve.indexOf('fillEstimatedCarries') < src.indexOf('.sort((a, b) => a.carry - b.carry)'));
 });

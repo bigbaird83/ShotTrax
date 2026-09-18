@@ -7,6 +7,7 @@ import type { OsmOverlay } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
 import { getHole, getRound, listClubAverages, listClubs, listShotsForHole } from '@/src/db/repo';
 import { resolveHoleTee } from '@/src/domain/holeCamera';
+import { planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
 import { COPY, formatPickerLeftYards, formatSuggestedClubChip } from '@/src/domain/playerCopy';
 import { clubPickLeaveHref, clubPickLeaveRunsAcceptFix, planClubPickLeave } from '@/src/domain/clubPickNav';
 import { putterOpensPuttSheet } from '@/src/domain/putts';
@@ -171,6 +172,13 @@ export default function ClubPickScreen() {
     averages.map((row) => clubToRankInput(row.club, row)),
     target,
   );
+  const stripPlan = planClubStrip({
+    clubs: clubs.map((club) => {
+      const row = averages.find((item) => item.club.id === club.id);
+      return toWheelFillClub(club, row);
+    }),
+    yardsLeft: target?.dYards ?? toGreen.yards,
+  });
   const lastLie = useMemo(() => {
     const last = [...shots].reverse().find((shot) => shot.startLat != null && shot.startLng != null);
     return last?.startLat != null && last.startLng != null
@@ -207,11 +215,10 @@ export default function ClubPickScreen() {
         id: club.id,
         shortName: formatSuggestedClubChip(club.shortName, rankDistanceYards(club)),
       })),
-      bag: clubs.map((club) => {
-        const row = averages.find((item) => item.club.id === club.id);
-        const carry = row ? rankDistanceYards(clubToRankInput(row.club, row)) : null;
-        return { id: club.id, shortName: formatSuggestedClubChip(club.shortName, carry) };
-      }),
+      bag: clubs.map((club) => ({
+        id: club.id,
+        shortName: formatSuggestedClubChip(club.shortName, stripPlan.carries[club.id] ?? null),
+      })),
       holeNumber,
       yardsToGreen: target?.dYards ?? toGreen.yards,
       yardsQuality: toGreen.quality,
