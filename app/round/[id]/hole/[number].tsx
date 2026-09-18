@@ -59,7 +59,6 @@ import { resolveStickyClub, selectClubForMark } from '@/src/domain/stickyClub';
 import type { Club, PenaltyReason } from '@/src/domain/types';
 import { matchSpokenClub, speechContextualStrings } from '@/src/domain/voiceClub';
 import { toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
-import { yardsToGreen } from '@/src/sensing/api';
 import { describeGpsSource } from '@/src/services/location';
 import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, undoShotEdit } from '@/src/services/shotActions';
 import { startClubSpeech, type ClubSpeechSession } from '@/src/services/speechClub';
@@ -325,12 +324,10 @@ export default function HoleScreen() {
     ),
     depthYards: hole?.greenDepthYards ?? null,
   };
-  const phoneToGreen = yardsToGreen(fix, green);
   const toGreenDisplay = toGreenDisplayFromHole({
     courseYards: hole?.yards ?? null,
     green,
     shots,
-    phone: phoneToGreen,
   });
   const yardsToGreenResult = {
     yards: toGreenDisplay.yards,

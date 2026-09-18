@@ -41,7 +41,7 @@ export function courseTeeYards(yards: number | null | undefined): number | null 
   return Math.round(yards);
 }
 
-/** Live GPS / mark-to-green. Quality none or over 600 → not shown. Not the 400-yard shot-save cap. */
+/** Start-to-green. Quality none or over 600 → not shown. Not the 400-yard shot-save cap. */
 export function liveToGreenYards(
   yards: number | null | undefined,
   quality: string,
@@ -51,14 +51,24 @@ export function liveToGreenYards(
   return Math.round(yards);
 }
 
-/** Latest club mark on the hole (where they hit from). No coords → null, never invented. */
-export function lastClubMark(
-  shots: { seq: number; startLat: number | null; startLng: number | null }[],
-): LatLng | null {
+export type ClubStartShot = {
+  seq: number;
+  startLat: number | null;
+  startLng: number | null;
+  fixQuality?: ShotFixQuality | null;
+};
+
+/** Latest shot start (where they hit from). Never the phone. Never invented. */
+export function lastClubMark(shots: ClubStartShot[]): LatLng | null {
   const last = [...shots].sort((a, b) => a.seq - b.seq).at(-1);
   if (!last) return null;
   const mark = { lat: last.startLat ?? Number.NaN, lng: last.startLng ?? Number.NaN };
   return isValidLatLng(mark) ? mark : null;
+}
+
+export function lastClubStartQuality(shots: ClubStartShot[]): ShotFixQuality {
+  const last = [...shots].sort((a, b) => a.seq - b.seq).at(-1);
+  return last?.fixQuality === 'none' ? 'none' : last?.fixQuality === 'soft' ? 'soft' : 'good';
 }
 
 export function markToGreen(
@@ -74,11 +84,11 @@ export function markToGreen(
 /**
  * To-green number for the hole header and picker remaining-yards line.
  *
- * Before any shot: course tee yardage (the card). Not the phone-to-green fix —
- * that is why home showed 14,167.
- * After a mark: mark-to-green only when it is more than 50 yards off the card.
- * Live may show up to 600. Over 600, keep the course number or —.
- * No course + live ≤ 600 → live. No green → —. Quality none → no live number.
+ * Before any mark: course tee yardage only. Never the phone's distance home.
+ * After a mark: haversine from that shot's start to the green — never the
+ * phone's current location. Switch only if that number is more than 50 yards
+ * off the card AND 600 or under. Over 600 or quality none → keep the course
+ * number. No course + start-to-green ≤ 600 → live. No green → —. Never invent.
  * The 400-yard shot-save confirm is a different gate and stays unchanged.
  */
 export function planToGreenDisplay(args: {
@@ -96,18 +106,14 @@ export function planToGreenDisplay(args: {
 
   if (args.shotCount <= 0) {
     if (course != null) return { yards: course, source: 'course', quality: 'good' };
-    if (live != null) return { yards: live, source: 'live', quality: liveQuality };
     return { yards: null, source: 'none', quality: 'none' };
   }
 
-  if (live != null && course != null) {
-    if (Math.abs(live - course) > TO_GREEN_COURSE_SWITCH_YD) {
-      return { yards: live, source: 'live', quality: liveQuality };
-    }
-    return { yards: course, source: 'course', quality: 'good' };
+  if (live != null && course != null && Math.abs(live - course) > TO_GREEN_COURSE_SWITCH_YD) {
+    return { yards: live, source: 'live', quality: liveQuality };
   }
-  if (live != null) return { yards: live, source: 'live', quality: liveQuality };
   if (course != null) return { yards: course, source: 'course', quality: 'good' };
+  if (live != null) return { yards: live, source: 'live', quality: liveQuality };
   return { yards: null, source: 'none', quality: 'none' };
 }
 
@@ -138,16 +144,25 @@ export function yardsToGreenLabel(
 export function toGreenDisplayFromHole(args: {
   courseYards: number | null;
   green: LatLng | null;
-  shots: { seq: number; startLat: number | null; startLng: number | null }[];
-  phone: { yards: number | null; quality: string };
+  shots: ClubStartShot[];
 }): ToGreenDisplay {
   const hasGreen = isValidLatLng(args.green);
-  const marked = args.shots.length > 0;
-  const live = marked ? markToGreen(lastClubMark(args.shots), args.green) : args.phone;
+  if (args.shots.length === 0) {
+    return planToGreenDisplay({
+      courseYards: args.courseYards,
+      liveYards: null,
+      liveQuality: 'none',
+      shotCount: 0,
+      hasGreen,
+    });
+  }
+  const start = lastClubMark(args.shots);
+  const live = markToGreen(start, args.green);
+  const quality = lastClubStartQuality(args.shots);
   return planToGreenDisplay({
     courseYards: args.courseYards,
     liveYards: live.yards,
-    liveQuality: live.quality,
+    liveQuality: quality === 'none' ? 'none' : live.quality,
     shotCount: args.shots.length,
     hasGreen,
   });

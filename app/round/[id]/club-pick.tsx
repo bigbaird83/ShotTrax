@@ -13,7 +13,6 @@ import { matchSpokenClub, speechContextualStrings } from '@/src/domain/voiceClub
 import { emptyWalkAway, stepWalkAway, walkAwayEligible } from '@/src/domain/walkAway';
 import type { Club, GpsFix } from '@/src/domain/types';
 import { toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
-import { yardsToGreen } from '@/src/sensing/api';
 import { startClubSpeech, type ClubSpeechSession } from '@/src/services/speechClub';
 import { addNoGpsShot, changeShotClub, markShotWithClub, promptForPlan } from '@/src/services/shotActions';
 import { useLiveFix } from '@/src/services/useLiveFix';
@@ -121,12 +120,10 @@ export default function ClubPickScreen() {
       : null;
   const fix = useLiveFix(!withoutGps);
 
-  const phoneToGreen = yardsToGreen(withoutGps ? null : fix, green);
   const toGreen = toGreenDisplayFromHole({
     courseYards: holeRow?.yards ?? null,
     green,
     shots,
-    phone: phoneToGreen,
   });
   const target = resolveDistanceTarget({
     toGreen,
