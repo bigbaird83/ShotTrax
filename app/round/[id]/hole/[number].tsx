@@ -427,10 +427,11 @@ export default function HoleScreen() {
     previous: lastHoleCamera.current,
   });
   if (holeCamera) lastHoleCamera.current = holeCamera;
-  addShotFromRef.current = resolveAddShotFromPin({
+  const addShotFrom = resolveAddShotFromPin({
     tee: holeTee,
     lastLanding: lastLandingMark(shots),
   });
+  addShotFromRef.current = addShotFrom;
   const insertSlots = planInsertSlots(shots);
   const playLayout = planPlayLayout();
   const playHeaderYards = planPlayHeaderYards({
@@ -955,7 +956,9 @@ export default function HoleScreen() {
           yardsToGreen={yardsToGreenResult}
           fmb={fmb}
           osmOverlay={osmOverlay}
-          placedFrom={placeFrom}
+          placedFrom={
+            placeMode === 'edit-from' || placeMode === 'edit-to' ? placeFrom : addShotFrom ?? placeFrom
+          }
           placedTo={placeToDraft ?? placeTo}
           freezePan={placeMode === 'to' || placeMode === 'edit-to'}
           onPlaceToDrag={
@@ -966,7 +969,7 @@ export default function HoleScreen() {
           lockFrame
           showPhonePin={!catchUpFullScreen}
           allowMapsChrome={!catchUpFullScreen}
-          hideYardsOverlay={!catchUpFullScreen}
+          hideYardsOverlay
           frameEpoch={catchUpFullScreen ? 'catchup' : `play-${hole.number}-${playFrameNonce}`}
           onFrameReady={setMapFramed}
           heading={holeCamera?.heading ?? null}
@@ -987,7 +990,8 @@ export default function HoleScreen() {
                   const tap = catchUpPinFromTap(coord, fix);
                   if (!tap) return;
                   if (placeMode === 'from') {
-                    setPlaceFrom(tap);
+                    if (!addShotFrom) return;
+                    setPlaceFrom(addShotFrom);
                     setPlaceMode('to');
                     return;
                   }

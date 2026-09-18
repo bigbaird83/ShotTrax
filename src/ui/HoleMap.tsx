@@ -479,15 +479,17 @@ function NativeHoleMap({
         {placedFrom ? (
           <Marker
             coordinate={toCoord(placedFrom.lat, placedFrom.lng)}
-            title="From"
             pinColor="tomato"
+            tappable={false}
+            tracksViewChanges={false}
           />
         ) : null}
         {placedTo ? (
           <Marker
             coordinate={toCoord(placedTo.lat, placedTo.lng)}
-            title="Landed"
             pinColor="green"
+            tappable={false}
+            tracksViewChanges={false}
             draggable={Boolean(onPlaceToDrag) && !mapOwnsGesture}
             onDrag={(event) => {
               if (!onPlaceToDrag || mapOwnsGesture) return;
@@ -504,8 +506,9 @@ function NativeHoleMap({
         {green ? (
           <Marker
             coordinate={toCoord(green.lat, green.lng)}
-            title="Green"
             pinColor="green"
+            tappable={false}
+            tracksViewChanges={false}
           />
         ) : null}
         {showPhonePin && userDot ? (
