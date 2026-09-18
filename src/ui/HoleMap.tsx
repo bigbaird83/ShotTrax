@@ -10,12 +10,13 @@ import {
 } from 'react-native';
 import MapView, { Marker, Polygon, Polyline } from 'react-native-maps';
 import type { OsmFeature, OsmGolfKind, OsmOverlay } from '@/src/course/types';
-import { featuresForHole } from '@/src/course/osmOverlay';
+import { featuresForHole, resolveOverlayTee } from '@/src/course/osmOverlay';
 import type { GpsFix, Shot } from '@/src/domain/types';
 import type { YardsToGreenResult } from '@/src/sensing/yardsToGreen';
 import {
   applyHoleMapCamera,
   holeCameraFramedAfterApply,
+  holeCameraHeading,
   holeFrameRegion,
   holeMapShowsUserLocation,
   holeNativeCamera,
@@ -129,8 +130,8 @@ function TrailFallback({
       {yardsToGreen && !hideYardsOverlay ? (
         <YardsToGreenBadge result={yardsToGreen} hasFix={hasFix} hasGreen={hasGreen} />
       ) : null}
-      {!hideYardsOverlay && !yardsOnCard ? (
-        <Text style={styles.fallbackMsg}>{waiting ? COPY.waitingOnLocation : hasGreen ? COPY.waitingOnGreen : COPY.longPressGreen}</Text>
+      {!hideYardsOverlay && !yardsOnCard && waiting ? (
+        <Text style={styles.fallbackMsg}>{COPY.waitingOnLocation}</Text>
       ) : null}
     </View>
   );
@@ -233,15 +234,25 @@ function NativeHoleMap({
   }, [shots, green, osmFeatures, placedFrom, placedTo]);
 
   const lockedPoints = useMemo(() => {
-    if (!lockFrame || !framePoints || framePoints.length === 0) return [];
-    return framePoints
+    if (!lockFrame) return [];
+    const fromParent = (framePoints ?? [])
       .map((point) => ({ lat: point.latitude, lng: point.longitude }))
       .filter((point) => isValidLatLng(point));
-  }, [lockFrame, framePoints]);
+    if (fromParent.length >= 2) return fromParent;
+    const overlayTee = resolveOverlayTee(osmOverlay ?? null, holeNumber, green);
+    if (isValidLatLng(overlayTee) && isValidLatLng(green)) return [overlayTee, green];
+    return fromParent;
+  }, [lockFrame, framePoints, osmOverlay, holeNumber, green]);
 
   const holeUpCamera = useMemo(() => {
-    if (heading == null || !Number.isFinite(heading) || lockedPoints.length === 0) return null;
-    return holeNativeCamera(lockedPoints, heading);
+    const cameraHeading =
+      heading != null && Number.isFinite(heading)
+        ? heading
+        : lockedPoints.length >= 2
+          ? holeCameraHeading(lockedPoints[0], lockedPoints[1])
+          : null;
+    if (cameraHeading == null || lockedPoints.length === 0) return null;
+    return holeNativeCamera(lockedPoints, cameraHeading);
   }, [lockedPoints, heading]);
 
   const lockedRegion = useMemo(() => {

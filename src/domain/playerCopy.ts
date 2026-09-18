@@ -219,7 +219,7 @@ export function yardsToGreenPlayerLabel(
   ctx: { hasGreen?: boolean; hasFix?: boolean } = {},
 ): { heading: string; value: string; detail: string } {
   const heading = COPY.toGreen;
-  if (result.quality !== 'none' && result.yards != null && Number.isFinite(result.yards)) {
+  if (result.yards != null && Number.isFinite(result.yards)) {
     return { heading, value: `${result.yards}`, detail: 'yd' };
   }
   const detail = !ctx.hasGreen

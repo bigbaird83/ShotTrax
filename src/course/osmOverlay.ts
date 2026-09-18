@@ -149,6 +149,45 @@ export function teePointFromHoleFeature(
   return first;
 }
 
+/**
+ * Fairway vertex farthest from the green. Used only when the tee box and
+ * hole line are missing. Never the phone. No green → null.
+ */
+export function teePointFromFairway(
+  overlay: OsmOverlay | null,
+  holeNumber: number,
+  green?: LatLng | null,
+): LatLng | null {
+  if (!isValidLatLng(green)) return null;
+  let best: LatLng | null = null;
+  let bestYards = -1;
+  for (const feature of featuresForHole(overlay, holeNumber)) {
+    if (feature.kind !== 'fairway') continue;
+    for (const point of feature.coordinates) {
+      if (!isValidLatLng(point)) continue;
+      const yards = haversineYards(point, green);
+      if (yards > bestYards) {
+        bestYards = yards;
+        best = point;
+      }
+    }
+  }
+  return best;
+}
+
+/** Tee box, then hole line, then fairway. Never the phone or the clubhouse. */
+export function resolveOverlayTee(
+  overlay: OsmOverlay | null,
+  holeNumber: number,
+  green?: LatLng | null,
+): LatLng | null {
+  return (
+    teePointFromHoleFeature(overlay, holeNumber, green) ??
+    teePointForHole(overlay, holeNumber) ??
+    teePointFromFairway(overlay, holeNumber, green)
+  );
+}
+
 function overpassQuery(location: LatLng, radiusM: number): string {
   const r = Math.max(50, Math.min(3000, Math.round(radiusM)));
   const lat = location.lat;

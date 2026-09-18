@@ -78,6 +78,11 @@ export function addShotMapUsesPhoneFix(): false {
   return false;
 }
 
+/** Add shot never pairs a card number with Waiting on your location. */
+export function addShotShowsWaitingWithCardYards(): false {
+  return false;
+}
+
 /** Add shot keeps the map chip. The extra footer is the duplicate. */
 export function addShotPlaceHintShowsAsFooter(): false {
   return false;

@@ -19,6 +19,7 @@ import { clubStripOpeningIds, clubStripWindowKey, planClubStrip } from './clubSt
 import {
   addShotMapUsesPhoneFix,
   addShotMapWaitsForPhoneFix,
+  addShotShowsWaitingWithCardYards,
   holeFrameRegion,
   lockHoleCamera,
   openingHoleRegionContainsTeeAndGreen,
@@ -153,6 +154,7 @@ test('Watch selection is the phone selection; strip tap does not mark', () => {
 test("Add shot opening region contains tee and green and does not wait when 282 is showing", () => {
   assert.equal(addShotMapWaitsForPhoneFix(), false);
   assert.equal(addShotMapUsesPhoneFix(), false);
+  assert.equal(addShotShowsWaitingWithCardYards(), false);
   const tee = { lat: 37.0, lng: -122.0 };
   const green = { lat: 37.01, lng: -122.0 };
   const home = { lat: 40.7128, lng: -74.006 };
@@ -169,6 +171,8 @@ test("Add shot opening region contains tee and green and does not wait when 282 
   assert.match(playMap, /framePoints=/);
   assert.match(playMap, /heading=\{holeCamera\?\.heading/);
   assert.match(playMap, /showPhonePin=\{!catchUpFullScreen\}/);
+  assert.match(playMap, /playHeaderYards\.yards/);
+  assert.match(hole, /resolveOverlayTee/);
   assert.match(hole, /styles\.catchUpHint/);
   assert.match(hole, /COPY\.placeFromHint/);
 

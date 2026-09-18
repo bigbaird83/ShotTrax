@@ -115,6 +115,8 @@ test('yards to green is a big number or — plus waiting copy', () => {
     showWaitingOnLocationLine({ yards: 282, quality: 'good', hasFix: false, hasGreen: true }),
     false,
   );
+  assert.equal(yardsToGreenPlayerLabel({ yards: 282, quality: 'none' }).value, '282');
+  assert.doesNotMatch(yardsToGreenPlayerLabel({ yards: 282, quality: 'none' }).detail, /Waiting/);
   assert.equal(
     showWaitingOnLocationLine({ yards: null, quality: 'none', hasFix: false, hasGreen: true }),
     true,

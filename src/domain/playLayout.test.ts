@@ -120,7 +120,7 @@ test('play hole screen uses the fill layout and does not keep the empty middle',
   assert.equal(playShowsUserLocationFit(), false);
   assert.deepEqual([...PLAY_REFRAME_ON], ['open', 'prev', 'next', 'scorecard_return', 'menu_return']);
   assert.match(hole, /resolveHoleTee/);
-  assert.match(hole, /teePointFromHoleFeature/);
+  assert.match(hole, /resolveOverlayTee/);
   assert.equal(playUsesAddShotCamera(), true);
 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');

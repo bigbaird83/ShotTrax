@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { featuresForHole, fetchOsmOverlay, parseOverpassOverlay, teePointForHole, teePointFromHoleFeature } from './osmOverlay';
+import {
+  featuresForHole,
+  fetchOsmOverlay,
+  parseOverpassOverlay,
+  resolveOverlayTee,
+  teePointForHole,
+  teePointFromFairway,
+  teePointFromHoleFeature,
+} from './osmOverlay';
 
 test('parseOverpassOverlay maps golf=green/fairway/tee/hole and ignores other tags', () => {
   const overlay = parseOverpassOverlay({
@@ -120,6 +128,29 @@ test('hole line still supplies a tee when the OSM tee box is missing', () => {
     lat: 37.0,
     lng: -122.0,
   });
+  assert.deepEqual(resolveOverlayTee(overlay, 1, { lat: 37.01, lng: -122.0 }), {
+    lat: 37.0,
+    lng: -122.0,
+  });
+});
+
+test('fairway farthest from the green is the tee when the hole line is missing', () => {
+  const overlay = parseOverpassOverlay({
+    elements: [
+      {
+        type: 'way',
+        tags: { golf: 'fairway', ref: '1' },
+        geometry: [
+          { lat: 37.0, lon: -122.0 },
+          { lat: 37.008, lon: -122.0 },
+        ],
+      },
+    ],
+  });
+  const green = { lat: 37.008, lng: -122.0 };
+  assert.deepEqual(teePointFromFairway(overlay, 1, green), { lat: 37.0, lng: -122.0 });
+  assert.deepEqual(resolveOverlayTee(overlay, 1, green), { lat: 37.0, lng: -122.0 });
+  assert.equal(teePointFromFairway(overlay, 1, null), null);
 });
 
 test('fetchOsmOverlay returns null on Overpass failure — graceful empty overlay', async () => {

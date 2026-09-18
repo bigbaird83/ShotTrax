@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCourseDataClient } from '@/src/course/client';
-import { teePointForHole, teePointFromHoleFeature } from '@/src/course/osmOverlay';
+import { resolveOverlayTee } from '@/src/course/osmOverlay';
 import { formatParLabel } from '@/src/course/layout';
 import type { OsmOverlay } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
@@ -312,11 +312,8 @@ export default function HoleScreen() {
     const location =
       hole?.greenLat != null && hole.greenLng != null
         ? { lat: hole.greenLat, lng: hole.greenLng }
-        : round?.courseLat != null && round.courseLng != null
-          ? { lat: round.courseLat, lng: round.courseLng }
-          : null;
+        : null;
     if (!location) {
-      setOsmOverlay(null);
       return;
     }
     let live = true;
@@ -328,22 +325,15 @@ export default function HoleScreen() {
         radiusM: 1000,
       })
       .then((overlay) => {
-        if (live) setOsmOverlay(overlay);
+        if (live && overlay) setOsmOverlay(overlay);
       })
       .catch(() => {
-        if (live) setOsmOverlay(null);
+        // Keep the last overlay. Do not fall back to the clubhouse / phone.
       });
     return () => {
       live = false;
     };
-  }, [
-    round?.courseApiId,
-    round?.courseLat,
-    round?.courseLng,
-    hole?.greenLat,
-    hole?.greenLng,
-    holeNumber,
-  ]);
+  }, [round?.courseApiId, hole?.greenLat, hole?.greenLng, holeNumber]);
 
   useEffect(() => {
     return () => {
@@ -419,8 +409,8 @@ export default function HoleScreen() {
   });
   const wheelSelectedId = selectedClubId ?? stripPlan.pickId;
   const holeTee = resolveHoleTee({
-    holeTee: teePointFromHoleFeature(osmOverlay, holeNumber, green),
-    osmTee: teePointForHole(osmOverlay, holeNumber),
+    holeTee: resolveOverlayTee(osmOverlay, holeNumber, green),
+    osmTee: null,
     green,
   });
   const holeCamera = lockHoleCamera({
@@ -966,7 +956,10 @@ export default function HoleScreen() {
           shots={shots}
           userFix={fix}
           green={green}
-          yardsToGreen={yardsToGreenResult}
+          yardsToGreen={{
+            yards: playHeaderYards.yards,
+            quality: playHeaderYards.quality,
+          }}
           fmb={fmb}
           osmOverlay={osmOverlay}
           placedFrom={placeMode === 'edit-from' || placeMode === 'edit-to' ? placeFrom : addShotFrom}
@@ -1038,7 +1031,9 @@ export default function HoleScreen() {
                   <Text style={styles.backLabel}>{COPY.cancelPlace}</Text>
                 </Pressable>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.holeTitle}>{formatHoleHeader(hole.number, hole.par)}</Text>
+                  <Text style={styles.holeTitle}>
+                    {formatPlayHeader(hole.number, hole.par, playHeaderYards.yards)}
+                  </Text>
                 </View>
               </View>
               {placeHint ? <Text style={styles.catchUpHint}>{placeHint}</Text> : null}
@@ -1444,7 +1439,10 @@ export default function HoleScreen() {
             shots={shots}
             userFix={fix}
             green={green}
-            yardsToGreen={yardsToGreenResult}
+            yardsToGreen={{
+              yards: playHeaderYards.yards,
+              quality: playHeaderYards.quality,
+            }}
             osmOverlay={osmOverlay}
             lockFrame
             hideYardsOverlay
