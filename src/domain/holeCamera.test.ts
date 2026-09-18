@@ -123,7 +123,9 @@ test('home-scale phone does not change camera center, span, or heading when tee 
   assert.equal(fromFairway?.spanYards, base?.spanYards);
   assert.equal(fromFairway?.heading, base?.heading);
 
-  assert.deepEqual(base?.center, { lat: 37.005, lng: -122.0 });
+  assert.ok(base);
+  assert.ok(Math.abs(base.center.lat - (tee.lat + greenNorth.lat) / 2) < 1e-12);
+  assert.equal(base.center.lng, tee.lng);
   assert.equal(base?.heading, 0);
   assert.ok((base?.spanYards ?? 0) > 1000);
   assert.deepEqual(base?.points, [tee, greenNorth]);
