@@ -191,9 +191,8 @@ function NativeHoleMap({
       from: placedFrom,
       drag: placedTo,
       green,
-      phone: userFix,
     });
-  }, [onPlaceToDrag, placedFrom, placedTo, green, userFix]);
+  }, [onPlaceToDrag, placedFrom, placedTo, green]);
 
   const lockedCameraRef = useRef(holeUpCamera);
   lockedCameraRef.current = holeUpCamera;

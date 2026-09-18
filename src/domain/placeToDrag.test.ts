@@ -9,6 +9,7 @@ import {
   dragPreviewInventsGreen,
   dragPreviewRunsAcceptFix,
   dragPreviewUsesFixQuality,
+  dragPreviewUsesPhoneFixGate,
   dragRecentersOnPhone,
   formatDragPreviewYards,
   liveShotYardsFromThisFromPin,
@@ -127,11 +128,30 @@ test('both preview numbers and the 600 dash move with the finger', () => {
 test('finger preview has no GPS quality and does not run acceptFix', () => {
   assert.equal(dragPreviewUsesFixQuality(), false);
   assert.equal(dragPreviewRunsAcceptFix(), false);
+  assert.equal(dragPreviewUsesPhoneFixGate(), false);
   assert.equal(placeToAskOn(), 'confirm');
   assert.equal(placeToFilterOn(), 'confirm');
+  const preview = planPlaceToDragPreview({ from, drag, green, phone });
+  assert.ok(preview);
+  assert.equal(Object.hasOwn(preview, 'quality'), false);
+  assert.equal(Object.hasOwn(preview, 'fixQuality'), false);
+  assert.equal(liveYardsUsesPhone(), false);
+
+  const src = readFileSync(new URL('./placeToDrag.ts', import.meta.url), 'utf8');
+  const live = src.slice(
+    src.indexOf('export function liveShotYardsFromThisFromPin'),
+    src.indexOf('export type ConfirmPlaceToDraft'),
+  );
+  assert.match(live, /haversineYards\(args\.from, args\.drag\)/);
+  assert.match(live, /haversineYards\(args\.drag, args\.green\)/);
+  assert.doesNotMatch(live, /acceptFix\(|getFix\(|forceMark\(|\bliveToGreenYards\(/);
+  assert.doesNotMatch(live, /fixQuality|quality === |'good'|'soft'|'none'/);
+
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const dragBlock = hole.slice(hole.indexOf("if (placeMode === 'to')"), hole.indexOf("if (placeMode === 'edit-from')"));
   assert.doesNotMatch(dragBlock, /acceptFix|getFix|good|soft|forceMark/);
+  const call = hole.slice(hole.indexOf('const dragPreview'), hole.indexOf('const holeCamera'));
+  assert.doesNotMatch(call, /phone:|fixQuality|acceptFix/);
   assert.match(hole, /planPlaceToDragPreview/);
 });
 

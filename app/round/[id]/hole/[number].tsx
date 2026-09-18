@@ -352,7 +352,6 @@ export default function HoleScreen() {
     from: placeFrom,
     drag: placeToDraft,
     green,
-    phone: fix,
   });
   const holeCamera = lockHoleCamera({
     tee: resolveHoleTee({

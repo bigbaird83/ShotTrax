@@ -36,6 +36,10 @@ export function dragPreviewRunsAcceptFix(): false {
   return false;
 }
 
+export function dragPreviewUsesPhoneFixGate(): false {
+  return false;
+}
+
 export function dragPreviewInventsGreen(): false {
   return false;
 }
