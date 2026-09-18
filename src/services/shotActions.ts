@@ -26,7 +26,7 @@ import { preferWatchFix } from '../domain/preferWatchFix';
 import { isPutterClubId } from '../domain/defaultBag';
 import type { LatLng } from '../domain/latLng';
 import { planChangeShotClub, planMoveShotPin, type ShotEditSnapshot } from '../domain/shotEdit';
-import { homeClubTapRunsAcceptFix, planClubTapStart } from '../domain/homeClubTap';
+import { homeClubTapRunsAcceptFix, planClubTapAfterChosenFix } from '../domain/homeClubTap';
 import { confirmPlacedShot, placedShotRunsAcceptFix, planPlacedShot } from '../domain/shotSource';
 import type { GpsFix, OpenShot, PenaltyReason } from '../domain/types';
 import { COPY } from '../domain/playerCopy';
@@ -141,8 +141,8 @@ export async function markShotWithClub(
     (hole.greenLat != null && hole.greenLng != null
       ? { lat: hole.greenLat, lng: hole.greenLng }
       : null);
-  const tap = planClubTapStart({
-    phone: { lat: fix.lat, lng: fix.lng },
+  const tap = planClubTapAfterChosenFix({
+    chosenFix: { lat: fix.lat, lng: fix.lng },
     tee: args.tee ?? null,
     holePin,
   });

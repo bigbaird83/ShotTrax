@@ -33,6 +33,32 @@ export function homeClubTapPaths(): readonly ['suggested', 'same_club', 'say_clu
   return ['suggested', 'same_club', 'say_club', 'watch'];
 }
 
+/** Prefer Watch vs phone first. The 600-yard check is on that chosen fix. */
+export function clubTapMeasuresChosenFix(): true {
+  return true;
+}
+
+/** On-course (≤ 600) still runs acceptFix 15 m good / 25 m soft. */
+export function clubTapSkipsOnCourseAccuracyGates(): false {
+  return false;
+}
+
+/**
+ * Measure the fix we were about to save — after Watch-vs-phone preference.
+ * Do not invent a coordinate. Do not skip on-course accuracy gates.
+ */
+export function planClubTapAfterChosenFix(args: {
+  chosenFix: LatLng | null | undefined;
+  tee: LatLng | null | undefined;
+  holePin?: LatLng | null;
+}): ClubTapStart | null {
+  return planClubTapStart({
+    phone: args.chosenFix,
+    tee: args.tee,
+    holePin: args.holePin,
+  });
+}
+
 export function phoneIsHomeFromTee(
   phone: LatLng | null | undefined,
   tee: LatLng | null | undefined,
