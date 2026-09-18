@@ -17,7 +17,7 @@ struct ClubListState {
   var selectedClubId: String? = nil
 
   var statusLine: String {
-    if yardsQuality != "none", let yards = yardsToGreen {
+    if yardsQuality != "none", let yards = yardsToGreen, yards > 0 {
       return "Hole \(holeNumber) · \(yards) yd"
     }
     return "Hole \(holeNumber) · —"

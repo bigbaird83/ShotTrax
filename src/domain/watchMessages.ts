@@ -151,7 +151,7 @@ export function parseClubList(raw: unknown): ClubListMessage | null {
     return null;
   }
   if (!isYardsQuality(row.yardsQuality)) return null;
-  if (row.yardsQuality === 'none') yardsToGreen = null;
+  if (row.yardsQuality === 'none' || yardsToGreen == null || yardsToGreen <= 0) yardsToGreen = null;
   const msg: ClubListMessage = {
     type: 'clubList',
     top3: row.top3 as string[],
@@ -290,7 +290,10 @@ export function clubListPayload(args: {
   selectedClubId?: ClubId | null;
 }): ClubListMessage {
   const yardsToGreen =
-    args.yardsQuality === 'none' || args.yardsToGreen == null
+    args.yardsQuality === 'none' ||
+    args.yardsToGreen == null ||
+    !Number.isFinite(args.yardsToGreen) ||
+    args.yardsToGreen <= 0
       ? null
       : Math.round(args.yardsToGreen);
   return {

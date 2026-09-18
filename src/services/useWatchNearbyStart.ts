@@ -2,12 +2,13 @@ import { useEffect, useRef } from 'react';
 import { useDb } from '@/src/db/DbProvider';
 import { getActiveRound } from '@/src/db/repo';
 import { startWatchClubBridge } from './watchClub';
-import { setWatchNearbyContext, pushWatchNearbyCourses } from './watchNearby';
+import { setWatchNearbyContext } from './watchNearby';
 import { useLiveFix } from './useLiveFix';
 
-/** Home / root: push nearby courses from the phone fix and open a Watch-started round. */
+/** Home / root: keep a phone-fix context. Do not push the nearby list until
+ * the Watch taps Select course. */
 export function useWatchNearbyStart(): void {
-  const { db, bump, revision } = useDb();
+  const { db, bump } = useDb();
   const fix = useLiveFix(true);
   const fixRef = useRef(fix);
   fixRef.current = fix;
@@ -26,18 +27,4 @@ export function useWatchNearbyStart(): void {
     });
     return () => setWatchNearbyContext(null);
   }, [db]);
-
-  const searchKeyRef = useRef('');
-
-  useEffect(() => {
-    searchKeyRef.current = '';
-  }, [revision]);
-
-  useEffect(() => {
-    if (getActiveRound(db)) return;
-    const key = fix ? `${fix.lat.toFixed(3)},${fix.lng.toFixed(3)}` : 'none';
-    if (key === searchKeyRef.current) return;
-    searchKeyRef.current = key;
-    void pushWatchNearbyCourses();
-  }, [db, revision, fix?.lat, fix?.lng]);
 }

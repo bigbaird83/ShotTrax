@@ -309,9 +309,29 @@ test('play header yards use the 600-yard check: couch is course, never 14,000', 
       },
     ],
   });
-  assert.equal(afterShotAtHouse.source, 'course');
-  assert.equal(afterShotAtHouse.yards, 371);
+  assert.equal(afterShotAtHouse.source, 'live');
+  assert.equal(afterShotAtHouse.yards, markToGreen(landing, holeGreen).yards);
   assert.notEqual(afterShotAtHouse.yards, Math.round(haversineYards(couch, holeGreen)));
+  assert.notEqual(afterShotAtHouse.yards, 0);
+
+  const farLanding = northOf(from, 14_000);
+  const overCap = planPlayHeaderYards({
+    phone: farLanding,
+    green: holeGreen,
+    tee,
+    courseYards: 371,
+    shots: [
+      {
+        seq: 1,
+        endLat: farLanding.lat,
+        endLng: farLanding.lng,
+        endedAt: '2026-09-18T11:00:00.000Z',
+        source: 'gps',
+        fixQuality: 'good',
+      },
+    ],
+  });
+  assert.deepEqual(overCap, { yards: null, source: 'none', quality: 'none' });
 
   assert.deepEqual(
     planPlayHeaderYards({
@@ -329,7 +349,7 @@ test('play header yards use the 600-yard check: couch is course, never 14,000', 
       tee,
       courseYards: 371,
     }),
-    { yards: 371, source: 'course', quality: 'good' },
+    { yards: null, source: 'none', quality: 'none' },
   );
 });
 

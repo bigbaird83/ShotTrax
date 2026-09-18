@@ -281,6 +281,7 @@ test('a live round opens that hole; a different round lives under Home', () => {
   const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
   assert.match(session, /var active: Bool = false/);
   assert.match(session, /var hasLiveHole/);
+  assert.match(session, /yards > 0/);
   assert.match(session, /var showsNearby/);
   assert.match(session, /nearbyFromHome/);
   assert.match(session, /dismissNearbyToHole/);
@@ -328,6 +329,10 @@ test('a live round opens that hole; a different round lives under Home', () => {
   assert.match(home, /setWatchCoursePickedHandler/);
   assert.match(home, /setPicked\(pick\.course\)/);
   assert.match(home, /setPickedDetail\(pick\.detail\)/);
+
+  const start = readFileSync(new URL('../services/useWatchNearbyStart.ts', import.meta.url), 'utf8');
+  assert.match(start, /setWatchNearbyContext/);
+  assert.doesNotMatch(start, /pushWatchNearbyCourses/);
 });
 
 test('Watch nearby UI is a short list — no search, bag, settings, or scoring', () => {
