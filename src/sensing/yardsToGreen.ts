@@ -1,7 +1,6 @@
 import { classifyAccuracyM } from '../domain/fixQuality';
 import { haversineYards, roundYards } from '../domain/haversine';
 import { isValidLatLng, type LatLng } from '../domain/latLng';
-import { displayableYardsToGreen } from '../domain/yardsToGreen';
 import type { GpsFix, ShotFixQuality } from '../domain/types';
 
 /**
@@ -10,8 +9,8 @@ import type { GpsFix, ShotFixQuality } from '../domain/types';
  * `quality` is `none` (and `yards` is null) when there is no usable fix or green —
  * ShotTraxx does not invent a pin or a range. Poor GPS (>25 m / unknown) matches
  * `acceptFix`: not auto-accepted, so quality is `none`.
- * Over 400 yards is not a shot distance (phone at home → course). Display — .
- * Saving a shot still uses the separate 400-yard confirm.
+ * Display (course card / 50-yard switch / 600 cap) is `planToGreenDisplay`.
+ * This function does not apply the 400-yard shot-save confirm.
  */
 export type YardsToGreenResult = {
   yards: number | null;
@@ -31,13 +30,8 @@ export function yardsToGreen(
     return { yards: null, quality: 'none' };
   }
 
-  const yards = displayableYardsToGreen(roundYards(haversineYards(fix, greenCentroid)));
-  if (yards == null) {
-    return { yards: null, quality: 'none' };
-  }
-
   return {
-    yards,
+    yards: roundYards(haversineYards(fix, greenCentroid)),
     quality: band,
   };
 }

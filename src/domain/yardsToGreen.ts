@@ -1,10 +1,23 @@
-import { MAX_SHOT_YD } from '../config/sensing';
-import type { ShotFixQuality } from './types';
+import { haversineYards, roundYards } from './haversine';
 import { isValidLatLng, type LatLng } from './latLng';
+import type { ShotFixQuality } from './types';
 
 export type GreenPinSource = 'user_estimate' | 'course_centroid';
 
 export type GreenPin = LatLng & { source: GreenPinSource };
+
+/** Live to-green may read up to this. Over it, keep the course tee yardage or —. */
+export const TO_GREEN_LIVE_MAX_YD = 600;
+/** After a mark, use mark-to-green only when it differs from the card by more than this. */
+export const TO_GREEN_COURSE_SWITCH_YD = 50;
+
+export type ToGreenSource = 'course' | 'live' | 'none';
+
+export type ToGreenDisplay = {
+  yards: number | null;
+  source: ToGreenSource;
+  quality: 'good' | 'soft' | 'none';
+};
 
 /**
  * Prefer a user-dropped/GPS estimate over a course centroid. Never invent.
@@ -23,16 +36,82 @@ export function resolveGreenPin(args: {
   return null;
 }
 
-/**
- * Yards-to-green over MAX_SHOT_YD (400) is not a shot distance — phone at home
- * to a course green. Display — . The 400-yard confirm on save is separate.
- */
-export function displayableYardsToGreen(yards: number | null | undefined): number | null {
-  if (yards == null || !Number.isFinite(yards) || yards > MAX_SHOT_YD) return null;
-  return yards;
+export function courseTeeYards(yards: number | null | undefined): number | null {
+  if (yards == null || !Number.isFinite(yards) || yards <= 0) return null;
+  return Math.round(yards);
 }
 
-/** Copy for `yardsToGreen(fix, greenCentroid) → { yards, quality }`. */
+/** Live GPS / mark-to-green. Quality none or over 600 → not shown. Not the 400-yard shot-save cap. */
+export function liveToGreenYards(
+  yards: number | null | undefined,
+  quality: string,
+): number | null {
+  if (quality === 'none') return null;
+  if (yards == null || !Number.isFinite(yards) || yards > TO_GREEN_LIVE_MAX_YD) return null;
+  return Math.round(yards);
+}
+
+/** Latest club mark on the hole (where they hit from). No coords → null, never invented. */
+export function lastClubMark(
+  shots: { seq: number; startLat: number | null; startLng: number | null }[],
+): LatLng | null {
+  const last = [...shots].sort((a, b) => a.seq - b.seq).at(-1);
+  if (!last) return null;
+  const mark = { lat: last.startLat ?? Number.NaN, lng: last.startLng ?? Number.NaN };
+  return isValidLatLng(mark) ? mark : null;
+}
+
+export function markToGreen(
+  mark: LatLng | null,
+  green: LatLng | null,
+): { yards: number | null; quality: ShotFixQuality } {
+  if (!isValidLatLng(mark) || !isValidLatLng(green)) {
+    return { yards: null, quality: 'none' };
+  }
+  return { yards: roundYards(haversineYards(mark, green)), quality: 'good' };
+}
+
+/**
+ * To-green number for the hole header and picker remaining-yards line.
+ *
+ * Before any shot: course tee yardage (the card). Not the phone-to-green fix —
+ * that is why home showed 14,167.
+ * After a mark: mark-to-green only when it is more than 50 yards off the card.
+ * Live may show up to 600. Over 600, keep the course number or —.
+ * No course + live ≤ 600 → live. No green → —. Quality none → no live number.
+ * The 400-yard shot-save confirm is a different gate and stays unchanged.
+ */
+export function planToGreenDisplay(args: {
+  courseYards: number | null;
+  liveYards: number | null;
+  liveQuality: string;
+  shotCount: number;
+  hasGreen: boolean;
+}): ToGreenDisplay {
+  if (!args.hasGreen) return { yards: null, source: 'none', quality: 'none' };
+
+  const course = courseTeeYards(args.courseYards);
+  const live = liveToGreenYards(args.liveYards, args.liveQuality);
+  const liveQuality = args.liveQuality === 'soft' ? 'soft' : 'good';
+
+  if (args.shotCount <= 0) {
+    if (course != null) return { yards: course, source: 'course', quality: 'good' };
+    if (live != null) return { yards: live, source: 'live', quality: liveQuality };
+    return { yards: null, source: 'none', quality: 'none' };
+  }
+
+  if (live != null && course != null) {
+    if (Math.abs(live - course) > TO_GREEN_COURSE_SWITCH_YD) {
+      return { yards: live, source: 'live', quality: liveQuality };
+    }
+    return { yards: course, source: 'course', quality: 'good' };
+  }
+  if (live != null) return { yards: live, source: 'live', quality: liveQuality };
+  if (course != null) return { yards: course, source: 'course', quality: 'good' };
+  return { yards: null, source: 'none', quality: 'none' };
+}
+
+/** Copy for a planned to-green result. Never invents a number. */
 export function yardsToGreenLabel(
   result: { yards: number | null; quality: ShotFixQuality },
   ctx: { hasFix?: boolean; hasGreen?: boolean } = {},
@@ -42,11 +121,10 @@ export function yardsToGreenLabel(
   detail: string;
 } {
   const heading = 'yards to green';
-  const yards = result.quality !== 'none' ? displayableYardsToGreen(result.yards) : null;
-  if (yards != null) {
+  if (result.quality !== 'none' && result.yards != null && Number.isFinite(result.yards)) {
     return {
       heading,
-      value: `${yards} yd`,
+      value: `${result.yards} yd`,
       detail: 'to green',
     };
   }
@@ -55,4 +133,22 @@ export function yardsToGreenLabel(
   else if (!ctx.hasFix) detail = 'Waiting on your location.';
   else detail = 'Waiting on green location.';
   return { heading, value: '—', detail };
+}
+
+export function toGreenDisplayFromHole(args: {
+  courseYards: number | null;
+  green: LatLng | null;
+  shots: { seq: number; startLat: number | null; startLng: number | null }[];
+  phone: { yards: number | null; quality: string };
+}): ToGreenDisplay {
+  const hasGreen = isValidLatLng(args.green);
+  const marked = args.shots.length > 0;
+  const live = marked ? markToGreen(lastClubMark(args.shots), args.green) : args.phone;
+  return planToGreenDisplay({
+    courseYards: args.courseYards,
+    liveYards: live.yards,
+    liveQuality: live.quality,
+    shotCount: args.shots.length,
+    hasGreen,
+  });
 }

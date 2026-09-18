@@ -9,7 +9,6 @@
 
 import { isPutterClubId } from './defaultBag';
 import { isPuttLengthId, PUTT_LENGTHS, type PuttLengthId } from './putts';
-import { displayableYardsToGreen } from './yardsToGreen';
 
 export type ClubId = string;
 
@@ -113,7 +112,6 @@ export function parseClubList(raw: unknown): ClubListMessage | null {
   }
   if (!isYardsQuality(row.yardsQuality)) return null;
   if (row.yardsQuality === 'none') yardsToGreen = null;
-  else yardsToGreen = displayableYardsToGreen(yardsToGreen);
   const msg: ClubListMessage = {
     type: 'clubList',
     top3: row.top3 as string[],
@@ -230,8 +228,10 @@ export function clubListPayload(args: {
   yardsQuality: YardsQuality;
   lastClubId?: ClubId | null;
 }): ClubListMessage {
-  const shown = args.yardsQuality === 'none' ? null : displayableYardsToGreen(args.yardsToGreen);
-  const yardsToGreen = shown == null ? null : Math.round(shown);
+  const yardsToGreen =
+    args.yardsQuality === 'none' || args.yardsToGreen == null
+      ? null
+      : Math.round(args.yardsToGreen);
   return {
     type: 'clubList',
     top3: args.top3,

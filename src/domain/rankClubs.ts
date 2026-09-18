@@ -1,6 +1,5 @@
 import { isPutterClubId, typicalCarrySeedForClub } from './defaultBag';
 import type { Club, ShotFixQuality } from './types';
-import { displayableYardsToGreen } from './yardsToGreen';
 
 /** Live average replaces the typical-carry seed after this many closed shots. */
 export const MIN_CLOSED_SHOTS_FOR_RANK = 5;
@@ -93,12 +92,14 @@ export function resolveDistanceTarget(args: {
   toGreen: { yards: number | null; quality: ShotFixQuality };
   lastClosedYards: number | null;
 }): DistanceTarget | null {
-  const toGreenYards =
-    args.toGreen.quality !== 'none' ? displayableYardsToGreen(args.toGreen.yards) : null;
-  if (toGreenYards != null) {
+  if (
+    args.toGreen.quality !== 'none' &&
+    args.toGreen.yards != null &&
+    Number.isFinite(args.toGreen.yards)
+  ) {
     return {
       source: 'yards_to_green',
-      dYards: toGreenYards,
+      dYards: args.toGreen.yards,
     };
   }
   if (args.lastClosedYards != null && Number.isFinite(args.lastClosedYards)) {

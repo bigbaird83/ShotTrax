@@ -58,6 +58,7 @@ import { reconcileHoleScore, scoreMismatchMessage } from '@/src/domain/scoreReco
 import { resolveStickyClub, selectClubForMark } from '@/src/domain/stickyClub';
 import type { Club, PenaltyReason } from '@/src/domain/types';
 import { matchSpokenClub, speechContextualStrings } from '@/src/domain/voiceClub';
+import { toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
 import { yardsToGreen } from '@/src/sensing/api';
 import { describeGpsSource } from '@/src/services/location';
 import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, undoShotEdit } from '@/src/services/shotActions';
@@ -324,9 +325,19 @@ export default function HoleScreen() {
     ),
     depthYards: hole?.greenDepthYards ?? null,
   };
-  const yardsToGreenResult = yardsToGreen(fix, green);
+  const phoneToGreen = yardsToGreen(fix, green);
+  const toGreenDisplay = toGreenDisplayFromHole({
+    courseYards: hole?.yards ?? null,
+    green,
+    shots,
+    phone: phoneToGreen,
+  });
+  const yardsToGreenResult = {
+    yards: toGreenDisplay.yards,
+    quality: toGreenDisplay.quality,
+  };
   const fmb = hasApiFmb(pins) ? formatFmbRow(yardsToGreenDepth(fix, pins)) : null;
-  const toGreen = yardsToGreen(fix, green);
+  const toGreen = yardsToGreenResult;
   const target = resolveDistanceTarget({
     toGreen,
     lastClosedYards: lastClosedShotYards(shots),

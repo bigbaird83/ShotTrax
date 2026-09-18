@@ -60,21 +60,11 @@ test('yardsToGreen: same good/soft bands as acceptFix / shot marks', () => {
   });
 });
 
-test('yardsToGreen over MAX_SHOT_YD is not a shot distance — display none', () => {
+test('yardsToGreen remaining distance is not the 400-yard shot-save confirm', () => {
   const far = { lat: origin.lat + ((MAX_SHOT_YD + 80) * 0.9144) / 111_320, lng: origin.lng };
   const result = yardsToGreen(fixAt(origin.lat, origin.lng, 6), far);
-  assert.equal(result.quality, 'none');
-  assert.equal(result.yards, null);
-
-  const homeToCourse = { lat: origin.lat + (14167 * 0.9144) / 111_320, lng: origin.lng };
-  const home = yardsToGreen(fixAt(origin.lat, origin.lng, 6), homeToCourse);
-  assert.equal(home.quality, 'none');
-  assert.equal(home.yards, null);
-
-  const atCap = { lat: origin.lat + (MAX_SHOT_YD * 0.9144) / 111_320, lng: origin.lng };
-  const cap = yardsToGreen(fixAt(origin.lat, origin.lng, 6), atCap);
-  assert.equal(cap.quality, 'good');
-  assert.ok(cap.yards != null && cap.yards <= MAX_SHOT_YD);
+  assert.equal(result.quality, 'good');
+  assert.ok((result.yards ?? 0) > MAX_SHOT_YD);
 });
 
 test('top-3 D uses yardsToGreen only when quality !== none', () => {

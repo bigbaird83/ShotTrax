@@ -117,16 +117,10 @@ test('picker remaining yards are 148 left only when quality is good or soft', ()
   assert.equal(formatPickerLeftYards({ yards: 148, quality: 'none' }), '—');
   assert.equal(formatPickerLeftYards({ yards: 148, quality: 'forced' }), '—');
   assert.equal(formatPickerLeftYards({ yards: null, quality: 'good' }), '—');
-  assert.equal(formatPickerLeftYards({ yards: 400, quality: 'good' }), '400 left');
-  assert.equal(formatPickerLeftYards({ yards: 401, quality: 'good' }), '—');
-  assert.equal(formatPickerLeftYards({ yards: 14167, quality: 'good' }), '—');
-});
-
-test('yards to green over 400 shows — on the hole header', () => {
-  assert.equal(yardsToGreenPlayerLabel({ yards: 400, quality: 'good' }).value, '400');
-  assert.equal(yardsToGreenPlayerLabel({ yards: 401, quality: 'good' }).value, '—');
-  assert.equal(yardsToGreenPlayerLabel({ yards: 14167, quality: 'good' }).value, '—');
-  assert.equal(yardsToGreenPlayerLabel({ yards: 14167, quality: 'none' }).value, '—');
+  assert.equal(formatPickerLeftYards({ yards: 282, quality: 'good' }), '282 left');
+  assert.equal(formatPickerLeftYards({ yards: 401, quality: 'good' }), '401 left');
+  assert.equal(yardsToGreenPlayerLabel({ yards: 282, quality: 'good' }).value, '282');
+  assert.equal(yardsToGreenPlayerLabel({ yards: 401, quality: 'good' }).value, '401');
 });
 
 test('tee meta shows rating and slope in player voice when present', () => {
