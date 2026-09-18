@@ -36,7 +36,7 @@ import { lockHoleCamera, resolveHoleTee, shotPinsForHoleCamera, type LockedHoleC
 import { deleteShotPrompt } from '@/src/domain/deleteShot';
 import { planInsertSlots } from '@/src/domain/insertShot';
 import { confirmUndoIsLive, planConfirmUndo, type ConfirmUndoWindow } from '@/src/domain/confirmUndo';
-import { confirmPlaceToDraft, resolveAddShotFromPin } from '@/src/domain/placeToDrag';
+import { confirmPlaceToDraft, courseGreenCenterForLine, resolveAddShotFromPin } from '@/src/domain/placeToDrag';
 import { planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
 import { planPlayLayout } from '@/src/domain/playLayout';
 import { planPlacedShot } from '@/src/domain/shotSource';
@@ -432,6 +432,10 @@ export default function HoleScreen() {
     lastLanding: lastLandingMark(shots),
   });
   addShotFromRef.current = addShotFrom;
+  const courseGreen = courseGreenCenterForLine({
+    green,
+    source: hole?.greenSource ?? null,
+  });
   const insertSlots = planInsertSlots(shots);
   const playLayout = planPlayLayout();
   const playHeaderYards = planPlayHeaderYards({
@@ -956,10 +960,10 @@ export default function HoleScreen() {
           yardsToGreen={yardsToGreenResult}
           fmb={fmb}
           osmOverlay={osmOverlay}
-          placedFrom={
-            placeMode === 'edit-from' || placeMode === 'edit-to' ? placeFrom : addShotFrom ?? placeFrom
-          }
+          placedFrom={placeMode === 'edit-from' || placeMode === 'edit-to' ? placeFrom : addShotFrom}
           placedTo={placeToDraft ?? placeTo}
+          lineFrom={placeMode === 'edit-from' || placeMode === 'edit-to' ? placeFrom : addShotFrom}
+          lineGreen={courseGreen}
           freezePan={placeMode === 'to' || placeMode === 'edit-to'}
           onPlaceToDrag={
             placeMode === 'to' || placeMode === 'edit-to'

@@ -44,6 +44,10 @@ type Props = {
   onShotPress?: (shotId: string) => void;
   placedFrom?: { lat: number; lng: number } | null;
   placedTo?: { lat: number; lng: number } | null;
+  /** Tee or last landing. Never a house tap, phone, or puck. */
+  lineFrom?: { lat: number; lng: number } | null;
+  /** Course green center only. Never a tree pin or puck. */
+  lineGreen?: { lat: number; lng: number } | null;
   onPlaceToDrag?: (coord: { lat: number; lng: number }) => void;
   /** To pin is live: one finger moves the pin. Two fingers pan and pinch. */
   freezePan?: boolean;
@@ -134,6 +138,8 @@ function NativeHoleMap({
   onShotPress,
   placedFrom,
   placedTo,
+  lineFrom,
+  lineGreen,
   onPlaceToDrag,
   freezePan,
   placeHint,
@@ -242,13 +248,13 @@ function NativeHoleMap({
   }, [lockedPoints, lockFrame, coords]);
 
   const dragLines = useMemo(() => {
-    if (!onPlaceToDrag || !placedFrom || !placedTo) return { shot: null, toGreen: null };
+    if (!onPlaceToDrag || !placedTo) return { shot: null, toGreen: null };
     return planDragShotLines({
-      from: placedFrom,
+      from: lineFrom ?? null,
       drag: placedTo,
-      green,
+      green: lineGreen ?? null,
     });
-  }, [onPlaceToDrag, placedFrom, placedTo, green]);
+  }, [onPlaceToDrag, lineFrom, lineGreen, placedTo]);
 
   const lockedCameraRef = useRef(holeUpCamera);
   lockedCameraRef.current = holeUpCamera;
@@ -476,9 +482,9 @@ function NativeHoleMap({
             onPress={() => onShotPress?.(shot.id)}
           />
         ))}
-        {placedFrom ? (
+        {(lineFrom ?? (onPlaceToDrag ? null : placedFrom)) ? (
           <Marker
-            coordinate={toCoord(placedFrom.lat, placedFrom.lng)}
+            coordinate={toCoord((lineFrom ?? placedFrom)!.lat, (lineFrom ?? placedFrom)!.lng)}
             pinColor="tomato"
             tappable={false}
             tracksViewChanges={false}
@@ -503,9 +509,9 @@ function NativeHoleMap({
             }}
           />
         ) : null}
-        {green ? (
+        {(lineGreen ?? (onPlaceToDrag ? null : green)) ? (
           <Marker
-            coordinate={toCoord(green.lat, green.lng)}
+            coordinate={toCoord((lineGreen ?? green)!.lat, (lineGreen ?? green)!.lng)}
             pinColor="green"
             tappable={false}
             tracksViewChanges={false}
