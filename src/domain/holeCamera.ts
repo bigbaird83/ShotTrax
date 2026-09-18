@@ -219,11 +219,16 @@ export function planHoleCamera(args: {
   };
 }
 
+/** A single green pin is not an opening frame. That is the tight-on-trees miss. */
+export function openingCameraRequiresTeeAndGreen(): true {
+  return true;
+}
+
 /**
  * Locked camera for every hole map. Center, span, and heading come from the
- * hole only (tee + green, else shot pins, else the green). A home-scale phone
- * fix or an on-course fix must not change any of those. Never invents a point
- * from the phone. Tee at the bottom, green at the top, even from home.
+ * hole only (tee + green). A lone green pin is not framed. A home-scale phone
+ * fix must not change any of those. Never invents a point from the phone.
+ * Tee at the bottom, green at the top, even from home.
  */
 export function lockHoleCamera(args: {
   tee: LatLng | null;
@@ -249,7 +254,7 @@ export function lockHoleCamera(args: {
 
 /**
  * Tee + green wins. If the green drops out, keep that last hole-up frame.
- * Never replace it with the phone / house.
+ * A lone green pin is not an opening camera. Never the phone / house.
  */
 export function keepLastGoodHoleCamera(
   next: LockedHoleCamera | null | undefined,
@@ -257,6 +262,7 @@ export function keepLastGoodHoleCamera(
 ): LockedHoleCamera | null {
   if (next?.mode === 'tee_green' && next.heading != null) return next;
   if (previous?.mode === 'tee_green' && previous.heading != null) return previous;
+  if (next?.mode === 'green') return null;
   return next ?? previous ?? null;
 }
 

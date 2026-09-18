@@ -27,6 +27,7 @@ import {
   lockHoleCamera,
   missingGreenCentersOnPhone,
   nerdOutTrailUsesLockFrame,
+  openingCameraRequiresTeeAndGreen,
   openingHoleRegionContainsTeeAndGreen,
   planHoleCamera,
   regionIsHoleFrame,
@@ -186,13 +187,8 @@ test('missing tee or green does not invent a camera point from the phone', () =>
     shotPins: [],
     phone: home,
   });
-  assert.deepEqual(greenOnly, {
-    mode: 'green',
-    points: [greenNorth],
-    heading: null,
-    center: greenNorth,
-    spanYards: 0,
-  });
+  assert.equal(greenOnly, null);
+  assert.equal(openingCameraRequiresTeeAndGreen(), true);
 
   assert.equal(
     lockHoleCamera({ tee: null, green: null, shotPins: [], phone: home }),
@@ -273,10 +269,30 @@ test('null map ref does not stick framed; home GPS stays out; hole tee still fra
   );
 });
 
+test('opening region contains tee and green; heading is tee-to-green, not device heading', () => {
+  const deviceHeading = 274;
+  const home = { lat: 40.7128, lng: -74.006 };
+  const locked = lockHoleCamera({ tee, green: greenEast, shotPins: [], phone: home });
+  assert.ok(locked);
+  assert.equal(locked.mode, 'tee_green');
+  assert.equal(locked.heading, holeCameraHeading(tee, greenEast));
+  assert.notEqual(locked.heading, deviceHeading);
+  assert.notEqual(locked.heading, holeCameraHeading(home, greenEast));
+  assert.equal(holeCameraUsesDeviceHeading(), false);
+  assert.equal(openingCameraRequiresTeeAndGreen(), true);
+  const region = holeFrameRegion(locked.points);
+  assert.equal(openingHoleRegionContainsTeeAndGreen(region, tee, greenEast), true);
+  assert.equal(openingHoleRegionContainsTeeAndGreen(region, home, greenEast), false);
+  assert.notEqual(locked.center.lat, home.lat);
+  assert.equal(addShotPlaceHintShowsOnMap(), true);
+  assert.equal(addShotPlaceHintShowsAsFooter(), false);
+});
+
 test('opening camera puts tee below green and fits both, not sideways', () => {
   assert.equal(holeCameraLeavesAloneAfterOpen(), true);
   assert.equal(holeCameraReframesOnGps(), false);
   assert.equal(holeCameraReframesOnPinDrag(), false);
+  assert.equal(openingCameraRequiresTeeAndGreen(), true);
 
   for (const green of [greenNorth, greenSouth, greenEast, greenWest]) {
     const locked = lockHoleCamera({ tee, green, shotPins: [] });
