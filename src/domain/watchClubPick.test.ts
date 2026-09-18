@@ -32,6 +32,13 @@ import {
   watchTop3NumberIsYardsLeft,
   watchFirstSuggestedIsThePick,
   watchSuggestedPillsLookTheSame,
+  watchTop3IsSidewaysStrip,
+  watchStackedSuggestionRows,
+  watchStripSwipeLeftIsShorter,
+  watchStripSwipeRightIsLonger,
+  watchAllClubsExtendsStrip,
+  planWatchClubStrip,
+  watchCarryFromLabel,
   formatWatchSameClub,
   watchTop3MatchesPhone,
   watchTop3RequiresScroll,
@@ -76,16 +83,19 @@ test('Watch opens on the same top 3 as the phone; no scroll to hit one', () => {
   assert.match(pick, /Text\("Home"\)/);
   assert.match(pick, /\.buttonStyle\(\.plain\)/);
   assert.match(pick, /session\.list\.statusLine/);
-  assert.match(pick, /session\.list\.top3/);
-  assert.match(pick, /session\.list\.label\(for: clubId\)/);
+  assert.match(pick, /TabView/);
+  assert.match(pick, /\.tabViewStyle\(\.page\)/);
+  assert.match(pick, /stripClubs/);
+  assert.match(pick, /session\.list\.label\(for: club\.id\)/);
   assert.match(pick, /pickSameClub/);
   assert.match(pick, /sameClubTitle/);
   assert.match(pick, /Text\("All clubs"\)/);
   const headerAt = pick.indexOf('session.list.statusLine');
-  const top3At = pick.indexOf('session.list.top3');
+  const stripAt = pick.indexOf('TabView');
   const sameAt = pick.indexOf('pickSameClub');
   const allClubsAt = pick.indexOf('Text("All clubs")');
-  assert.ok(headerAt >= 0 && top3At > headerAt && sameAt > top3At && allClubsAt > sameAt);
+  assert.ok(headerAt >= 0 && stripAt > headerAt && sameAt > stripAt && allClubsAt > sameAt);
+  assert.doesNotMatch(pick, /top3\.enumerated\(\)/);
   const sameClub = pick.slice(sameAt, allClubsAt);
   assert.match(sameClub, /Color\("cream"\)/);
   assert.doesNotMatch(sameClub, /Color\.black|borderedProminent/);
@@ -107,11 +117,18 @@ test('Watch opens on the same top 3 as the phone; no scroll to hit one', () => {
   assert.doesNotMatch(clubPush, /formatPickerLeftYards/);
 });
 
-test('Watch suggested rows show that club\'s carry; the first row is the pick', () => {
+test('Watch suggested strip shows carry, opens on the pick, and is not stacked rows', () => {
   assert.equal(watchTop3NumberIsCarry(), true);
   assert.equal(watchTop3NumberIsYardsLeft(), false);
   assert.equal(watchFirstSuggestedIsThePick(), true);
   assert.equal(watchSuggestedPillsLookTheSame(), false);
+  assert.equal(watchTop3IsSidewaysStrip(), true);
+  assert.equal(watchStackedSuggestionRows(), false);
+  assert.equal(watchStripSwipeLeftIsShorter(), true);
+  assert.equal(watchStripSwipeRightIsLonger(), true);
+  assert.equal(watchAllClubsExtendsStrip(), false);
+  assert.equal(watchCarryFromLabel('6i · 185'), 185);
+  assert.equal(watchCarryFromLabel('6i · —'), null);
   assert.equal(formatSuggestedClubChip('5i', 205), '5i · 205');
   assert.equal(formatSuggestedClubChip('6i', 185), '6i · 185');
   assert.notEqual(formatSuggestedClubChip('5i', 205), formatPickerLeftYards({ yards: 164, quality: 'good' }));
@@ -158,17 +175,47 @@ test('Watch suggested rows show that club\'s carry; the first row is the pick', 
   assert.ok(!ranked.some((club) => club.id === PUTTER_CLUB_ID));
   assert.equal(watchPutterInTop3(), false);
 
-  const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
-  const rows = watchUi.slice(
-    watchUi.indexOf('session.list.top3.enumerated()'),
-    watchUi.indexOf('pickSameClub'),
+  const strip = planWatchClubStrip({
+    top3: ranked.map((club) => club.id),
+    labels: {
+      club_5i: formatSuggestedClubChip('5i', 205),
+      club_6i: formatSuggestedClubChip('6i', 185),
+      club_7i: formatSuggestedClubChip('7i', 165),
+    },
+  });
+  assert.deepEqual(strip.ids, ['club_5i', 'club_6i', 'club_7i']);
+  assert.equal(strip.openIndex, 1);
+  assert.equal(strip.ids[strip.openIndex], 'club_6i');
+  assert.ok((watchCarryFromLabel('5i · 205') ?? 0) > (watchCarryFromLabel('6i · 185') ?? 0));
+  assert.ok((watchCarryFromLabel('7i · 165') ?? 0) < (watchCarryFromLabel('6i · 185') ?? 0));
+  assert.deepEqual(
+    planWatchClubStrip({
+      top3: [PUTTER_CLUB_ID, 'club_6i', 'club_5i', 'club_7i'],
+      labels: {
+        club_putter: 'Pt · 8',
+        club_5i: '5i · 205',
+        club_6i: '6i · 185',
+        club_7i: '7i · 165',
+      },
+    }).ids.includes(PUTTER_CLUB_ID),
+    false,
   );
-  assert.match(rows, /index == 0 \? 16 : 13/);
-  assert.match(rows, /index == 0 \? \.black : \.heavy/);
-  assert.match(rows, /index == 0 \? Color\("accent"\) : Color\("cream"\)/);
-  assert.match(rows, /index == 0 \? 28 : 24/);
-  assert.match(rows, /session\.list\.label\(for: clubId\)/);
-  assert.doesNotMatch(rows, /statusLine|yardsToGreen|left/);
+
+  const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  const stripUi = watchUi.slice(watchUi.indexOf('TabView'), watchUi.indexOf('pickSameClub'));
+  assert.match(stripUi, /\.tabViewStyle\(\.page\)/);
+  assert.match(stripUi, /openStripOnPick/);
+  assert.match(stripUi, /stripPickId/);
+  assert.match(stripUi, /session\.pick\(clubId: club\.id\)/);
+  assert.match(stripUi, /session\.list\.label\(for: club\.id\)/);
+  assert.doesNotMatch(stripUi, /top3\.enumerated\(\)|minHeight: index == 0/);
+  assert.doesNotMatch(stripUi, /yardsToGreen|left/);
+  assert.match(watchUi, /sorted \{ \$0\.carry > \$1\.carry \}/);
+  assert.match(watchUi, /openStripOnPick\(\)/);
+
+  const phonePick = readFileSync(new URL('../../app/round/[id]/club-pick.tsx', import.meta.url), 'utf8');
+  assert.match(phonePick, /styles\.top3/);
+  assert.doesNotMatch(phonePick, /TabView|tabViewStyle/);
 
   const rankSrc = readFileSync(new URL('./rankClubs.ts', import.meta.url), 'utf8');
   assert.match(rankSrc, /lowest \|rank yards − D\|/);
@@ -267,10 +314,11 @@ test('a bag club under All clubs marks with the same rules as a top-3 tap', () =
   assert.equal(planWatchClubTap({ action: 'home' }).marks, false);
 
   const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
-  const top3Btn = watchUi.slice(watchUi.indexOf('session.list.top3.enumerated()'), watchUi.indexOf('Text("All clubs")'));
+  const top3Btn = watchUi.slice(watchUi.indexOf('TabView'), watchUi.indexOf('Text("All clubs")'));
   const bagBtn = watchUi.slice(watchUi.indexOf('ForEach(moreClubs'), watchUi.indexOf('private var moreClubs'));
-  assert.match(top3Btn, /session\.pick\(clubId: clubId\)/);
+  assert.match(top3Btn, /session\.pick\(clubId: club\.id\)/);
   assert.match(bagBtn, /session\.pick\(clubId: clubId\)/);
+  assert.doesNotMatch(top3Btn, /moreClubs/);
   assert.doesNotMatch(bagBtn, /leave\(|clubNav/);
 
   const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');

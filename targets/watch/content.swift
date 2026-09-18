@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
   @EnvironmentObject private var session: WatchClubSession
   @State private var showAllClubs = false
+  @State private var stripPage = ""
 
   private let buckets: [(id: String, label: String)] = [
     ("inside_3", "Under 3 ft"),
@@ -171,18 +172,25 @@ struct ContentView: View {
           .lineLimit(1)
       }
 
-      ForEach(Array(session.list.top3.enumerated()), id: \.element) { index, clubId in
-        Button(action: { session.pick(clubId: clubId) }) { // same pick as bag — marks the shot
-          Text(session.list.label(for: clubId))
-            .font(.system(size: index == 0 ? 16 : 13, weight: index == 0 ? .black : .heavy))
-            .foregroundStyle(index == 0 ? Color("accent") : Color("cream"))
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(minHeight: index == 0 ? 28 : 24)
+      TabView(selection: $stripPage) {
+        ForEach(Array(stripClubs.enumerated()), id: \.element.id) { _, club in
+          Button(action: { session.pick(clubId: club.id) }) { // same pick as bag — marks the shot
+            Text(session.list.label(for: club.id))
+              .font(.system(size: 16, weight: .black))
+              .foregroundStyle(club.id == stripPickId ? Color("accent") : Color("cream"))
+              .frame(maxWidth: .infinity)
+              .frame(minHeight: 36)
+          }
+          .buttonStyle(.bordered)
+          .tint(club.id == stripPickId ? Color("accent") : Color("cream"))
+          .disabled(session.sending)
+          .tag(club.id)
         }
-        .buttonStyle(.bordered)
-        .tint(index == 0 ? Color("accent") : Color("cream"))
-        .disabled(session.sending)
       }
+      .tabViewStyle(.page)
+      .frame(height: 48)
+      .onAppear { openStripOnPick() }
+      .onChange(of: session.list.top3.joined(separator: ",")) { _ in openStripOnPick() }
 
       Button(action: { session.pickSameClub() }) {
         Text(sameClubTitle)
@@ -237,6 +245,27 @@ struct ContentView: View {
 
   private var moreClubs: [String] {
     session.list.bag.filter { !session.list.top3.contains($0) }
+  }
+
+  private var stripPickId: String? {
+    session.list.top3.first { $0 != "club_putter" }
+  }
+
+  private var stripClubs: [(id: String, carry: Int)] {
+    session.list.top3
+      .filter { $0 != "club_putter" }
+      .map { id in (id: id, carry: carryFromLabel(session.list.label(for: id))) }
+      .sorted { $0.carry > $1.carry }
+  }
+
+  private func carryFromLabel(_ label: String) -> Int {
+    let parts = label.components(separatedBy: " · ")
+    if parts.count > 1, let yards = Int(parts[1]) { return yards }
+    return 0
+  }
+
+  private func openStripOnPick() {
+    stripPage = stripPickId ?? stripClubs.first?.id ?? ""
   }
 }
 

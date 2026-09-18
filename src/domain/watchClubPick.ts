@@ -70,13 +70,59 @@ export function watchTop3NumberIsYardsLeft(): false {
   return false;
 }
 
-/** First row is the closest carry to the hole yards — it reads as the pick. */
+/** The strip opens on the closest carry to the hole yards — that pill is the pick. */
 export function watchFirstSuggestedIsThePick(): true {
   return true;
 }
 
 export function watchSuggestedPillsLookTheSame(): false {
   return false;
+}
+
+export function watchTop3IsSidewaysStrip(): true {
+  return true;
+}
+
+export function watchStackedSuggestionRows(): false {
+  return false;
+}
+
+/** Swipe left shows a shorter club. Swipe right shows a longer club. */
+export function watchStripSwipeLeftIsShorter(): true {
+  return true;
+}
+
+export function watchStripSwipeRightIsLonger(): true {
+  return true;
+}
+
+export function watchAllClubsExtendsStrip(): false {
+  return false;
+}
+
+export function watchCarryFromLabel(label: string): number | null {
+  const raw = label.split(' · ')[1]?.trim();
+  if (!raw || raw === '—') return null;
+  const yards = Number(raw);
+  return Number.isFinite(yards) ? yards : null;
+}
+
+/**
+ * Sideways strip of the same top 3 the phone ranked. Longer clubs sit to
+ * the left so a left swipe is shorter and a right swipe is longer.
+ * `openIndex` is the closest carry (the pick). Putter never enters.
+ */
+export function planWatchClubStrip(args: {
+  top3: string[];
+  labels: Record<string, string>;
+}): { ids: string[]; openIndex: number } {
+  const ranked = watchClubListTop3(args.top3);
+  const pick = ranked[0] ?? null;
+  const ordered = ranked
+    .map((id) => ({ id, carry: watchCarryFromLabel(args.labels[id] ?? '') }))
+    .sort((a, b) => (b.carry ?? Number.NEGATIVE_INFINITY) - (a.carry ?? Number.NEGATIVE_INFINITY));
+  const openIndex = pick ? Math.max(0, ordered.findIndex((club) => club.id === pick)) : 0;
+  return { ids: ordered.map((club) => club.id), openIndex };
 }
 
 /** Same club · 2i — club name only. Top-3 rows keep their yards. */
