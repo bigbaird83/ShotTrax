@@ -24,6 +24,7 @@ type Props = {
   framePoints?: { latitude: number; longitude: number }[] | null;
   lockFrame?: boolean;
   heading?: number | null;
+  frameEpoch?: string;
 };
 
 export function HoleMap({ holeNumber, userFix, green, yardsToGreen, placeHint }: Props) {

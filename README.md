@@ -192,7 +192,7 @@ Use **Add shot** when you went back to a hole (or forgot a swing) and want to lo
 | `typed_yards` | always `NULL` — no typed-yards form |
 | `ended_at` | set immediately (closed stroke) |
 
-**Never `acceptFix`.** Placed shots have **no** GPS quality. The **400-yard** cap still asks (**That looks too far. Mark anyway?**) before a silent save; confirming still stores `placed` with no quality. Pins are the spots they tap, never the phone GPS fix. The add-shot map frames tee → green (or shot pins, or the green), pinch-zoom stays on, and the camera never recenters on the phone.
+**Never `acceptFix`.** Placed shots have **no** GPS quality. The **400-yard** cap still asks (**That looks too far. Mark anyway?**) before a silent save; confirming still stores `placed` with no quality. Pins are the spots they tap, never the phone GPS fix. The add-shot map frames tee → green (or shot pins, or the green), tee at the bottom and green at the top. Phone GPS does not enter camera bounds, heading, or center — at home or on the course. Pinch-zoom stays on and does not snap back to the phone. The user dot may render off-screen. If tee or green is missing, do not rotate and do not invent a point from the phone.
 
 **Insert / append:** **+** between logged shots and after the last uses this same flow. Sequence numbers stay correct. Neighbors keep their pins.
 

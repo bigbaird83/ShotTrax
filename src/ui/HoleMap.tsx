@@ -6,7 +6,8 @@ import { featuresForHole } from '@/src/course/osmOverlay';
 import { COPY } from '@/src/domain/playerCopy';
 import type { GpsFix, Shot } from '@/src/domain/types';
 import type { YardsToGreenResult } from '@/src/sensing/yardsToGreen';
-import { holeNativeCamera } from '@/src/domain/holeCamera';
+import { holeFrameRegion, holeNativeCamera } from '@/src/domain/holeCamera';
+import { isValidLatLng } from '@/src/domain/latLng';
 import { hasClosedGpsTrail, hasGpsStart } from '@/src/domain/shotSource';
 import { FmbRow } from './FmbRow';
 import { YardsToGreenBadge } from './YardsToGreenBadge';
@@ -35,6 +36,8 @@ type Props = {
   lockFrame?: boolean;
   /** Tee-to-green camera heading. Null = do not rotate. Does not rewrite pins. */
   heading?: number | null;
+  /** Changes when Add shot takes the screen so the hole is framed again. */
+  frameEpoch?: string;
 };
 
 class MapGuard extends Component<{ children: ReactNode; fallback: ReactNode }, { failed: boolean }> {
@@ -110,10 +113,11 @@ function NativeHoleMap({
   framePoints,
   lockFrame,
   heading,
+  frameEpoch,
 }: Props) {
   const mapRef = useRef<MapView | null>(null);
   const framedOnce = useRef(false);
-  const pendingHeading = useRef<number | null>(null);
+  const pendingLocked = useRef(false);
 
   const closed = useMemo(() => shots.filter(hasClosedGpsTrail), [shots]);
   const osmFeatures = useMemo(
@@ -131,7 +135,6 @@ function NativeHoleMap({
       }
     }
     if (green) out.push(toCoord(green.lat, green.lng));
-    if (!lockFrame && userFix) out.push(toCoord(userFix.lat, userFix.lng));
     if (placedFrom) out.push(toCoord(placedFrom.lat, placedFrom.lng));
     if (placedTo) out.push(toCoord(placedTo.lat, placedTo.lng));
     for (const feature of osmFeatures) {
@@ -140,79 +143,84 @@ function NativeHoleMap({
       }
     }
     return out;
-  }, [shots, green, userFix, osmFeatures, placedFrom, placedTo, lockFrame]);
+  }, [shots, green, osmFeatures, placedFrom, placedTo]);
 
-  const region = useMemo(() => {
-    const framed = lockFrame && framePoints && framePoints.length > 0 ? framePoints[0] : null;
-    const c = framed ?? coords[0] ?? (lockFrame ? null : userFix ? toCoord(userFix.lat, userFix.lng) : null);
-    if (!c) return null;
+  const lockedPoints = useMemo(() => {
+    if (!lockFrame || !framePoints || framePoints.length === 0) return [];
+    return framePoints
+      .map((point) => ({ lat: point.latitude, lng: point.longitude }))
+      .filter((point) => isValidLatLng(point));
+  }, [lockFrame, framePoints]);
+
+  const holeUpCamera = useMemo(() => {
+    if (heading == null || !Number.isFinite(heading) || lockedPoints.length === 0) return null;
+    return holeNativeCamera(lockedPoints, heading);
+  }, [lockedPoints, heading]);
+
+  const lockedRegion = useMemo(() => {
+    if (lockedPoints.length > 0) return holeFrameRegion(lockedPoints);
+    if (lockFrame) {
+      return coords.length > 0
+        ? holeFrameRegion(coords.map((point) => ({ lat: point.latitude, lng: point.longitude })))
+        : null;
+    }
+    const fallback =
+      coords[0] ?? (userFix && isValidLatLng(userFix) ? toCoord(userFix.lat, userFix.lng) : null);
+    if (!fallback) return null;
     return {
-      latitude: c.latitude,
-      longitude: c.longitude,
+      latitude: fallback.latitude,
+      longitude: fallback.longitude,
       latitudeDelta: 0.004,
       longitudeDelta: 0.004,
     };
-  }, [coords, userFix, lockFrame, framePoints]);
+  }, [lockedPoints, lockFrame, coords, userFix]);
 
-  const holeUpCamera = useMemo(() => {
-    if (heading == null || !Number.isFinite(heading)) return null;
-    const points = framePoints && framePoints.length > 0 ? framePoints : coords;
-    if (points.length === 0) return null;
-    return holeNativeCamera(
-      points.map((point) => ({ lat: point.latitude, lng: point.longitude })),
-      heading,
-    );
-  }, [coords, framePoints, heading]);
+  const lockedCameraRef = useRef(holeUpCamera);
+  lockedCameraRef.current = holeUpCamera;
+  const lockedRegionRef = useRef(lockedRegion);
+  lockedRegionRef.current = lockedRegion;
 
   const lockKey = lockFrame
-    ? `${(framePoints ?? []).map((point) => `${point.latitude},${point.longitude}`).join('|')}|h:${heading ?? 'none'}`
+    ? `${(framePoints ?? []).map((point) => `${point.latitude},${point.longitude}`).join('|')}|h:${heading ?? 'none'}|e:${frameEpoch ?? ''}`
     : '';
 
-  const applyHoleHeading = (degrees: number) => {
-    mapRef.current?.setCamera({ heading: degrees, pitch: 0 });
+  const applyLockedCamera = () => {
+    const camera = lockedCameraRef.current;
+    const region = lockedRegionRef.current;
+    if (camera) {
+      mapRef.current?.setCamera(camera);
+      return true;
+    }
+    if (region) {
+      mapRef.current?.animateToRegion(region, 0);
+      return true;
+    }
+    return false;
   };
 
   const frameLockedMap = () => {
-    const padding = { edgePadding: { top: 88, right: 36, bottom: 56, left: 36 }, animated: false };
-    const points = framePoints && framePoints.length > 0 ? framePoints : coords;
-    if (points.length === 0) return false;
-    pendingHeading.current = heading != null && Number.isFinite(heading) ? heading : null;
-    if (holeUpCamera) {
-      mapRef.current?.setCamera(holeUpCamera);
-      return true;
-    }
-    if (points.length === 1) {
-      mapRef.current?.animateToRegion({
-        latitude: points[0].latitude,
-        longitude: points[0].longitude,
-        latitudeDelta: 0.004,
-        longitudeDelta: 0.004,
-      });
-    } else {
-      mapRef.current?.fitToCoordinates(points, padding);
-    }
-    return true;
+    if (lockedPoints.length === 0 && !lockedRegion) return false;
+    pendingLocked.current = true;
+    return applyLockedCamera();
   };
 
   useEffect(() => {
     framedOnce.current = false;
-    pendingHeading.current = heading != null && Number.isFinite(heading) ? heading : null;
-  }, [lockFrame, lockKey, heading]);
+    pendingLocked.current = true;
+  }, [lockFrame, lockKey, heading, frameEpoch]);
 
   useEffect(() => {
-    const padding = { edgePadding: { top: 72, right: 36, bottom: 48, left: 36 }, animated: !lockFrame };
     if (lockFrame) {
       if (framedOnce.current) return;
       if (frameLockedMap()) framedOnce.current = true;
       return;
     }
     if (coords.length < 2) return;
-    mapRef.current?.fitToCoordinates(coords, padding);
-    if (heading != null && Number.isFinite(heading)) {
-      pendingHeading.current = heading;
-      applyHoleHeading(heading);
-    }
-  }, [coords, framePoints, lockFrame, heading, holeUpCamera]);
+    mapRef.current?.fitToCoordinates(coords, {
+      edgePadding: { top: 72, right: 36, bottom: 48, left: 36 },
+      animated: true,
+    });
+  }, [coords, framePoints, lockFrame, heading, holeUpCamera, lockedRegion, frameEpoch]);
 
   const onMapLayout = (event: LayoutChangeEvent) => {
     if (!lockFrame) return;
@@ -223,13 +231,12 @@ function NativeHoleMap({
   };
 
   const onRegionSettled = () => {
-    const degrees = pendingHeading.current;
-    if (degrees == null) return;
-    pendingHeading.current = null;
-    applyHoleHeading(degrees);
+    if (!lockFrame || !pendingLocked.current) return;
+    pendingLocked.current = false;
+    applyLockedCamera();
   };
 
-  if (!region) {
+  if (!lockedRegion) {
     return (
       <TrailFallback
         holeNumber={holeNumber}
@@ -240,6 +247,11 @@ function NativeHoleMap({
     );
   }
 
+  const userDot =
+    userFix && isValidLatLng({ lat: userFix.lat, lng: userFix.lng })
+      ? toCoord(userFix.lat, userFix.lng)
+      : null;
+
   return (
     <View style={[fullBleed ? styles.bleed : styles.wrap, style]} onLayout={onMapLayout}>
       <MapView
@@ -248,8 +260,8 @@ function NativeHoleMap({
         mapType="satellite"
         {...(holeUpCamera
           ? { initialCamera: holeUpCamera }
-          : { initialRegion: region })}
-        showsUserLocation={Boolean(userFix)}
+          : { initialRegion: lockedRegion })}
+        showsUserLocation={!lockFrame && Boolean(userDot)}
         showsMyLocationButton={false}
         followsUserLocation={false}
         zoomEnabled
@@ -349,6 +361,16 @@ function NativeHoleMap({
             pinColor="green"
           />
         ) : null}
+        {lockFrame && userDot ? (
+          <Marker
+            coordinate={userDot}
+            anchor={{ x: 0.5, y: 0.5 }}
+            tappable={false}
+            tracksViewChanges={false}
+          >
+            <View pointerEvents="none" style={styles.userDot} />
+          </Marker>
+        ) : null}
       </MapView>
       {!placeHint ? (
         <View pointerEvents="none" style={styles.toGreen}>
@@ -439,4 +461,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   fallbackMsg: { color: colors.muted, fontSize: type.meta, lineHeight: 20 },
+  userDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#2F80FF',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+  },
 });

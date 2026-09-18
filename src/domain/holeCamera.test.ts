@@ -3,8 +3,11 @@ import { test } from 'node:test';
 import { haversineYards } from './haversine';
 import {
   holeCameraHeading,
+  holeCameraIncludesPhoneFix,
   holeCameraIsCameraOnly,
   holeCameraUsesPhoneHeading,
+  holeFrameRegion,
+  lockHoleCamera,
   planHoleCamera,
 } from './holeCamera';
 
@@ -98,4 +101,69 @@ test('planHoleCamera rotates only on the tee-to-green line', () => {
 
   const greenOnly = planHoleCamera({ tee: null, green: greenNorth, shotPins: [] });
   assert.deepEqual(greenOnly, { mode: 'green', points: [greenNorth], heading: null });
+});
+
+test('home-scale phone does not change camera center, span, or heading when tee and green exist', () => {
+  const home = { lat: 40.7128, lng: -74.006 }; // NYC — miles from the CA hole
+  const onCourse = { lat: 37.004, lng: -122.001 };
+  const base = lockHoleCamera({ tee, green: greenNorth, shotPins: [pin] });
+  const fromHome = lockHoleCamera({ tee, green: greenNorth, shotPins: [pin], phone: home });
+  const fromFairway = lockHoleCamera({
+    tee,
+    green: greenNorth,
+    shotPins: [pin],
+    phone: onCourse,
+  });
+
+  assert.ok(base);
+  assert.deepEqual(fromHome?.center, base?.center);
+  assert.equal(fromHome?.spanYards, base?.spanYards);
+  assert.equal(fromHome?.heading, base?.heading);
+  assert.deepEqual(fromFairway?.center, base?.center);
+  assert.equal(fromFairway?.spanYards, base?.spanYards);
+  assert.equal(fromFairway?.heading, base?.heading);
+
+  assert.ok(base);
+  assert.ok(Math.abs(base.center.lat - (tee.lat + greenNorth.lat) / 2) < 1e-12);
+  assert.equal(base.center.lng, tee.lng);
+  assert.equal(base?.heading, 0);
+  assert.ok((base?.spanYards ?? 0) > 1000);
+  assert.deepEqual(base?.points, [tee, greenNorth]);
+  assert.equal(
+    base?.points.some((point) => point.lat === home.lat && point.lng === home.lng),
+    false,
+  );
+  assert.notEqual(fromHome?.heading, holeCameraHeading(home, greenNorth));
+  assert.notEqual(fromHome?.center.lat, home.lat);
+  assert.notEqual(fromHome?.center.lng, home.lng);
+  assert.equal(holeCameraIncludesPhoneFix(), false);
+
+  const homeRegion = holeFrameRegion(fromHome?.points ?? []);
+  const baseRegion = holeFrameRegion(base?.points ?? []);
+  assert.deepEqual(homeRegion, baseRegion);
+  assert.ok(homeRegion);
+  assert.notEqual(homeRegion?.latitude, home.lat);
+  assert.notEqual(homeRegion?.longitude, home.lng);
+});
+
+test('missing tee or green does not invent a camera point from the phone', () => {
+  const home = { lat: 40.7128, lng: -74.006 };
+  const greenOnly = lockHoleCamera({
+    tee: null,
+    green: greenNorth,
+    shotPins: [],
+    phone: home,
+  });
+  assert.deepEqual(greenOnly, {
+    mode: 'green',
+    points: [greenNorth],
+    heading: null,
+    center: greenNorth,
+    spanYards: 0,
+  });
+
+  assert.equal(
+    lockHoleCamera({ tee: null, green: null, shotPins: [], phone: home }),
+    null,
+  );
 });
