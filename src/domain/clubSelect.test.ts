@@ -23,9 +23,9 @@ import {
   addShotShowsWaitingOnLocation,
   addShotShowsWaitingWithCardYards,
   holeFrameRegion,
-  lockHoleCamera,
   openingHoleRegionContainsTeeAndGreen,
   holeCameraHeading,
+  planCourseCardCamera,
 } from './holeCamera';
 import { parseClubSelect, parseWatchInboundIntent, clubSelectPayload, clubListPayload, clubListPushKey } from './watchMessages';
 
@@ -161,13 +161,13 @@ test("Add shot opening region contains tee and green and does not wait when 282 
   const tee = { lat: 37.0, lng: -122.0 };
   const green = { lat: 37.01, lng: -122.0 };
   const home = { lat: 40.7128, lng: -74.006 };
-  const camera = lockHoleCamera({ tee, green, shotPins: [], phone: null });
-  const fromHome = lockHoleCamera({ tee, green, shotPins: [], phone: home });
+  const camera = planCourseCardCamera({ tee, green, phone: null });
+  const fromHome = planCourseCardCamera({ tee, green, phone: home });
   assert.ok(camera);
-  assert.equal(camera.mode, 'tee_green');
+  assert.deepEqual(camera.points, [tee, green]);
   assert.equal(camera.heading, holeCameraHeading(tee, green));
   assert.notEqual(camera.heading, holeCameraHeading(home, green));
-  assert.deepEqual(camera.center, fromHome?.center);
+  assert.deepEqual(camera, fromHome);
   assert.deepEqual(addShotFramePoints({ tee, green, phone: null }), [tee, green]);
   assert.deepEqual(addShotFramePoints({ tee, green, phone: home }), [tee, green]);
   assert.equal(addShotFramePoints({ tee: null, green, phone: home }), null);
@@ -177,15 +177,19 @@ test("Add shot opening region contains tee and green and does not wait when 282 
   const playMap = hole.slice(hole.indexOf('<HoleMap'), hole.indexOf('onDropGreenEstimate'));
   assert.match(playMap, /lockFrame/);
   assert.match(playMap, /framePoints=/);
-  assert.match(playMap, /heading=\{holeCamera\?\.heading/);
+  assert.match(playMap, /heading=\{courseCamera\?\.heading/);
   assert.match(playMap, /showPhonePin=\{!catchUpFullScreen\}/);
   assert.match(playMap, /userFix=\{catchUpFullScreen \? null : fix\}/);
-  assert.match(playMap, /addShotPoints/);
+  assert.match(playMap, /courseCamera\?\.points/);
+  assert.doesNotMatch(playMap, /holeCamera\?\.points/);
   assert.match(playMap, /playHeaderYards\.yards/);
   assert.match(hole, /resolveOverlayTee/);
   assert.match(hole, /cachedOsmOverlay/);
   assert.match(hole, /cachedResolvedTee/);
   assert.match(hole, /rememberResolvedTee/);
+  assert.match(hole, /courseTeeFromHole/);
+  assert.match(hole, /resolvePlayHoleTee/);
+  assert.match(hole, /saveHoleTee/);
   assert.match(hole, /phone: null/);
   assert.doesNotMatch(playMap, /getCurrentFix/);
   assert.match(hole, /styles\.catchUpHint/);

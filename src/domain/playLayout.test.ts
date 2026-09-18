@@ -2,12 +2,21 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
+  addShotFramePoints,
   addShotPlaceHintShowsAsFooter,
   addShotPlaceHintShowsOnMap,
+  courseCardCameraFramesLonePin,
+  courseCardCameraUsesPhone,
+  courseCardCameraWaitsForPhoneFix,
+  holeCameraHeading,
   holeCameraLeavesAloneAfterOpen,
   holeCameraReframesOnGps,
   holeCameraReframesOnPinDrag,
+  holeCameraTeeBelowGreenOnScreen,
   holeCameraUsesDeviceHeading,
+  holeFrameRegion,
+  openingHoleRegionContainsTeeAndGreen,
+  planCourseCardCamera,
 } from './holeCamera';
 import {
   PLAY_DOCK_ACTIONS,
@@ -54,6 +63,11 @@ import {
   playScorecardWraps,
   playSameClubHiddenUntilShot,
   playMapMountsWhenYardsShown,
+  playRoundStartSecondCameraPath,
+  playRoundStartUsesAddShotFramePoints,
+  playUsesCourseCardCamera,
+  playEditUsesCourseCardCamera,
+  playAndAddShotShareCourseCardCamera,
 } from './playLayout';
 
 test('play map fills at least 60% down to a two-row dock; header is overlay', () => {
@@ -108,7 +122,8 @@ test('play hole screen uses the fill layout and does not keep the empty middle',
   assert.doesNotMatch(hole, /ThumbZone/);
   assert.doesNotMatch(hole, /styles\.shotList/);
   assert.doesNotMatch(hole, /styles\.clubChip/);
-  assert.match(hole, /lockHoleCamera/);
+  assert.match(hole, /planCourseCardCamera/);
+  assert.doesNotMatch(hole, /lockHoleCamera/);
   assert.match(hole, /lockFrame/);
   assert.doesNotMatch(hole, /lockFrame=\{catchUpFullScreen|lockFrame=\{placing/);
   assert.match(hole, /catchUpFullScreen \? 'catchup'/);
@@ -119,12 +134,17 @@ test('play hole screen uses the fill layout and does not keep the empty middle',
   assert.equal(playPhonePinMovesCamera(), false);
   assert.equal(playShowsUserLocationFit(), false);
   assert.deepEqual([...PLAY_REFRAME_ON], ['open', 'prev', 'next', 'scorecard_return', 'menu_return']);
-  assert.match(hole, /resolveHoleTee/);
+  assert.match(hole, /resolvePlayHoleTee/);
   assert.match(hole, /resolveOverlayTee/);
   assert.equal(playUsesAddShotCamera(), true);
+  assert.equal(playRoundStartUsesAddShotFramePoints(), true);
+  assert.equal(playRoundStartSecondCameraPath(), false);
+  assert.equal(playUsesCourseCardCamera(), true);
+  assert.equal(playEditUsesCourseCardCamera(), true);
+  assert.equal(playAndAddShotShareCourseCardCamera(), true);
 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
-  assert.match(map, /holeMapShowsUserLocation\(Boolean\(lockFrame\)\)/);
+  assert.match(map, /holeMapUserLocationVisible\(\{/);
   assert.match(map, /styles\.mapCover/);
   assert.match(map, /tee \+ green only/);
   assert.doesNotMatch(
@@ -182,20 +202,24 @@ test('Add shot, play, and edit open hole-up once; map chip stays, footer does no
   assert.equal(holeCameraUsesDeviceHeading(), false);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
-  assert.match(hole, /previous: lastHoleCamera\.current/);
-  assert.match(hole, /lastHoleCamera\.current = null/);
+  assert.match(hole, /planCourseCardCamera/);
+  assert.doesNotMatch(hole, /lastHoleCamera/);
+  assert.doesNotMatch(hole, /lockHoleCamera/);
   assert.match(hole, /styles\.catchUpHint/);
   assert.match(hole, /placeHint=\{placeHint\}/);
-  assert.match(hole, /heading=\{holeCamera\?\.heading \?\? null\}/);
+  assert.match(hole, /heading=\{courseCamera\?\.heading \?\? null\}/);
   assert.doesNotMatch(hole, /heading=\{fix|deviceHeading|compass/);
 
   const playMap = hole.slice(hole.indexOf('<HoleMap'), hole.indexOf('onDropGreenEstimate'));
   assert.match(playMap, /lockFrame/);
   assert.match(playMap, /framePoints=/);
+  assert.match(playMap, /courseCamera\?\.points/);
+  assert.doesNotMatch(playMap, /holeCamera\?\.points/);
   const editMap = hole.slice(hole.indexOf('visible={editOpen && !editClubOpen}'), hole.indexOf('visible={scoreOpen}'));
   assert.match(editMap, /<HoleMap/);
   assert.match(editMap, /lockFrame/);
-  assert.match(editMap, /heading=\{holeCamera\?\.heading \?\? null\}/);
+  assert.match(editMap, /heading=\{courseCamera\?\.heading \?\? null\}/);
+  assert.match(editMap, /courseCamera\?\.points/);
 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   assert.match(map, /initialCamera: holeUpCamera/);
@@ -216,11 +240,11 @@ test('opening, Prev/Next, and Scorecard or Menu return reframe before the dock c
   assert.match(hole, /bumpPlayFrame/);
   assert.match(hole, /dismissScorecard/);
   assert.match(hole, /goToHole/);
-  assert.match(hole, /!hideHoleButtons && \(catchUpFullScreen \|\| !holeCamera \|\| mapFramed\)/);
+  assert.match(hole, /!hideHoleButtons && \(catchUpFullScreen \|\| !courseCamera \|\| mapFramed\)/);
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   assert.match(map, /onFrameReady/);
   assert.match(map, /styles\.userDot/);
-  assert.match(map, /holeMapShowsUserLocation\(Boolean\(lockFrame\)\)/);
+  assert.match(map, /holeMapUserLocationVisible\(\{/);
   assert.doesNotMatch(
     map.slice(map.indexOf('const coords = useMemo'), map.indexOf('const lockedPoints')),
     /userFix/,
@@ -318,8 +342,9 @@ test('Add shot hides the user puck, Legal, and compass; play and edit wait for a
 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   const userLoc = map.slice(map.indexOf('showsUserLocation='), map.indexOf('showsMyLocationButton'));
-  assert.match(userLoc, /allowMapsChrome/);
-  assert.match(userLoc, /: false/);
+  assert.match(userLoc, /holeMapUserLocationVisible\(\{/);
+  assert.match(userLoc, /lockFrame,/);
+  assert.match(userLoc, /allowMapsChrome,/);
   assert.doesNotMatch(userLoc, /true/);
   assert.match(map, /followsUserLocation=\{false\}/);
   assert.match(map, /showPhonePin && userDot/);
@@ -360,4 +385,58 @@ test('play map still mounts; waiting line is off when 282 is on the card; Scorec
     map.slice(map.indexOf('function TrailFallback'), map.indexOf('function NativeHoleMap')),
     /hasGreen \? COPY\.waitingOnLocation/,
   );
+});
+
+test('round start and Add shot both call the same helper and frame tee+green with no fix', () => {
+  assert.equal(playAndAddShotShareCourseCardCamera(), true);
+  assert.equal(playUsesCourseCardCamera(), true);
+  assert.equal(playEditUsesCourseCardCamera(), true);
+  assert.equal(playRoundStartSecondCameraPath(), false);
+  assert.equal(courseCardCameraWaitsForPhoneFix(), false);
+  assert.equal(courseCardCameraUsesPhone(), false);
+  assert.equal(courseCardCameraFramesLonePin(), false);
+
+  const tee = { lat: 34.11, lng: -85.64 };
+  const green = { lat: 34.1124, lng: -85.64 };
+  const home = { lat: 40.7128, lng: -74.006 };
+
+  const roundStart = planCourseCardCamera({ tee, green, phone: null });
+  const addShot = planCourseCardCamera({ tee, green, phone: null });
+  const fromHome = planCourseCardCamera({ tee, green, phone: home });
+  const lonePin = planCourseCardCamera({ tee: null, green, phone: home });
+  const houseOnly = planCourseCardCamera({ tee: null, green: null, phone: home });
+
+  assert.deepEqual(roundStart, addShot);
+  assert.deepEqual(roundStart?.points, [tee, green]);
+  assert.deepEqual(addShot?.points, [tee, green]);
+  assert.deepEqual(fromHome?.points, [tee, green]);
+  assert.deepEqual(fromHome, roundStart);
+  assert.equal(roundStart?.heading, holeCameraHeading(tee, green));
+  assert.notEqual(roundStart?.heading, holeCameraHeading(home, green));
+  assert.equal(holeCameraTeeBelowGreenOnScreen(tee, green, roundStart?.heading ?? null), true);
+  assert.equal(openingHoleRegionContainsTeeAndGreen(holeFrameRegion(roundStart?.points ?? []), tee, green), true);
+  assert.equal(lonePin, null);
+  assert.equal(houseOnly, null);
+  assert.deepEqual(addShotFramePoints({ tee, green, phone: null }), roundStart?.points);
+  assert.deepEqual(addShotFramePoints({ tee, green, phone: home }), addShot?.points);
+  assert.equal(addShotFramePoints({ tee: null, green, phone: home }), null);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  assert.equal((hole.match(/planCourseCardCamera\(/g) ?? []).length, 1);
+  assert.match(hole, /const courseCamera = planCourseCardCamera\(\{[\s\S]*?tee: holeTee,[\s\S]*?green,[\s\S]*?phone: null,/);
+  assert.doesNotMatch(hole, /lockHoleCamera/);
+  assert.doesNotMatch(hole, /addShotFramePoints/);
+  assert.doesNotMatch(hole, /shotPinsForHoleCamera/);
+  assert.doesNotMatch(hole, /lastHoleCamera/);
+  assert.doesNotMatch(hole, /planHoleCamera/);
+
+  const playMap = hole.slice(hole.indexOf('<HoleMap'), hole.indexOf('onDropGreenEstimate'));
+  assert.match(playMap, /heading=\{courseCamera\?\.heading \?\? null\}/);
+  assert.match(playMap, /courseCamera\?\.points/);
+  assert.doesNotMatch(playMap, /holeCamera|addShotPoints|getCurrentFix/);
+
+  const editMap = hole.slice(hole.indexOf('visible={editOpen && !editClubOpen}'), hole.indexOf('visible={scoreOpen}'));
+  assert.match(editMap, /heading=\{courseCamera\?\.heading \?\? null\}/);
+  assert.match(editMap, /courseCamera\?\.points/);
+  assert.doesNotMatch(editMap, /holeCamera|lockHoleCamera/);
 });

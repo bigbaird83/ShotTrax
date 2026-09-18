@@ -231,6 +231,8 @@ export function migrate(db: SQLiteDatabase): void {
   ensureColumn(db, 'holes', 'green_back_lat', 'REAL');
   ensureColumn(db, 'holes', 'green_back_lng', 'REAL');
   ensureColumn(db, 'holes', 'green_depth_yards', 'INTEGER');
+  ensureColumn(db, 'holes', 'tee_lat', 'REAL');
+  ensureColumn(db, 'holes', 'tee_lng', 'REAL');
   ensureColumn(db, 'hole_penalties', 'kind', "TEXT NOT NULL DEFAULT 'penalty'");
   ensureColumn(db, 'hole_penalties', 'lat', 'REAL');
   ensureColumn(db, 'hole_penalties', 'lng', 'REAL');

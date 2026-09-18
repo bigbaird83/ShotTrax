@@ -119,14 +119,14 @@ test('Watch opens on the same top 3 as the phone; no scroll to hit one', () => {
   assert.equal(watchSameClubSharesRowWithAllClubs(), true);
   assert.equal(watchBackHomeAreTinyText(), false);
   assert.equal((pick.match(/Text\("Home"\)/g) ?? []).length, 1);
-  assert.match(pick, /minHeight: 32/);
+  assert.match(pick, /minHeight: 44/);
   assert.doesNotMatch(pick, /top3\.enumerated\(\)|TabView|tabViewStyle/);
   const sameClub = pick.slice(sameAt, allClubsAt);
   assert.match(sameClub, /Color\("cream"\)/);
   assert.doesNotMatch(sameClub, /Color\.black|borderedProminent/);
-  assert.match(pick.slice(pick.indexOf('HStack(spacing: 6)'), pick.indexOf('if showAllClubs')), /lastClubId/);
-  assert.match(pick.slice(pick.indexOf('HStack(spacing: 6)'), pick.indexOf('if showAllClubs')), /pickSameClub/);
-  assert.match(pick.slice(pick.indexOf('HStack(spacing: 6)'), pick.indexOf('if showAllClubs')), /Text\("All clubs"\)/);
+  assert.match(pick.slice(pick.indexOf('HStack(spacing: 8)'), pick.indexOf('if showAllClubs')), /lastClubId/);
+  assert.match(pick.slice(pick.indexOf('HStack(spacing: 8)'), pick.indexOf('if showAllClubs')), /pickSameClub/);
+  assert.match(pick.slice(pick.indexOf('HStack(spacing: 8)'), pick.indexOf('if showAllClubs')), /Text\("All clubs"\)/);
   assert.match(watchUi, /"Same club · \\\(name\)"/);
   assert.match(pick, /moreClubs/);
   assert.match(watchUi, /session\.list\.bag/);

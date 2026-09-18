@@ -78,18 +78,113 @@ export function addShotMapUsesPhoneFix(): false {
   return false;
 }
 
+export type CourseCardCamera = {
+  points: LatLng[];
+  heading: number;
+};
+
+/** Course-card camera never waits on a phone fix. */
+export function courseCardCameraWaitsForPhoneFix(): false {
+  return false;
+}
+
+/** Phone GPS never enters the course-card frame. */
+export function courseCardCameraUsesPhone(): false {
+  return false;
+}
+
+/** A lone pin or house coordinate is not a course-card frame. */
+export function courseCardCameraFramesLonePin(): false {
+  return false;
+}
+
 /**
- * Add shot camera points. Tee + green only. Phone is ignored even when it is
- * the only coordinate we have. Missing green → null (do not use the phone).
+ * One camera for round start, Add shot, and edit.
+ * Same function, same inputs: course tee + green center from the course card.
+ * Phone is ignored. Tee at the bottom, green at the top.
+ * Missing tee or green → null. Never a lone pin. Never the house.
+ */
+export function planCourseCardCamera(args: {
+  tee: LatLng | null;
+  green: LatLng | null;
+  phone?: LatLng | null;
+}): CourseCardCamera | null {
+  void args.phone;
+  if (!isValidLatLng(args.tee) || !isValidLatLng(args.green)) return null;
+  const heading = holeCameraHeading(args.tee, args.green);
+  if (heading == null) return null;
+  return { points: [args.tee, args.green], heading };
+}
+
+/**
+ * Add shot camera points. Same helper as round start and edit:
+ * planCourseCardCamera. Phone is ignored. Missing tee or green → null.
  */
 export function addShotFramePoints(args: {
   tee: LatLng | null;
   green: LatLng | null;
   phone?: LatLng | null;
 }): LatLng[] | null {
-  void args.phone;
-  if (!isValidLatLng(args.tee) || !isValidLatLng(args.green)) return null;
-  return [args.tee, args.green];
+  return planCourseCardCamera(args)?.points ?? null;
+}
+
+/**
+ * Opening region from the shared helper only. Tee + green center.
+ * Phone / house never enter the bounds.
+ */
+export function courseCardCameraRegion(args: {
+  tee: LatLng | null;
+  green: LatLng | null;
+  phone?: LatLng | null;
+}): HoleMapRegion | null {
+  const camera = planCourseCardCamera(args);
+  if (!camera) return null;
+  return holeFrameRegion(camera.points);
+}
+
+export function courseCardCameraRegionUsesPhone(): false {
+  return false;
+}
+
+export function courseCardCameraRegionUsesHouse(): false {
+  return false;
+}
+
+/** Course tee stored on the hole. Never invented from the phone. */
+export function courseTeeFromHole(
+  hole:
+    | {
+        teeLat?: number | null;
+        teeLng?: number | null;
+      }
+    | null
+    | undefined,
+): LatLng | null {
+  if (!hole) return null;
+  const tee = { lat: hole.teeLat ?? Number.NaN, lng: hole.teeLng ?? Number.NaN };
+  return isValidLatLng(tee) ? tee : null;
+}
+
+/**
+ * Play / Add shot tee: course coordinate, then overlay / cache.
+ * Phone GPS is never a tee.
+ */
+export function resolvePlayHoleTee(args: {
+  courseTee?: LatLng | null;
+  overlayTee?: LatLng | null;
+  cachedTee?: LatLng | null;
+  green?: LatLng | null;
+}): LatLng | null {
+  return resolveHoleTee({
+    holeTee: args.courseTee ?? args.overlayTee ?? args.cachedTee ?? null,
+    osmTee: args.cachedTee ?? args.overlayTee ?? null,
+    green: args.green ?? null,
+  });
+}
+
+/** Opening lock-frame maps need tee + green. A lone green is the house / pin-zoom miss. */
+export function lockFramePointsNeedTeeAndGreen(): true {
+  return true;
 }
 
 /** Add shot never pairs a card number with Waiting on your location. */
@@ -405,6 +500,19 @@ export function holeMapRevealsBeforeHoleFrame(): false {
 /** Every hole map never lets Apple/Google follow the phone into the frame. */
 export function holeMapShowsUserLocation(lockFrame: boolean): boolean {
   return !lockFrame;
+}
+
+/**
+ * Native showsUserLocation for play, Add shot, and edit.
+ * Lock-frame maps stay false even when a phone pin or Maps chrome is allowed.
+ */
+export function holeMapUserLocationVisible(args: {
+  lockFrame?: boolean;
+  showPhonePin?: boolean;
+  allowMapsChrome?: boolean;
+}): boolean {
+  if (!args.allowMapsChrome) return false;
+  return Boolean(args.showPhonePin) && holeMapShowsUserLocation(Boolean(args.lockFrame));
 }
 
 /** Play, Add shot, edit-shot, and the Nerd out trail all lock tee-to-green. */

@@ -3,6 +3,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { getCourseDataClient } from '@/src/course/client';
 import type { CourseDetail, CourseSummary } from '@/src/course/types';
 import { layoutFromTee } from '@/src/course/layout';
+import { fillLayoutTeesFromOsm } from '@/src/course/osmOverlay';
 import { startRound } from '@/src/db/repo';
 import type { GpsFix } from '@/src/domain/types';
 import {
@@ -189,7 +190,7 @@ export async function handleWatchNearbyJson(json: string): Promise<{ ok: boolean
         : null;
       if (start.teeName && !tee) return { ok: false, feedback: 'open the phone' };
       if (detail.tees.length > 0 && !tee) return { ok: false, feedback: 'open the phone' };
-      const layout = layoutFromTee(detail, tee);
+      const layout = await fillLayoutTeesFromOsm(layoutFromTee(detail, tee), { timeoutMs: 3500 });
       const round = startRound(ctx.db, holeCount, detail.name, layout);
       ctx.bump();
       router.push(`/round/${round.id}/hole/1`);

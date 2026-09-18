@@ -5,6 +5,7 @@ import {
   cachedResolvedTee,
   featuresForHole,
   fetchOsmOverlay,
+  fillLayoutTeesFromOsm,
   parseOverpassOverlay,
   rememberOsmOverlay,
   rememberResolvedTee,
@@ -230,4 +231,53 @@ test('fetchOsmOverlay POSTs around a real pin and returns parsed features', asyn
   assert.match(body, /around:1000/);
   assert.ok(overlay);
   assert.equal(overlay?.features[0].kind, 'green');
+});
+
+test('fillLayoutTeesFromOsm keeps API tees and fills missing tees from the hole line', async () => {
+  const apiTee = { lat: 37.02, lng: -122.01 };
+  const layout = await fillLayoutTeesFromOsm(
+    {
+      apiId: 'c1',
+      location: { lat: 37.01, lng: -122.0 },
+      holes: [
+        {
+          number: 1,
+          par: 4,
+          yards: 282,
+          handicap: 1,
+          greenCentroid: { lat: 37.01, lng: -122.0 },
+          teeCentroid: apiTee,
+        },
+        {
+          number: 2,
+          par: 3,
+          yards: 150,
+          handicap: 2,
+          greenCentroid: { lat: 37.012, lng: -122.002 },
+          teeCentroid: null,
+        },
+      ],
+    },
+    {
+      fetch: async () =>
+        new Response(
+          JSON.stringify({
+            elements: [
+              {
+                type: 'way',
+                tags: { golf: 'hole', ref: '2' },
+                geometry: [
+                  { lat: 37.008, lon: -122.002 },
+                  { lat: 37.012, lon: -122.002 },
+                ],
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+    },
+  );
+  assert.deepEqual(layout.holes?.[0].teeCentroid, apiTee);
+  assert.deepEqual(layout.holes?.[1].teeCentroid, { lat: 37.008, lng: -122.002 });
+  assert.deepEqual(cachedResolvedTee({ courseId: 'c1', holeNumber: 1, green: { lat: 37.01, lng: -122.0 } }), apiTee);
 });

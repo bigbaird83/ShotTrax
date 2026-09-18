@@ -2,9 +2,13 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { haversineYards } from './haversine';
 import {
+  addShotFramePoints,
   addShotPlaceHintShowsAsFooter,
   addShotPlaceHintShowsOnMap,
   addShotShowsWaitingOnLocation,
+  courseCardCameraFramesLonePin,
+  courseCardCameraUsesPhone,
+  courseCardCameraWaitsForPhoneFix,
   applyHoleMapCamera,
   holeCameraFramedAfterApply,
   holeCameraHeading,
@@ -30,9 +34,13 @@ import {
   nerdOutTrailUsesLockFrame,
   openingCameraRequiresTeeAndGreen,
   openingHoleRegionContainsTeeAndGreen,
+  planCourseCardCamera,
   planHoleCamera,
   regionIsHoleFrame,
   resolveHoleTee,
+  resolvePlayHoleTee,
+  courseTeeFromHole,
+  lockFramePointsNeedTeeAndGreen,
   shotPinsForHoleCamera,
   editShotMapUsesLockFrame,
   everyHoleMapUsesLockFrame,
@@ -45,6 +53,30 @@ const greenEast = { lat: 37.0, lng: -121.99 };
 const greenSouth = { lat: 36.99, lng: -122.0 };
 const greenWest = { lat: 37.0, lng: -122.01 };
 const pin = { lat: 37.005, lng: -122.005 };
+
+test('planCourseCardCamera is tee+green only; phone, house, and a lone pin never frame', () => {
+  const home = { lat: 40.7128, lng: -74.006 };
+  const roundStart = planCourseCardCamera({ tee, green: greenNorth, phone: null });
+  const addShot = planCourseCardCamera({ tee, green: greenNorth, phone: null });
+  const fromHome = planCourseCardCamera({ tee, green: greenNorth, phone: home });
+
+  assert.deepEqual(roundStart, addShot);
+  assert.deepEqual(roundStart?.points, [tee, greenNorth]);
+  assert.deepEqual(fromHome, roundStart);
+  assert.equal(roundStart?.heading, 0);
+  assert.equal(roundStart?.heading, holeCameraHeading(tee, greenNorth));
+  assert.notEqual(roundStart?.heading, holeCameraHeading(home, greenNorth));
+  assert.equal(holeCameraTeeBelowGreenOnScreen(tee, greenNorth, roundStart?.heading ?? null), true);
+  assert.deepEqual(addShotFramePoints({ tee, green: greenNorth, phone: null }), roundStart?.points);
+  assert.deepEqual(addShotFramePoints({ tee, green: greenNorth, phone: home }), addShot?.points);
+  assert.equal(planCourseCardCamera({ tee: null, green: greenNorth, phone: home }), null);
+  assert.equal(planCourseCardCamera({ tee, green: null, phone: home }), null);
+  assert.equal(planCourseCardCamera({ tee: null, green: null, phone: home }), null);
+  assert.equal(addShotFramePoints({ tee: null, green: greenNorth, phone: home }), null);
+  assert.equal(courseCardCameraWaitsForPhoneFix(), false);
+  assert.equal(courseCardCameraUsesPhone(), false);
+  assert.equal(courseCardCameraFramesLonePin(), false);
+});
 
 test('tee-to-green north puts the green at the top (heading 0)', () => {
   assert.equal(holeCameraHeading(tee, greenNorth), 0);
@@ -288,6 +320,25 @@ test('opening region contains tee and green; heading is tee-to-green, not device
   assert.equal(addShotPlaceHintShowsOnMap(), true);
   assert.equal(addShotPlaceHintShowsAsFooter(), false);
   assert.equal(addShotShowsWaitingOnLocation(), false);
+});
+
+test('round start frames the course tee and green with no phone fix', () => {
+  const home = { lat: 40.7128, lng: -74.006 };
+  const courseTee = { lat: 34.11, lng: -85.64 };
+  const overlayTee = { lat: 34.109, lng: -85.64 };
+  assert.deepEqual(courseTeeFromHole({ teeLat: courseTee.lat, teeLng: courseTee.lng }), courseTee);
+  assert.equal(courseTeeFromHole({ teeLat: null, teeLng: null }), null);
+  assert.deepEqual(
+    resolvePlayHoleTee({ courseTee, overlayTee, cachedTee: null, green: greenNorth }),
+    resolveHoleTee({ holeTee: courseTee, osmTee: overlayTee, green: greenNorth }),
+  );
+  assert.equal(lockFramePointsNeedTeeAndGreen(), true);
+  const locked = lockHoleCamera({ tee: courseTee, green: greenNorth, shotPins: [], phone: home });
+  assert.ok(locked);
+  assert.equal(locked.mode, 'tee_green');
+  assert.deepEqual(locked.points, [courseTee, greenNorth]);
+  assert.notEqual(locked.center.lat, home.lat);
+  assert.equal(locked.heading, holeCameraHeading(courseTee, greenNorth));
 });
 
 test('opening camera puts tee below green and fits both, not sideways', () => {

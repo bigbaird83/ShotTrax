@@ -2,11 +2,11 @@ import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { getCourseDataClient } from '@/src/course/client';
-import { teePointForHole, teePointFromHoleFeature } from '@/src/course/osmOverlay';
+import { cachedResolvedTee, resolveOverlayTee } from '@/src/course/osmOverlay';
 import type { OsmOverlay } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
 import { getHole, getRound, listClubAverages, listClubs, listShotsForHole } from '@/src/db/repo';
-import { resolveHoleTee } from '@/src/domain/holeCamera';
+import { courseTeeFromHole, resolvePlayHoleTee } from '@/src/domain/holeCamera';
 import { planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
 import { COPY, formatPickerLeftYards, formatSuggestedClubChip } from '@/src/domain/playerCopy';
 import { clubPickLeaveHref, clubPickLeaveRunsAcceptFix, planClubPickLeave } from '@/src/domain/clubPickNav';
@@ -124,9 +124,12 @@ export default function ClubPickScreen() {
     holeRow?.greenLat != null && holeRow.greenLng != null
       ? { lat: holeRow.greenLat, lng: holeRow.greenLng }
       : null;
-  const holeTee = resolveHoleTee({
-    holeTee: teePointFromHoleFeature(osmOverlay, holeNumber, green),
-    osmTee: teePointForHole(osmOverlay, holeNumber),
+  const overlayTee = resolveOverlayTee(osmOverlay, holeNumber, green);
+  const cachedTee = cachedResolvedTee({ courseId: round?.courseApiId, holeNumber, green });
+  const holeTee = resolvePlayHoleTee({
+    courseTee: courseTeeFromHole(holeRow),
+    overlayTee,
+    cachedTee,
     green,
   });
   const fix = useLiveFix(!withoutGps);

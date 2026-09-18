@@ -1,6 +1,7 @@
 import { featureCentroid } from '../domain/catchUpMap';
 import { haversineYards } from '../domain/haversine';
 import { isValidLatLng, type LatLng } from '../domain/latLng';
+import type { CourseLayoutSeed } from './layout';
 import type { OsmFeature, OsmGolfKind, OsmOverlay, OsmOverlayHook, OsmOverlayQuery } from './types';
 
 export const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
@@ -307,3 +308,60 @@ export function rememberOsmOverlay(
 export const osmOverlayHook: OsmOverlayHook = {
   fetchCourseOverlay: (query) => fetchOsmOverlay(query),
 };
+
+/**
+ * Fill missing layout tees from one OSM query around the course / hole-1 green.
+ * Existing API tees win. Never invents a coordinate. Never uses the phone.
+ */
+export async function fillLayoutTeesFromOsm(
+  layout: CourseLayoutSeed,
+  deps: OsmOverlayDeps & { timeoutMs?: number } = {},
+): Promise<CourseLayoutSeed> {
+  const holes = layout.holes ?? [];
+  if (holes.length === 0) return layout;
+  const location =
+    holes.find((hole) => isValidLatLng(hole.greenCentroid))?.greenCentroid ??
+    (isValidLatLng(layout.location) ? layout.location : null);
+  if (!location) return layout;
+
+  const work = (async () => {
+    const overlay = await fetchOsmOverlay(
+      {
+        courseId: layout.apiId,
+        location,
+        radiusM: 1800,
+      },
+      deps,
+    );
+    if (!overlay) return layout;
+    return {
+      ...layout,
+      holes: holes.map((hole) => {
+        const green = isValidLatLng(hole.greenCentroid) ? hole.greenCentroid : null;
+        if (green) {
+          rememberOsmOverlay({ courseId: layout.apiId, holeNumber: hole.number, green }, overlay);
+        }
+        if (isValidLatLng(hole.teeCentroid)) {
+          if (green) {
+            rememberResolvedTee({ courseId: layout.apiId, holeNumber: hole.number, green }, hole.teeCentroid);
+          }
+          return hole;
+        }
+        const tee = resolveOverlayTee(overlay, hole.number, green);
+        if (tee && green) {
+          rememberResolvedTee({ courseId: layout.apiId, holeNumber: hole.number, green }, tee);
+        }
+        return { ...hole, teeCentroid: tee };
+      }),
+    };
+  })();
+
+  const timeoutMs = deps.timeoutMs;
+  if (timeoutMs == null || timeoutMs <= 0) return work;
+  return Promise.race([
+    work,
+    new Promise<CourseLayoutSeed>((resolve) => {
+      setTimeout(() => resolve(layout), timeoutMs);
+    }),
+  ]);
+}

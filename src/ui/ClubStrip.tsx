@@ -6,6 +6,7 @@ import {
   CLUB_STRIP_VISIBLE_PILLS,
   PHONE_WHEEL_PILL_HEIGHT,
   clubStripWindowKey,
+  clubStripWindowStartClamped,
   wrapClubStripIndex,
 } from '../domain/clubStrip';
 import { colors, type } from './theme';
@@ -27,12 +28,13 @@ type Props = {
 
 const LOOP_COPIES = 3;
 
-function pillWidthForStrip(width: number, count: number, compact?: boolean): number {
+function pillWidthForStrip(width: number, count: number, _compact?: boolean): number {
   if (width <= 0) return 0;
   const visible = Math.min(CLUB_STRIP_VISIBLE_PILLS, Math.max(count, 1));
   const gaps = Math.max(0, visible - 1);
   const raw = (width - CLUB_STRIP_GAP * gaps) / visible;
-  return Math.max(compact ? 56 : 72, raw);
+  // Exact fit so the third pill (often Dr) cannot clip off the right.
+  return raw > 0 ? raw : 0;
 }
 
 /** Sideways carry wheel. Three full pills. Tap selects; swipe does not mark. */
@@ -42,7 +44,7 @@ export function ClubStrip({ items, pickId, windowStart = 0, onPick, disabled, co
   const pillWidth = pillWidthForStrip(width, items.length, compact);
   const loops = items.length > 1 ? LOOP_COPIES : 1;
   const origin = items.length > 1 ? items.length : 0;
-  const start = Math.max(0, Math.min(windowStart, Math.max(items.length - 1, 0)));
+  const start = clubStripWindowStartClamped(windowStart, items.length);
   const looped = Array.from({ length: loops }, (_, copy) =>
     items.map((item, index) => ({
       ...item,

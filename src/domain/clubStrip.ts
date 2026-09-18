@@ -1,10 +1,11 @@
 import { fillEstimatedCarries, type CarryClub } from './carryFill';
-import { isPutterClubId } from './defaultBag';
+import { isPutterClubId, typicalCarrySeedForClub } from './defaultBag';
 import { MIN_CLOSED_SHOTS_FOR_RANK } from './rankClubs';
 
 /** Phone wheel pills are taller than the Watch pills. */
 export const PHONE_WHEEL_PILL_HEIGHT = 52;
-export const WATCH_WHEEL_PILL_HEIGHT = 36;
+/** Watch pills sit in the 40% control band and must fit three full labels. */
+export const WATCH_WHEEL_PILL_HEIGHT = 44;
 
 export function phoneWheelPillTallerThanWatch(): true {
   return true;
@@ -159,6 +160,21 @@ export function clubStripFillsBeforeSort(): true {
   return true;
 }
 
+/** Sort of the bag by name / iron / hybrid label is the Hy+3W miss. */
+export function clubStripSortsByIronHybridName(): false {
+  return false;
+}
+
+/** A numbered club (Dr · 280) is never dropped from the wheel. */
+export function clubStripDropsNumberedClub(): false {
+  return false;
+}
+
+/** Opening frame is the three closest carries to the hole, after fill then sort. */
+export function clubStripPicksThreeClosest(): true {
+  return true;
+}
+
 export function clubStripEstimatedEntersWheel(): true {
   return true;
 }
@@ -200,11 +216,13 @@ export function toWheelFillClub(
 ): ClubStripClub {
   const count = live?.count ?? 0;
   const avg = live?.avgYards;
+  const typical = typicalCarrySeedForClub(club);
   return {
     id: club.id,
     loftRank: club.loftRank,
     sortOrder: club.sortOrder,
-    typicalCarryYards: club.typicalCarryYards ?? null,
+    typicalCarryYards: typical,
+    carry: typical,
     liveCarry:
       count >= MIN_CLOSED_SHOTS_FOR_RANK && avg != null && Number.isFinite(avg) && avg > 0 ? avg : null,
   };
@@ -255,9 +273,15 @@ export function openingClubStripWindow(args: {
   return { windowStart: 0, openIndex: 1 };
 }
 
+/** Clamp so the longest club cannot scroll off the right of a three-pill frame. */
+export function clubStripWindowStartClamped(windowStart: number, count: number): number {
+  if (count <= CLUB_STRIP_VISIBLE_PILLS) return 0;
+  return Math.max(0, Math.min(windowStart, count - CLUB_STRIP_VISIBLE_PILLS));
+}
+
 export function clubStripOpeningIds(ids: string[], windowStart: number): string[] {
   if (ids.length <= CLUB_STRIP_VISIBLE_PILLS) return ids.slice();
-  const start = Math.max(0, Math.min(windowStart, ids.length - CLUB_STRIP_VISIBLE_PILLS));
+  const start = clubStripWindowStartClamped(windowStart, ids.length);
   return ids.slice(start, start + CLUB_STRIP_VISIBLE_PILLS);
 }
 
@@ -274,7 +298,7 @@ export function resolveWheelCarries(clubs: ClubStripClub[]): Record<string, numb
           id: club.id,
           loftRank: club.loftRank ?? 0,
           sortOrder: club.sortOrder,
-          typicalCarryYards: club.typicalCarryYards ?? null,
+          typicalCarryYards: club.typicalCarryYards ?? club.carry ?? null,
         }) satisfies CarryClub),
       )
     : null;
@@ -290,11 +314,40 @@ export function resolveWheelCarries(clubs: ClubStripClub[]): Record<string, numb
       carries[club.id] = estimated as number;
       continue;
     }
+    if (clubHasWheelCarry(club.typicalCarryYards)) {
+      carries[club.id] = club.typicalCarryYards as number;
+      continue;
+    }
     if (clubHasWheelCarry(club.carry)) {
       carries[club.id] = club.carry as number;
     }
   }
   return carries;
+}
+
+/**
+ * After fill and a carry sort, the opening three are the closest carries to
+ * the hole — never a name/iron/hybrid sort, never a dash, never dropping a
+ * numbered club (Dr · 280 on a 282-yard hole).
+ */
+export function clubStripThreeClosestIds(
+  ordered: { id: string; carry: number }[],
+  yards: number | null | undefined,
+): string[] {
+  if (ordered.length <= CLUB_STRIP_VISIBLE_PILLS) return ordered.map((club) => club.id);
+  if (yards == null || !Number.isFinite(yards)) {
+    return ordered.slice(0, CLUB_STRIP_VISIBLE_PILLS).map((club) => club.id);
+  }
+  return [...ordered]
+    .sort((a, b) => {
+      const da = Math.abs(a.carry - yards);
+      const db = Math.abs(b.carry - yards);
+      if (da !== db) return da - db;
+      return a.carry - b.carry;
+    })
+    .slice(0, CLUB_STRIP_VISIBLE_PILLS)
+    .sort((a, b) => a.carry - b.carry)
+    .map((club) => club.id);
 }
 
 /**
@@ -325,11 +378,15 @@ export function planClubStrip(args: {
   }
   if (!pick) pick = ordered[0]?.id ?? null;
   const closestIndex = pick ? Math.max(0, ordered.findIndex((club) => club.id === pick)) : 0;
+  const closestThree = clubStripThreeClosestIds(ordered, yards);
+  const threeStart = closestThree.length
+    ? Math.max(0, ordered.findIndex((club) => club.id === closestThree[0]))
+    : openingClubStripWindow({ count: ordered.length, closestIndex }).windowStart;
   const window = openingClubStripWindow({ count: ordered.length, closestIndex });
   return {
     ids: ordered.map((club) => club.id),
     openIndex: window.openIndex,
-    windowStart: window.windowStart,
+    windowStart: clubStripWindowStartClamped(threeStart, ordered.length),
     pickId: pick,
     carries,
   };

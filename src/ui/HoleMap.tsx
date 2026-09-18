@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import MapView, { Marker, Polygon, Polyline } from 'react-native-maps';
 import type { OsmFeature, OsmGolfKind, OsmOverlay } from '@/src/course/types';
-import { featuresForHole, resolveOverlayTee } from '@/src/course/osmOverlay';
+import { featuresForHole } from '@/src/course/osmOverlay';
 import type { GpsFix, Shot } from '@/src/domain/types';
 import type { YardsToGreenResult } from '@/src/sensing/yardsToGreen';
 import {
@@ -18,7 +18,7 @@ import {
   holeCameraFramedAfterApply,
   holeCameraHeading,
   holeFrameRegion,
-  holeMapShowsUserLocation,
+  holeMapUserLocationVisible,
   holeNativeCamera,
   regionIsHoleFrame,
 } from '@/src/domain/holeCamera';
@@ -239,13 +239,9 @@ function NativeHoleMap({
     const fromParent = (framePoints ?? [])
       .map((point) => ({ lat: point.latitude, lng: point.longitude }))
       .filter((point) => isValidLatLng(point));
-    if (fromParent.length >= 2) return fromParent;
-    const overlayTee = resolveOverlayTee(osmOverlay ?? null, holeNumber, green);
-    if (isValidLatLng(overlayTee) && isValidLatLng(green)) return [overlayTee, green];
-    if (fromParent.length > 0) return fromParent;
-    // Green is enough to put a map on screen. Never wait on a phone fix.
-    if (isValidLatLng(green)) return [green];
-    return [];
+    // Same camera path as Add shot: parent tee + green only.
+    // A lone green is the house / pin-zoom miss. Never wait on a phone fix.
+    return fromParent.length >= 2 ? fromParent : [];
   }, [lockFrame, framePoints, osmOverlay, holeNumber, green]);
 
   const holeUpCamera = useMemo(() => {
@@ -391,7 +387,7 @@ function NativeHoleMap({
     <View
       style={[fullBleed ? styles.bleed : styles.wrap, style]}
       onLayout={onMapLayout}
-      pointerEvents={lockFrame && !holeCameraReady && !holeFrameOnScreen ? 'none' : 'auto'}
+      pointerEvents={lockFrame && !holeCameraReady ? 'none' : 'auto'}
       onTouchStart={(event) => {
         if (event.nativeEvent.touches.length >= 2) setMapOwnsGesture(true);
       }}
@@ -401,16 +397,18 @@ function NativeHoleMap({
       onTouchCancel={() => setMapOwnsGesture(false)}>
       <MapView
         ref={mapRef}
-        style={[styles.map, lockFrame && !holeCameraReady && !holeFrameOnScreen ? styles.mapHidden : null]}
+        style={[styles.map, lockFrame && !holeCameraReady ? styles.mapHidden : null]}
         mapType="satellite"
         {...(lockFrame
           ? lockedCameraProps
           : holeUpCamera
             ? { initialCamera: holeUpCamera }
             : { initialRegion: lockedRegion })}
-        showsUserLocation={
-          allowMapsChrome ? Boolean(showPhonePin) && holeMapShowsUserLocation(Boolean(lockFrame)) : false
-        }
+        showsUserLocation={holeMapUserLocationVisible({
+          lockFrame,
+          showPhonePin,
+          allowMapsChrome,
+        })}
         showsMyLocationButton={false}
         followsUserLocation={false}
         showsCompass={allowMapsChrome && mapsChrome}
@@ -625,7 +623,7 @@ function NativeHoleMap({
           }}
         />
       ) : null}
-      {lockFrame && !holeCameraReady && !holeFrameOnScreen ? (
+      {lockFrame && !holeCameraReady ? (
         <View pointerEvents="none" style={styles.mapCover} />
       ) : null}
       {!allowMapsChrome ? <View pointerEvents="none" style={styles.legalCover} /> : null}

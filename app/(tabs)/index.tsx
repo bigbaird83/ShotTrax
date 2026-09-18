@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { getCourseDataClient } from '@/src/course/client';
 import { layoutFromTee } from '@/src/course/layout';
+import { fillLayoutTeesFromOsm } from '@/src/course/osmOverlay';
 import type { CourseDetail, CourseSummary, TeeSet } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
 import {
@@ -46,7 +47,7 @@ async function loadLayout(
   tee: TeeSet | null,
 ): Promise<CourseLayoutSeed> {
   const resolved = detail ?? (await getCourseDataClient().getCourse(course.id).catch(() => null));
-  if (resolved) return layoutFromTee(resolved, tee);
+  if (resolved) return fillLayoutTeesFromOsm(layoutFromTee(resolved, tee), { timeoutMs: 3500 });
   return {
     apiId: course.id,
     name: course.name,
