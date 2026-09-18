@@ -1,10 +1,14 @@
 import {
   carryFromClubLabel,
+  clubHasWheelCarry,
   clubStripCappedAtThree,
   clubStripOnlyTapMarks,
   clubStripSortedByCarry,
+  clubStripSortedByIronNumber,
   clubStripSortedByName,
+  clubStripWraps,
   planClubStrip,
+  wrapClubStripIndex,
 } from './clubStrip';
 import { isPutterClubId } from './defaultBag';
 import { COPY } from './playerCopy';
@@ -140,12 +144,52 @@ export function watchStripUsesFullBag(): true {
   return true;
 }
 
+export function watchStripIsWheel(): true {
+  return true;
+}
+
+export function watchStripWraps(): true {
+  return clubStripWraps();
+}
+
+export function watchStripSortedByIronNumber(): false {
+  return clubStripSortedByIronNumber();
+}
+
+export function watchStripAllowsDashPill(): false {
+  return false;
+}
+
+export function watchStripInventZero(): false {
+  return false;
+}
+
+export function watchOneHomeOnly(): true {
+  return true;
+}
+
+export function watchSameClubSharesRowWithAllClubs(): true {
+  return true;
+}
+
+export function watchBackHomeAreTinyText(): false {
+  return false;
+}
+
 export function watchAllClubsExtendsStrip(): false {
   return false;
 }
 
 export function watchCarryFromLabel(label: string): number | null {
   return carryFromClubLabel(label);
+}
+
+export function watchClubHasWheelCarry(carry: number | null | undefined): boolean {
+  return clubHasWheelCarry(carry);
+}
+
+export function wrapWatchClubStripIndex(index: number, count: number): number {
+  return wrapClubStripIndex(index, count);
 }
 
 /**

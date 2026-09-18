@@ -7,7 +7,7 @@ import type { OsmOverlay } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
 import { getHole, getRound, listClubAverages, listClubs, listShotsForHole } from '@/src/db/repo';
 import { resolveHoleTee } from '@/src/domain/holeCamera';
-import { planClubStrip } from '@/src/domain/clubStrip';
+import { planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
 import { COPY, formatPickerLeftYards, formatSuggestedClubChip } from '@/src/domain/playerCopy';
 import { clubPickLeaveHref, clubPickLeaveRunsAcceptFix, planClubPickLeave } from '@/src/domain/clubPickNav';
 import { putterOpensPuttSheet } from '@/src/domain/putts';
@@ -23,8 +23,6 @@ import { addNoGpsShot, changeShotClub, markShotWithClub, promptForPlan } from '@
 import { useLiveFix } from '@/src/services/useLiveFix';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
 import { BigButton } from '@/src/ui/BigButton';
-import { ClubButton } from '@/src/ui/ClubButton';
-import { ClubStrip } from '@/src/ui/ClubStrip';
 import { hapticMark, hapticSelect, hapticWarn } from '@/src/ui/haptics';
 import { Screen } from '@/src/ui/Screen';
 import { colors, type } from '@/src/ui/theme';
@@ -95,7 +93,7 @@ export default function ClubPickScreen() {
 
   useEffect(() => {
     navigation.setOptions({
-      title: withoutGps ? COPY.forgotShot : relabelId ? COPY.changeClub : COPY.pickClub,
+      title: withoutGps ? COPY.forgotShot : relabelId ? COPY.changeClub : COPY.allClubs,
       headerLeft: () => (
         <Pressable
           accessibilityRole="button"
@@ -129,6 +127,7 @@ export default function ClubPickScreen() {
   const holeTee = resolveHoleTee({
     holeTee: teePointFromHoleFeature(osmOverlay, holeNumber, green),
     osmTee: teePointForHole(osmOverlay, holeNumber),
+    green,
   });
   const fix = useLiveFix(!withoutGps);
 
@@ -177,18 +176,9 @@ export default function ClubPickScreen() {
   const stripPlan = planClubStrip({
     clubs: clubs.map((club) => {
       const row = averages.find((item) => item.club.id === club.id);
-      return {
-        id: club.id,
-        carry: row ? rankDistanceYards(clubToRankInput(row.club, row)) : null,
-      };
+      return toWheelFillClub(club, row);
     }),
     yardsLeft: target?.dYards ?? toGreen.yards,
-  });
-  const stripItems = stripPlan.ids.map((id) => {
-    const club = clubs.find((row) => row.id === id);
-    const row = averages.find((item) => item.club.id === id);
-    const carry = row ? rankDistanceYards(clubToRankInput(row.club, row)) : null;
-    return { id, label: formatSuggestedClubChip(club?.shortName ?? id, carry) };
   });
   const lastLie = useMemo(() => {
     const last = [...shots].reverse().find((shot) => shot.startLat != null && shot.startLng != null);
@@ -226,11 +216,10 @@ export default function ClubPickScreen() {
         id: club.id,
         shortName: formatSuggestedClubChip(club.shortName, rankDistanceYards(club)),
       })),
-      bag: clubs.map((club) => {
-        const row = averages.find((item) => item.club.id === club.id);
-        const carry = row ? rankDistanceYards(clubToRankInput(row.club, row)) : null;
-        return { id: club.id, shortName: formatSuggestedClubChip(club.shortName, carry) };
-      }),
+      bag: clubs.map((club) => ({
+        id: club.id,
+        shortName: formatSuggestedClubChip(club.shortName, stripPlan.carries[club.id] ?? null),
+      })),
       holeNumber,
       yardsToGreen: target?.dYards ?? toGreen.yards,
       yardsQuality: toGreen.quality,
@@ -400,17 +389,43 @@ export default function ClubPickScreen() {
     if (!session) setListening(false);
   };
 
+  const bag = (
+    <View style={styles.bag}>
+      {clubs.map((club) => (
+        <Pressable
+          key={club.id}
+          accessibilityRole="button"
+          disabled={busy}
+          onPress={() => void markClub(club)}
+          style={[styles.bagCell, selected?.id === club.id && styles.bagCellOn]}>
+          <Text numberOfLines={1} style={styles.bagShort}>
+            {club.shortName}
+          </Text>
+          <Text numberOfLines={1} style={styles.bagName}>
+            {club.name}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+
+  if (!withoutGps && !relabelId) {
+    return (
+      <Screen scroll={false}>
+        {bag}
+      </Screen>
+    );
+  }
+
   return (
     <Screen>
       <Text style={styles.title}>
-        {withoutGps ? COPY.forgotShot : relabelId ? COPY.changeClub : COPY.pickClub}
+        {withoutGps ? COPY.forgotShot : COPY.changeClub}
       </Text>
       <Text style={styles.lede}>
         {withoutGps
           ? 'Pick a club, then log it. This doesn’t mark a distance.'
-          : relabelId
-            ? 'Where you hit from stays. Only the club changes.'
-            : COPY.pickClubLede}
+          : 'Where you hit from stays. Only the club changes.'}
       </Text>
       {withoutGps ? null : <Text style={styles.left}>{formatPickerLeftYards(toGreen)}</Text>}
       <View style={styles.navRow}>
@@ -449,32 +464,7 @@ export default function ClubPickScreen() {
       {heard ? <Text style={styles.heard}>“{heard}”</Text> : null}
       {voiceError ? <Text style={styles.warn}>{voiceError}</Text> : null}
 
-      {stripItems.length > 0 ? (
-        <ClubStrip
-          items={stripItems}
-          pickId={stripPlan.pickId}
-          disabled={busy}
-          onPick={(id) => {
-            const full = clubs.find((row) => row.id === id);
-            if (full) void markClub(full);
-          }}
-        />
-      ) : (
-        <Text style={styles.unlock}>{COPY.top3Unlock}</Text>
-      )}
-
-      <View style={styles.grid}>
-        {clubs.map((club) => (
-          <ClubButton
-            key={club.id}
-            selected={selected?.id === club.id}
-            disabled={busy}
-            shortName={club.shortName}
-            name={club.name}
-            onPress={() => void markClub(club)}
-          />
-        ))}
-      </View>
+      {bag}
 
       {withoutGps ? (
         <BigButton label="Log shot" disabled={busy || !selected} onPress={onLogMissed} />
@@ -504,4 +494,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgElevated,
   },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  bag: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignContent: 'stretch' },
+  bagCell: {
+    width: '25%',
+    flexGrow: 1,
+    minHeight: 56,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.bgElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    paddingVertical: 6,
+  },
+  bagCellOn: { borderColor: colors.lime, borderWidth: 2, backgroundColor: '#1C3A24' },
+  bagShort: { color: colors.lime, fontWeight: '900', fontSize: type.chip },
+  bagName: { color: colors.cream, fontSize: 10, fontWeight: '700' },
 });

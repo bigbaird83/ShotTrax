@@ -32,12 +32,12 @@ import { COPY, finishPuttsChip, finishShotChip, formatHoleHeader, formatPlayHead
 import { canAdvanceHole, holesNeedingOpenShots } from '@/src/domain/holeAdvance';
 import { isPutterClubId } from '@/src/domain/defaultBag';
 import { catchUpPinFromTap, planCancelCatchUp, planCatchUpSheet } from '@/src/domain/catchUpMap';
-import { lockHoleCamera, resolveHoleTee, shotPinsForHoleCamera } from '@/src/domain/holeCamera';
+import { lockHoleCamera, resolveHoleTee, shotPinsForHoleCamera, type LockedHoleCamera } from '@/src/domain/holeCamera';
 import { deleteShotPrompt } from '@/src/domain/deleteShot';
 import { planInsertSlots } from '@/src/domain/insertShot';
 import { confirmUndoIsLive, planConfirmUndo, type ConfirmUndoWindow } from '@/src/domain/confirmUndo';
-import { confirmPlaceToDraft, planPlaceToDragPreview } from '@/src/domain/placeToDrag';
-import { planClubStrip } from '@/src/domain/clubStrip';
+import { confirmPlaceToDraft, resolveAddShotFromPin } from '@/src/domain/placeToDrag';
+import { planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
 import { planPlayLayout } from '@/src/domain/playLayout';
 import { planPlacedShot } from '@/src/domain/shotSource';
 import { planUndoPlacePins } from '@/src/domain/undoLastShot';
@@ -105,6 +105,8 @@ export default function HoleScreen() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [playFrameNonce, setPlayFrameNonce] = useState(0);
   const [mapFramed, setMapFramed] = useState(false);
+  const lastHoleCamera = useRef<LockedHoleCamera | null>(null);
+  const addShotFromRef = useRef<LatLng | null>(null);
   const [confirmUndo, setConfirmUndo] = useState<ConfirmUndoWindow | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [placeFrom, setPlaceFrom] = useState<LatLng | null>(null);
@@ -188,18 +190,13 @@ export default function HoleScreen() {
   const placeStripPlan = planClubStrip({
     clubs: clubs.map((club) => {
       const row = averages.find((item) => item.club.id === club.id);
-      return {
-        id: club.id,
-        carry: row ? rankDistanceYards(clubToRankInput(row.club, row)) : null,
-      };
+      return toWheelFillClub(club, row);
     }),
     yardsLeft: pickerYards,
   });
   const placeStripItems = placeStripPlan.ids.map((id) => {
     const club = clubs.find((row) => row.id === id);
-    const row = averages.find((item) => item.club.id === id);
-    const carry = row ? rankDistanceYards(clubToRankInput(row.club, row)) : null;
-    return { id, label: formatSuggestedClubChip(club?.shortName ?? id, carry) };
+    return { id, label: formatSuggestedClubChip(club?.shortName ?? id, placeStripPlan.carries[id]) };
   });
   const placeBag = clubs.filter((club) => !isPutterClubId(club.id));
 
@@ -219,6 +216,12 @@ export default function HoleScreen() {
     closeEdit();
     resetPlace();
     setInsertSeq(seq);
+    const from = addShotFromRef.current;
+    if (from) {
+      setPlaceFrom(from);
+      setPlaceMode('to');
+      return;
+    }
     setPlaceMode('from');
   };
 
@@ -284,6 +287,7 @@ export default function HoleScreen() {
 
   useEffect(() => {
     setMapFramed(false);
+    lastHoleCamera.current = null;
   }, [holeNumber]);
 
   useEffect(() => {
@@ -318,6 +322,7 @@ export default function HoleScreen() {
         courseId: round?.courseApiId,
         location,
         holeNumber,
+        radiusM: 1000,
       })
       .then((overlay) => {
         if (live) setOsmOverlay(overlay);
@@ -401,33 +406,30 @@ export default function HoleScreen() {
   const stripPlan = planClubStrip({
     clubs: clubs.map((club) => {
       const row = averages.find((item) => item.club.id === club.id);
-      return {
-        id: club.id,
-        carry: row ? rankDistanceYards(clubToRankInput(row.club, row)) : null,
-      };
+      return toWheelFillClub(club, row);
     }),
     yardsLeft: target?.dYards ?? toGreen.yards,
   });
   const stripItems = stripPlan.ids.map((id) => {
     const club = clubs.find((row) => row.id === id);
-    const row = averages.find((item) => item.club.id === id);
-    const carry = row ? rankDistanceYards(clubToRankInput(row.club, row)) : null;
-    return { id, label: formatSuggestedClubChip(club?.shortName ?? id, carry) };
-  });
-  const dragPreview = planPlaceToDragPreview({
-    from: placeFrom,
-    pin: placeToDraft,
-    green,
+    return { id, label: formatSuggestedClubChip(club?.shortName ?? id, stripPlan.carries[id]) };
   });
   const holeTee = resolveHoleTee({
     holeTee: teePointFromHoleFeature(osmOverlay, holeNumber, green),
     osmTee: teePointForHole(osmOverlay, holeNumber),
+    green,
   });
   const holeCamera = lockHoleCamera({
     tee: holeTee,
     green,
     shotPins: shotPinsForHoleCamera(shots),
     phone: fix ? { lat: fix.lat, lng: fix.lng } : null,
+    previous: lastHoleCamera.current,
+  });
+  if (holeCamera) lastHoleCamera.current = holeCamera;
+  addShotFromRef.current = resolveAddShotFromPin({
+    tee: holeTee,
+    lastLanding: lastLandingMark(shots),
   });
   const insertSlots = planInsertSlots(shots);
   const playLayout = planPlayLayout();
@@ -568,11 +570,10 @@ export default function HoleScreen() {
         id: club.id,
         shortName: formatSuggestedClubChip(club.shortName, rankDistanceYards(club)),
       })),
-      bag: clubs.map((club) => {
-        const row = averages.find((item) => item.club.id === club.id);
-        const carry = row ? rankDistanceYards(clubToRankInput(row.club, row)) : null;
-        return { id: club.id, shortName: formatSuggestedClubChip(club.shortName, carry) };
-      }),
+      bag: clubs.map((club) => ({
+        id: club.id,
+        shortName: formatSuggestedClubChip(club.shortName, stripPlan.carries[club.id] ?? null),
+      })),
       holeNumber,
       yardsToGreen: target?.dYards ?? toGreen.yards,
       yardsQuality: toGreen.quality,
@@ -923,23 +924,17 @@ export default function HoleScreen() {
   const catchUpSheet = planCatchUpSheet(placing);
   const hideHoleButtons = catchUpSheet.holeButtons === 'hidden';
   const catchUpFullScreen = catchUpSheet.map === 'fullscreen';
-  const livePlaceHint =
-    placeToDraft && dragPreview
-      ? `${COPY.shot} ${dragPreview.shotLabel} · ${COPY.toGreen} ${dragPreview.toGreenLabel}`
-      : null;
   const placeHint =
     placeMode === 'edit-from'
       ? COPY.editFromHint
       : placeMode === 'edit-to'
-        ? livePlaceHint ?? COPY.editToHint
+        ? COPY.editToHint
         : placing
           ? placeTo
             ? `${placedYards ?? '—'} yd · ${COPY.pickClub}`
-            : livePlaceHint
-              ? livePlaceHint
-              : placeFrom
-                ? COPY.placeToHint
-                : COPY.placeFromHint
+            : placeFrom
+              ? null
+              : COPY.placeFromHint
           : null;
 
   const onCancelPlace = () => {
@@ -969,6 +964,8 @@ export default function HoleScreen() {
               : undefined
           }
           lockFrame
+          showPhonePin={!catchUpFullScreen}
+          allowMapsChrome={!catchUpFullScreen}
           hideYardsOverlay={!catchUpFullScreen}
           frameEpoch={catchUpFullScreen ? 'catchup' : `play-${hole.number}-${playFrameNonce}`}
           onFrameReady={setMapFramed}
@@ -1164,7 +1161,6 @@ export default function HoleScreen() {
           <View style={styles.dockRow}>
             <View style={styles.dockStrip}>
               <ClubStrip
-                compact
                 items={stripItems}
                 pickId={stripPlan.pickId}
                 disabled={readOnly || placing}
@@ -1175,22 +1171,6 @@ export default function HoleScreen() {
                 }}
               />
             </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={COPY.allClubs}
-              disabled={readOnly || placing}
-              onPress={openBag}
-              style={styles.dockChipSide}>
-              <Text style={styles.dockChipText}>{COPY.allClubs}</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={COPY.sayClub}
-              disabled={placing}
-              onPress={() => void onListen()}
-              style={styles.dockChipSide}>
-              <Text style={styles.dockChipText}>{listening ? COPY.listening : COPY.sayClub}</Text>
-            </Pressable>
           </View>
           <View style={styles.dockRow}>
             <Pressable
@@ -1202,6 +1182,14 @@ export default function HoleScreen() {
                 {sticky ? `${COPY.stickyClub} · ${sticky.shortName}` : COPY.stickyClub}
               </Text>
               <MarkCheck nonce={checkNonce} />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={COPY.allClubs}
+              disabled={readOnly || placing}
+              onPress={openBag}
+              style={styles.dockAction}>
+              <Text style={styles.dockActionText}>{COPY.allClubs}</Text>
             </Pressable>
             {!readOnly ? (
               <Pressable
@@ -1231,6 +1219,14 @@ export default function HoleScreen() {
               onPress={() => goToHole(holeNumber + 1)}
               style={styles.dockAction}>
               <Text style={styles.dockActionText}>{COPY.nextHole}</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={COPY.sayClub}
+              disabled={placing}
+              onPress={() => void onListen()}
+              style={styles.dockAction}>
+              <Text style={styles.dockActionText}>{listening ? COPY.listening : COPY.sayClub}</Text>
             </Pressable>
           </View>
         </View>
@@ -1421,6 +1417,8 @@ export default function HoleScreen() {
             osmOverlay={osmOverlay}
             lockFrame
             hideYardsOverlay
+            showPhonePin={false}
+            allowMapsChrome
             frameEpoch={`edit-${hole.number}-${editingShot?.id ?? 'none'}`}
             heading={holeCamera?.heading ?? null}
             framePoints={
@@ -1694,7 +1692,7 @@ export default function HoleScreen() {
 
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: colors.bg },
-  mapFill: { flex: 1, minHeight: 0, flexGrow: 1, flexBasis: '60%' },
+  mapFill: { flex: 1, minHeight: '60%', flexGrow: 1, flexBasis: '60%' },
   mapWrapFull: { flex: 1, minHeight: 0 },
   catchUpBar: {
     flexDirection: 'row',
@@ -1800,7 +1798,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   dockRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  dockStrip: { flex: 1, minWidth: 0, height: 40 },
+  dockStrip: { flex: 1, minWidth: 0, height: 60 },
   dockChip: {
     flex: 1,
     minHeight: 36,

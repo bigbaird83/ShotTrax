@@ -2,6 +2,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
+  addShotPlaceHintShowsAsFooter,
+  addShotPlaceHintShowsOnMap,
+  holeCameraLeavesAloneAfterOpen,
+  holeCameraReframesOnGps,
+  holeCameraReframesOnPinDrag,
+  holeCameraUsesDeviceHeading,
+} from './holeCamera';
+import {
   PLAY_DOCK_ACTIONS,
   PLAY_MAP_MIN_RATIO,
   planPlayLayout,
@@ -32,9 +40,17 @@ import {
   playHidesMapsLegal,
   playHidesMapsCompass,
   playMapsChromeUntilTap,
+  addShotHidesMapsLegal,
+  addShotHidesMapsCompass,
+  addShotHidesUserLocation,
+  addShotFollowsUserLocation,
   playSuggestedIsSidewaysStrip,
   playStackedSuggestionChips,
   playStripCappedAtThree,
+  playUnderWheelIncludes,
+  playSameClubSitsUnderWheel,
+  playAllClubsSitsUnderWheel,
+  playAllClubsSitsBesideWheel,
 } from './playLayout';
 
 test('play map fills at least 60% down to a two-row dock; header is overlay', () => {
@@ -63,7 +79,11 @@ test('dock is not fat All clubs, Say a club, or a tall Same club', () => {
   assert.equal(layout.allClubs, 'chip');
   assert.equal(layout.sayClub, 'chip');
   assert.equal(layout.sameClub, 'short');
-  assert.deepEqual(playChipRowIncludes(), ['suggested', 'all_clubs', 'say_club']);
+  assert.deepEqual(playChipRowIncludes(), ['suggested']);
+  assert.deepEqual(playUnderWheelIncludes(), ['same_club', 'all_clubs']);
+  assert.equal(playSameClubSitsUnderWheel(), true);
+  assert.equal(playAllClubsSitsUnderWheel(), true);
+  assert.equal(playAllClubsSitsBesideWheel(), false);
   assert.equal(playShowsFatAllClubs(), false);
   assert.equal(playShowsFatSayClub(), false);
   assert.equal(playShowsTallSameClub(), false);
@@ -75,11 +95,13 @@ test('play hole screen uses the fill layout and does not keep the empty middle',
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   assert.match(hole, /planPlayLayout/);
   assert.match(hole, /styles\.mapFill/);
+  assert.match(hole, /minHeight: '60%'/);
+  assert.match(hole, /flexBasis: '60%'/);
   assert.match(hole, /styles\.dock/);
   assert.match(hole, /styles\.shotLine/);
   assert.match(hole, /COPY\.allClubs/);
   assert.match(hole, /COPY\.sayClub/);
-  assert.match(hole, /styles\.dockChip/);
+  assert.match(hole, /styles\.dockAction/);
   assert.doesNotMatch(hole, /ThumbZone/);
   assert.doesNotMatch(hole, /styles\.shotList/);
   assert.doesNotMatch(hole, /styles\.clubChip/);
@@ -103,7 +125,7 @@ test('play hole screen uses the fill layout and does not keep the empty middle',
   assert.match(map, /styles\.mapCover/);
   assert.match(map, /if \(lockFrame\) return null;/);
   assert.doesNotMatch(
-    map.slice(map.indexOf('const lockedRegion'), map.indexOf('const dragPreview')),
+    map.slice(map.indexOf('const lockedRegion'), map.indexOf('const dragLines')),
     /userFix/,
   );
   const fitBlock = map.slice(map.indexOf('if (lockFrame) {'), map.indexOf('mapRef.current?.fitToCoordinates'));
@@ -112,7 +134,8 @@ test('play hole screen uses the fill layout and does not keep the empty middle',
 
 test('All clubs and Say a club are chips in row 1; edit is tap a shot, not a dock row', () => {
   assert.equal(playDockRowCount(), 2);
-  assert.deepEqual(playChipRowIncludes(), ['suggested', 'all_clubs', 'say_club']);
+  assert.deepEqual(playChipRowIncludes(), ['suggested']);
+  assert.deepEqual(playUnderWheelIncludes(), ['same_club', 'all_clubs']);
   assert.equal(playEditIsDockRow(), false);
   assert.equal(anyEarlierShotCanOpenEdit(), true);
 
@@ -121,7 +144,10 @@ test('All clubs and Say a club are chips in row 1; edit is tap a shot, not a doc
   assert.equal((dock.match(/styles\.dockRow/g) ?? []).length, 2);
   assert.match(dock, /COPY\.allClubs/);
   assert.match(dock, /COPY\.sayClub/);
-  assert.match(dock, /styles\.dockChip/);
+  const wheelAt = dock.indexOf('<ClubStrip');
+  const sameAt = dock.indexOf('COPY.stickyClub');
+  const allAt = dock.indexOf('COPY.allClubs');
+  assert.ok(wheelAt >= 0 && sameAt > wheelAt && allAt > sameAt);
   assert.doesNotMatch(dock, /COPY\.editShot|COPY\.changeClub|COPY\.moveFrom|COPY\.moveTo/);
   assert.match(hole, /shots\.map\(\(shot\) => \{[\s\S]*openEdit\(shot\.id\)/);
   assert.match(hole, /label=\{COPY\.changeClub\}/);
@@ -142,6 +168,43 @@ test('All clubs and Say a club are chips in row 1; edit is tap a shot, not a doc
   assert.match(editSheet, /<HoleMap/);
   assert.match(editSheet, /lockFrame/);
   assert.match(editSheet, /frameEpoch=\{`edit-/);
+});
+
+test('Add shot, play, and edit open hole-up once; map chip stays, footer does not', () => {
+  assert.equal(addShotPlaceHintShowsOnMap(), true);
+  assert.equal(addShotPlaceHintShowsAsFooter(), false);
+  assert.equal(holeCameraLeavesAloneAfterOpen(), true);
+  assert.equal(holeCameraReframesOnGps(), false);
+  assert.equal(holeCameraReframesOnPinDrag(), false);
+  assert.equal(holeCameraUsesDeviceHeading(), false);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  assert.match(hole, /previous: lastHoleCamera\.current/);
+  assert.match(hole, /lastHoleCamera\.current = null/);
+  assert.match(hole, /styles\.catchUpHint/);
+  assert.match(hole, /placeHint=\{placeHint\}/);
+  assert.match(hole, /heading=\{holeCamera\?\.heading \?\? null\}/);
+  assert.doesNotMatch(hole, /heading=\{fix|deviceHeading|compass/);
+
+  const playMap = hole.slice(hole.indexOf('<HoleMap'), hole.indexOf('onDropGreenEstimate'));
+  assert.match(playMap, /lockFrame/);
+  assert.match(playMap, /framePoints=/);
+  const editMap = hole.slice(hole.indexOf('visible={editOpen && !editClubOpen}'), hole.indexOf('visible={scoreOpen}'));
+  assert.match(editMap, /<HoleMap/);
+  assert.match(editMap, /lockFrame/);
+  assert.match(editMap, /heading=\{holeCamera\?\.heading \?\? null\}/);
+
+  const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
+  assert.match(map, /initialCamera: holeUpCamera/);
+  assert.doesNotMatch(map, /camera: holeUpCamera/);
+  assert.doesNotMatch(map, /region: lockedRegion/);
+  assert.doesNotMatch(map, /styles\.placeHint/);
+  const ready = map.slice(map.indexOf('onMapReady'), map.indexOf('onRegionChangeComplete'));
+  assert.match(ready, /if \(framedOnce\.current\) return;/);
+  assert.doesNotMatch(ready, /applyLockedCamera/);
+  const settled = map.slice(map.indexOf('const onRegionSettled'), map.indexOf('if (!lockedRegion)'));
+  assert.match(settled, /if \(framedOnce\.current\)/);
+  assert.doesNotMatch(settled, /framedOnce\.current = false/);
 });
 
 test('opening, Prev/Next, and Scorecard or Menu return reframe before the dock comes back', () => {
@@ -225,7 +288,37 @@ test('play header is one line; shot list is one overlay row with + and In play o
   assert.match(overlayShots, /styles\.shotLinePlus/);
 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
-  assert.match(map, /showsCompass=\{mapsChrome\}/);
+  assert.match(map, /showsCompass=\{allowMapsChrome && mapsChrome\}/);
   assert.match(map, /legalLabelInsets/);
   assert.match(map, /revealMapsChrome/);
+});
+
+test('Add shot hides the user puck, Legal, and compass; play and edit wait for a tap', () => {
+  assert.equal(addShotHidesUserLocation(), true);
+  assert.equal(addShotFollowsUserLocation(), false);
+  assert.equal(addShotHidesMapsLegal(), true);
+  assert.equal(addShotHidesMapsCompass(), true);
+  assert.equal(playHidesMapsLegal(), true);
+  assert.equal(playHidesMapsCompass(), true);
+  assert.equal(playMapsChromeUntilTap(), true);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const playMap = hole.slice(hole.indexOf('<HoleMap'), hole.indexOf('onDropGreenEstimate'));
+  assert.match(playMap, /showPhonePin=\{!catchUpFullScreen\}/);
+  assert.match(playMap, /allowMapsChrome=\{!catchUpFullScreen\}/);
+  const editMap = hole.slice(hole.indexOf('visible={editOpen && !editClubOpen}'), hole.indexOf('visible={scoreOpen}'));
+  assert.match(editMap, /showPhonePin=\{false\}/);
+  assert.match(editMap, /allowMapsChrome/);
+
+  const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
+  const userLoc = map.slice(map.indexOf('showsUserLocation='), map.indexOf('showsMyLocationButton'));
+  assert.match(userLoc, /allowMapsChrome/);
+  assert.match(userLoc, /: false/);
+  assert.doesNotMatch(userLoc, /true/);
+  assert.match(map, /followsUserLocation=\{false\}/);
+  assert.match(map, /showPhonePin && userDot/);
+  assert.match(map, /!allowMapsChrome \? <View pointerEvents="none" style=\{styles\.legalCover\}/);
+  assert.match(map, /showsCompass=\{allowMapsChrome && mapsChrome\}/);
+  assert.doesNotMatch(map, /followsUserLocation=\{true\}/);
+  assert.doesNotMatch(map, /showsUserLocation=\{true\}/);
 });

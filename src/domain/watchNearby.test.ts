@@ -24,6 +24,10 @@ import {
   watchShowsBag,
   watchShowsScoring,
   watchShowsSettings,
+  liveRoundOpensThatHole,
+  watchOpenCoversLiveHoleWithCourses,
+  startDifferentRoundLivesUnderHome,
+  planWatchOpenFace,
 } from './watchNearby';
 import {
   WATCH_MESSAGE_TYPES,
@@ -184,6 +188,45 @@ test('Watch start messages never run acceptFix and never send Watch GPS', () => 
   });
   assert.equal(tees.type, 'nearbyTees');
   assert.equal(tees.tees[0].name, 'Blue');
+});
+
+test('a live round opens that hole; a different round lives under Home', () => {
+  assert.equal(liveRoundOpensThatHole(), true);
+  assert.equal(watchOpenCoversLiveHoleWithCourses(), false);
+  assert.equal(startDifferentRoundLivesUnderHome(), true);
+  assert.equal(planWatchOpenFace({ hasLiveRound: true }), 'hole');
+  assert.equal(planWatchOpenFace({ hasLiveRound: true, openedFromHome: false }), 'hole');
+  assert.equal(planWatchOpenFace({ hasLiveRound: false }), 'nearby');
+  assert.equal(planWatchOpenFace({ hasLiveRound: true, openedFromHome: true }), 'nearby');
+  assert.notEqual(planWatchOpenFace({ hasLiveRound: true }), 'nearby');
+
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+  assert.match(session, /var active: Bool = false/);
+  assert.match(session, /var hasLiveHole/);
+  assert.match(session, /var showsNearby/);
+  assert.match(session, /nearbyFromHome/);
+  assert.match(session, /dismissNearbyToHole/);
+  assert.match(session, /if hasLiveHole && !nearbyFromHome \{ return \}/);
+  const leaveFn = session.slice(session.indexOf('func leave('), session.indexOf('func dismissNearbyToHole'));
+  assert.match(leaveFn, /nearbyFromHome = true/);
+  assert.match(leaveFn, /requestNearby/);
+  assert.match(leaveFn, /"type": "clubNav"/);
+  const replyFn = session.slice(session.indexOf('private func handleReply'), session.indexOf('private func failUnavailable'));
+  assert.match(replyFn, /type == "startRound"/);
+  assert.match(replyFn, /nearbyFromHome = false/);
+  assert.match(replyFn, /nearby.active = false/);
+
+  const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  assert.match(watchUi, /session\.showsNearby/);
+  assert.match(watchUi, /session\.hasLiveHole/);
+  assert.match(watchUi, /dismissNearbyToHole/);
+  const pick = watchUi.slice(watchUi.indexOf('private var clubPick'), watchUi.indexOf('private var moreClubs'));
+  assert.doesNotMatch(pick, /session\.nearby\.active/);
+  assert.equal((pick.match(/Text\("Home"\)/g) ?? []).length, 1);
+
+  const service = readFileSync(new URL('../services/watchNearby.ts', import.meta.url), 'utf8');
+  assert.match(service, /allowDuringRound/);
+  assert.match(service, /hasActiveRound\(\) && !opts\?\.allowDuringRound/);
 });
 
 test('Watch nearby UI is a short list — no search, bag, settings, or scoring', () => {

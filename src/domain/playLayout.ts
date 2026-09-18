@@ -62,8 +62,25 @@ export function playShowsFatSayClub(): false {
   return false;
 }
 
-export function playChipRowIncludes(): readonly ['suggested', 'all_clubs', 'say_club'] {
-  return ['suggested', 'all_clubs', 'say_club'];
+/** Wheel is the first dock row. Same club and All clubs sit under it. */
+export function playChipRowIncludes(): readonly ['suggested'] {
+  return ['suggested'];
+}
+
+export function playUnderWheelIncludes(): readonly ['same_club', 'all_clubs'] {
+  return ['same_club', 'all_clubs'];
+}
+
+export function playSameClubSitsUnderWheel(): true {
+  return true;
+}
+
+export function playAllClubsSitsUnderWheel(): true {
+  return true;
+}
+
+export function playAllClubsSitsBesideWheel(): false {
+  return false;
 }
 
 /** Suggested slot is the sideways carry strip, not stacked chips. */
@@ -169,4 +186,21 @@ export function playHidesMapsCompass(): true {
 /** After a tap, Legal and the compass may show. They do not sit on the hole the whole time. */
 export function playMapsChromeUntilTap(): true {
   return true;
+}
+
+/** Add shot never shows Legal, the compass, or the user-location puck. */
+export function addShotHidesMapsLegal(): true {
+  return true;
+}
+
+export function addShotHidesMapsCompass(): true {
+  return true;
+}
+
+export function addShotHidesUserLocation(): true {
+  return true;
+}
+
+export function addShotFollowsUserLocation(): false {
+  return false;
 }

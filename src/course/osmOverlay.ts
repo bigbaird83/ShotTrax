@@ -4,7 +4,7 @@ import { isValidLatLng, type LatLng } from '../domain/latLng';
 import type { OsmFeature, OsmGolfKind, OsmOverlay, OsmOverlayHook, OsmOverlayQuery } from './types';
 
 export const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
-const DEFAULT_HOLE_RADIUS_M = 400;
+const DEFAULT_HOLE_RADIUS_M = 1000;
 const DEFAULT_COURSE_RADIUS_M = 1200;
 const OSM_KINDS: OsmGolfKind[] = ['green', 'fairway', 'tee', 'hole'];
 

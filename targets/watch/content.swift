@@ -13,14 +13,22 @@ struct ContentView: View {
 
   var body: some View {
     Group {
-      if session.nearby.active, session.nearby.openPhone || (session.nearby.courses.isEmpty && session.nearby.tees.isEmpty) {
-        Text(session.nearby.line.isEmpty ? "open the phone" : session.nearby.line)
-          .font(.footnote.weight(.bold))
-          .foregroundStyle(Color("cream"))
-          .padding(.horizontal, 4)
-      } else if session.nearby.active {
+      if session.showsNearby, session.nearby.openPhone || (session.nearby.courses.isEmpty && session.nearby.tees.isEmpty) {
+        VStack(alignment: .leading, spacing: 8) {
+          if session.hasLiveHole {
+            nearbyBack
+          }
+          Text(session.nearby.line.isEmpty ? "open the phone" : session.nearby.line)
+            .font(.footnote.weight(.bold))
+            .foregroundStyle(Color("cream"))
+        }
+        .padding(.horizontal, 4)
+      } else if session.showsNearby {
         ScrollView {
           VStack(alignment: .leading, spacing: 8) {
+            if session.hasLiveHole {
+              nearbyBack
+            }
             statusHeader
             nearbyStart
           }
@@ -42,12 +50,27 @@ struct ContentView: View {
   }
 
   @ViewBuilder
+  private var nearbyBack: some View {
+    Button(action: { session.dismissNearbyToHole() }) {
+      Text("Back")
+        .font(.system(size: 13, weight: .heavy))
+        .foregroundStyle(Color("cream"))
+        .frame(maxWidth: .infinity, minHeight: 32)
+        .overlay(
+          RoundedRectangle(cornerRadius: 8)
+            .stroke(Color("cream"), lineWidth: 1)
+        )
+    }
+    .buttonStyle(.plain)
+  }
+
+  @ViewBuilder
   private var statusHeader: some View {
     HStack(alignment: .firstTextBaseline, spacing: 6) {
-      Text(session.nearby.active ? "Courses near you" : session.putt.open ? "Hole \(session.putt.holeNumber) · Putts" : session.list.statusLine)
+      Text(session.showsNearby ? "Courses near you" : session.putt.open ? "Hole \(session.putt.holeNumber) · Putts" : session.list.statusLine)
         .font(.footnote.weight(.bold))
         .foregroundStyle(Color("cream"))
-      if !session.nearby.active, !session.putt.open, session.list.showSoft {
+      if !session.showsNearby, !session.putt.open, session.list.showSoft {
         Text("Approximate")
           .font(.system(size: 10, weight: .heavy))
           .padding(.horizontal, 5)
@@ -140,25 +163,35 @@ struct ContentView: View {
 
   @ViewBuilder
   private var clubPick: some View {
-    VStack(alignment: .leading, spacing: 2) {
-      HStack(alignment: .center, spacing: 4) {
-        Text(session.list.statusLine)
-          .font(.system(size: 11, weight: .bold))
-          .foregroundStyle(Color("cream"))
-          .lineLimit(1)
-          .minimumScaleFactor(0.8)
-        Spacer(minLength: 2)
+    VStack(alignment: .leading, spacing: 4) {
+      Text(session.list.statusLine)
+        .font(.system(size: 13, weight: .bold))
+        .foregroundStyle(Color("cream"))
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
+
+      HStack(spacing: 6) {
         Button(action: { session.leave("back") }) {
           Text("Back")
-            .font(.system(size: 10, weight: .bold))
+            .font(.system(size: 13, weight: .heavy))
             .foregroundStyle(Color("cream"))
+            .frame(maxWidth: .infinity, minHeight: 32)
+            .overlay(
+              RoundedRectangle(cornerRadius: 8)
+                .stroke(Color("cream"), lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
         .disabled(session.sending)
         Button(action: { session.leave("home") }) {
           Text("Home")
-            .font(.system(size: 10, weight: .bold))
+            .font(.system(size: 13, weight: .heavy))
             .foregroundStyle(Color("cream"))
+            .frame(maxWidth: .infinity, minHeight: 32)
+            .overlay(
+              RoundedRectangle(cornerRadius: 8)
+                .stroke(Color("cream"), lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
         .disabled(session.sending)
@@ -176,7 +209,7 @@ struct ContentView: View {
         ScrollViewReader { proxy in
           ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-              ForEach(stripClubs, id: \.id) { club in
+              ForEach(wheelClubs, id: \.token) { club in
                 Text(session.list.label(for: club.id))
                   .font(.system(size: 15, weight: .black))
                   .foregroundStyle(club.id == stripPickId ? Color("accent") : Color("cream"))
@@ -186,7 +219,8 @@ struct ContentView: View {
                     RoundedRectangle(cornerRadius: 10)
                       .stroke(club.id == stripPickId ? Color("accent") : Color("cream"), lineWidth: 1)
                   )
-                  .id(club.id)
+                  .padding(.trailing, club.seamAfter ? 16 : 0)
+                  .id(club.token)
                   .onTapGesture {
                     if !session.sending { session.pick(clubId: club.id) }
                   }
@@ -194,34 +228,34 @@ struct ContentView: View {
             }
             .padding(.horizontal, (geo.size.width - pillWidth) / 2)
           }
-          .onAppear { proxy.scrollTo(stripPickId ?? stripClubs.first?.id, anchor: .center) }
+          .onAppear { proxy.scrollTo(stripPickToken, anchor: .center) }
           .onChange(of: stripScrollKey) { _ in
-            proxy.scrollTo(stripPickId ?? stripClubs.first?.id, anchor: .center)
+            proxy.scrollTo(stripPickToken, anchor: .center)
           }
         }
       }
       .frame(height: 44)
 
-      Button(action: { session.pickSameClub() }) {
-        Text(sameClubTitle)
-          .font(.system(size: 13, weight: .heavy))
-          .foregroundStyle(Color("cream"))
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .frame(minHeight: 24)
-      }
-      .buttonStyle(.bordered)
-      .tint(Color("cream"))
-      .disabled(session.sending)
+      HStack(spacing: 6) {
+        Button(action: { session.pickSameClub() }) {
+          Text(sameClubTitle)
+            .font(.system(size: 12, weight: .heavy))
+            .foregroundStyle(Color("cream"))
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .frame(maxWidth: .infinity, minHeight: 28)
+        }
+        .buttonStyle(.plain)
+        .disabled(session.sending)
 
-      Button(action: { showAllClubs.toggle() }) {
-        Text("All clubs")
-          .font(.system(size: 13, weight: .heavy))
-          .foregroundStyle(Color("cream"))
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .frame(minHeight: 24)
+        Button(action: { showAllClubs.toggle() }) {
+          Text("All clubs")
+            .font(.system(size: 12, weight: .heavy))
+            .foregroundStyle(Color("cream"))
+            .frame(maxWidth: .infinity, minHeight: 28)
+        }
+        .buttonStyle(.plain)
       }
-      .buttonStyle(.bordered)
-      .tint(Color("cream"))
 
       if showAllClubs {
         ScrollView {
@@ -268,17 +302,46 @@ struct ContentView: View {
     return clubs.min { abs($0.carry - hole) < abs($1.carry - hole) }?.id
   }
 
+  private var stripPickToken: String? {
+    guard let id = stripPickId else { return wheelClubs.first?.token }
+    if stripClubs.count <= 1 { return id }
+    return "\(id)#1"
+  }
+
   private var stripClubs: [(id: String, carry: Int)] {
     session.list.bag
       .filter { $0 != "club_putter" }
-      .map { id in (id: id, carry: carryFromLabel(session.list.label(for: id))) }
+      .compactMap { id -> (id: String, carry: Int)? in
+        guard let carry = carryFromLabel(session.list.label(for: id)) else { return nil }
+        return (id: id, carry: carry)
+      }
       .sorted { $0.carry < $1.carry }
   }
 
-  private func carryFromLabel(_ label: String) -> Int {
+  private var wheelClubs: [(token: String, id: String, carry: Int, seamAfter: Bool)] {
+    let base = stripClubs
+    guard base.count > 1 else {
+      return base.map { (token: $0.id, id: $0.id, carry: $0.carry, seamAfter: false) }
+    }
+    return (0..<3).flatMap { copy in
+      base.enumerated().map { index, club in
+        (
+          token: "\(club.id)#\(copy)",
+          id: club.id,
+          carry: club.carry,
+          seamAfter: index == base.count - 1
+        )
+      }
+    }
+  }
+
+  private func carryFromLabel(_ label: String) -> Int? {
     let parts = label.components(separatedBy: " · ")
-    if parts.count > 1, let yards = Int(parts[1]) { return yards }
-    return 10_000
+    guard parts.count > 1 else { return nil }
+    let raw = parts[1].trimmingCharacters(in: .whitespaces)
+    if raw.isEmpty || raw == "—" || raw == "-" { return nil }
+    guard let yards = Int(raw), yards > 0 else { return nil }
+    return yards
   }
 }
 
