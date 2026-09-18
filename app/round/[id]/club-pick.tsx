@@ -127,6 +127,7 @@ export default function ClubPickScreen() {
   const holeTee = resolveHoleTee({
     holeTee: teePointFromHoleFeature(osmOverlay, holeNumber, green),
     osmTee: teePointForHole(osmOverlay, holeNumber),
+    green,
   });
   const fix = useLiveFix(!withoutGps);
 

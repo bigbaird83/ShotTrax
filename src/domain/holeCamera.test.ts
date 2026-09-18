@@ -2,11 +2,18 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { haversineYards } from './haversine';
 import {
+  addShotPlaceHintShowsAsFooter,
+  addShotPlaceHintShowsOnMap,
   applyHoleMapCamera,
   holeCameraFramedAfterApply,
   holeCameraHeading,
   holeCameraIncludesPhoneFix,
   holeCameraIsCameraOnly,
+  holeCameraLeavesAloneAfterOpen,
+  holeCameraReframesOnGps,
+  holeCameraReframesOnPinDrag,
+  holeCameraTeeBelowGreenOnScreen,
+  holeCameraUsesDeviceHeading,
   holeCameraUsesPhoneHeading,
   holeFrameRegion,
   holeCameraNullRefIsFramed,
@@ -14,9 +21,13 @@ import {
   holeMapRevealsBeforeHoleFrame,
   holeMapShowsUserLocation,
   holeNativeCamera,
+  keepLastGoodHoleCamera,
+  keepLastGoodHoleFrameWhenGreenMissing,
   lockFrameRegionIncludesPhone,
   lockHoleCamera,
+  missingGreenCentersOnPhone,
   nerdOutTrailUsesLockFrame,
+  openingHoleRegionContainsTeeAndGreen,
   planHoleCamera,
   regionIsHoleFrame,
   resolveHoleTee,
@@ -57,10 +68,16 @@ test('bearing is tee-to-green, never the phone heading or compass north by defau
   const phone = { lat: 36.5, lng: -121.5 };
   const holeUp = holeCameraHeading(tee, greenNorth);
   const fromPhone = holeCameraHeading(phone, greenNorth);
+  const deviceHeading = 274;
   assert.equal(holeUp, 0);
   assert.notEqual(holeUp, fromPhone);
+  assert.notEqual(holeUp, deviceHeading);
   assert.equal(holeCameraUsesPhoneHeading(), false);
+  assert.equal(holeCameraUsesDeviceHeading(), false);
   assert.equal(holeCameraIsCameraOnly(), true);
+  const east = planHoleCamera({ tee, green: greenEast, shotPins: [] });
+  assert.equal(east?.heading, holeCameraHeading(tee, greenEast));
+  assert.notEqual(east?.heading, deviceHeading);
 });
 
 test('missing tee or green means no rotation — do not invent a bearing', () => {
@@ -236,6 +253,9 @@ test('null map ref does not stick framed; home GPS stays out; hole tee still fra
     true,
   );
   assert.equal(resolveHoleTee({ holeTee: null, osmTee: null }), null);
+  const nearGreen = { lat: 37.0098, lng: -122.0 };
+  const farTee = { lat: 36.995, lng: -122.0 };
+  assert.deepEqual(resolveHoleTee({ holeTee: nearGreen, osmTee: farTee, green: greenNorth }), farTee);
   assert.equal(holeMapRevealsBeforeHoleFrame(), false);
   assert.equal(holeMapShowsUserLocation(true), false);
   assert.equal(holeMapFitsToCoordinates(true), false);
@@ -251,4 +271,50 @@ test('null map ref does not stick framed; home GPS stays out; hole tee still fra
     ]),
     [tee, greenNorth],
   );
+});
+
+test('opening camera puts tee below green and fits both, not sideways', () => {
+  assert.equal(holeCameraLeavesAloneAfterOpen(), true);
+  assert.equal(holeCameraReframesOnGps(), false);
+  assert.equal(holeCameraReframesOnPinDrag(), false);
+
+  for (const green of [greenNorth, greenSouth, greenEast, greenWest]) {
+    const locked = lockHoleCamera({ tee, green, shotPins: [] });
+    assert.ok(locked);
+    assert.equal(locked.mode, 'tee_green');
+    assert.equal(locked.heading, holeCameraHeading(tee, green));
+    assert.equal(holeCameraTeeBelowGreenOnScreen(tee, green, locked.heading), true);
+    const region = holeFrameRegion(locked.points);
+    assert.equal(openingHoleRegionContainsTeeAndGreen(region, tee, green), true);
+    const sideways = locked.heading != null && (locked.heading === 90 || locked.heading === 270);
+    if (sideways) {
+      assert.equal(holeCameraTeeBelowGreenOnScreen(tee, green, 0), false);
+    }
+  }
+});
+
+test('missing green keeps the last hole frame and never centers on the phone', () => {
+  const home = { lat: 40.7128, lng: -74.006 };
+  const good = lockHoleCamera({ tee, green: greenNorth, shotPins: [], phone: home });
+  assert.ok(good);
+  assert.equal(good.mode, 'tee_green');
+
+  const missing = lockHoleCamera({
+    tee,
+    green: null,
+    shotPins: [],
+    phone: home,
+    previous: good,
+  });
+  assert.equal(missing?.mode, 'tee_green');
+  assert.deepEqual(missing?.points, [tee, greenNorth]);
+  assert.equal(missing?.heading, 0);
+  assert.notEqual(missing?.center.lat, home.lat);
+  assert.notEqual(missing?.center.lng, home.lng);
+  assert.equal(missingGreenCentersOnPhone(), false);
+  assert.equal(keepLastGoodHoleFrameWhenGreenMissing(), true);
+
+  assert.equal(lockHoleCamera({ tee, green: null, shotPins: [], phone: home }), null);
+  assert.deepEqual(keepLastGoodHoleCamera(null, good), good);
+  assert.equal(keepLastGoodHoleCamera(null, null), null);
 });

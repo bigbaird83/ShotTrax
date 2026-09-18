@@ -32,7 +32,7 @@ import { COPY, finishPuttsChip, finishShotChip, formatHoleHeader, formatPlayHead
 import { canAdvanceHole, holesNeedingOpenShots } from '@/src/domain/holeAdvance';
 import { isPutterClubId } from '@/src/domain/defaultBag';
 import { catchUpPinFromTap, planCancelCatchUp, planCatchUpSheet } from '@/src/domain/catchUpMap';
-import { lockHoleCamera, resolveHoleTee, shotPinsForHoleCamera } from '@/src/domain/holeCamera';
+import { lockHoleCamera, resolveHoleTee, shotPinsForHoleCamera, type LockedHoleCamera } from '@/src/domain/holeCamera';
 import { deleteShotPrompt } from '@/src/domain/deleteShot';
 import { planInsertSlots } from '@/src/domain/insertShot';
 import { confirmUndoIsLive, planConfirmUndo, type ConfirmUndoWindow } from '@/src/domain/confirmUndo';
@@ -105,6 +105,7 @@ export default function HoleScreen() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [playFrameNonce, setPlayFrameNonce] = useState(0);
   const [mapFramed, setMapFramed] = useState(false);
+  const lastHoleCamera = useRef<LockedHoleCamera | null>(null);
   const [confirmUndo, setConfirmUndo] = useState<ConfirmUndoWindow | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [placeFrom, setPlaceFrom] = useState<LatLng | null>(null);
@@ -279,6 +280,7 @@ export default function HoleScreen() {
 
   useEffect(() => {
     setMapFramed(false);
+    lastHoleCamera.current = null;
   }, [holeNumber]);
 
   useEffect(() => {
@@ -313,6 +315,7 @@ export default function HoleScreen() {
         courseId: round?.courseApiId,
         location,
         holeNumber,
+        radiusM: 1000,
       })
       .then((overlay) => {
         if (live) setOsmOverlay(overlay);
@@ -412,13 +415,16 @@ export default function HoleScreen() {
   const holeTee = resolveHoleTee({
     holeTee: teePointFromHoleFeature(osmOverlay, holeNumber, green),
     osmTee: teePointForHole(osmOverlay, holeNumber),
+    green,
   });
   const holeCamera = lockHoleCamera({
     tee: holeTee,
     green,
     shotPins: shotPinsForHoleCamera(shots),
     phone: fix ? { lat: fix.lat, lng: fix.lng } : null,
+    previous: lastHoleCamera.current,
   });
+  if (holeCamera) lastHoleCamera.current = holeCamera;
   const insertSlots = planInsertSlots(shots);
   const playLayout = planPlayLayout();
   const playHeaderYards = planPlayHeaderYards({

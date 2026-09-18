@@ -271,7 +271,11 @@ function NativeHoleMap({
 
   const markFramedIfLive = (applied: boolean) => {
     const framed = holeCameraFramedAfterApply(applied);
-    if (framed) framedOnce.current = true;
+    if (framed) {
+      framedOnce.current = true;
+      pendingLocked.current = false;
+      setHoleCameraReady(true);
+    }
     return framed;
   };
 
@@ -312,17 +316,19 @@ function NativeHoleMap({
 
   const onRegionSettled = (region: { latitude: number; longitude: number }) => {
     if (!lockFrame) return;
+    if (framedOnce.current) {
+      if (regionIsHoleFrame(region, holeCenterRef.current)) setHoleCameraReady(true);
+      return;
+    }
     if (regionIsHoleFrame(region, holeCenterRef.current)) {
       framedOnce.current = true;
       pendingLocked.current = false;
       setHoleCameraReady(true);
       return;
     }
-    // One-finger pin or two-finger pan/zoom must not snap the hole back.
+    // Pin drag and two-finger pan must not move the camera. GPS neither.
     if (toPinLive) return;
-    // House / default GPS region is not framed. Do not stick. Re-apply the hole.
-    framedOnce.current = false;
-    pendingLocked.current = true;
+    // Opening house / default GPS is not framed. A null ref is not success.
     markFramedIfLive(frameLockedMap());
   };
 
@@ -343,12 +349,8 @@ function NativeHoleMap({
       : null;
 
   const lockedCameraProps = holeUpCamera
-    ? holeCameraReady
-      ? { initialCamera: holeUpCamera }
-      : { camera: holeUpCamera }
-    : holeCameraReady
-      ? { initialRegion: lockedRegion }
-      : { region: lockedRegion };
+    ? { initialCamera: holeUpCamera }
+    : { initialRegion: lockedRegion };
 
   return (
     <View
@@ -391,10 +393,7 @@ function NativeHoleMap({
         }}
         onMapReady={() => {
           if (!lockFrame) return;
-          if (framedOnce.current) {
-            applyLockedCamera();
-            return;
-          }
+          if (framedOnce.current) return;
           markFramedIfLive(frameLockedMap());
         }}
         onRegionChangeComplete={onRegionSettled}
@@ -581,7 +580,6 @@ function NativeHoleMap({
         </View>
       ) : null}
       {!green && !placeHint ? <Text style={styles.hint}>{COPY.longPressGreen}</Text> : null}
-      {placeHint ? <Text style={[styles.hint, styles.placeHint]}>{placeHint}</Text> : null}
     </View>
   );
 }
@@ -672,11 +670,6 @@ const styles = StyleSheet.create({
     fontSize: type.tiny,
     paddingHorizontal: 10,
     paddingVertical: 8,
-  },
-  placeHint: {
-    fontSize: type.body,
-    fontWeight: '800',
-    paddingVertical: 12,
   },
   fallback: {
     minHeight: 160,

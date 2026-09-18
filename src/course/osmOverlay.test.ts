@@ -168,6 +168,7 @@ test('fetchOsmOverlay POSTs around a real pin and returns parsed features', asyn
   assert.match(body, /\["golf"="fairway"\]/);
   assert.match(body, /\["golf"="tee"\]/);
   assert.match(body, /\["golf"="hole"\]/);
+  assert.match(body, /around:1000/);
   assert.ok(overlay);
   assert.equal(overlay?.features[0].kind, 'green');
 });

@@ -182,6 +182,7 @@ export default function RoundSummaryScreen() {
               tee: resolveHoleTee({
                 holeTee: teePointFromHoleFeature(osmOverlay, hole.number, green),
                 osmTee: teePointForHole(osmOverlay, hole.number),
+                green,
               }),
               green,
               shotPins: shotPinsForHoleCamera(shots),

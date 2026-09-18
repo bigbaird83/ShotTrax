@@ -2,6 +2,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
+  addShotPlaceHintShowsAsFooter,
+  addShotPlaceHintShowsOnMap,
+  holeCameraLeavesAloneAfterOpen,
+  holeCameraReframesOnGps,
+  holeCameraReframesOnPinDrag,
+  holeCameraUsesDeviceHeading,
+} from './holeCamera';
+import {
   PLAY_DOCK_ACTIONS,
   PLAY_MAP_MIN_RATIO,
   planPlayLayout,
@@ -156,6 +164,43 @@ test('All clubs and Say a club are chips in row 1; edit is tap a shot, not a doc
   assert.match(editSheet, /<HoleMap/);
   assert.match(editSheet, /lockFrame/);
   assert.match(editSheet, /frameEpoch=\{`edit-/);
+});
+
+test('Add shot, play, and edit open hole-up once; map chip stays, footer does not', () => {
+  assert.equal(addShotPlaceHintShowsOnMap(), true);
+  assert.equal(addShotPlaceHintShowsAsFooter(), false);
+  assert.equal(holeCameraLeavesAloneAfterOpen(), true);
+  assert.equal(holeCameraReframesOnGps(), false);
+  assert.equal(holeCameraReframesOnPinDrag(), false);
+  assert.equal(holeCameraUsesDeviceHeading(), false);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  assert.match(hole, /previous: lastHoleCamera\.current/);
+  assert.match(hole, /lastHoleCamera\.current = null/);
+  assert.match(hole, /styles\.catchUpHint/);
+  assert.match(hole, /placeHint=\{placeHint\}/);
+  assert.match(hole, /heading=\{holeCamera\?\.heading \?\? null\}/);
+  assert.doesNotMatch(hole, /heading=\{fix|deviceHeading|compass/);
+
+  const playMap = hole.slice(hole.indexOf('<HoleMap'), hole.indexOf('onDropGreenEstimate'));
+  assert.match(playMap, /lockFrame/);
+  assert.match(playMap, /framePoints=/);
+  const editMap = hole.slice(hole.indexOf('visible={editOpen && !editClubOpen}'), hole.indexOf('visible={scoreOpen}'));
+  assert.match(editMap, /<HoleMap/);
+  assert.match(editMap, /lockFrame/);
+  assert.match(editMap, /heading=\{holeCamera\?\.heading \?\? null\}/);
+
+  const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
+  assert.match(map, /initialCamera: holeUpCamera/);
+  assert.doesNotMatch(map, /camera: holeUpCamera/);
+  assert.doesNotMatch(map, /region: lockedRegion/);
+  assert.doesNotMatch(map, /styles\.placeHint/);
+  const ready = map.slice(map.indexOf('onMapReady'), map.indexOf('onRegionChangeComplete'));
+  assert.match(ready, /if \(framedOnce\.current\) return;/);
+  assert.doesNotMatch(ready, /applyLockedCamera/);
+  const settled = map.slice(map.indexOf('const onRegionSettled'), map.indexOf('if (!lockedRegion)'));
+  assert.match(settled, /if \(framedOnce\.current\)/);
+  assert.doesNotMatch(settled, /framedOnce\.current = false/);
 });
 
 test('opening, Prev/Next, and Scorecard or Menu return reframe before the dock comes back', () => {
