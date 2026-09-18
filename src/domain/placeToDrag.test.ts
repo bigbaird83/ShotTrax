@@ -37,7 +37,20 @@ import {
   liveYardsUseScreenPixel,
   mapPanChangesLiveYards,
   mapPinchChangesLiveYards,
+  planDragShotLines,
   planPlaceToDragPreview,
+  resolveAddShotFromPin,
+  addShotFollowsUser,
+  addShotFromUsesHousePin,
+  addShotFromUsesPhone,
+  addShotShowsMapsCompass,
+  addShotShowsMapsLegal,
+  addShotShowsUserLocation,
+  addShotShowsUserPin,
+  dragYardsSitInHeader,
+  dragYardsSitOnLines,
+  dragYardsSitOnPins,
+  dragYardsSitUnderConfirm,
   toGreenYardsSitOnGreen,
   toPinFollowsFinger,
 } from './placeToDrag';
@@ -81,9 +94,10 @@ test('preview is this shot from pin to the finger, not the prior shot', () => {
   assert.equal(placeToAskOn(), 'never');
   assert.equal(placeToFilterOn(), 'confirm');
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
-  const preview = hole.slice(hole.indexOf('const dragPreview'), hole.indexOf('const holeCamera'));
-  assert.match(preview, /from: placeFrom/);
-  assert.doesNotMatch(preview, /previousFrom|lastClosed/);
+  const fromPin = hole.slice(hole.indexOf('addShotFromRef.current = resolveAddShotFromPin'), hole.indexOf('const insertSlots'));
+  assert.match(fromPin, /tee: holeTee/);
+  assert.match(fromPin, /lastLanding: lastLandingMark\(shots\)/);
+  assert.doesNotMatch(fromPin, /phone:/);
 });
 
 test('preview to-green is fingertip to green center; over 600 or no green is a dash', () => {
@@ -101,61 +115,52 @@ test('preview to-green is fingertip to green center; over 600 or no green is a d
   assert.equal(formatDragPreviewYards(null), '—');
 });
 
-test('shot yards sit above the finger; to-green stays on the green', () => {
-  const preview = planPlaceToDragPreview({ from, drag, green, phone, previousFrom });
-  assert.ok(preview);
-  assert.equal(preview.shotYards, roundYards(haversineYards(from, drag)));
-  assert.notEqual(preview.shotYards, roundYards(haversineYards(previousFrom, drag)));
-  assert.notEqual(preview.shotYards, roundYards(haversineYards(from, phone)));
-  assert.equal(preview.toGreenYards, roundYards(haversineYards(drag, green)));
-  assert.notEqual(preview.toGreenYards, roundYards(haversineYards(phone, green)));
-  assert.equal(preview.shotLabel, `${preview.shotYards} yd`);
-  assert.equal(preview.toGreenLabel, `${preview.toGreenYards} yd`);
-  assert.equal(liveYardsSitAboveFinger(), true);
-  assert.equal(toGreenYardsSitOnGreen(), true);
-  assert.equal(preview.fingerAt.lat, drag.lat);
-  assert.equal(preview.fingerAt.lng, drag.lng);
-  assert.equal(preview.pinAt.lat, drag.lat);
-  assert.equal(preview.pinAt.lng, drag.lng);
-  assert.equal(preview.shotAt.lat, drag.lat);
-  assert.ok(preview.toGreenAt);
-  assert.equal(preview.toGreenAt.lat, green.lat);
-  assert.equal(preview.toGreenAt.lng, green.lng);
-  assert.notEqual(preview.toGreenAt.lat, drag.lat);
-  assert.notEqual(preview.shotAt.lat, phone.lat);
-  assert.notEqual(preview.toGreenAt.lat, phone.lat);
+test('shot and to-green yards sit on the two dotted lines, not the header or pins', () => {
+  const lines = planDragShotLines({ from, drag, green, phone });
+  assert.ok(lines.shot);
+  assert.ok(lines.toGreen);
+  assert.equal(lines.shot.yards, roundYards(haversineYards(from, drag)));
+  assert.notEqual(lines.shot.yards, roundYards(haversineYards(previousFrom, drag)));
+  assert.notEqual(lines.shot.yards, roundYards(haversineYards(from, phone)));
+  assert.equal(lines.toGreen.yards, roundYards(haversineYards(drag, green)));
+  assert.notEqual(lines.toGreen.yards, roundYards(haversineYards(phone, green)));
+  assert.deepEqual(lines.shot.from, from);
+  assert.deepEqual(lines.shot.to, drag);
+  assert.deepEqual(lines.toGreen.from, drag);
+  assert.deepEqual(lines.toGreen.to, green);
+  assert.equal(lines.shot.label, `${lines.shot.yards} yd`);
+  assert.equal(lines.toGreen.label, `${lines.toGreen.yards} yd`);
+  assert.equal(dragYardsSitOnLines(), true);
+  assert.equal(dragYardsSitInHeader(), false);
+  assert.equal(dragYardsSitUnderConfirm(), false);
+  assert.equal(dragYardsSitOnPins(), false);
+  assert.equal(liveYardsSitAboveFinger(), false);
+  assert.equal(toGreenYardsSitOnGreen(), false);
   assert.equal(dragPreviewInventsGreen(), false);
-  assert.equal(placeToAskOn(), 'never');
-  assert.equal(placeToFilterOn(), 'confirm');
 
-  const noGreen = planPlaceToDragPreview({ from, drag, green: null, phone });
-  assert.ok(noGreen);
-  assert.equal(noGreen.toGreenYards, null);
-  assert.equal(noGreen.toGreenLabel, '—');
-  assert.equal(noGreen.toGreenAt, null);
+  const noGreen = planDragShotLines({ from, drag, green: null, phone });
+  assert.ok(noGreen.shot);
+  assert.equal(noGreen.toGreen, null);
 
   const farGreen = { lat: drag.lat + 0.02, lng: drag.lng };
   assert.ok(roundYards(haversineYards(drag, farGreen)) > TO_GREEN_LIVE_MAX_YD);
-  const over = planPlaceToDragPreview({ from, drag, green: farGreen, phone });
-  assert.ok(over);
-  assert.equal(over.toGreenYards, null);
-  assert.equal(over.toGreenLabel, '—');
-  assert.ok(over.toGreenAt);
+  const over = planDragShotLines({ from, drag, green: farGreen, phone });
+  assert.ok(over.shot);
+  assert.equal(over.toGreen, null);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
-  assert.match(hole, /COPY\.shot/);
-  assert.match(hole, /dragPreview\.shotLabel/);
-  assert.match(hole, /COPY\.toGreen/);
-  assert.match(hole, /dragPreview\.toGreenLabel/);
+  assert.doesNotMatch(hole, /dragPreview\.shotLabel/);
+  assert.doesNotMatch(hole, /Shot \$\{dragPreview/);
+  const confirm = hole.slice(hole.indexOf('styles.confirmDock'), hole.indexOf('styles.sticky'));
+  assert.doesNotMatch(confirm, /shotLabel|toGreenLabel|107 yd/);
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
-  assert.match(map, /COPY\.shot/);
-  assert.match(map, /COPY\.toGreen/);
-  assert.match(map, /dragPreview\.pinAt/);
-  assert.match(map, /dragPreview\.toGreenAt/);
-  assert.match(map, /anchor=\{\{ x: 0\.5, y: 1 \}\}/);
-  const fingerChip = map.slice(map.indexOf('dragPreview.pinAt'), map.indexOf('dragPreview?.toGreenAt'));
-  assert.match(fingerChip, /dragPreview\.shotLabel/);
-  assert.doesNotMatch(fingerChip, /dragPreview\.toGreenLabel/);
+  assert.match(map, /planDragShotLines/);
+  assert.match(map, /lineDashPattern/);
+  assert.match(map, /dragLines\.shot\.label/);
+  assert.match(map, /dragLines\.toGreen\.label/);
+  assert.match(map, /dragLines\.shot\.mid/);
+  assert.match(map, /dragLines\.toGreen\.mid/);
+  assert.doesNotMatch(map, /dragPreview\.pinAt|dragChip|COPY\.shot/);
 });
 
 test('finger preview has no GPS quality and does not run acceptFix', () => {
@@ -184,10 +189,10 @@ test('finger preview has no GPS quality and does not run acceptFix', () => {
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const dragBlock = hole.slice(hole.indexOf("if (placeMode === 'to')"), hole.indexOf("if (placeMode === 'edit-from')"));
   assert.doesNotMatch(dragBlock, /acceptFix|getFix|good|soft|forceMark/);
-  const call = hole.slice(hole.indexOf('const dragPreview'), hole.indexOf('const holeCamera'));
+  const call = hole.slice(hole.indexOf('addShotFromRef.current = resolveAddShotFromPin'), hole.indexOf('const insertSlots'));
   assert.doesNotMatch(call, /phone:|fixQuality|acceptFix|screen:|camera:/);
-  assert.match(call, /pin: placeToDraft/);
-  assert.match(hole, /planPlaceToDragPreview/);
+  assert.match(call, /tee: holeTee/);
+  assert.match(hole, /resolveAddShotFromPin/);
 });
 
 test('nothing is stored before Confirm; cancel leaves no to pin', () => {
@@ -315,22 +320,22 @@ test('panning the map leaves shot and to-green unchanged unless the landing pin 
   assert.doesNotMatch(live, /locationX|locationY|pageX|pageY/);
 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
-  const preview = map.slice(map.indexOf('const dragPreview = useMemo'), map.indexOf('const lockedCameraRef'));
-  assert.match(preview, /pin: placedTo/);
+  const preview = map.slice(map.indexOf('const dragLines = useMemo'), map.indexOf('const lockedCameraRef'));
+  assert.match(preview, /drag: placedTo/);
   assert.doesNotMatch(preview, /locationX|locationY|screen:|camera:/);
   assert.match(map, /if \(!onPlaceToDrag \|\| mapOwnsGesture\) return/);
-  assert.match(map, /dragPreview\.pinAt/);
+  assert.match(map, /planDragShotLines/);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
-  const call = hole.slice(hole.indexOf('const dragPreview'), hole.indexOf('const holeCamera'));
-  assert.match(call, /pin: placeToDraft/);
+  const call = hole.slice(hole.indexOf('addShotFromRef.current = resolveAddShotFromPin'), hole.indexOf('const insertSlots'));
+  assert.match(call, /tee: holeTee/);
   assert.doesNotMatch(call, /screen:|camera:|locationX|pageX/);
 });
 
 test('Add shot to-pin is a draft until Confirm shot; edit still does not read the phone', () => {
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   assert.match(hole, /confirmPlaceToDraft/);
-  assert.match(hole, /liveShotYardsFromThisFromPin|planPlaceToDragPreview/);
+  assert.match(hole, /resolveAddShotFromPin|planDragShotLines/);
   assert.match(hole, /setPlaceToDraft/);
   assert.match(hole, /COPY\.confirmPlace/);
   assert.match(hole, /label=\{COPY\.confirmPlace\}/);
@@ -399,7 +404,41 @@ test('to pin follows the finger; live yards are this shot only; nothing stores b
   );
   assert.match(editToTap, /setPlaceToDraft\(tap\)/);
   assert.doesNotMatch(editToTap, /commitMovePin|addPlacedShot/);
-  const dragCall = hole.slice(hole.indexOf('const dragPreview'), hole.indexOf('const holeCamera'));
-  assert.match(dragCall, /from: placeFrom/);
-  assert.doesNotMatch(dragCall, /previousFrom|lastClosed|phone:/);
+  const dragCall = hole.slice(hole.indexOf('addShotFromRef.current = resolveAddShotFromPin'), hole.indexOf('const insertSlots'));
+  assert.match(dragCall, /tee: holeTee/);
+  assert.doesNotMatch(dragCall, /previousFrom|phone:/);
+});
+
+test('Add shot from-pin is tee or last landing, never the house, phone, or puck', () => {
+  assert.deepEqual(resolveAddShotFromPin({ tee: from, lastLanding: null, phone }), from);
+  assert.deepEqual(resolveAddShotFromPin({ tee: from, lastLanding: drag, phone }), drag);
+  assert.equal(resolveAddShotFromPin({ tee: null, lastLanding: null, phone }), null);
+  assert.notEqual(resolveAddShotFromPin({ tee: from, lastLanding: null, phone })?.lat, phone.lat);
+  assert.notEqual(resolveAddShotFromPin({ tee: from, lastLanding: null, phone })?.lat, house.lat);
+  assert.equal(addShotFromUsesPhone(), false);
+  assert.equal(addShotFromUsesHousePin(), false);
+  assert.equal(addShotShowsUserLocation(), false);
+  assert.equal(addShotShowsUserPin(), false);
+  assert.equal(addShotFollowsUser(), false);
+  assert.equal(addShotShowsMapsLegal(), false);
+  assert.equal(addShotShowsMapsCompass(), false);
+
+  const houseFrom = planDragShotLines({ from: house, drag, green, phone });
+  const teeFrom = planDragShotLines({ from, drag, green, phone });
+  assert.notEqual(houseFrom.shot?.yards, teeFrom.shot?.yards);
+  assert.deepEqual(teeFrom.shot?.from, from);
+  assert.notDeepEqual(teeFrom.shot?.from, house);
+  assert.notDeepEqual(teeFrom.shot?.from, phone);
+  assert.deepEqual(teeFrom.toGreen?.to, green);
+  assert.notDeepEqual(teeFrom.toGreen?.to, phone);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  assert.match(hole, /showPhonePin=\{!catchUpFullScreen\}/);
+  assert.match(hole, /allowMapsChrome=\{!catchUpFullScreen\}/);
+  assert.match(hole, /addShotFromRef\.current/);
+  const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
+  assert.match(map, /followsUserLocation=\{false\}/);
+  assert.match(map, /showPhonePin && userDot/);
+  assert.match(map, /styles\.legalCover/);
+  assert.doesNotMatch(map, /showsUserLocation=\{true\}/);
 });

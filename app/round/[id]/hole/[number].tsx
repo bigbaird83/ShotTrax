@@ -36,7 +36,7 @@ import { lockHoleCamera, resolveHoleTee, shotPinsForHoleCamera, type LockedHoleC
 import { deleteShotPrompt } from '@/src/domain/deleteShot';
 import { planInsertSlots } from '@/src/domain/insertShot';
 import { confirmUndoIsLive, planConfirmUndo, type ConfirmUndoWindow } from '@/src/domain/confirmUndo';
-import { confirmPlaceToDraft, planPlaceToDragPreview } from '@/src/domain/placeToDrag';
+import { confirmPlaceToDraft, resolveAddShotFromPin } from '@/src/domain/placeToDrag';
 import { planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
 import { planPlayLayout } from '@/src/domain/playLayout';
 import { planPlacedShot } from '@/src/domain/shotSource';
@@ -106,6 +106,7 @@ export default function HoleScreen() {
   const [playFrameNonce, setPlayFrameNonce] = useState(0);
   const [mapFramed, setMapFramed] = useState(false);
   const lastHoleCamera = useRef<LockedHoleCamera | null>(null);
+  const addShotFromRef = useRef<LatLng | null>(null);
   const [confirmUndo, setConfirmUndo] = useState<ConfirmUndoWindow | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [placeFrom, setPlaceFrom] = useState<LatLng | null>(null);
@@ -215,6 +216,12 @@ export default function HoleScreen() {
     closeEdit();
     resetPlace();
     setInsertSeq(seq);
+    const from = addShotFromRef.current;
+    if (from) {
+      setPlaceFrom(from);
+      setPlaceMode('to');
+      return;
+    }
     setPlaceMode('from');
   };
 
@@ -407,11 +414,6 @@ export default function HoleScreen() {
     const club = clubs.find((row) => row.id === id);
     return { id, label: formatSuggestedClubChip(club?.shortName ?? id, stripPlan.carries[id]) };
   });
-  const dragPreview = planPlaceToDragPreview({
-    from: placeFrom,
-    pin: placeToDraft,
-    green,
-  });
   const holeTee = resolveHoleTee({
     holeTee: teePointFromHoleFeature(osmOverlay, holeNumber, green),
     osmTee: teePointForHole(osmOverlay, holeNumber),
@@ -425,6 +427,10 @@ export default function HoleScreen() {
     previous: lastHoleCamera.current,
   });
   if (holeCamera) lastHoleCamera.current = holeCamera;
+  addShotFromRef.current = resolveAddShotFromPin({
+    tee: holeTee,
+    lastLanding: lastLandingMark(shots),
+  });
   const insertSlots = planInsertSlots(shots);
   const playLayout = planPlayLayout();
   const playHeaderYards = planPlayHeaderYards({
@@ -918,23 +924,17 @@ export default function HoleScreen() {
   const catchUpSheet = planCatchUpSheet(placing);
   const hideHoleButtons = catchUpSheet.holeButtons === 'hidden';
   const catchUpFullScreen = catchUpSheet.map === 'fullscreen';
-  const livePlaceHint =
-    placeToDraft && dragPreview
-      ? `${COPY.shot} ${dragPreview.shotLabel} · ${COPY.toGreen} ${dragPreview.toGreenLabel}`
-      : null;
   const placeHint =
     placeMode === 'edit-from'
       ? COPY.editFromHint
       : placeMode === 'edit-to'
-        ? livePlaceHint ?? COPY.editToHint
+        ? COPY.editToHint
         : placing
           ? placeTo
             ? `${placedYards ?? '—'} yd · ${COPY.pickClub}`
-            : livePlaceHint
-              ? livePlaceHint
-              : placeFrom
-                ? COPY.placeToHint
-                : COPY.placeFromHint
+            : placeFrom
+              ? null
+              : COPY.placeFromHint
           : null;
 
   const onCancelPlace = () => {
@@ -964,6 +964,8 @@ export default function HoleScreen() {
               : undefined
           }
           lockFrame
+          showPhonePin={!catchUpFullScreen}
+          allowMapsChrome={!catchUpFullScreen}
           hideYardsOverlay={!catchUpFullScreen}
           frameEpoch={catchUpFullScreen ? 'catchup' : `play-${hole.number}-${playFrameNonce}`}
           onFrameReady={setMapFramed}
@@ -1415,6 +1417,8 @@ export default function HoleScreen() {
             osmOverlay={osmOverlay}
             lockFrame
             hideYardsOverlay
+            showPhonePin={false}
+            allowMapsChrome
             frameEpoch={`edit-${hole.number}-${editingShot?.id ?? 'none'}`}
             heading={holeCamera?.heading ?? null}
             framePoints={

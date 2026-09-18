@@ -97,13 +97,116 @@ export function editToTwoFingersPanAndZoom(): true {
   return dragTwoFingersPanAndZoom();
 }
 
-export function liveYardsSitAboveFinger(): true {
+export function liveYardsSitAboveFinger(): false {
+  return false;
+}
+
+/** Yards sit on the dotted lines, not on the pins. */
+export function toGreenYardsSitOnGreen(): false {
+  return false;
+}
+
+export function dragYardsSitOnLines(): true {
   return true;
 }
 
-/** To-green stays on the green center. Not above the finger. */
-export function toGreenYardsSitOnGreen(): true {
-  return true;
+export function dragYardsSitInHeader(): false {
+  return false;
+}
+
+export function dragYardsSitUnderConfirm(): false {
+  return false;
+}
+
+export function dragYardsSitOnPins(): false {
+  return false;
+}
+
+export function addShotShowsUserLocation(): false {
+  return false;
+}
+
+export function addShotShowsUserPin(): false {
+  return false;
+}
+
+export function addShotFollowsUser(): false {
+  return false;
+}
+
+export function addShotShowsMapsLegal(): false {
+  return false;
+}
+
+export function addShotShowsMapsCompass(): false {
+  return false;
+}
+
+/** First shot starts at the course tee. Later shots start at the last landing. Never the phone. */
+export function addShotFromUsesPhone(): false {
+  return false;
+}
+
+export function addShotFromUsesHousePin(): false {
+  return false;
+}
+
+export function resolveAddShotFromPin(args: {
+  tee: LatLng | null;
+  lastLanding: LatLng | null;
+  phone?: LatLng | null;
+}): LatLng | null {
+  void args.phone;
+  if (isValidLatLng(args.lastLanding)) return args.lastLanding;
+  if (isValidLatLng(args.tee)) return args.tee;
+  return null;
+}
+
+export function midpointLatLng(a: LatLng, b: LatLng): LatLng {
+  return { lat: (a.lat + b.lat) / 2, lng: (a.lng + b.lng) / 2 };
+}
+
+export type DragShotLine = {
+  from: LatLng;
+  to: LatLng;
+  mid: LatLng;
+  yards: number;
+  label: string;
+};
+
+/**
+ * Dotted-line yards. Shot line is tee/previous-shot → drag.
+ * To-green is drag → course green center. No green or over 600 → no second line.
+ * Phone / house / puck never enter.
+ */
+export function planDragShotLines(args: {
+  from: LatLng | null;
+  drag: LatLng | null;
+  green: LatLng | null;
+  phone?: LatLng | null;
+}): { shot: DragShotLine | null; toGreen: DragShotLine | null } {
+  void args.phone;
+  const from = isValidLatLng(args.from) ? args.from : null;
+  const drag = isValidLatLng(args.drag) ? args.drag : null;
+  const green = isValidLatLng(args.green) ? args.green : null;
+  const shotYards = liveShotYardsFromThisFromPin({ from, pin: drag });
+  const toGreenYards = liveToGreenYardsFromFinger({ pin: drag, green });
+  return {
+    shot:
+      from && drag && shotYards != null
+        ? { from, to: drag, mid: midpointLatLng(from, drag), yards: shotYards, label: `${shotYards} yd` }
+        : null,
+    toGreen:
+      drag && green && toGreenYards != null
+        ? {
+            from: drag,
+            to: green,
+            mid: midpointLatLng(drag, green),
+            yards: toGreenYards,
+            label: `${toGreenYards} yd`,
+          }
+        : null,
+  };
 }
 
 /** Live yards use the landing pin's map lat/lng, not a screen pixel. */

@@ -121,7 +121,7 @@ test('play hole screen uses the fill layout and does not keep the empty middle',
   assert.match(map, /styles\.mapCover/);
   assert.match(map, /if \(lockFrame\) return null;/);
   assert.doesNotMatch(
-    map.slice(map.indexOf('const lockedRegion'), map.indexOf('const dragPreview')),
+    map.slice(map.indexOf('const lockedRegion'), map.indexOf('const dragLines')),
     /userFix/,
   );
   const fitBlock = map.slice(map.indexOf('if (lockFrame) {'), map.indexOf('mapRef.current?.fitToCoordinates'));
@@ -284,7 +284,7 @@ test('play header is one line; shot list is one overlay row with + and In play o
   assert.match(overlayShots, /styles\.shotLinePlus/);
 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
-  assert.match(map, /showsCompass=\{mapsChrome\}/);
+  assert.match(map, /showsCompass=\{allowMapsChrome && mapsChrome\}/);
   assert.match(map, /legalLabelInsets/);
   assert.match(map, /revealMapsChrome/);
 });
