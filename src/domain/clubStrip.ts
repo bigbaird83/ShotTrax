@@ -65,6 +65,19 @@ export function clubStripCenterUsesHoleYards(): true {
   return true;
 }
 
+/** After a shot lands, the middle pill is closest to yards left — not the tee club. */
+export function clubStripCenterUsesYardsLeft(): true {
+  return true;
+}
+
+export function clubStripUsesRankedTop3(): false {
+  return false;
+}
+
+export function clubStripUsesFullBag(): true {
+  return true;
+}
+
 export function carryFromClubLabel(label: string): number | null {
   const raw = label.split(' · ')[1]?.trim();
   if (!raw || raw === '—') return null;

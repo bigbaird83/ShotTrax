@@ -21,6 +21,9 @@ import {
   clubStripTapMarksLikeChip,
   clubStripTapUsesHomeClubTap,
   clubStripCenterUsesHoleYards,
+  clubStripCenterUsesYardsLeft,
+  clubStripUsesFullBag,
+  clubStripUsesRankedTop3,
   planClubStrip,
 } from './clubStrip';
 import { planClubTapStart } from './homeClubTap';
@@ -41,6 +44,9 @@ test('strip is carry-sorted, full bag, putter off, center is closest to yards le
   assert.equal(clubStripTapMarksLikeChip(), true);
   assert.equal(clubStripTapUsesHomeClubTap(), true);
   assert.equal(clubStripCenterUsesHoleYards(), true);
+  assert.equal(clubStripCenterUsesYardsLeft(), true);
+  assert.equal(clubStripUsesFullBag(), true);
+  assert.equal(clubStripUsesRankedTop3(), false);
   assert.equal(carryFromClubLabel('6i · 185'), 185);
   assert.equal(carryFromClubLabel('6i · —'), null);
   assert.equal(formatSuggestedClubChip('6i', 185), '6i · 185');
@@ -78,6 +84,63 @@ test('strip is carry-sorted, full bag, putter off, center is closest to yards le
   assert.notEqual(afterShot.pickId, 'club_driver');
   assert.equal(afterShot.ids[afterShot.openIndex - 1], 'club_pw');
   assert.equal(afterShot.ids[afterShot.openIndex + 1], 'club_6i');
+});
+
+test('after a shot lands the middle pill is closest to yards left, and the strip is the bag', () => {
+  assert.equal(clubStripCenterUsesYardsLeft(), true);
+  assert.equal(clubStripCenterIsTeeClub(), false);
+  assert.equal(clubStripSortedByCarry(), true);
+  assert.equal(clubStripSortedByName(), false);
+  assert.equal(clubStripCappedAtThree(), false);
+  assert.equal(clubStripUsesFullBag(), true);
+  assert.equal(clubStripUsesRankedTop3(), false);
+  assert.equal(clubStripPutterIncluded(), false);
+  assert.equal(clubStripSwipeMarksShot(), false);
+  assert.equal(clubStripOnlyTapMarks(), true);
+
+  const afterShot = planClubStrip({
+    clubs: [
+      { id: 'club_driver', carry: 250 },
+      { id: 'club_3w', carry: 230 },
+      { id: 'club_5i', carry: 205 },
+      { id: 'club_6i', carry: 185 },
+      { id: 'club_8i', carry: 145 },
+      { id: 'club_pw', carry: 130 },
+      { id: PUTTER_CLUB_ID, carry: 8 },
+    ],
+    yardsLeft: 140,
+  });
+  assert.ok(afterShot.ids.length > 3);
+  assert.deepEqual(afterShot.ids, ['club_pw', 'club_8i', 'club_6i', 'club_5i', 'club_3w', 'club_driver']);
+  assert.equal(afterShot.pickId, 'club_8i');
+  assert.notEqual(afterShot.pickId, 'club_driver');
+  assert.equal(afterShot.ids[afterShot.openIndex - 1], 'club_pw');
+  assert.equal(afterShot.ids[afterShot.openIndex + 1], 'club_6i');
+  assert.ok(!afterShot.ids.includes(PUTTER_CLUB_ID));
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const plan = hole.slice(hole.indexOf('const stripPlan'), hole.indexOf('const stripItems'));
+  assert.match(plan, /clubs\.map/);
+  assert.match(plan, /target\?\.dYards/);
+  assert.doesNotMatch(plan, /rankTopClubs|ranked\.slice|slice\(0,\s*3\)/);
+  assert.match(hole, /COPY\.allClubs/);
+  assert.match(hole, /openBag/);
+
+  const pick = readFileSync(new URL('../../app/round/[id]/club-pick.tsx', import.meta.url), 'utf8');
+  const pickPlan = pick.slice(pick.indexOf('const stripPlan'), pick.indexOf('const stripItems'));
+  assert.match(pickPlan, /clubs\.map/);
+  assert.match(pickPlan, /target\?\.dYards/);
+  assert.doesNotMatch(pickPlan, /rankTopClubs|slice\(0,\s*3\)/);
+
+  const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  const stripClubs = watch.slice(watch.indexOf('private var stripClubs'), watch.indexOf('private func carryFromLabel'));
+  assert.match(stripClubs, /session\.list\.bag/);
+  assert.match(stripClubs, /sorted \{ \$0\.carry < \$1\.carry \}/);
+  assert.doesNotMatch(stripClubs, /top3|localeCompare|name/);
+  assert.match(watch, /session\.list\.yardsToGreen/);
+  assert.match(watch, /Text\("All clubs"\)/);
+  const more = watch.slice(watch.indexOf('private var moreClubs'), watch.indexOf('private var stripScrollKey'));
+  assert.match(more, /session\.list\.bag/);
 });
 
 test('phone strip tap is the old chip mark, and the center pill is closest to hole yards', () => {
