@@ -44,6 +44,8 @@ type Props = {
   heading?: number | null;
   /** Changes when Add shot takes the screen so the hole is framed again. */
   frameEpoch?: string;
+  /** Play header already shows to-green. Keep the map badge for Add shot. */
+  hideYardsOverlay?: boolean;
 };
 
 class MapGuard extends Component<{ children: ReactNode; fallback: ReactNode }, { failed: boolean }> {
@@ -120,6 +122,7 @@ function NativeHoleMap({
   lockFrame,
   heading,
   frameEpoch,
+  hideYardsOverlay,
 }: Props) {
   const mapRef = useRef<MapView | null>(null);
   const framedOnce = useRef(false);
@@ -408,7 +411,7 @@ function NativeHoleMap({
           </Marker>
         ) : null}
       </MapView>
-      {!placeHint ? (
+      {!placeHint && !hideYardsOverlay ? (
         <View pointerEvents="none" style={styles.toGreen}>
           <YardsToGreenBadge
             compact

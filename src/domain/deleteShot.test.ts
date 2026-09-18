@@ -6,15 +6,20 @@ import { PUTTER_CLUB_ID } from './defaultBag';
 import {
   DELETE_SHOT_PROMPT,
   applyDeleteShot,
+  carryAfterDelete,
   deleteFillsGap,
   deleteInventsPoints,
   deleteMovesNeighborPins,
   deleteReopensNeighbor,
+  deleteReplacesSeedAt,
   deleteShotPrompt,
+  neighborEndWasDeletedStart,
+  neighborYardsUpdate,
   planDeleteShot,
   remainingAverageShots,
-  yardsIfDistanceChanged,
 } from './deleteShot';
+import { yardsFromShotPins } from './insertShot';
+import { MIN_CLOSED_SHOTS_FOR_RANK } from './rankClubs';
 import { COPY } from './playerCopy';
 import { includeInDistanceAverages } from './shotSource';
 import type { Shot } from './types';
@@ -165,8 +170,10 @@ test('neighbor coordinates do not change and the gap is not filled', () => {
   assert.equal(deleteFillsGap(), false);
   assert.equal(deleteInventsPoints(), false);
   assert.equal(deleteReopensNeighbor(), false);
+  assert.equal(neighborEndWasDeletedStart(first, middle), false);
+  assert.equal(neighborYardsUpdate(first, middle), null);
+  assert.equal(neighborYardsUpdate(last, middle), null);
   assert.deepEqual(confirmed.plan.yardsUpdates, []);
-  assert.equal(yardsIfDistanceChanged(first, confirmed.remaining[0]!), undefined);
 
   const left = confirmed.remaining[0];
   const right = confirmed.remaining[1];
@@ -317,6 +324,88 @@ test('Watch has no shot-list delete UI to invent', () => {
   const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
   assert.doesNotMatch(watch, /Delete this shot/);
   assert.doesNotMatch(watch, /deleteShot/);
+});
+
+test('delete drops the shot from the five that replace the seed; empty rolls back', () => {
+  const live = { yards: 160, fixQuality: 'good' as const };
+  const five = [live, live, live, live, live];
+  const before = carryAfterDelete({ remainingForClub: five, seed });
+  assert.equal(before.average.count, 5);
+  assert.equal(before.rankYards, 160);
+  assert.equal(before.book.kind, 'live');
+  assert.equal(deleteReplacesSeedAt(), MIN_CLOSED_SHOTS_FOR_RANK);
+
+  const afterOne = carryAfterDelete({ remainingForClub: [live, live, live, live], seed });
+  assert.equal(afterOne.average.count, 4);
+  assert.equal(afterOne.rankYards, 150);
+  assert.ok(afterOne.average.count < MIN_CLOSED_SHOTS_FOR_RANK);
+
+  const noneLeft = carryAfterDelete({ remainingForClub: [], seed });
+  assert.equal(noneLeft.average.count, 0);
+  assert.equal(noneLeft.rankYards, 150);
+  assert.equal(noneLeft.book.kind, 'typed');
+  assert.equal(noneLeft.book.yards, 150);
+
+  const estimated = carryAfterDelete({
+    remainingForClub: [],
+    seed: { typedCarryYards: null, estimatedCarryYards: 148 },
+  });
+  assert.equal(estimated.rankYards, 148);
+  assert.equal(estimated.book.kind, 'estimated');
+
+  const blank = carryAfterDelete({
+    remainingForClub: [],
+    seed: { typedCarryYards: null, estimatedCarryYards: null },
+  });
+  assert.equal(blank.rankYards, null);
+  assert.equal(blank.book.yards, null);
+  assert.equal(blank.book.kind, null);
+});
+
+test('neighbor yards change only if that end was the deleted shot start', () => {
+  const prior = shot({
+    id: 's1',
+    seq: 1,
+    startLat: 37,
+    startLng: -122,
+    endLat: 37.001,
+    endLng: -122,
+    distanceYards: 999,
+  });
+  const open = shot({
+    id: 's2',
+    seq: 2,
+    startLat: 37.001,
+    startLng: -122,
+    endLat: null,
+    endLng: null,
+    distanceYards: null,
+    endedAt: null,
+  });
+  const other = shot({
+    id: 's3',
+    seq: 3,
+    startLat: 36.94,
+    startLng: -121.86,
+    endLat: 36.95,
+    endLng: -121.86,
+    distanceYards: 77,
+  });
+  assert.equal(neighborEndWasDeletedStart(prior, open), true);
+  const fromPins = yardsFromShotPins(prior);
+  assert.notEqual(fromPins, 999);
+  assert.deepEqual(neighborYardsUpdate(prior, open), { id: 's1', distanceYards: fromPins });
+  assert.equal(neighborYardsUpdate(other, open), null);
+
+  const confirmed = applyDeleteShot({ shots: [prior, open, other], shotId: 's2', confirmed: true });
+  assert.equal(confirmed.status, 'commit');
+  if (confirmed.status !== 'commit') return;
+  assert.equal(confirmed.remaining[0]?.startLat, 37);
+  assert.equal(confirmed.remaining[0]?.endLat, 37.001);
+  assert.equal(confirmed.remaining[0]?.distanceYards, fromPins);
+  assert.equal(confirmed.remaining[1]?.startLat, 36.94);
+  assert.equal(confirmed.remaining[1]?.distanceYards, 77);
+  assert.deepEqual(confirmed.plan.yardsUpdates, [{ id: 's1', distanceYards: fromPins }]);
 });
 
 test('missing shot is not a silent delete', () => {

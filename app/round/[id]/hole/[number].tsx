@@ -5,7 +5,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCourseDataClient } from '@/src/course/client';
 import { teePointForHole, teePointFromHoleFeature } from '@/src/course/osmOverlay';
-import { formatParLabel, formatSiLabel, formatTeeMeta } from '@/src/course/layout';
+import { formatParLabel, formatSiLabel } from '@/src/course/layout';
 import type { OsmOverlay } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
 import {
@@ -28,13 +28,14 @@ import {
 } from '@/src/db/repo';
 import { pinOrNull, formatFmbRow, hasApiFmb, yardsToGreenDepth } from '@/src/domain/greenDepth';
 import { clubPickLeaveHref, clubPickLeaveRunsAcceptFix, planClubPickLeave } from '@/src/domain/clubPickNav';
-import { COPY, finishPuttsChip, finishShotChip, formatHoleHeader, formatSuggestedClubChip, markedSuggestedMessage, voiceFailRecovery } from '@/src/domain/playerCopy';
+import { COPY, finishPuttsChip, finishShotChip, formatHoleHeader, formatSuggestedClubChip, markedSuggestedMessage, voiceFailRecovery, yardsToGreenPlayerLabel } from '@/src/domain/playerCopy';
 import { canAdvanceHole, holesNeedingOpenShots } from '@/src/domain/holeAdvance';
 import { isPutterClubId } from '@/src/domain/defaultBag';
 import { catchUpPinFromTap, planCancelCatchUp, planCatchUpSheet } from '@/src/domain/catchUpMap';
 import { lockHoleCamera, resolveHoleTee } from '@/src/domain/holeCamera';
 import { deleteShotPrompt } from '@/src/domain/deleteShot';
 import { planInsertSlots } from '@/src/domain/insertShot';
+import { planPlayLayout } from '@/src/domain/playLayout';
 import { planPlacedShot } from '@/src/domain/shotSource';
 import { planUndoPlacePins } from '@/src/domain/undoLastShot';
 import type { LatLng } from '@/src/domain/latLng';
@@ -78,7 +79,6 @@ import { MarkCheck } from '@/src/ui/MarkCheck';
 import { FullSheet } from '@/src/ui/Sheet';
 import { PuttSheetBody } from '@/src/ui/PuttSheetBody';
 import { ScorecardBody } from '@/src/ui/ScorecardBody';
-import { ThumbZone } from '@/src/ui/ThumbZone';
 import { colors, tapTarget, type } from '@/src/ui/theme';
 
 export default function HoleScreen() {
@@ -364,6 +364,11 @@ export default function HoleScreen() {
     phone: fix ? { lat: fix.lat, lng: fix.lng } : null,
   });
   const insertSlots = planInsertSlots(shots);
+  const playLayout = planPlayLayout();
+  const toGreenCopy = yardsToGreenPlayerLabel(yardsToGreenResult, {
+    hasFix: Boolean(fix),
+    hasGreen: Boolean(green),
+  });
 
   const openPuttSheet = useCallback(
     async (targetHole: number) => {
@@ -824,15 +829,6 @@ export default function HoleScreen() {
 
   const voiceFail = voiceFailRecovery();
 
-  const teeLine = round.teeName
-    ? formatTeeMeta({
-        name: round.teeName,
-        rating: round.teeRating,
-        slope: round.teeSlope,
-        totalYards: round.teeTotalYards,
-      })
-    : null;
-
   const catchUpSheet = planCatchUpSheet(placing);
   const hideHoleButtons = catchUpSheet.holeButtons === 'hidden';
   const catchUpFullScreen = catchUpSheet.map === 'fullscreen';
@@ -857,7 +853,7 @@ export default function HoleScreen() {
 
   return (
     <View style={styles.fill}>
-      <View style={catchUpFullScreen ? styles.mapWrapFull : styles.mapWrap}>
+      <View style={catchUpFullScreen ? styles.mapWrapFull : styles.mapFill}>
         <HoleMap
           fullBleed
           holeNumber={hole.number}
@@ -870,6 +866,7 @@ export default function HoleScreen() {
           placedFrom={placeFrom}
           placedTo={placeTo}
           lockFrame
+          hideYardsOverlay={!catchUpFullScreen}
           frameEpoch={catchUpFullScreen ? 'catchup' : 'play'}
           heading={holeCamera?.heading ?? null}
           framePoints={
@@ -930,231 +927,189 @@ export default function HoleScreen() {
               {placeHint ? <Text style={styles.catchUpHint}>{placeHint}</Text> : null}
             </View>
           ) : (
-            <View style={styles.stickyInner}>
-              <Pressable onPress={() => setMenuOpen(true)} style={styles.back} accessibilityRole="button">
-                <Text style={styles.backLabel}>{COPY.menu}</Text>
-              </Pressable>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.holeTitle}>{formatHoleHeader(hole.number, hole.par)}</Text>
-                <Text style={styles.stickyMeta}>
-                  {formatSiLabel(hole.handicap)}
-                  {hole.yards != null ? ` · ${hole.yards} yd` : ''}
-                </Text>
-                {teeLine ? <Text style={styles.stickyMeta}>{teeLine}</Text> : null}
+            <View>
+              <View style={styles.stickyInner}>
+                <Pressable onPress={() => setMenuOpen(true)} style={styles.back} accessibilityRole="button">
+                  <Text style={styles.backLabel}>{COPY.menu}</Text>
+                </Pressable>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.holeTitle}>{formatHoleHeader(hole.number, hole.par)}</Text>
+                  <Text style={styles.stickyMeta}>
+                    {formatSiLabel(hole.handicap)}
+                    {hole.yards != null ? ` · ${hole.yards} yd` : ''}
+                  </Text>
+                </View>
+                <View style={styles.toGreenChip}>
+                  <Text style={styles.toGreenHeading}>{toGreenCopy.heading}</Text>
+                  <Text style={styles.toGreenValue}>{toGreenCopy.value}</Text>
+                </View>
               </View>
-              <Pressable
-                onPress={() => setScoreOpen(true)}
-                style={styles.scoreChip}
-                accessibilityRole="button">
-                <Text style={styles.scoreChipLabel}>{hole.score ?? '—'}</Text>
-              </Pressable>
+              {playLayout.shotLine === 'header' ? (
+                <ScrollView
+                  horizontal
+                  style={styles.shotLine}
+                  contentContainerStyle={styles.shotLineInner}
+                  showsHorizontalScrollIndicator={false}>
+                  {shots.length === 0 ? (
+                    <Text style={styles.shotLineMuted}>{COPY.noShots}</Text>
+                  ) : (
+                    shots.map((shot) => {
+                      const club = shot.clubId ? clubMap[shot.clubId] : null;
+                      const slot = insertSlots.find((row) => row.afterShotId === shot.id);
+                      const label =
+                        shot.source === 'no_gps' || shot.fixQuality === 'none'
+                          ? COPY.logged
+                          : shot.endedAt == null
+                            ? COPY.inPlay
+                            : `${shot.distanceYards ?? '—'} yd`;
+                      return (
+                        <View key={shot.id} style={styles.shotLineItem}>
+                          <Pressable
+                            disabled={placing}
+                            onPress={() => openEdit(shot.id)}
+                            style={styles.shotLineShot}>
+                            <Text style={styles.shotLineText}>
+                              {shot.seq} {club?.shortName ?? 'Club'} · {label}
+                            </Text>
+                          </Pressable>
+                          {!readOnly && slot && playLayout.insertPlus === 'header' ? (
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel={COPY.insertShot}
+                              disabled={placing}
+                              onPress={() => startCatchUp(slot.seq)}
+                              style={styles.shotLinePlus}>
+                              <Text style={styles.shotLinePlusText}>+</Text>
+                            </Pressable>
+                          ) : null}
+                        </View>
+                      );
+                    })
+                  )}
+                  {!readOnly && shots.length === 0 ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={COPY.insertShot}
+                      disabled={placing}
+                      onPress={() => startCatchUp(1)}
+                      style={styles.shotLinePlus}>
+                      <Text style={styles.shotLinePlusText}>+</Text>
+                    </Pressable>
+                  ) : null}
+                </ScrollView>
+              ) : null}
+              {simBanner ? <GpsBanner message={simBanner} /> : null}
+              {voiceError ? (
+                <View style={styles.overlayBanner}>
+                  <Text style={styles.warn}>{voiceError}</Text>
+                  <Pressable onPress={openBag} style={styles.overlayLink}>
+                    <Text style={styles.backLabel}>{voiceFail.primaryLabel}</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+              {toast ? <Text style={styles.overlayToast}>{toast}</Text> : null}
+              {!readOnly && editUndo ? (
+                <Pressable onPress={onUndoEdit} style={styles.overlayLink}>
+                  <Text style={styles.backLabel}>{COPY.undoEdit}</Text>
+                </Pressable>
+              ) : null}
+              {pendingShots.map((row) => (
+                <Pressable
+                  key={`shot-${row.number}`}
+                  accessibilityRole="button"
+                  disabled={readOnly}
+                  onPress={() => goToHole(row.number)}
+                  style={styles.overlayLink}>
+                  <Text style={styles.backLabel}>{finishShotChip(row.number)}</Text>
+                </Pressable>
+              ))}
+              {pendingPutts.map((row) => (
+                <Pressable
+                  key={row.number}
+                  accessibilityRole="button"
+                  disabled={readOnly}
+                  onPress={() => void openPuttSheet(row.number)}
+                  style={styles.overlayLink}>
+                  <Text style={styles.backLabel}>{finishPuttsChip(row.number)}</Text>
+                </Pressable>
+              ))}
             </View>
           )}
         </View>
       </View>
 
-      {!hideHoleButtons && simBanner ? (
-        <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
-          <GpsBanner message={simBanner} />
-        </View>
-      ) : null}
-
-      {!hideHoleButtons && voiceError ? (
-        <View style={styles.voiceFail}>
-          <Text style={styles.warn}>{voiceError}</Text>
-          <View style={styles.row}>
-            <BigButton
-              label={voiceFail.primaryLabel}
-              style={{ flex: 1 }}
+      {!hideHoleButtons ? (
+        <View style={[styles.dock, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+          <View style={styles.dockRow}>
+            {ranked.map((club, index) => (
+              <Pressable
+                key={club.id}
+                onPress={() => {
+                  if (placing) return;
+                  const full = clubs.find((row) => row.id === club.id);
+                  if (full) void markClub(full);
+                }}
+                style={[
+                  styles.dockChip,
+                  index === 0 && styles.dockChipPrimary,
+                  sticky?.id === club.id && styles.chipOn,
+                ]}>
+                <Text style={[styles.dockChipText, index === 0 && styles.dockChipPrimaryText]}>
+                  {formatSuggestedClubChip(club.shortName, rankDistanceYards(club))}
+                </Text>
+              </Pressable>
+            ))}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={COPY.allClubs}
+              disabled={readOnly || placing}
               onPress={openBag}
-            />
-            <BigButton
-              label={voiceFail.secondaryLabel}
-              variant="ghost"
-              style={{ flex: 1 }}
-              onPress={retryVoice}
-            />
+              style={styles.dockAll}>
+              <Text style={styles.dockAllText}>{COPY.allClubs}</Text>
+            </Pressable>
           </View>
-        </View>
-      ) : null}
-      {!hideHoleButtons && toast ? <Text style={styles.toast}>{toast}</Text> : null}
-
-      {!hideHoleButtons && !readOnly && editUndo && !placing ? (
-        <View style={styles.pendingWrap}>
-          <BigButton label={COPY.undoEdit} variant="ghost" onPress={onUndoEdit} />
-        </View>
-      ) : null}
-
-      {!hideHoleButtons && (pendingPutts.length > 0 || pendingShots.length > 0) ? (
-        <View style={styles.pendingWrap}>
-          {pendingShots.map((row) => (
+          <View style={styles.dockRow}>
             <Pressable
-              key={`shot-${row.number}`}
               accessibilityRole="button"
-              disabled={readOnly}
-              onPress={() => goToHole(row.number)}
-              style={styles.pendingChip}>
-              <Text style={styles.pendingText}>{finishShotChip(row.number)}</Text>
-            </Pressable>
-          ))}
-          {pendingPutts.map((row) => (
-            <Pressable
-              key={row.number}
-              accessibilityRole="button"
-              disabled={readOnly}
-              onPress={() => void openPuttSheet(row.number)}
-              style={styles.pendingChip}>
-              <Text style={styles.pendingText}>{finishPuttsChip(row.number)}</Text>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
-
-      {!hideHoleButtons ? (
-      <ScrollView style={styles.shotList} nestedScrollEnabled>
-        {shots.length === 0 ? (
-          <Text style={styles.muted}>{COPY.noShots}</Text>
-        ) : (
-          shots.map((shot) => {
-            const club = shot.clubId ? clubMap[shot.clubId] : null;
-            const slot = insertSlots.find((row) => row.afterShotId === shot.id);
-            return (
-              <View key={shot.id}>
-                <Pressable
-                  disabled={placing}
-                  onPress={() => openEdit(shot.id)}
-                  style={styles.shot}>
-                  <Text style={styles.shotSeq}>{shot.seq}</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.shotClub}>{club?.shortName ?? 'Club'}</Text>
-                    <Text style={styles.meta}>
-                      {shot.source === 'no_gps' || shot.fixQuality === 'none'
-                        ? COPY.logged
-                        : shot.endedAt == null
-                          ? COPY.inPlay
-                          : `${shot.distanceYards ?? '—'} yd`}
-                    </Text>
-                  </View>
-                  <QualityBadge
-                    quality={shot.fixQuality}
-                    open={shot.endedAt == null && shot.source !== 'no_gps'}
-                    source={shot.source}
-                  />
-                </Pressable>
-                {!readOnly && slot ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={COPY.insertShot}
-                    disabled={placing}
-                    onPress={() => startCatchUp(slot.seq)}
-                    style={styles.insertPlus}>
-                    <Text style={styles.insertPlusText}>+</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            );
-          })
-        )}
-        {!readOnly && shots.length === 0 ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={COPY.insertShot}
-            disabled={placing}
-            onPress={() => startCatchUp(1)}
-            style={styles.insertPlus}>
-            <Text style={styles.insertPlusText}>+</Text>
-          </Pressable>
-        ) : null}
-      </ScrollView>
-      ) : null}
-
-      {!hideHoleButtons && !readOnly && ranked.length > 0 ? (
-        <View style={styles.top3}>
-          {ranked.map((club, index) => (
-            <Pressable
-              key={club.id}
-              onPress={() => {
-                if (placing) return;
-                const full = clubs.find((row) => row.id === club.id);
-                if (full) void markClub(full);
-              }}
-              style={[
-                styles.top3Chip,
-                index === 0 && styles.top3Primary,
-                sticky?.id === club.id && styles.chipOn,
-              ]}>
-              <Text style={[styles.top3Text, index === 0 && styles.top3PrimaryText]}>
-                {formatSuggestedClubChip(club.shortName, rankDistanceYards(club))}
+              disabled={busy || readOnly || !sticky || placing}
+              onPress={() => void onMark()}
+              style={styles.dockAction}>
+              <Text style={styles.dockActionText}>
+                {sticky ? `${COPY.stickyClub} · ${sticky.shortName}` : COPY.stickyClub}
               </Text>
-              {index === 0 ? <Text style={styles.suggest}>{COPY.suggested}</Text> : null}
+              <MarkCheck nonce={checkNonce} />
             </Pressable>
-          ))}
-        </View>
-      ) : null}
-
-      {!hideHoleButtons ? (
-      <ThumbZone>
-        <View style={styles.clubRow}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={sticky ? `${sticky.shortName}. ${COPY.allClubs}` : COPY.allClubs}
-            disabled={readOnly || placing}
-            onPress={openBag}
-            style={styles.clubChip}>
-            <Text style={styles.clubShort}>{sticky?.shortName ?? 'Club'}</Text>
-            <Text style={styles.clubName}>{COPY.allClubs}</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            disabled={placing}
-            onPress={() => void onListen()}
-            style={styles.sideBtn}>
-            <Text style={styles.sideLabel}>{listening ? COPY.listening : COPY.sayClub}</Text>
-          </Pressable>
-        </View>
-
-        <BigButton
-          label={COPY.scorecard}
-          variant="ghost"
-          onPress={() => setScorecardOpen(true)}
-        />
-
-        <View style={styles.markWrap}>
-          <BigButton
-            label={sticky ? `${COPY.stickyClub} · ${sticky.shortName}` : COPY.stickyClub}
-            disabled={busy || readOnly || !sticky || placing}
-            onPress={() => void onMark()}
-          />
-          <MarkCheck nonce={checkNonce} />
-        </View>
-
-        {!readOnly ? (
-          <View style={styles.row}>
-            <BigButton
-              label={COPY.prevHole}
-              variant="ghost"
-              style={{ flex: 1 }}
-              disabled={holeNumber <= 1}
+            {!readOnly ? (
+              <Pressable
+                accessibilityRole="button"
+                disabled={placing}
+                onPress={() => startCatchUp(null)}
+                style={styles.dockAction}>
+                <Text style={styles.dockActionText}>{COPY.addShot}</Text>
+              </Pressable>
+            ) : null}
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setScorecardOpen(true)}
+              style={styles.dockAction}>
+              <Text style={styles.dockActionText}>{COPY.scorecard}</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              disabled={readOnly || holeNumber <= 1}
               onPress={() => goToHole(holeNumber - 1)}
-            />
-            <BigButton
-              label={COPY.nextHole}
-              variant="secondary"
-              style={{ flex: 1 }}
-              disabled={!canAdvanceHole({ holeNumber, holeCount: round.holeCount })}
+              style={styles.dockAction}>
+              <Text style={styles.dockActionText}>{COPY.prevHole}</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              disabled={readOnly || !canAdvanceHole({ holeNumber, holeCount: round.holeCount })}
               onPress={() => goToHole(holeNumber + 1)}
-            />
+              style={styles.dockAction}>
+              <Text style={styles.dockActionText}>{COPY.nextHole}</Text>
+            </Pressable>
           </View>
-        ) : null}
-
-        {!readOnly ? (
-          <BigButton
-            label={COPY.addShot}
-            variant="ghost"
-            onPress={() => startCatchUp(null)}
-          />
-        ) : null}
-      </ThumbZone>
+        </View>
       ) : null}
 
       <FullSheet
@@ -1221,6 +1176,15 @@ export default function HoleScreen() {
             onPress={() => {
               setMenuOpen(false);
               setPenaltyOpen(true);
+            }}
+          />
+          <BigButton
+            label={listening ? COPY.listening : COPY.sayClub}
+            variant="ghost"
+            disabled={placing}
+            onPress={() => {
+              setMenuOpen(false);
+              void onListen();
             }}
           />
           <BigButton
@@ -1591,7 +1555,7 @@ export default function HoleScreen() {
 
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: colors.bg },
-  mapWrap: { flex: 1 },
+  mapFill: { flex: 1, minHeight: 0, flexGrow: 1, flexBasis: '60%' },
   mapWrapFull: { flex: 1, minHeight: 0 },
   catchUpBar: {
     flexDirection: 'row',
@@ -1632,17 +1596,114 @@ const styles = StyleSheet.create({
   backLabel: { color: colors.lime, fontWeight: '800', fontSize: type.meta },
   holeTitle: { color: colors.cream, fontSize: type.body, fontWeight: '900' },
   stickyMeta: { color: colors.muted, fontSize: type.tiny },
-  scoreChip: {
+  toGreenChip: {
     minHeight: 44,
-    minWidth: 44,
-    borderRadius: 12,
-    backgroundColor: colors.bgElevated,
+    paddingHorizontal: 8,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  toGreenHeading: {
+    color: colors.lime,
+    fontSize: type.tiny,
+    fontWeight: '800',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  toGreenValue: { color: colors.cream, fontSize: 22, fontWeight: '900' },
+  shotLine: { marginTop: 6, maxHeight: 36 },
+  shotLineInner: { alignItems: 'center', gap: 6, paddingRight: 8 },
+  shotLineItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  shotLineShot: {
+    minHeight: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(11,26,18,0.88)',
+    paddingHorizontal: 10,
+    justifyContent: 'center',
+  },
+  shotLineText: { color: colors.cream, fontSize: type.tiny, fontWeight: '800' },
+  shotLineMuted: { color: colors.muted, fontSize: type.tiny, fontWeight: '700' },
+  shotLinePlus: {
+    minHeight: 32,
+    minWidth: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.lime,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(11,26,18,0.88)',
+  },
+  shotLinePlusText: { color: colors.lime, fontSize: 18, fontWeight: '900', lineHeight: 20 },
+  overlayBanner: {
+    marginTop: 6,
+    backgroundColor: 'rgba(11,26,18,0.88)',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    gap: 4,
+  },
+  overlayLink: {
+    marginTop: 6,
+    minHeight: 32,
+    justifyContent: 'center',
+    backgroundColor: 'rgba(11,26,18,0.88)',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+  },
+  overlayToast: {
+    marginTop: 6,
+    color: colors.lime,
+    fontSize: type.tiny,
+    fontWeight: '800',
+    backgroundColor: 'rgba(11,26,18,0.88)',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  dock: {
+    flexGrow: 0,
+    flexShrink: 0,
+    backgroundColor: colors.bg,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    gap: 8,
+  },
+  dockRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dockChip: {
+    flex: 1,
+    minHeight: 36,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bgElevated,
+    paddingHorizontal: 4,
   },
-  scoreChipLabel: { color: colors.lime, fontSize: 20, fontWeight: '900' },
+  dockChipPrimary: { borderColor: colors.lime, borderWidth: 2, backgroundColor: '#1C3A24' },
+  dockChipText: { color: colors.cream, fontWeight: '800', fontSize: type.tiny },
+  dockChipPrimaryText: { color: colors.lime, fontWeight: '900' },
+  dockAll: {
+    minHeight: 36,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dockAllText: { color: colors.lime, fontWeight: '800', fontSize: type.tiny },
+  dockAction: {
+    flex: 1,
+    minHeight: 36,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bgElevated,
+    paddingHorizontal: 2,
+  },
+  dockActionText: { color: colors.cream, fontWeight: '800', fontSize: 11, textAlign: 'center' },
   top3: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingTop: 8 },
   top3Chip: {
     flex: 1,
@@ -1664,47 +1725,8 @@ const styles = StyleSheet.create({
   top3Text: { color: colors.cream, fontWeight: '800', fontSize: type.chip },
   top3PrimaryText: { color: colors.lime, fontSize: type.button, fontWeight: '900' },
   suggest: { color: colors.lime, fontSize: type.tiny, fontWeight: '800' },
-  clubRow: { flexDirection: 'row', gap: 8 },
-  clubChip: {
-    flex: 1,
-    minHeight: tapTarget,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: colors.lime,
-    backgroundColor: colors.bgElevated,
-    paddingHorizontal: 14,
-    justifyContent: 'center',
-  },
-  clubShort: { color: colors.lime, fontSize: type.button, fontWeight: '900' },
-  clubName: { color: colors.cream, fontSize: type.tiny },
-  sideBtn: {
-    minHeight: tapTarget,
-    minWidth: 120,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.line,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-  },
-  sideLabel: { color: colors.cream, fontWeight: '800', fontSize: type.meta, textAlign: 'center' },
-  markWrap: { position: 'relative' },
-  pendingWrap: { paddingHorizontal: 16, paddingTop: 8, gap: 8 },
-  pendingChip: {
-    minHeight: 48,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: colors.lime,
-    backgroundColor: '#1C3A24',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-  },
-  pendingText: { color: colors.lime, fontSize: type.body, fontWeight: '900' },
   row: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   warn: { color: colors.orange, fontSize: type.meta, fontWeight: '700' },
-  voiceFail: { paddingHorizontal: 16, paddingTop: 8, gap: 8 },
-  toast: { color: colors.lime, fontSize: type.meta, fontWeight: '800', paddingHorizontal: 16, paddingTop: 6 },
   muted: { color: colors.muted, fontSize: type.body },
   meta: { color: colors.muted, fontSize: type.meta },
   label: { color: colors.cream, fontSize: type.meta, fontWeight: '800', letterSpacing: 0.6 },
@@ -1744,7 +1766,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     minHeight: 64,
   },
-  shotList: { paddingHorizontal: 16, paddingTop: 8, gap: 6, maxHeight: 220 },
   insertPlus: {
     alignSelf: 'center',
     minHeight: 36,
