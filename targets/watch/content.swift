@@ -14,35 +14,73 @@ struct ContentView: View {
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 8) {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-          Text(session.putt.open ? "Hole \(session.putt.holeNumber) · Putts" : session.list.statusLine)
-            .font(.headline)
-            .foregroundStyle(Color("cream"))
-          if !session.putt.open, session.list.showSoft {
-            Text("Approximate")
-              .font(.system(size: 10, weight: .heavy))
-              .padding(.horizontal, 5)
-              .padding(.vertical, 2)
-              .background(Color.orange.opacity(0.25))
-              .clipShape(Capsule())
-          }
-        }
-
-        if !session.feedback.isEmpty {
-          Text(session.feedback)
+        if session.nearby.active, session.nearby.openPhone || (session.nearby.courses.isEmpty && session.nearby.tees.isEmpty) {
+          Text(session.nearby.line.isEmpty ? "open the phone" : session.nearby.line)
             .font(.footnote.weight(.bold))
-            .foregroundStyle(session.feedback.contains("✓") ? Color("accent") : Color.orange)
-        }
-
-        if session.putt.open {
-          puttSheet
+            .foregroundStyle(Color("cream"))
         } else {
-          clubPick
+          HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(session.nearby.active ? "Courses near you" : session.putt.open ? "Hole \(session.putt.holeNumber) · Putts" : session.list.statusLine)
+              .font(.headline)
+              .foregroundStyle(Color("cream"))
+            if !session.nearby.active, !session.putt.open, session.list.showSoft {
+              Text("Approximate")
+                .font(.system(size: 10, weight: .heavy))
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(Color.orange.opacity(0.25))
+                .clipShape(Capsule())
+            }
+          }
+
+          if !session.feedback.isEmpty {
+            Text(session.feedback)
+              .font(.footnote.weight(.bold))
+              .foregroundStyle(session.feedback.contains("✓") ? Color("accent") : Color.orange)
+          }
+
+          if session.nearby.active {
+            nearbyStart
+          } else if session.putt.open {
+            puttSheet
+          } else {
+            clubPick
+          }
         }
       }
       .padding(.horizontal, 4)
     }
     .background(Color("bg").ignoresSafeArea())
+  }
+
+  @ViewBuilder
+  private var nearbyStart: some View {
+    if !session.nearby.tees.isEmpty {
+      if let name = session.nearby.courseName {
+        Text(name)
+          .font(.footnote.weight(.bold))
+          .foregroundStyle(Color("cream"))
+      }
+      ForEach(session.nearby.tees) { tee in
+        Button(action: { session.pickTee(name: tee.name) }) {
+          Text(tee.name)
+            .font(.headline.weight(.heavy))
+            .frame(maxWidth: .infinity, minHeight: 40)
+        }
+        .buttonStyle(.bordered)
+        .disabled(session.sending)
+      }
+    } else {
+      ForEach(session.nearby.courses) { course in
+        Button(action: { session.pickCourse(courseId: course.id) }) {
+          Text(course.name)
+            .font(.headline.weight(.heavy))
+            .frame(maxWidth: .infinity, minHeight: 40)
+        }
+        .buttonStyle(.bordered)
+        .disabled(session.sending)
+      }
+    }
   }
 
   @ViewBuilder

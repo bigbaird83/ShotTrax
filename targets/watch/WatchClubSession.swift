@@ -30,6 +30,26 @@ struct ClubListState {
   }
 }
 
+struct NearbyCourse: Identifiable, Equatable {
+  var id: String
+  var name: String
+}
+
+struct NearbyTee: Identifiable, Equatable {
+  var id: String { name }
+  var name: String
+}
+
+struct NearbyState {
+  var active: Bool = true
+  var openPhone: Bool = true
+  var line: String = "open the phone"
+  var courses: [NearbyCourse] = []
+  var tees: [NearbyTee] = []
+  var courseId: String?
+  var courseName: String?
+}
+
 struct PuttSheetState {
   var open: Bool = false
   var holeNumber: Int = 1
@@ -51,6 +71,7 @@ struct PuttSheetState {
 final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLLocationManagerDelegate {
   @Published var list = ClubListState()
   @Published var putt = PuttSheetState()
+  @Published var nearby = NearbyState()
   @Published var feedback: String = ""
   @Published var sending = false
 
@@ -73,6 +94,42 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
     loadFromDefaults()
     loadPending()
+  }
+
+  func requestNearby() {
+    sending = true
+    feedback = ""
+    sendPick([
+      "type": "nearbyRequest",
+      "at": isoNow(),
+    ], keepPending: false)
+  }
+
+  func pickCourse(courseId: String) {
+    sending = true
+    feedback = ""
+    nearby.courseId = courseId
+    sendPick([
+      "type": "nearbyCoursePick",
+      "courseId": courseId,
+      "at": isoNow(),
+    ], keepPending: false)
+  }
+
+  func pickTee(name: String) {
+    sending = true
+    feedback = ""
+    guard let courseId = nearby.courseId else {
+      feedback = "open the phone"
+      sending = false
+      return
+    }
+    sendPick([
+      "type": "startRound",
+      "courseId": courseId,
+      "teeName": name,
+      "at": isoNow(),
+    ], keepPending: false)
   }
 
   func pick(clubId: String) {
@@ -232,13 +289,71 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     WKInterfaceDevice.current().play(type)
   }
 
+  private func applyNearbyCourses(_ message: [String: Any]) {
+    var next = NearbyState()
+    next.active = true
+    let status = message["status"] as? String ?? "open_phone"
+    next.openPhone = status != "ok"
+    next.line = (message["line"] as? String) ?? "open the phone"
+    var courses: [NearbyCourse] = []
+    if let rows = message["courses"] as? [[String: Any]] {
+      for row in rows {
+        guard let id = row["id"] as? String, !id.isEmpty,
+              let name = row["name"] as? String, !name.isEmpty else { continue }
+        courses.append(NearbyCourse(id: id, name: name))
+      }
+    }
+    next.courses = courses
+    if courses.isEmpty {
+      next.openPhone = true
+      next.line = "open the phone"
+    }
+    nearby = next
+    putt.open = false
+  }
+
+  private func applyNearbyTees(_ message: [String: Any]) {
+    var next = nearby
+    next.active = true
+    next.openPhone = false
+    if let id = message["courseId"] as? String {
+      next.courseId = id
+    }
+    if let name = message["courseName"] as? String {
+      next.courseName = name
+    }
+    var tees: [NearbyTee] = []
+    if let rows = message["tees"] as? [[String: Any]] {
+      for row in rows {
+        guard let name = row["name"] as? String, !name.isEmpty else { continue }
+        tees.append(NearbyTee(name: name))
+      }
+    }
+    next.tees = tees
+    if tees.isEmpty {
+      next.openPhone = true
+      next.line = "open the phone"
+      next.courses = []
+    }
+    nearby = next
+  }
+
   private func applyClubList(_ message: [String: Any]) {
     let type = message["type"] as? String
     if type == "puttSheet" {
       applyPuttSheet(message)
       return
     }
+    if type == "nearbyCourses" {
+      applyNearbyCourses(message)
+      return
+    }
+    if type == "nearbyTees" {
+      applyNearbyTees(message)
+      return
+    }
     guard type == "clubList" else { return }
+    nearby.active = false
     var next = ClubListState()
     next.top3 = message["top3"] as? [String] ?? []
     next.bag = message["bag"] as? [String] ?? []
@@ -320,6 +435,11 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     applyClubList(session.receivedApplicationContext)
     if activationState == .activated {
       flushPending()
+      if nearby.active {
+        DispatchQueue.main.async {
+          self.requestNearby()
+        }
+      }
     }
   }
 

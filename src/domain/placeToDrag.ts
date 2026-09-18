@@ -44,6 +44,19 @@ export function dragPreviewInventsGreen(): false {
   return false;
 }
 
+/** After the from pin is set, the to pin follows the finger. Tap still places it. */
+export function toPinFollowsFinger(): true {
+  return true;
+}
+
+export function confirmPlaceIsFatButton(): true {
+  return true;
+}
+
+export function confirmPlaceLabel(): 'Confirm shot' {
+  return 'Confirm shot';
+}
+
 function along(from: LatLng, to: LatLng, t: number): LatLng {
   return {
     lat: from.lat + (to.lat - from.lat) * t,

@@ -996,11 +996,6 @@ export default function HoleScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.holeTitle}>{formatHoleHeader(hole.number, hole.par)}</Text>
                 </View>
-                {placeMode === 'to' && placeToDraft && !placeClubOpen ? (
-                  <Pressable onPress={() => confirmToPin()} style={styles.back} accessibilityRole="button">
-                    <Text style={styles.backLabel}>{COPY.confirmPlace}</Text>
-                  </Pressable>
-                ) : null}
               </View>
               {placeHint ? <Text style={styles.catchUpHint}>{placeHint}</Text> : null}
             </View>
@@ -1113,6 +1108,13 @@ export default function HoleScreen() {
             </View>
           )}
         </View>
+        {catchUpFullScreen && placeMode === 'to' && placeToDraft && !placeClubOpen ? (
+          <View
+            pointerEvents="box-none"
+            style={[styles.confirmDock, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+            <BigButton label={COPY.confirmPlace} onPress={() => confirmToPin()} />
+          </View>
+        ) : null}
       </View>
 
       {!hideHoleButtons && (catchUpFullScreen || !holeCamera || mapFramed) ? (
@@ -1676,6 +1678,12 @@ const styles = StyleSheet.create({
     color: colors.cream,
     fontSize: type.body,
     fontWeight: '800',
+  },
+  confirmDock: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    bottom: 0,
   },
   sticky: {
     position: 'absolute',

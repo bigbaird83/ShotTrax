@@ -5,6 +5,8 @@ import { MAX_SHOT_YD } from '../config/sensing';
 import { haversineYards, roundYards } from './haversine';
 import {
   cancelPlaceToDraft,
+  confirmPlaceIsFatButton,
+  confirmPlaceLabel,
   confirmPlaceToDraft,
   dragPreviewInventsGreen,
   dragPreviewRunsAcceptFix,
@@ -21,7 +23,9 @@ import {
   placeToFilterOn,
   placeToStoresBeforeConfirm,
   planPlaceToDragPreview,
+  toPinFollowsFinger,
 } from './placeToDrag';
+import { COPY } from './playerCopy';
 import { PLAY_MAP_MIN_RATIO, playMapMinRatio } from './playLayout';
 import { includeInDistanceAverages, placedShotRunsAcceptFix } from './shotSource';
 import { TO_GREEN_LIVE_MAX_YD } from './yardsToGreen';
@@ -192,14 +196,50 @@ test('400-yard ask happens on Confirm, not mid-drag', () => {
   assert.equal(forced.plan.source, 'placed');
 });
 
-test('Add shot to-pin is a draft until Confirm; edit still does not read the phone', () => {
+test('Add shot to-pin is a draft until Confirm shot; edit still does not read the phone', () => {
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   assert.match(hole, /confirmPlaceToDraft/);
   assert.match(hole, /liveShotYardsFromThisFromPin|planPlaceToDragPreview/);
   assert.match(hole, /setPlaceToDraft/);
   assert.match(hole, /COPY\.confirmPlace/);
+  assert.match(hole, /label=\{COPY\.confirmPlace\}/);
+  assert.match(hole, /styles\.confirmDock/);
+  assert.equal(COPY.confirmPlace, 'Confirm shot');
+  assert.equal(confirmPlaceLabel(), 'Confirm shot');
+  assert.equal(confirmPlaceIsFatButton(), true);
+  const header = hole.slice(hole.indexOf('styles.catchUpBar'), hole.indexOf('placeHint ?'));
+  assert.doesNotMatch(header, /COPY\.confirmPlace/);
   assert.doesNotMatch(
     hole.slice(hole.indexOf("if (placeMode === 'to')"), hole.indexOf("if (placeMode === 'edit-from')")),
     /addPlacedShot|setPlaceClubOpen/,
   );
+});
+
+test('to pin follows the finger; live yards are this shot only; nothing stores before Confirm shot', () => {
+  assert.equal(toPinFollowsFinger(), true);
+  assert.equal(placeToStoresBeforeConfirm(), false);
+  assert.equal(placeToAskOn(), 'confirm');
+  assert.equal(placeToFilterOn(), 'confirm');
+  const yards = liveShotYardsFromThisFromPin({ from, drag, phone, previousFrom });
+  assert.equal(yards, roundYards(haversineYards(from, drag)));
+  assert.notEqual(yards, roundYards(haversineYards(previousFrom, drag)));
+  assert.notEqual(yards, roundYards(haversineYards(from, phone)));
+  const previewSrc = readFileSync(new URL('./placeToDrag.ts', import.meta.url), 'utf8');
+  const live = previewSrc.slice(
+    previewSrc.indexOf('export function liveShotYardsFromThisFromPin'),
+    previewSrc.indexOf('export type ConfirmPlaceToDraft'),
+  );
+  assert.doesNotMatch(live, /shotMovesClubAverage|AVERAGE_OUTLIER_RATIO/);
+  assert.doesNotMatch(live, /acceptFix\(|forceMark\(/);
+
+  const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
+  assert.match(map, /onPanDrag/);
+  assert.match(map, /scrollEnabled=\{!onPlaceToDrag\}/);
+  assert.match(map, /onPlaceToDrag\(\{ lat: latitude, lng: longitude \}\)/);
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  assert.match(hole, /onPlaceToDrag=\{placeMode === 'to'/);
+  assert.match(hole, /setPlaceToDraft\(point\)/);
+  const dragCall = hole.slice(hole.indexOf('const dragPreview'), hole.indexOf('const holeCamera'));
+  assert.match(dragCall, /from: placeFrom/);
+  assert.doesNotMatch(dragCall, /previousFrom|lastClosed|phone:/);
 });

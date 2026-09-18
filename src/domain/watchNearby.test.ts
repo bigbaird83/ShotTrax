@@ -1,0 +1,234 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { test } from 'node:test';
+import { SOFT_GPS_MAX_M, SOFT_GPS_MIN_M } from '../config/sensing';
+import { COPY } from './playerCopy';
+import type { GpsFix } from './types';
+import {
+  NEARBY_COURSE_FIX_MAX_AGE_MS,
+  NEARBY_COURSE_LIST_MAX,
+  OPEN_PHONE,
+  guessNearbyCourse,
+  nearbyCourseFixIsFresh,
+  nearbyCourseFixMaxAgeMs,
+  nearbyCourseFixPassesMarkGates,
+  nearbyCoursesGuessesFromWatch,
+  nearbyCoursesHasSearchBox,
+  nearbyCoursesPayload,
+  nearbyCoursesUsesMarkGates,
+  nearbyCoursesUsesPhoneFixOnly,
+  nearbyCoursesUsesWatchFix,
+  nearbyTeesPayload,
+  phoneFixForNearbyCourses,
+  planNearbyCourses,
+  watchShowsBag,
+  watchShowsScoring,
+  watchShowsSettings,
+} from './watchNearby';
+import {
+  WATCH_MESSAGE_TYPES,
+  nearbyCoursePickPayload,
+  nearbyRequestPayload,
+  parseNearbyCourses,
+  parseStartRound,
+  parseWatchNearbyIntent,
+  startRoundPayload,
+  watchPayloadRunsAcceptFix,
+} from './watchMessages';
+
+function fixAt(
+  lat: number,
+  lng: number,
+  accuracyM: number | null,
+  timestamp: number,
+): GpsFix {
+  return {
+    lat,
+    lng,
+    accuracyM,
+    mocked: false,
+    isSimulator: false,
+    timestamp,
+  };
+}
+
+const phone = fixAt(37.0, -122.0, 40, 1_000_000);
+const watch = fixAt(40.7, -74.0, 4, 1_000_000);
+const courses = [
+  { id: 'c1', name: 'Bay CC', distanceMeters: 1200 },
+  { id: 'c2', name: 'Ridge GC', distanceMeters: 5400 },
+];
+
+test('nearby courses use the phone fix only — never the Watch', () => {
+  assert.equal(nearbyCoursesUsesPhoneFixOnly(), true);
+  assert.equal(nearbyCoursesUsesWatchFix(), false);
+  assert.equal(nearbyCoursesGuessesFromWatch(), false);
+  assert.equal(nearbyCoursesUsesMarkGates(), false);
+  assert.equal(nearbyCourseFixPassesMarkGates(SOFT_GPS_MAX_M + 20), true);
+  assert.equal(nearbyCourseFixPassesMarkGates(SOFT_GPS_MIN_M - 1), true);
+  assert.equal(nearbyCourseFixMaxAgeMs(), 30_000);
+  assert.equal(NEARBY_COURSE_FIX_MAX_AGE_MS, 30_000);
+
+  const chosen = phoneFixForNearbyCourses({ phoneFix: phone, watchFix: watch, nowMs: 1_000_000 });
+  assert.deepEqual(chosen, { lat: phone.lat, lng: phone.lng });
+  assert.notEqual(chosen?.lat, watch.lat);
+  assert.notEqual(chosen?.lng, watch.lng);
+
+  const noPhone = phoneFixForNearbyCourses({ phoneFix: null, watchFix: watch, nowMs: 1_000_000 });
+  assert.equal(noPhone, null);
+});
+
+test('no fresh phone fix or an empty list is one line: open the phone', () => {
+  assert.equal(OPEN_PHONE, 'open the phone');
+  assert.equal(COPY.openPhone, 'open the phone');
+  assert.equal(nearbyCourseFixIsFresh(phone, 1_000_000 + NEARBY_COURSE_FIX_MAX_AGE_MS + 1), false);
+  assert.equal(nearbyCourseFixIsFresh(null, 1_000_000), false);
+  assert.equal(nearbyCourseFixIsFresh({ timestamp: 0 }, 1_000_000), false);
+
+  const stale = planNearbyCourses({
+    phoneFix: { ...phone, timestamp: 1_000_000 - NEARBY_COURSE_FIX_MAX_AGE_MS - 1 },
+    watchFix: watch,
+    courses,
+    nowMs: 1_000_000,
+  });
+  assert.deepEqual(stale, { status: 'open_phone', line: OPEN_PHONE, courses: [] });
+  assert.equal(guessNearbyCourse(stale), null);
+
+  const missing = planNearbyCourses({
+    phoneFix: null,
+    watchFix: watch,
+    courses,
+    nowMs: 1_000_000,
+  });
+  assert.deepEqual(missing, { status: 'open_phone', line: OPEN_PHONE, courses: [] });
+  assert.equal(guessNearbyCourse(missing), null);
+
+  const empty = planNearbyCourses({
+    phoneFix: phone,
+    watchFix: watch,
+    courses: [],
+    nowMs: 1_000_000,
+  });
+  assert.deepEqual(empty, { status: 'open_phone', line: OPEN_PHONE, courses: [] });
+  assert.equal(guessNearbyCourse(empty), null);
+
+  const msg = nearbyCoursesPayload(empty);
+  assert.equal(msg.type, 'nearbyCourses');
+  assert.equal(msg.status, 'open_phone');
+  assert.equal(msg.line, 'open the phone');
+  assert.deepEqual(msg.courses, []);
+  assert.equal(parseNearbyCourses(msg)?.line, OPEN_PHONE);
+});
+
+test('a short nearby list from the phone fix skips 15 m / 25 m mark gates', () => {
+  const poorPhone = fixAt(37.1, -122.1, SOFT_GPS_MAX_M + 30, 1_000_000);
+  assert.ok((poorPhone.accuracyM ?? 0) > SOFT_GPS_MAX_M);
+  const plan = planNearbyCourses({
+    phoneFix: poorPhone,
+    watchFix: watch,
+    courses,
+    nowMs: 1_000_000,
+  });
+  assert.equal(plan.status, 'ok');
+  assert.equal(plan.line, null);
+  assert.equal(plan.courses.length, 2);
+  assert.equal(plan.courses[0].id, 'c1');
+  assert.equal(plan.courses[0].name, 'Bay CC');
+  assert.notEqual(plan.courses[0].id, 'watch-guess');
+  assert.equal(NEARBY_COURSE_LIST_MAX, 8);
+
+  const many = Array.from({ length: 12 }, (_, i) => ({
+    id: `c${i}`,
+    name: `Course ${i}`,
+    distanceMeters: i * 100,
+  }));
+  const trimmed = planNearbyCourses({
+    phoneFix: poorPhone,
+    courses: many,
+    nowMs: 1_000_000,
+  });
+  assert.equal(trimmed.status, 'ok');
+  if (trimmed.status !== 'ok') return;
+  assert.equal(trimmed.courses.length, 8);
+
+  const src = readFileSync(new URL('./watchNearby.ts', import.meta.url), 'utf8');
+  assert.doesNotMatch(src, /acceptFix\(|forceMark\(|classifyAccuracyM/);
+  assert.match(src, /phoneFixForNearbyCourses/);
+  assert.doesNotMatch(src.slice(src.indexOf('export function phoneFixForNearbyCourses'), src.indexOf('export type WatchNearbyCourse')), /args\.watchFix\.(lat|lng)/);
+});
+
+test('Watch start messages never run acceptFix and never send Watch GPS', () => {
+  const at = '2026-09-18T13:00:00.000Z';
+  const request = parseWatchNearbyIntent(nearbyRequestPayload({ at }));
+  const pick = parseWatchNearbyIntent(nearbyCoursePickPayload({ courseId: 'c1', at }));
+  const start = parseWatchNearbyIntent(startRoundPayload({ courseId: 'c1', teeName: 'Blue', at }));
+  assert.equal(request?.kind, 'nearbyRequest');
+  assert.equal(request?.runsAcceptFix, false);
+  assert.equal(request?.usesWatchFix, false);
+  assert.equal(pick?.kind, 'nearbyCoursePick');
+  assert.equal(pick?.runsAcceptFix, false);
+  assert.equal(start?.kind, 'startRound');
+  assert.equal(start?.runsAcceptFix, false);
+  assert.equal(watchPayloadRunsAcceptFix(nearbyRequestPayload({ at })), false);
+  assert.equal(watchPayloadRunsAcceptFix(startRoundPayload({ courseId: 'c1', teeName: 'Blue', at })), false);
+  assert.equal('lat' in nearbyRequestPayload({ at }), false);
+  assert.equal('lng' in startRoundPayload({ courseId: 'c1', teeName: 'Blue', at }), false);
+  assert.equal(parseStartRound({ type: 'startRound', courseId: 'c1', teeName: '', at }), null);
+  assert.ok(WATCH_MESSAGE_TYPES.includes('nearbyCourses'));
+  assert.ok(WATCH_MESSAGE_TYPES.includes('startRound'));
+
+  const tees = nearbyTeesPayload({
+    courseId: 'c1',
+    courseName: 'Bay CC',
+    tees: [{ name: 'Blue', rating: 72.1, slope: 128, totalYards: 6500 }],
+  });
+  assert.equal(tees.type, 'nearbyTees');
+  assert.equal(tees.tees[0].name, 'Blue');
+});
+
+test('Watch nearby UI is a short list — no search, bag, settings, or scoring', () => {
+  assert.equal(nearbyCoursesHasSearchBox(), false);
+  assert.equal(watchShowsBag(), false);
+  assert.equal(watchShowsSettings(), false);
+  assert.equal(watchShowsScoring(), false);
+
+  const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  assert.match(watchUi, /open the phone/);
+  assert.doesNotMatch(watchUi, /TextField|searchable|Search/);
+  assert.doesNotMatch(watchUi, /Bag|Settings|Scorecard|Averages/);
+  assert.match(watchUi, /nearbyCourses|session\.nearby/);
+
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+  assert.match(session, /nearbyRequest|nearbyCoursePick|startRound/);
+  assert.doesNotMatch(
+    session.slice(session.indexOf('func requestNearby'), session.indexOf('func pickCourse')),
+    /lat|lng|accuracyM/,
+  );
+
+  const service = readFileSync(new URL('../services/watchNearby.ts', import.meta.url), 'utf8');
+  assert.match(service, /phoneFixForNearbyCourses|planNearbyCourses/);
+  assert.doesNotMatch(service, /acceptFix\(|forceMark\(/);
+  assert.match(service, /getLastLiveFix|phoneFix/);
+});
+
+test('build 26 locks stay: delete confirm, 60% map, one-line header, 600-yard tee start, 5s Undo, privacy strings', () => {
+  const app = readFileSync(new URL('../../app.json', import.meta.url), 'utf8');
+  assert.match(
+    app,
+    /NSLocationWhenInUseUsageDescription": "ShotTraxx captures GPS when you pick a club to mark where you hit from\./,
+  );
+  assert.match(app, /NSPhotoLibraryUsageDescription": "ShotTraxx does not use your photo library/);
+  assert.match(app, /NSMicrophoneUsageDescription": "ShotTraxx uses the microphone only when you tap Say a club/);
+  assert.match(
+    app,
+    /NSSpeechRecognitionUsageDescription": "ShotTraxx uses speech recognition to match what you say to a club in your bag\./,
+  );
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  assert.match(hole, /deleteShotPrompt/);
+  assert.match(hole, /planConfirmUndo/);
+  assert.match(hole, /formatPlayHeader/);
+  assert.match(hole, /styles\.mapFill/);
+  assert.match(hole, /lockHoleCamera/);
+  assert.equal(COPY.deleteShotConfirm, 'Delete this shot?');
+});

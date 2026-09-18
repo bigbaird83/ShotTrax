@@ -22,6 +22,7 @@ import {
 import type { PuttLengthId } from '../domain/putts';
 import { hapticMark, hapticSelect, hapticWarn } from '../ui/haptics';
 import { markShotWithClub, promptForPlan } from './shotActions';
+import { handleWatchNearbyJson, isWatchNearbyJson } from './watchNearby';
 
 export type WatchClubContext = {
   db: SQLiteDatabase;
@@ -123,6 +124,11 @@ async function replyToken(token: string, payload: ClubPickReply | PuttPickReply)
 }
 
 async function handlePick(token: string, json: string): Promise<void> {
+  if (isWatchNearbyJson(json)) {
+    const result = await handleWatchNearbyJson(json);
+    await replyToken(token, result);
+    return;
+  }
   let raw: unknown;
   try {
     raw = JSON.parse(json) as unknown;

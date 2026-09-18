@@ -73,9 +73,10 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.shot, 'Shot');
   assert.equal(COPY.placed, 'Placed');
   assert.equal(COPY.placeFromHint, 'Tap where you hit from.');
-  assert.equal(COPY.placeToHint, 'Tap where it landed.');
+  assert.equal(COPY.placeToHint, 'Tap or drag where it landed.');
   assert.equal(COPY.cancelPlace, 'Cancel');
-  assert.equal(COPY.confirmPlace, 'Confirm');
+  assert.equal(COPY.confirmPlace, 'Confirm shot');
+  assert.equal(COPY.openPhone, 'open the phone');
   assert.equal(COPY.nextHole, 'Next');
   assert.equal(COPY.courseDistance, 'Course distance');
   assert.equal(COPY.courseDistanceSetting, 'Course distance: Miles / Kilometers');

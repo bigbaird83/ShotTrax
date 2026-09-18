@@ -317,9 +317,14 @@ function NativeHoleMap({
         showsMyLocationButton={false}
         followsUserLocation={false}
         zoomEnabled
-        scrollEnabled
+        scrollEnabled={!onPlaceToDrag}
         pitchEnabled={false}
         rotateEnabled={false}
+        onPanDrag={(event) => {
+          if (!onPlaceToDrag) return;
+          const { latitude, longitude } = event.nativeEvent.coordinate;
+          onPlaceToDrag({ lat: latitude, lng: longitude });
+        }}
         onMapReady={() => {
           if (!lockFrame) return;
           if (framedOnce.current) {
