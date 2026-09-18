@@ -6,6 +6,7 @@ import { haversineYards, roundYards } from './haversine';
 import {
   cancelPlaceToDraft,
   confirmPlaceToDraft,
+  dragPreviewInventsGreen,
   dragPreviewRunsAcceptFix,
   dragPreviewUsesFixQuality,
   dragRecentersOnPhone,
@@ -78,23 +79,49 @@ test('preview to-green is fingertip to green center; over 600 or no green is a d
   assert.equal(formatDragPreviewYards(null), '—');
 });
 
-test('both preview numbers move with the finger and ignore the phone', () => {
+test('both preview numbers and the 600 dash move with the finger', () => {
   const preview = planPlaceToDragPreview({ from, drag, green, phone, previousFrom });
   assert.ok(preview);
   assert.equal(preview.shotYards, roundYards(haversineYards(from, drag)));
+  assert.notEqual(preview.shotYards, roundYards(haversineYards(previousFrom, drag)));
+  assert.notEqual(preview.shotYards, roundYards(haversineYards(from, phone)));
   assert.equal(preview.toGreenYards, roundYards(haversineYards(drag, green)));
+  assert.notEqual(preview.toGreenYards, roundYards(haversineYards(phone, green)));
   assert.equal(preview.shotLabel, `${preview.shotYards} yd`);
   assert.equal(preview.toGreenLabel, `${preview.toGreenYards} yd`);
   assert.ok(Math.abs(preview.shotAt.lat - (from.lat + drag.lat) / 2) < 1e-12);
   assert.ok(preview.toGreenAt);
+  assert.ok(haversineYards(preview.toGreenAt, green) < haversineYards(preview.toGreenAt, drag));
   assert.notEqual(preview.shotAt.lat, phone.lat);
-  assert.notEqual(preview.toGreenAt?.lat, phone.lat);
+  assert.notEqual(preview.toGreenAt.lat, phone.lat);
+  assert.equal(dragPreviewInventsGreen(), false);
+  assert.equal(placeToAskOn(), 'confirm');
+  assert.equal(placeToFilterOn(), 'confirm');
 
   const noGreen = planPlaceToDragPreview({ from, drag, green: null, phone });
   assert.ok(noGreen);
   assert.equal(noGreen.toGreenYards, null);
   assert.equal(noGreen.toGreenLabel, '—');
   assert.equal(noGreen.toGreenAt, null);
+
+  const farGreen = { lat: drag.lat + 0.02, lng: drag.lng };
+  assert.ok(roundYards(haversineYards(drag, farGreen)) > TO_GREEN_LIVE_MAX_YD);
+  const over = planPlaceToDragPreview({ from, drag, green: farGreen, phone });
+  assert.ok(over);
+  assert.equal(over.toGreenYards, null);
+  assert.equal(over.toGreenLabel, '—');
+  assert.ok(over.toGreenAt);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  assert.match(hole, /COPY\.shot/);
+  assert.match(hole, /dragPreview\.shotLabel/);
+  assert.match(hole, /COPY\.toGreen/);
+  assert.match(hole, /dragPreview\.toGreenLabel/);
+  const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
+  assert.match(map, /COPY\.shot/);
+  assert.match(map, /COPY\.toGreen/);
+  assert.match(map, /dragPreview\.shotAt/);
+  assert.match(map, /dragPreview\.toGreenAt/);
 });
 
 test('finger preview has no GPS quality and does not run acceptFix', () => {

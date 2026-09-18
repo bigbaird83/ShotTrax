@@ -36,6 +36,10 @@ export function dragPreviewRunsAcceptFix(): false {
   return false;
 }
 
+export function dragPreviewInventsGreen(): false {
+  return false;
+}
+
 function along(from: LatLng, to: LatLng, t: number): LatLng {
   return {
     lat: from.lat + (to.lat - from.lat) * t,
