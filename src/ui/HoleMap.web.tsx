@@ -32,16 +32,25 @@ type Props = {
   style?: object;
 };
 
-export function HoleMap({ holeNumber, userFix, green, yardsToGreen, placeHint }: Props) {
+export function HoleMap({
+  holeNumber,
+  userFix,
+  green,
+  yardsToGreen,
+  placeHint,
+  hideYardsOverlay,
+}: Props) {
   return (
     <View style={styles.fallback}>
       <Text style={styles.title}>Hole {holeNumber}</Text>
-      <YardsToGreenBadge
-        result={yardsToGreen}
-        hasFix={Boolean(userFix)}
-        hasGreen={Boolean(green)}
-      />
-      {!placeHint && !yardsAreOnTheCard(yardsToGreen) ? (
+      {!hideYardsOverlay ? (
+        <YardsToGreenBadge
+          result={yardsToGreen}
+          hasFix={Boolean(userFix)}
+          hasGreen={Boolean(green)}
+        />
+      ) : null}
+      {!hideYardsOverlay && !placeHint && !yardsAreOnTheCard(yardsToGreen) ? (
         <Text style={styles.msg}>
           {showWaitingOnLocationLine({
             yards: yardsToGreen.yards,

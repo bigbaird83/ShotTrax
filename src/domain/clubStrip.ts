@@ -261,6 +261,11 @@ export function clubStripOpeningIds(ids: string[], windowStart: number): string[
   return ids.slice(start, start + CLUB_STRIP_VISIBLE_PILLS);
 }
 
+/** Re-open only when the bag or hole window changes — never when a tap selects. */
+export function clubStripWindowKey(ids: string[], windowStart: number): string {
+  return `${ids.join('|')}@${windowStart}`;
+}
+
 export function resolveWheelCarries(clubs: ClubStripClub[]): Record<string, number> {
   const canFill = clubs.some((club) => club.loftRank != null);
   const filled = canFill

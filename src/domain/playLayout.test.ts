@@ -126,11 +126,10 @@ test('play hole screen uses the fill layout and does not keep the empty middle',
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   assert.match(map, /holeMapShowsUserLocation\(Boolean\(lockFrame\)\)/);
   assert.match(map, /styles\.mapCover/);
-  assert.match(map, /if \(lockFrame\) return null;/);
-  assert.match(map.slice(map.indexOf('const lockedRegion'), map.indexOf('const dragLines')), /coords\.length > 0/);
+  assert.match(map, /tee \+ green only/);
   assert.doesNotMatch(
     map.slice(map.indexOf('const lockedRegion'), map.indexOf('const dragLines')),
-    /userFix/,
+    /userFix|coords\.length/,
   );
   const fitBlock = map.slice(map.indexOf('if (lockFrame) {'), map.indexOf('mapRef.current?.fitToCoordinates'));
   assert.match(fitBlock, /if \(framedOnce\.current\) return;/);

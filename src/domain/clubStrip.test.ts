@@ -43,6 +43,7 @@ import {
   clubStripNeighborPillsShowCarry,
   clubStripVisiblePills,
   clubStripOpeningIds,
+  clubStripWindowKey,
   openingClubStripWindow,
   CLUB_STRIP_GAP,
   CLUB_STRIP_SEAM_GAP,
@@ -518,6 +519,8 @@ test('282-yard hole opens 2i, 3W, Dr with no wedge; 100-yard hole centers the cl
   assert.match(hole, /windowStart=\{stripPlan\.windowStart\}/);
   const phone = readFileSync(new URL('../ui/ClubStrip.tsx', import.meta.url), 'utf8');
   assert.match(phone, /windowStart/);
+  assert.match(phone, /clubStripWindowKey/);
+  assert.equal(clubStripWindowKey(tee.ids, tee.windowStart), clubStripWindowKey(tee.ids, tee.windowStart));
   assert.match(phone, /item\.label/);
   const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
   assert.match(watch, /stripWindowStart/);

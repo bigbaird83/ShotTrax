@@ -5,6 +5,7 @@ import {
   CLUB_STRIP_SEAM_GAP,
   CLUB_STRIP_VISIBLE_PILLS,
   PHONE_WHEEL_PILL_HEIGHT,
+  clubStripWindowKey,
   wrapClubStripIndex,
 } from '../domain/clubStrip';
 import { colors, type } from './theme';
@@ -34,7 +35,7 @@ function pillWidthForStrip(width: number, count: number, compact?: boolean): num
   return Math.max(compact ? 56 : 72, raw);
 }
 
-/** Sideways carry wheel. Three full pills. Tap marks; swipe does not. */
+/** Sideways carry wheel. Three full pills. Tap selects; swipe does not mark. */
 export function ClubStrip({ items, pickId, windowStart = 0, onPick, disabled, compact }: Props) {
   const scrollRef = useRef<ScrollView>(null);
   const [width, setWidth] = useState(0);
@@ -78,12 +79,17 @@ export function ClubStrip({ items, pickId, windowStart = 0, onPick, disabled, co
     });
   };
 
+  const windowKey = clubStripWindowKey(
+    items.map((item) => item.id),
+    start,
+  );
+
   useEffect(() => {
     if (width <= 0 || items.length === 0) return;
     scrollToIndex(origin + start, false);
-    // Selection changes do not re-open the window. A new hole / yards key updates windowStart.
+    // Selection / label changes do not re-open the window. A new hole updates windowKey.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, start, origin, pillWidth, width]);
+  }, [windowKey, origin, pillWidth, width]);
 
   const settleWrap = (x: number) => {
     if (items.length <= 1 || width <= 0) return;

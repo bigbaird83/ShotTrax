@@ -108,11 +108,13 @@ function TrailFallback({
   yardsToGreen,
   hasFix,
   hasGreen,
+  hideYardsOverlay,
 }: {
   holeNumber: number;
   yardsToGreen?: YardsToGreenResult;
   hasFix?: boolean;
   hasGreen?: boolean;
+  hideYardsOverlay?: boolean;
 }) {
   const yardsOnCard = Boolean(yardsToGreen && yardsToGreen.yards != null && Number.isFinite(yardsToGreen.yards));
   const waiting = showWaitingOnLocationLine({
@@ -124,10 +126,10 @@ function TrailFallback({
   return (
     <View style={styles.fallback}>
       <Text style={styles.holeBadgeText}>Hole {holeNumber}</Text>
-      {yardsToGreen ? (
+      {yardsToGreen && !hideYardsOverlay ? (
         <YardsToGreenBadge result={yardsToGreen} hasFix={hasFix} hasGreen={hasGreen} />
       ) : null}
-      {!yardsOnCard ? (
+      {!hideYardsOverlay && !yardsOnCard ? (
         <Text style={styles.fallbackMsg}>{waiting ? COPY.waitingOnLocation : hasGreen ? COPY.waitingOnGreen : COPY.longPressGreen}</Text>
       ) : null}
     </View>
@@ -244,13 +246,9 @@ function NativeHoleMap({
 
   const lockedRegion = useMemo(() => {
     if (lockedPoints.length > 0) return holeFrameRegion(lockedPoints);
-    // Hole geometry (green / OSM / shot pins) still frames the map. Never the phone.
-    if (coords.length > 0) {
-      return holeFrameRegion(coords.map((point) => ({ lat: point.latitude, lng: point.longitude })));
-    }
-    if (lockFrame) return null;
+    // Lock-frame maps use tee + green only. Do not zoom a lone pin or the phone.
     return null;
-  }, [lockedPoints, lockFrame, coords]);
+  }, [lockedPoints]);
 
   const dragLines = useMemo(() => {
     if (!onPlaceToDrag || !placedTo) return { shot: null, toGreen: null };
@@ -358,6 +356,7 @@ function NativeHoleMap({
         yardsToGreen={yardsToGreen}
         hasFix={Boolean(userFix)}
         hasGreen={Boolean(green)}
+        hideYardsOverlay={hideYardsOverlay}
       />
     );
   }
@@ -638,6 +637,7 @@ export function HoleMap(props: Props) {
       yardsToGreen={props.yardsToGreen}
       hasFix={Boolean(props.userFix)}
       hasGreen={Boolean(props.green)}
+      hideYardsOverlay={props.hideYardsOverlay}
     />
   );
 

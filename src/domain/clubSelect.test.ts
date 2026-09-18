@@ -15,7 +15,7 @@ import {
   wheelSelectionAfterTap,
   wheelSelectionSyncsPhoneAndWatch,
 } from './clubSelect';
-import { clubStripOpeningIds, planClubStrip } from './clubStrip';
+import { clubStripOpeningIds, clubStripWindowKey, planClubStrip } from './clubStrip';
 import {
   addShotMapUsesPhoneFix,
   addShotMapWaitsForPhoneFix,
@@ -77,8 +77,17 @@ test('a non-driver tap stays selected and does not mark or reopen the window', (
 
   const phone = readFileSync(new URL('../ui/ClubStrip.tsx', import.meta.url), 'utf8');
   const openFx = phone.slice(phone.indexOf('useEffect(() => {'), phone.indexOf('const settleWrap'));
-  assert.match(openFx, /windowStart/);
+  assert.match(openFx, /windowKey/);
   assert.doesNotMatch(openFx, /pickId/);
+  assert.doesNotMatch(openFx, /\[items,/);
+  assert.equal(
+    clubStripWindowKey(['club_2i', 'club_3w', 'club_driver'], 0),
+    clubStripWindowKey(['club_2i', 'club_3w', 'club_driver'], 0),
+  );
+  assert.notEqual(
+    clubStripWindowKey(['club_2i', 'club_3w', 'club_driver'], 0),
+    clubStripWindowKey(['club_2i', 'club_3w', 'club_driver'], 2),
+  );
 });
 
 test('Watch selection is the phone selection; strip tap does not mark', () => {
@@ -147,12 +156,12 @@ test("Add shot opening region contains tee and green and does not wait when 282 
   const tee = { lat: 37.0, lng: -122.0 };
   const green = { lat: 37.01, lng: -122.0 };
   const home = { lat: 40.7128, lng: -74.006 };
-  const locked = lockHoleCamera({ tee, green, shotPins: [], phone: home });
-  assert.ok(locked);
-  assert.equal(locked.mode, 'tee_green');
-  assert.equal(locked.heading, holeCameraHeading(tee, green));
-  assert.notEqual(locked.heading, holeCameraHeading(home, green));
-  assert.equal(openingHoleRegionContainsTeeAndGreen(holeFrameRegion(locked.points), tee, green), true);
+  const camera = lockHoleCamera({ tee, green, shotPins: [], phone: home });
+  assert.ok(camera);
+  assert.equal(camera.mode, 'tee_green');
+  assert.equal(camera.heading, holeCameraHeading(tee, green));
+  assert.notEqual(camera.heading, holeCameraHeading(home, green));
+  assert.equal(openingHoleRegionContainsTeeAndGreen(holeFrameRegion(camera.points), tee, green), true);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const playMap = hole.slice(hole.indexOf('<HoleMap'), hole.indexOf('onDropGreenEstimate'));
@@ -166,9 +175,9 @@ test("Add shot opening region contains tee and green and does not wait when 282 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   assert.match(map, /showWaitingOnLocationLine/);
   assert.match(map, /!yardsOnCard/);
+  assert.match(map, /hideYardsOverlay/);
   assert.doesNotMatch(map, /styles\.placeHint/);
-  assert.doesNotMatch(
-    map.slice(map.indexOf('const lockedRegion'), map.indexOf('const dragLines')),
-    /userFix/,
-  );
+  const locked = map.slice(map.indexOf('const lockedRegion'), map.indexOf('const dragLines'));
+  assert.doesNotMatch(locked, /userFix/);
+  assert.doesNotMatch(locked, /coords\.length/);
 });
