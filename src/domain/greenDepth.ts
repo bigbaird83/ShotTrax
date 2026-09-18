@@ -1,6 +1,7 @@
 import { yardsToGreen, type YardsToGreenResult } from '../sensing/yardsToGreen';
 import { isValidLatLng, type LatLng } from './latLng';
 import type { GpsFix } from './types';
+import { displayableYardsToGreen } from './yardsToGreen';
 
 /** Front / middle / back pins from course data only. Missing stays null — never invented. */
 export type GreenDepthPins = {
@@ -46,7 +47,9 @@ export function formatFmbRow(yards: GreenDepthYards): { f: string; m: string; b:
   const m = yards.middle;
   const b = yards.back;
   if (!f || !m || !b) return null;
-  const cell = (row: YardsToGreenResult) =>
-    row.quality !== 'none' && row.yards != null ? String(row.yards) : '—';
+  const cell = (row: YardsToGreenResult) => {
+    const yards = row.quality !== 'none' ? displayableYardsToGreen(row.yards) : null;
+    return yards != null ? String(yards) : '—';
+  };
   return { f: cell(f), m: cell(m), b: cell(b) };
 }

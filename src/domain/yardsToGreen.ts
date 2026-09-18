@@ -1,3 +1,4 @@
+import { MAX_SHOT_YD } from '../config/sensing';
 import type { ShotFixQuality } from './types';
 import { isValidLatLng, type LatLng } from './latLng';
 
@@ -22,6 +23,15 @@ export function resolveGreenPin(args: {
   return null;
 }
 
+/**
+ * Yards-to-green over MAX_SHOT_YD (400) is not a shot distance — phone at home
+ * to a course green. Display — . The 400-yard confirm on save is separate.
+ */
+export function displayableYardsToGreen(yards: number | null | undefined): number | null {
+  if (yards == null || !Number.isFinite(yards) || yards > MAX_SHOT_YD) return null;
+  return yards;
+}
+
 /** Copy for `yardsToGreen(fix, greenCentroid) → { yards, quality }`. */
 export function yardsToGreenLabel(
   result: { yards: number | null; quality: ShotFixQuality },
@@ -32,10 +42,11 @@ export function yardsToGreenLabel(
   detail: string;
 } {
   const heading = 'yards to green';
-  if (result.quality !== 'none' && result.yards != null) {
+  const yards = result.quality !== 'none' ? displayableYardsToGreen(result.yards) : null;
+  if (yards != null) {
     return {
       heading,
-      value: `${result.yards} yd`,
+      value: `${yards} yd`,
       detail: 'to green',
     };
   }

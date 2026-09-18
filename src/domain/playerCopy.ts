@@ -1,3 +1,5 @@
+import { displayableYardsToGreen } from './yardsToGreen';
+
 /** Player-facing copy. Accuracy / API / OSM rules stay in code, not on screen. */
 
 export const COPY = {
@@ -111,13 +113,17 @@ export function formatSuggestedClubChip(shortName: string, carryYards: number | 
   return carryYards != null && Number.isFinite(carryYards) ? `${shortName} · ${Math.round(carryYards)}` : `${shortName} · —`;
 }
 
-/** Picker remaining yards. Only when yards-to-green quality is good or soft. Never invent. */
+/** Picker remaining yards. Only when yards-to-green quality is good or soft. Never invent. Over 400 → —. */
 export function formatPickerLeftYards(result: {
   yards: number | null;
   quality: string;
 }): string {
-  if ((result.quality === 'good' || result.quality === 'soft') && result.yards != null && Number.isFinite(result.yards)) {
-    return `${Math.round(result.yards)} left`;
+  const yards =
+    result.quality === 'good' || result.quality === 'soft'
+      ? displayableYardsToGreen(result.yards)
+      : null;
+  if (yards != null) {
+    return `${Math.round(yards)} left`;
   }
   return '—';
 }
@@ -178,8 +184,9 @@ export function yardsToGreenPlayerLabel(
   ctx: { hasGreen?: boolean; hasFix?: boolean } = {},
 ): { heading: string; value: string; detail: string } {
   const heading = COPY.toGreen;
-  if (result.quality !== 'none' && result.yards != null) {
-    return { heading, value: `${result.yards}`, detail: 'yd' };
+  const yards = result.quality !== 'none' ? displayableYardsToGreen(result.yards) : null;
+  if (yards != null) {
+    return { heading, value: `${yards}`, detail: 'yd' };
   }
   const detail = !ctx.hasGreen
     ? COPY.waitingOnGreen

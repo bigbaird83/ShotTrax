@@ -117,6 +117,21 @@ test('lastClosedShotYards skips putter shots — they are not a club sample', ()
   assert.equal(yards, 155);
 });
 
+test('yards-to-green over 400 is not a ranking D — fall back or empty', () => {
+  assert.deepEqual(
+    resolveDistanceTarget({ toGreen: { yards: 14167, quality: 'good' }, lastClosedYards: 148 }),
+    { source: 'last_closed_shot', dYards: 148 },
+  );
+  assert.equal(
+    resolveDistanceTarget({ toGreen: { yards: 401, quality: 'good' }, lastClosedYards: null }),
+    null,
+  );
+  assert.deepEqual(
+    resolveDistanceTarget({ toGreen: { yards: 400, quality: 'good' }, lastClosedYards: 148 }),
+    { source: 'yards_to_green', dYards: 400 },
+  );
+});
+
 test('catch-up club rank uses that shot’s yards, not yards-to-green', () => {
   const shotTarget = shotYardsDistanceTarget(148);
   const liveTarget = resolveDistanceTarget({
