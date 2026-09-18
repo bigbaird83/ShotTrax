@@ -193,7 +193,14 @@ export default function ClubPickScreen() {
       onPutter: () => {
         router.replace(`/round/${id}/hole/${holeNumber}?putts=1`);
       },
-      onLeave: (action) => leavePicker(action),
+      onLeave: (action) => {
+        if (action === 'home') {
+          if (!id || Number.isNaN(holeNumber)) return;
+          router.replace(`/round/${id}/hole/${holeNumber}?menu=1`);
+          return;
+        }
+        leavePicker(action);
+      },
       labelForClub: (clubId) => clubs.find((club) => club.id === clubId)?.shortName ?? null,
     },
     {

@@ -27,7 +27,7 @@ import {
   updateHoleScore,
 } from '@/src/db/repo';
 import { pinOrNull, formatFmbRow, hasApiFmb, yardsToGreenDepth } from '@/src/domain/greenDepth';
-import { clubPickLeaveHref, clubPickLeaveRunsAcceptFix, planClubPickLeave } from '@/src/domain/clubPickNav';
+import { clubPickLeaveRunsAcceptFix, planClubPickLeave } from '@/src/domain/clubPickNav';
 import { COPY, finishPuttsChip, finishShotChip, formatHoleHeader, formatPlayHeader, formatSuggestedClubChip, markedSuggestedMessage, voiceFailRecovery } from '@/src/domain/playerCopy';
 import { canAdvanceHole, holesNeedingOpenShots } from '@/src/domain/holeAdvance';
 import { isPutterClubId } from '@/src/domain/defaultBag';
@@ -84,7 +84,12 @@ import { ScorecardBody } from '@/src/ui/ScorecardBody';
 import { colors, tapTarget, type } from '@/src/ui/theme';
 
 export default function HoleScreen() {
-  const { id, number, putts: puttsParam } = useLocalSearchParams<{ id: string; number: string; putts?: string }>();
+  const { id, number, putts: puttsParam, menu: menuParam } = useLocalSearchParams<{
+    id: string;
+    number: string;
+    putts?: string;
+    menu?: string;
+  }>();
   const holeNumber = Number(number);
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -460,6 +465,12 @@ export default function HoleScreen() {
   }, [puttsParam, holeNumber, readOnly, openPuttSheet]);
 
   useEffect(() => {
+    if (menuParam !== '1' || readOnly) return;
+    setMenuOpen(true);
+    router.setParams({ menu: undefined });
+  }, [menuParam, readOnly]);
+
+  useEffect(() => {
     if (!puttOpen) return;
     void pushWatchPuttSheet({ open: true, holeNumber: puttSheetHole, lengths: puttDraft.lengths });
   }, [puttOpen, puttSheetHole, puttDraft]);
@@ -515,7 +526,10 @@ export default function HoleScreen() {
         ) {
           return;
         }
-        if (plan.dest === 'rounds') router.replace(clubPickLeaveHref({ action, roundId: id, holeNumber }));
+        if (action === 'home') {
+          setMenuOpen(true);
+          return;
+        }
       },
       onPuttPick: onWatchPuttPick,
       labelForClub: (clubId) => clubMap[clubId]?.shortName ?? clubs.find((club) => club.id === clubId)?.shortName ?? null,

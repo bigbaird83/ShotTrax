@@ -2,6 +2,7 @@ import { Alert } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getWatchBridgeNative } from '@/modules/watch-bridge';
 import { COPY } from '../domain/playerCopy';
+import { watchClubListTop3 } from '../domain/watchClubPick';
 import { watchFixFromPick } from '../domain/preferWatchFix';
 import {
   MADE_IT_FEEDBACK,
@@ -103,7 +104,7 @@ export function buildClubList(args: {
     labels[club.id] = club.shortName;
   }
   return clubListPayload({
-    top3: args.top3.map((club) => club.id),
+    top3: watchClubListTop3(args.top3.map((club) => club.id)),
     bag: args.bag.map((club) => club.id),
     labels,
     holeNumber: args.holeNumber,
