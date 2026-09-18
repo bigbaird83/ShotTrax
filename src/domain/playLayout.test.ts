@@ -14,6 +14,8 @@ import {
   playShowsFatSayClub,
   playShowsTallSameClub,
   playUsesAddShotCamera,
+  anyEarlierShotCanOpenEdit,
+  playEditIsDockRow,
 } from './playLayout';
 
 test('play map fills at least 60% down to a two-row dock; header is overlay', () => {
@@ -66,4 +68,25 @@ test('play hole screen uses the fill layout and does not keep the empty middle',
   assert.match(hole, /resolveHoleTee/);
   assert.match(hole, /teePointFromHoleFeature/);
   assert.equal(playUsesAddShotCamera(), true);
+});
+
+test('All clubs and Say a club are chips in row 1; edit is tap a shot, not a dock row', () => {
+  assert.equal(playDockRowCount(), 2);
+  assert.deepEqual(playChipRowIncludes(), ['suggested', 'all_clubs', 'say_club']);
+  assert.equal(playEditIsDockRow(), false);
+  assert.equal(anyEarlierShotCanOpenEdit(), true);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const dock = hole.slice(hole.indexOf('styles.dock'), hole.indexOf('<FullSheet'));
+  assert.equal((dock.match(/styles\.dockRow/g) ?? []).length, 2);
+  assert.match(dock, /COPY\.allClubs/);
+  assert.match(dock, /COPY\.sayClub/);
+  assert.match(dock, /styles\.dockChip/);
+  assert.doesNotMatch(dock, /COPY\.editShot|COPY\.changeClub|COPY\.moveFrom|COPY\.moveTo/);
+  assert.match(hole, /shots\.map\(\(shot\) => \{[\s\S]*openEdit\(shot\.id\)/);
+  assert.match(hole, /label=\{COPY\.changeClub\}/);
+  assert.match(hole, /label=\{COPY\.moveFrom\}/);
+  assert.match(hole, /label=\{COPY\.moveTo\}/);
+  assert.match(hole, /toGreenDisplayFromHole/);
+  assert.match(hole, /yardsToGreenPlayerLabel/);
 });

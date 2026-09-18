@@ -76,3 +76,12 @@ export function playEmptyMiddle(): false {
 export function playUsesAddShotCamera(): true {
   return true;
 }
+
+/** Edit is tap-the-shot → club / from / to. Not a dock button or a third row. */
+export function playEditIsDockRow(): false {
+  return false;
+}
+
+export function anyEarlierShotCanOpenEdit(): true {
+  return true;
+}
