@@ -1,8 +1,10 @@
+import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
 import { getCourseDistanceUnit, setCourseDistanceUnit } from '@/src/db/repo';
 import { COPY } from '@/src/domain/playerCopy';
 import type { CourseDistanceUnit } from '@/src/domain/courseDistance';
+import { BigButton } from '@/src/ui/BigButton';
 import { Screen } from '@/src/ui/Screen';
 import { colors, tapTarget, type } from '@/src/ui/theme';
 
@@ -33,6 +35,7 @@ export default function SettingsScreen() {
           <Text style={styles.chipText}>{COPY.kilometers}</Text>
         </Pressable>
       </View>
+      <BigButton label={COPY.bag} variant="secondary" onPress={() => router.push('/bag')} />
     </Screen>
   );
 }

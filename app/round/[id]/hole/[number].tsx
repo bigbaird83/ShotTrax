@@ -35,7 +35,7 @@ import {
 } from '@/src/db/repo';
 import { pinOrNull, formatFmbRow, hasApiFmb, yardsToGreenDepth } from '@/src/domain/greenDepth';
 import { clubPickLeaveRunsAcceptFix, planClubPickLeave } from '@/src/domain/clubPickNav';
-import { COPY, finishPuttsChip, finishShotChip, formatHoleHeader, formatPlayHeader, formatSuggestedClubChip, markedSuggestedMessage, voiceFailRecovery } from '@/src/domain/playerCopy';
+import { COPY, finishPuttsChip, finishShotChip, formatHoleHeader, formatPlayHeader, formatSuggestedClubChip, markedSuggestedMessage } from '@/src/domain/playerCopy';
 import { canAdvanceHole, holesNeedingOpenShots } from '@/src/domain/holeAdvance';
 import { isPutterClubId } from '@/src/domain/defaultBag';
 import { catchUpPinFromTap, planCancelCatchUp, planCatchUpSheet } from '@/src/domain/catchUpMap';
@@ -45,8 +45,8 @@ import { planInsertSlots } from '@/src/domain/insertShot';
 import { confirmUndoIsLive, planConfirmUndo, type ConfirmUndoWindow } from '@/src/domain/confirmUndo';
 import { confirmPlaceToDraft, courseGreenCenterForLine, resolveAddShotFromPin } from '@/src/domain/placeToDrag';
 import { applyWheelSelection } from '@/src/domain/clubSelect';
-import { planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
-import { planPlayLayout } from '@/src/domain/playLayout';
+import { PHONE_WHEEL_PILL_HEIGHT, planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
+import { PLAY_DOCK_ACTION_MIN_HEIGHT, planPlayLayout } from '@/src/domain/playLayout';
 import { planPlacedShot } from '@/src/domain/shotSource';
 import { planUndoPlacePins } from '@/src/domain/undoLastShot';
 import type { LatLng } from '@/src/domain/latLng';
@@ -71,11 +71,9 @@ import { planScorecardDismiss } from '@/src/domain/scorecard';
 import { reconcileHoleScore, scoreMismatchMessage } from '@/src/domain/scoreReconcile';
 import { resolveStickyClub, selectClubForMark } from '@/src/domain/stickyClub';
 import type { Club, PenaltyReason } from '@/src/domain/types';
-import { matchSpokenClub, speechContextualStrings } from '@/src/domain/voiceClub';
 import { lastLandingMark, markToGreen, planPlayHeaderYards, toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
 import { describeGpsSource } from '@/src/services/location';
 import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, undoShotEdit, deleteHoleShot } from '@/src/services/shotActions';
-import { startClubSpeech, type ClubSpeechSession } from '@/src/services/speechClub';
 import { useLiveFix } from '@/src/services/useLiveFix';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
 import { pushWatchPuttSheet } from '@/src/services/watchClub';
@@ -137,11 +135,7 @@ export default function HoleScreen() {
   const [penaltyNote, setPenaltyNote] = useState('');
   const [osmOverlay, setOsmOverlay] = useState<OsmOverlay | null>(null);
   const [checkNonce, setCheckNonce] = useState(0);
-  const [listening, setListening] = useState(false);
-  const [voiceError, setVoiceError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const sessionRef = useRef<ClubSpeechSession | null>(null);
-  const voiceCommitted = useRef(false);
   const autoOpened = useRef<number | null>(null);
 
   const round = useMemo(() => getRound(db, id), [db, id, revision]);
@@ -346,13 +340,6 @@ export default function HoleScreen() {
       live = false;
     };
   }, [round?.courseApiId, hole?.greenLat, hole?.greenLng, holeNumber]);
-
-  useEffect(() => {
-    return () => {
-      sessionRef.current?.stop();
-      sessionRef.current = null;
-    };
-  }, []);
 
   useEffect(() => {
     if (!round || !hole || Number.isNaN(holeNumber)) return;
@@ -772,64 +759,8 @@ export default function HoleScreen() {
     bump();
   };
 
-  const applyTranscript = (text: string, isFinal: boolean) => {
-    const matched = matchSpokenClub(text, clubs);
-    if (matched) {
-      if (voiceCommitted.current) return;
-      voiceCommitted.current = true;
-      setVoiceError(null);
-      sessionRef.current?.stop();
-      sessionRef.current = null;
-      setListening(false);
-      void markClub(matched);
-      return;
-    }
-    if (isFinal) {
-      sessionRef.current?.stop();
-      sessionRef.current = null;
-      setListening(false);
-      setVoiceError(COPY.didntCatchClub);
-    }
-  };
-
-  const stopListening = () => {
-    sessionRef.current?.stop();
-    sessionRef.current = null;
-    setListening(false);
-  };
-
-  const startListening = async () => {
-    voiceCommitted.current = false;
-    setVoiceError(null);
-    setListening(true);
-    const session = await startClubSpeech({
-      contextualStrings: speechContextualStrings(clubs),
-      onTranscript: applyTranscript,
-      onError: (message) => {
-        sessionRef.current?.stop();
-        sessionRef.current = null;
-        setVoiceError(message);
-        setListening(false);
-      },
-      onEnd: () => setListening(false),
-    });
-    sessionRef.current = session;
-    if (!session) setListening(false);
-  };
-
-  const onListen = () => {
-    if (placing) return;
-    if (listening) {
-      stopListening();
-      return;
-    }
-    void startListening();
-  };
-
   const openBag = () => {
     if (placing) return;
-    stopListening();
-    setVoiceError(null);
     router.push(`/round/${id}/club-pick?hole=${holeNumber}`);
   };
 
@@ -940,13 +871,6 @@ export default function HoleScreen() {
       { text: prompt.confirm, style: 'destructive', onPress: () => commitDeleteShot(shotId) },
     ]);
   };
-
-  const retryVoice = () => {
-    stopListening();
-    void startListening();
-  };
-
-  const voiceFail = voiceFailRecovery();
 
   const catchUpSheet = planCatchUpSheet(placing);
   const hideHoleButtons = catchUpSheet.holeButtons === 'hidden';
@@ -1062,8 +986,8 @@ export default function HoleScreen() {
           ) : (
             <View>
               <View style={styles.stickyInner}>
-                <Pressable onPress={() => setMenuOpen(true)} style={styles.back} accessibilityRole="button">
-                  <Text style={styles.backLabel}>{COPY.menu}</Text>
+                <Pressable onPress={() => setMenuOpen(true)} style={styles.menuButton} accessibilityRole="button">
+                  <Text style={styles.menuButtonText}>{COPY.menu}</Text>
                 </Pressable>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.holeTitle} numberOfLines={1}>
@@ -1126,14 +1050,6 @@ export default function HoleScreen() {
                 </ScrollView>
               ) : null}
               {simBanner ? <GpsBanner message={simBanner} /> : null}
-              {voiceError ? (
-                <View style={styles.overlayBanner}>
-                  <Text style={styles.warn}>{voiceError}</Text>
-                  <Pressable onPress={openBag} style={styles.overlayLink}>
-                    <Text style={styles.backLabel}>{voiceFail.primaryLabel}</Text>
-                  </Pressable>
-                </View>
-              ) : null}
               {toast ? <Text style={styles.overlayToast}>{toast}</Text> : null}
               {!readOnly && confirmUndoIsLive(confirmUndo, nowMs) ? (
                 <Pressable onPress={onConfirmUndo} style={styles.overlayLink}>
@@ -1187,6 +1103,22 @@ export default function HoleScreen() {
             />
           </View>
         ) : null}
+        {!catchUpFullScreen &&
+        !hideHoleButtons &&
+        (!courseCamera || mapFramed) ? (
+          <View pointerEvents="box-none" style={styles.allClubsFloat}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={COPY.allClubs}
+              disabled={readOnly || placing}
+              onPress={openBag}
+              style={styles.allClubsPill}>
+              <Text style={styles.allClubsPillText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                {COPY.allClubs}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
       </View>
 
       {!hideHoleButtons && (catchUpFullScreen || !courseCamera || mapFramed) ? (
@@ -1218,16 +1150,6 @@ export default function HoleScreen() {
                 <MarkCheck nonce={checkNonce} />
               </Pressable>
             ) : null}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={COPY.allClubs}
-              disabled={readOnly || placing}
-              onPress={openBag}
-              style={styles.dockAction}>
-              <Text style={styles.dockActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-                {COPY.allClubs}
-              </Text>
-            </Pressable>
             {!readOnly ? (
               <Pressable
                 accessibilityRole="button"
@@ -1263,16 +1185,6 @@ export default function HoleScreen() {
               style={styles.dockAction}>
               <Text style={styles.dockActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                 {COPY.nextHole}
-              </Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={COPY.sayClub}
-              disabled={placing}
-              onPress={() => void onListen()}
-              style={styles.dockAction}>
-              <Text style={styles.dockActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-                {listening ? COPY.listening : COPY.sayClub}
               </Text>
             </Pressable>
           </View>
@@ -1783,8 +1695,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
+  menuButton: {
+    minHeight: tapTarget,
+    minWidth: 88,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: colors.lime,
+    backgroundColor: colors.bgElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuButtonText: { color: colors.cream, fontWeight: '800', fontSize: type.button },
   back: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 },
   backLabel: { color: colors.lime, fontWeight: '800', fontSize: type.meta },
+  allClubsFloat: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    bottom: 8,
+    alignItems: 'center',
+  },
+  allClubsPill: {
+    height: PHONE_WHEEL_PILL_HEIGHT,
+    minWidth: 120,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.bgElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  allClubsPillText: { color: colors.cream, fontWeight: '800', fontSize: type.chip },
   holeTitle: { color: colors.cream, fontSize: type.body, fontWeight: '900' },
   shotLine: { marginTop: 6, maxHeight: 36, flexGrow: 0 },
   shotLineInner: { alignItems: 'center', gap: 6, paddingRight: 8 },
@@ -1846,7 +1789,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   dockRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'nowrap', gap: 6 },
-  dockStrip: { flex: 1, minWidth: 0, height: 60 },
+  dockStrip: { flex: 1, minWidth: 0, height: PHONE_WHEEL_PILL_HEIGHT + 8 },
   dockChip: {
     flex: 1,
     minHeight: 36,
@@ -1875,7 +1818,7 @@ const styles = StyleSheet.create({
   dockChipPrimaryText: { color: colors.lime, fontWeight: '900' },
   dockAction: {
     flex: 1,
-    minHeight: 36,
+    minHeight: PLAY_DOCK_ACTION_MIN_HEIGHT,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.line,

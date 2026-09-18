@@ -11,6 +11,17 @@ import {
   confirmPlaceToDraft,
   dragFreezesPan,
   dragKeepsPinchZoom,
+  addShotMapScrollEnabledAfterFrame,
+  addShotMapZoomEnabledAfterFrame,
+  addShotMapFrozenWhilePinLive,
+  addShotTwoFingerPanAfterFrame,
+  addShotPinchZoomAfterFrame,
+  addShotGesturesShowUserLocation,
+  addShotGesturesRerunCourseCardCamera,
+  addShotGesturesLeaveCameraAloneAfterFrame,
+  addShotGestureYardsUsePinHaversine,
+  addShotGestureYardsUseFingerPixel,
+  addShotGestureYardsUseReframe,
   dragOneFingerMovesToPin,
   dragTwoFingersPanAndZoom,
   editToFreezesPan,
@@ -385,12 +396,25 @@ test('to pin follows the finger; live yards are this shot only; nothing stores b
   assert.equal(dragOneFingerMovesToPin(), true);
   assert.equal(dragTwoFingersPanAndZoom(), true);
   assert.equal(dragKeepsPinchZoom(), true);
+  assert.equal(addShotMapScrollEnabledAfterFrame(), true);
+  assert.equal(addShotMapZoomEnabledAfterFrame(), true);
+  assert.equal(addShotMapFrozenWhilePinLive(), false);
+  assert.equal(addShotTwoFingerPanAfterFrame(), true);
+  assert.equal(addShotPinchZoomAfterFrame(), true);
+  assert.equal(addShotGesturesShowUserLocation(), false);
+  assert.equal(addShotGesturesRerunCourseCardCamera(), false);
+  assert.equal(addShotGesturesLeaveCameraAloneAfterFrame(), true);
+  assert.equal(addShotGestureYardsUsePinHaversine(), true);
+  assert.equal(addShotGestureYardsUseFingerPixel(), false);
+  assert.equal(addShotGestureYardsUseReframe(), false);
   assert.equal(editToFreezesPan(), false);
   assert.equal(editToOneFingerMovesToPin(), true);
   assert.equal(editToTwoFingersPanAndZoom(), true);
   assert.equal(confirmPlaceIsInTopBar(), false);
-  assert.match(map, /scrollEnabled=\{mapOwnsGesture \|\| !toPinLive\}/);
-  assert.match(map, /zoomEnabled/);
+  assert.match(map, /const framedForGestures = !lockFrame \|\| holeCameraReady/);
+  assert.match(map, /scrollEnabled=\{framedForGestures\}/);
+  assert.match(map, /zoomEnabled=\{framedForGestures\}/);
+  assert.doesNotMatch(map, /scrollEnabled=\{mapOwnsGesture \|\| !toPinLive\}/);
   assert.match(map, /to-pin-drag-layer/);
   assert.match(map, /touches\.length >= 2/);
   assert.match(map, /pointerEvents=\{mapOwnsGesture \? 'none' : 'auto'\}/);

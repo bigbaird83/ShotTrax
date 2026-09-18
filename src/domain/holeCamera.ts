@@ -60,6 +60,15 @@ export function holeCameraReframesOnPinDrag(): false {
   return false;
 }
 
+/** Two-finger pan / pinch after the first frame must not snap back to tee→green. */
+export function holeCameraReframesOnTwoFingerPan(): false {
+  return false;
+}
+
+export function holeCameraReframesOnPinch(): false {
+  return false;
+}
+
 /** Missing green keeps the last tee-to-green frame. Never the house / phone. */
 export function missingGreenCentersOnPhone(): false {
   return false;

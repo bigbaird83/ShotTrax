@@ -183,7 +183,15 @@ export default function HomeScreen() {
 
   return (
     <Screen edges={['bottom']} refreshing={refreshing} onRefresh={() => void onRefresh()}>
-      <Text style={styles.title}>ShotTraxx</Text>
+      <View style={styles.homeBar}>
+        <Text style={styles.title}>ShotTraxx</Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/settings')}
+          style={styles.menuButton}>
+          <Text style={styles.menuButtonText}>{COPY.menu}</Text>
+        </Pressable>
+      </View>
       <Text style={styles.lede}>{COPY.homeLede}</Text>
 
       <FullSheet
@@ -338,7 +346,20 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: { color: colors.cream, fontSize: type.title, fontWeight: '900' },
+  homeBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  title: { color: colors.cream, fontSize: type.title, fontWeight: '900', flex: 1 },
+  menuButton: {
+    minHeight: tapTarget,
+    minWidth: 88,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: colors.lime,
+    backgroundColor: colors.bgElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuButtonText: { color: colors.cream, fontWeight: '800', fontSize: type.button },
   lede: { color: colors.muted, fontSize: type.body, lineHeight: 22 },
   hint: { color: colors.muted, fontSize: type.tiny },
   meta: { color: colors.cream, fontSize: type.meta, fontWeight: '700' },

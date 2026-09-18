@@ -235,7 +235,7 @@ test('phone strip tap is the old chip mark, and the center pill is closest to ho
   });
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
-  const strip = hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.allClubs'));
+  const strip = hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.stickyClub'));
   assert.match(strip, /applyWheelSelection/);
   assert.doesNotMatch(strip, /void markClub\(full\)/);
   const mark = hole.slice(hole.indexOf('const markClub'), hole.indexOf('const onMark'));
@@ -274,8 +274,8 @@ test('phone and Watch strip UIs peek neighbors and mark only on tap', () => {
   assert.match(dock, /<ClubStrip/);
   assert.match(dock, /applyWheelSelection/);
   assert.doesNotMatch(dock, /void markClub\(full\)/);
-  assert.match(dock, /COPY\.allClubs/);
-  assert.match(dock, /COPY\.sayClub/);
+  assert.doesNotMatch(dock, /COPY\.allClubs/);
+  assert.doesNotMatch(dock, /COPY\.sayClub/);
   assert.doesNotMatch(dock, /ranked\.map\(\(club, index\)/);
   assert.doesNotMatch(dock, /club_putter/);
   assert.match(hole, /planClubStrip/);
@@ -284,7 +284,8 @@ test('phone and Watch strip UIs peek neighbors and mark only on tap', () => {
 
   const pick = readFileSync(new URL('../../app/round/[id]/club-pick.tsx', import.meta.url), 'utf8');
   assert.match(pick, /void markClub\(club\)/);
-  assert.match(pick, /void markClub\(matched\)/);
+  assert.doesNotMatch(pick, /void markClub\(matched\)/);
+  assert.doesNotMatch(pick, /COPY\.sayClub/);
   assert.doesNotMatch(pick, /styles\.top3/);
   assert.doesNotMatch(pick.slice(pick.indexOf('return ('), pick.length), /ranked\.map\(\(club, index\)/);
 

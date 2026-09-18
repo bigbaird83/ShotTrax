@@ -71,7 +71,7 @@ test('a non-driver tap stays selected and does not mark or reopen the window', (
   assert.equal(applyWheelSelection('club_3w'), 'club_3w');
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
-  const strip = hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.allClubs'));
+  const strip = hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.stickyClub'));
   assert.match(strip, /pickId=\{wheelSelectedId\}/);
   assert.match(strip, /applyWheelSelection/);
   assert.doesNotMatch(strip, /markClub/);

@@ -14,11 +14,9 @@ import { putterOpensPuttSheet } from '@/src/domain/putts';
 import { clubToRankInput, lastClosedShotYards, rankDistanceYards, rankTopClubs, resolveNextShotDistanceTarget } from '@/src/domain/rankClubs';
 import { parseTypedYards } from '@/src/domain/shotSource';
 import { selectClubForMark } from '@/src/domain/stickyClub';
-import { matchSpokenClub, speechContextualStrings } from '@/src/domain/voiceClub';
 import { emptyWalkAway, stepWalkAway, walkAwayEligible } from '@/src/domain/walkAway';
 import type { Club, GpsFix } from '@/src/domain/types';
 import { lastLandingMark, markToGreen, toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
-import { startClubSpeech, type ClubSpeechSession } from '@/src/services/speechClub';
 import { addNoGpsShot, changeShotClub, markShotWithClub, promptForPlan } from '@/src/services/shotActions';
 import { useLiveFix } from '@/src/services/useLiveFix';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
@@ -76,13 +74,8 @@ export default function ClubPickScreen() {
   const averages = useMemo(() => listClubAverages(db).filter((row) => row.club.enabled), [db, revision]);
 
   const [busy, setBusy] = useState(false);
-  const [listening, setListening] = useState(false);
-  const [heard, setHeard] = useState<string | null>(null);
-  const [voiceError, setVoiceError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Club | null>(null);
   const [typedYards, setTypedYards] = useState('');
-  const sessionRef = useRef<ClubSpeechSession | null>(null);
-  const voiceCommitted = useRef(false);
 
   useEffect(() => {
     const unsub = navigation.addListener('beforeRemove', () => {
@@ -112,13 +105,6 @@ export default function ClubPickScreen() {
       ),
     });
   }, [navigation, withoutGps, relabelId, id, holeNumber]);
-
-  useEffect(() => {
-    return () => {
-      sessionRef.current?.stop();
-      sessionRef.current = null;
-    };
-  }, []);
 
   const green =
     holeRow?.greenLat != null && holeRow.greenLng != null
@@ -339,59 +325,6 @@ export default function ClubPickScreen() {
     }
   };
 
-  const applyTranscript = (text: string, isFinal: boolean) => {
-    setHeard(text);
-    const matched = matchSpokenClub(text, clubs);
-    if (matched) {
-      setVoiceError(null);
-      if (withoutGps) {
-        setSelected(matched);
-        if (isFinal) {
-          sessionRef.current?.stop();
-          sessionRef.current = null;
-          setListening(false);
-        }
-        return;
-      }
-      if (voiceCommitted.current) return;
-      voiceCommitted.current = true;
-      sessionRef.current?.stop();
-      sessionRef.current = null;
-      setListening(false);
-      void markClub(matched);
-      return;
-    }
-    if (isFinal) {
-      setVoiceError(COPY.didntCatchClub);
-    }
-  };
-
-  const onListen = async () => {
-    if (listening) {
-      sessionRef.current?.stop();
-      sessionRef.current = null;
-      setListening(false);
-      return;
-    }
-    voiceCommitted.current = false;
-    setVoiceError(null);
-    setHeard(null);
-    setListening(true);
-    const session = await startClubSpeech({
-      contextualStrings: speechContextualStrings(clubs),
-      onTranscript: applyTranscript,
-      onError: (message) => {
-        sessionRef.current?.stop();
-        sessionRef.current = null;
-        setVoiceError(message);
-        setListening(false);
-      },
-      onEnd: () => setListening(false),
-    });
-    sessionRef.current = session;
-    if (!session) setListening(false);
-  };
-
   const bag = (
     <View style={styles.bag}>
       {clubs.map((club) => (
@@ -457,15 +390,6 @@ export default function ClubPickScreen() {
           style={styles.yardsInput}
         />
       ) : null}
-
-      <BigButton
-        label={listening ? COPY.listening : COPY.sayClub}
-        variant="secondary"
-        disabled={busy}
-        onPress={() => void onListen()}
-      />
-      {heard ? <Text style={styles.heard}>“{heard}”</Text> : null}
-      {voiceError ? <Text style={styles.warn}>{voiceError}</Text> : null}
 
       {bag}
 

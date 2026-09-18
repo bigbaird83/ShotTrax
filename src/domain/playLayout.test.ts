@@ -59,7 +59,16 @@ import {
   playUnderWheelIncludes,
   playSameClubSitsUnderWheel,
   playAllClubsSitsUnderWheel,
+  playAllClubsSitsAboveWheel,
+  playAllClubsSitsInDockRow,
   playAllClubsSitsBesideWheel,
+  playShowsSayClub,
+  watchShowsSayClub,
+  PLAY_DOCK_ACTION_MIN_HEIGHT,
+  playDockActionMinHeight,
+  playMenuIsButton,
+  homeMenuIsButton,
+  homeMenuOpensSettings,
   playScorecardWraps,
   playSameClubHiddenUntilShot,
   playMapMountsWhenYardsShown,
@@ -93,16 +102,20 @@ test('play map fills at least 60% down to a two-row dock; header is overlay', ()
 
 test('dock is not fat All clubs, Say a club, or a tall Same club', () => {
   const layout = planPlayLayout();
-  assert.equal(layout.allClubs, 'chip');
-  assert.equal(layout.sayClub, 'chip');
+  assert.equal(layout.allClubs, 'float');
+  assert.equal(layout.sayClub, 'off');
   assert.equal(layout.sameClub, 'short');
   assert.deepEqual(playChipRowIncludes(), ['suggested']);
-  assert.deepEqual(playUnderWheelIncludes(), ['same_club', 'all_clubs']);
+  assert.deepEqual(playUnderWheelIncludes(), ['same_club']);
   assert.equal(playSameClubSitsUnderWheel(), true);
-  assert.equal(playAllClubsSitsUnderWheel(), true);
+  assert.equal(playAllClubsSitsUnderWheel(), false);
+  assert.equal(playAllClubsSitsAboveWheel(), true);
+  assert.equal(playAllClubsSitsInDockRow(), false);
   assert.equal(playAllClubsSitsBesideWheel(), false);
   assert.equal(playShowsFatAllClubs(), false);
   assert.equal(playShowsFatSayClub(), false);
+  assert.equal(playShowsSayClub(), false);
+  assert.equal(watchShowsSayClub(), false);
   assert.equal(playShowsTallSameClub(), false);
   assert.ok(!layout.dockActions.includes('all_clubs' as (typeof layout.dockActions)[number]));
   assert.ok(!layout.dockActions.includes('say_club' as (typeof layout.dockActions)[number]));
@@ -117,7 +130,7 @@ test('play hole screen uses the fill layout and does not keep the empty middle',
   assert.match(hole, /styles\.dock/);
   assert.match(hole, /styles\.shotLine/);
   assert.match(hole, /COPY\.allClubs/);
-  assert.match(hole, /COPY\.sayClub/);
+  assert.doesNotMatch(hole, /COPY\.sayClub/);
   assert.match(hole, /styles\.dockAction/);
   assert.doesNotMatch(hole, /ThumbZone/);
   assert.doesNotMatch(hole, /styles\.shotList/);
@@ -155,22 +168,24 @@ test('play hole screen uses the fill layout and does not keep the empty middle',
   assert.match(fitBlock, /if \(framedOnce\.current\) return;/);
 });
 
-test('All clubs and Say a club are chips in row 1; edit is tap a shot, not a dock row', () => {
+test('All clubs floats above the wheel; edit is tap a shot, not a dock row', () => {
   assert.equal(playDockRowCount(), 2);
   assert.deepEqual(playChipRowIncludes(), ['suggested']);
-  assert.deepEqual(playUnderWheelIncludes(), ['same_club', 'all_clubs']);
+  assert.deepEqual(playUnderWheelIncludes(), ['same_club']);
+  assert.equal(playAllClubsSitsInDockRow(), false);
   assert.equal(playEditIsDockRow(), false);
   assert.equal(anyEarlierShotCanOpenEdit(), true);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const dock = hole.slice(hole.indexOf('styles.dock'), hole.indexOf('<FullSheet'));
   assert.equal((dock.match(/styles\.dockRow/g) ?? []).length, 2);
-  assert.match(dock, /COPY\.allClubs/);
-  assert.match(dock, /COPY\.sayClub/);
+  assert.doesNotMatch(dock, /COPY\.allClubs/);
+  assert.doesNotMatch(dock, /COPY\.sayClub/);
   const wheelAt = dock.indexOf('<ClubStrip');
   const sameAt = dock.indexOf('COPY.stickyClub');
-  const allAt = dock.indexOf('COPY.allClubs');
-  assert.ok(wheelAt >= 0 && sameAt > wheelAt && allAt > sameAt);
+  const allAt = hole.indexOf('styles.allClubsFloat');
+  assert.ok(wheelAt >= 0 && sameAt > wheelAt);
+  assert.ok(allAt >= 0 && allAt < hole.indexOf('styles.dock'));
   assert.doesNotMatch(dock, /COPY\.editShot|COPY\.changeClub|COPY\.moveFrom|COPY\.moveTo/);
   assert.match(hole, /shots\.map\(\(shot\) => \{[\s\S]*openEdit\(shot\.id\)/);
   assert.match(hole, /label=\{COPY\.changeClub\}/);
@@ -230,8 +245,12 @@ test('Add shot, play, and edit open hole-up once; map chip stays, footer does no
   assert.match(ready, /if \(framedOnce\.current\) return;/);
   assert.doesNotMatch(ready, /applyLockedCamera/);
   const settled = map.slice(map.indexOf('const onRegionSettled'), map.indexOf('if (!lockedRegion)'));
-  assert.match(settled, /if \(framedOnce\.current\)/);
+  assert.match(settled, /if \(framedOnce\.current\) return;/);
   assert.doesNotMatch(settled, /framedOnce\.current = false/);
+  assert.doesNotMatch(
+    settled.slice(settled.indexOf('if (framedOnce.current)'), settled.indexOf('if (regionIsHoleFrame')),
+    /applyLockedCamera|frameLockedMap|planCourseCardCamera/,
+  );
 });
 
 test('opening, Prev/Next, and Scorecard or Menu return reframe before the dock comes back', () => {
@@ -262,7 +281,7 @@ test('after a shot lands the next suggested club is already the primary chip', (
   assert.match(hole, /planClubStrip/);
   assert.match(hole, /target\?\.dYards/);
   assert.match(hole, /applyWheelSelection/);
-  assert.doesNotMatch(hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.allClubs')), /void markClub\(full\)/);
+  assert.doesNotMatch(hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.stickyClub')), /void markClub\(full\)/);
   assert.match(hole, /resolveNextShotDistanceTarget/);
   assert.match(hole, /lastLandingMark/);
   assert.doesNotMatch(hole, /nextClub|Next club|suggestedButton/);
@@ -439,4 +458,51 @@ test('round start and Add shot both call the same helper and frame tee+green wit
   assert.match(editMap, /heading=\{courseCamera\?\.heading \?\? null\}/);
   assert.match(editMap, /courseCamera\?\.points/);
   assert.doesNotMatch(editMap, /holeCamera|lockHoleCamera/);
+});
+
+test('build 32 cook-gate: Menu is a button, All clubs floats, dock matches 31 pills, Say a club is gone', () => {
+  assert.equal(playMenuIsButton(), true);
+  assert.equal(homeMenuIsButton(), true);
+  assert.equal(homeMenuOpensSettings(), true);
+  assert.equal(playAllClubsSitsInDockRow(), false);
+  assert.equal(playAllClubsSitsAboveWheel(), true);
+  assert.equal(playShowsSayClub(), false);
+  assert.equal(watchShowsSayClub(), false);
+  assert.equal(playDockActionMinHeight(), PLAY_DOCK_ACTION_MIN_HEIGHT);
+  assert.equal(PLAY_DOCK_ACTION_MIN_HEIGHT, 52);
+  assert.ok(playMapMinRatio() >= 0.6);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const home = readFileSync(new URL('../../app/(tabs)/index.tsx', import.meta.url), 'utf8');
+  const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  const pick = readFileSync(new URL('../../app/round/[id]/club-pick.tsx', import.meta.url), 'utf8');
+
+  assert.match(home, /styles\.menuButton/);
+  assert.match(home, /COPY\.menu/);
+  assert.match(home, /router\.push\('\/settings'\)/);
+  assert.match(home, /minHeight: tapTarget/);
+  assert.match(hole, /styles\.menuButton/);
+  assert.match(hole, /minHeight: tapTarget/);
+  assert.match(hole, /COPY\.menu/);
+  assert.doesNotMatch(
+    hole.slice(hole.indexOf('styles.menuButton'), hole.indexOf('menuButtonText')),
+    /styles\.back[^A-Za-z]/,
+  );
+
+  const dock = hole.slice(hole.indexOf('<View style={[styles.dock'), hole.indexOf('<FullSheet'));
+  assert.doesNotMatch(dock, /COPY\.allClubs/);
+  assert.doesNotMatch(dock, /COPY\.sayClub/);
+  assert.match(dock, /COPY\.stickyClub/);
+  assert.match(dock, /COPY\.addShot/);
+  assert.match(dock, /COPY\.scorecard/);
+  assert.match(dock, /COPY\.prevHole/);
+  assert.match(dock, /COPY\.nextHole/);
+  assert.match(hole, /styles\.allClubsFloat/);
+  assert.match(hole, /styles\.allClubsPill/);
+  assert.match(hole, /height: PHONE_WHEEL_PILL_HEIGHT/);
+  assert.match(hole, /minHeight: PLAY_DOCK_ACTION_MIN_HEIGHT/);
+  assert.doesNotMatch(hole, /COPY\.sayClub/);
+  assert.doesNotMatch(pick, /COPY\.sayClub/);
+  assert.doesNotMatch(watch, /Say a club/);
+  assert.doesNotMatch(watch, /Listening/);
 });
