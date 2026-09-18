@@ -237,7 +237,7 @@ function NativeHoleMap({
     if (!onPlaceToDrag || !placedFrom || !placedTo) return null;
     return planPlaceToDragPreview({
       from: placedFrom,
-      drag: placedTo,
+      pin: placedTo,
       green,
     });
   }, [onPlaceToDrag, placedFrom, placedTo, green]);
@@ -477,14 +477,14 @@ function NativeHoleMap({
             coordinate={toCoord(placedTo.lat, placedTo.lng)}
             title="Landed"
             pinColor="green"
-            draggable={Boolean(onPlaceToDrag)}
+            draggable={Boolean(onPlaceToDrag) && !mapOwnsGesture}
             onDrag={(event) => {
-              if (!onPlaceToDrag) return;
+              if (!onPlaceToDrag || mapOwnsGesture) return;
               const { latitude, longitude } = event.nativeEvent.coordinate;
               onPlaceToDrag({ lat: latitude, lng: longitude });
             }}
             onDragEnd={(event) => {
-              if (!onPlaceToDrag) return;
+              if (!onPlaceToDrag || mapOwnsGesture) return;
               const { latitude, longitude } = event.nativeEvent.coordinate;
               onPlaceToDrag({ lat: latitude, lng: longitude });
             }}
@@ -509,7 +509,7 @@ function NativeHoleMap({
         ) : null}
         {dragPreview ? (
           <Marker
-            coordinate={toCoord(dragPreview.fingerAt.lat, dragPreview.fingerAt.lng)}
+            coordinate={toCoord(dragPreview.pinAt.lat, dragPreview.pinAt.lng)}
             anchor={{ x: 0.5, y: 1 }}
             tappable={false}
             tracksViewChanges>

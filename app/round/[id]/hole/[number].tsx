@@ -382,7 +382,7 @@ export default function HoleScreen() {
   );
   const dragPreview = planPlaceToDragPreview({
     from: placeFrom,
-    drag: placeToDraft,
+    pin: placeToDraft,
     green,
   });
   const holeTee = resolveHoleTee({
