@@ -78,6 +78,20 @@ export function addShotMapUsesPhoneFix(): false {
   return false;
 }
 
+/**
+ * Add shot camera points. Tee + green only. Phone is ignored even when it is
+ * the only coordinate we have. Missing green → null (do not use the phone).
+ */
+export function addShotFramePoints(args: {
+  tee: LatLng | null;
+  green: LatLng | null;
+  phone?: LatLng | null;
+}): LatLng[] | null {
+  void args.phone;
+  if (!isValidLatLng(args.tee) || !isValidLatLng(args.green)) return null;
+  return [args.tee, args.green];
+}
+
 /** Add shot never pairs a card number with Waiting on your location. */
 export function addShotShowsWaitingWithCardYards(): false {
   return false;

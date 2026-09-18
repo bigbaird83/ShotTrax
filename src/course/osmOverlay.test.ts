@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  cachedOsmOverlay,
   featuresForHole,
   fetchOsmOverlay,
   parseOverpassOverlay,
+  rememberOsmOverlay,
   resolveOverlayTee,
   teePointForHole,
   teePointFromFairway,
@@ -151,6 +153,26 @@ test('fairway farthest from the green is the tee when the hole line is missing',
   assert.deepEqual(teePointFromFairway(overlay, 1, green), { lat: 37.0, lng: -122.0 });
   assert.deepEqual(resolveOverlayTee(overlay, 1, green), { lat: 37.0, lng: -122.0 });
   assert.equal(teePointFromFairway(overlay, 1, null), null);
+});
+
+test('cached overlay is available without a phone fix', () => {
+  const green = { lat: 37.01, lng: -122.0 };
+  const overlay = parseOverpassOverlay({
+    elements: [
+      {
+        type: 'way',
+        tags: { golf: 'hole', ref: '1' },
+        geometry: [
+          { lat: 37.0, lon: -122.0 },
+          { lat: 37.01, lon: -122.0 },
+        ],
+      },
+    ],
+  });
+  assert.ok(overlay);
+  rememberOsmOverlay({ courseId: 'c1', holeNumber: 1, green }, overlay);
+  assert.equal(cachedOsmOverlay({ courseId: 'c1', holeNumber: 1, green }), overlay);
+  assert.equal(cachedOsmOverlay({ courseId: 'c1', holeNumber: 1, green: null }), null);
 });
 
 test('fetchOsmOverlay returns null on Overpass failure — graceful empty overlay', async () => {

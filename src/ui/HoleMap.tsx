@@ -385,7 +385,7 @@ function NativeHoleMap({
     <View
       style={[fullBleed ? styles.bleed : styles.wrap, style]}
       onLayout={onMapLayout}
-      pointerEvents={lockFrame && !holeCameraReady ? 'none' : 'auto'}
+      pointerEvents={lockFrame && !holeCameraReady && !holeUpCamera ? 'none' : 'auto'}
       onTouchStart={(event) => {
         if (event.nativeEvent.touches.length >= 2) setMapOwnsGesture(true);
       }}
@@ -395,7 +395,7 @@ function NativeHoleMap({
       onTouchCancel={() => setMapOwnsGesture(false)}>
       <MapView
         ref={mapRef}
-        style={[styles.map, lockFrame && !holeCameraReady ? styles.mapHidden : null]}
+        style={[styles.map, lockFrame && !holeCameraReady && !holeUpCamera ? styles.mapHidden : null]}
         mapType="satellite"
         {...(lockFrame
           ? lockedCameraProps
@@ -619,7 +619,9 @@ function NativeHoleMap({
           }}
         />
       ) : null}
-      {lockFrame && !holeCameraReady ? <View pointerEvents="none" style={styles.mapCover} /> : null}
+      {lockFrame && !holeCameraReady && !holeUpCamera ? (
+        <View pointerEvents="none" style={styles.mapCover} />
+      ) : null}
       {!allowMapsChrome ? <View pointerEvents="none" style={styles.legalCover} /> : null}
       {!placeHint && !hideYardsOverlay ? (
         <View pointerEvents="none" style={styles.toGreen}>

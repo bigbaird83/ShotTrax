@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCourseDataClient } from '@/src/course/client';
-import { resolveOverlayTee } from '@/src/course/osmOverlay';
+import { cachedOsmOverlay, rememberOsmOverlay, resolveOverlayTee } from '@/src/course/osmOverlay';
 import { formatParLabel } from '@/src/course/layout';
 import type { OsmOverlay } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
@@ -32,7 +32,7 @@ import { COPY, finishPuttsChip, finishShotChip, formatHoleHeader, formatPlayHead
 import { canAdvanceHole, holesNeedingOpenShots } from '@/src/domain/holeAdvance';
 import { isPutterClubId } from '@/src/domain/defaultBag';
 import { catchUpPinFromTap, planCancelCatchUp, planCatchUpSheet } from '@/src/domain/catchUpMap';
-import { lockHoleCamera, resolveHoleTee, shotPinsForHoleCamera, type LockedHoleCamera } from '@/src/domain/holeCamera';
+import { addShotFramePoints, lockHoleCamera, resolveHoleTee, shotPinsForHoleCamera, type LockedHoleCamera } from '@/src/domain/holeCamera';
 import { deleteShotPrompt } from '@/src/domain/deleteShot';
 import { planInsertSlots } from '@/src/domain/insertShot';
 import { confirmUndoIsLive, planConfirmUndo, type ConfirmUndoWindow } from '@/src/domain/confirmUndo';
@@ -325,7 +325,12 @@ export default function HoleScreen() {
         radiusM: 1000,
       })
       .then((overlay) => {
-        if (live && overlay) setOsmOverlay(overlay);
+        if (!live || !overlay) return;
+        rememberOsmOverlay(
+          { courseId: round?.courseApiId, holeNumber, green: location },
+          overlay,
+        );
+        setOsmOverlay(overlay);
       })
       .catch(() => {
         // Keep the last overlay. Do not fall back to the clubhouse / phone.
@@ -408,8 +413,11 @@ export default function HoleScreen() {
     return { id, label: formatSuggestedClubChip(club?.shortName ?? id, stripPlan.carries[id]) };
   });
   const wheelSelectedId = selectedClubId ?? stripPlan.pickId;
+  const overlay =
+    osmOverlay ??
+    cachedOsmOverlay({ courseId: round?.courseApiId, holeNumber, green });
   const holeTee = resolveHoleTee({
-    holeTee: resolveOverlayTee(osmOverlay, holeNumber, green),
+    holeTee: resolveOverlayTee(overlay, holeNumber, green),
     osmTee: null,
     green,
   });
@@ -417,9 +425,10 @@ export default function HoleScreen() {
     tee: holeTee,
     green,
     shotPins: shotPinsForHoleCamera(shots),
-    phone: fix ? { lat: fix.lat, lng: fix.lng } : null,
+    phone: null,
     previous: lastHoleCamera.current,
   });
+  const addShotPoints = addShotFramePoints({ tee: holeTee, green, phone: null });
   if (holeCamera) lastHoleCamera.current = holeCamera;
   const addShotFrom = resolveAddShotFromPin({
     tee: holeTee,
@@ -954,14 +963,14 @@ export default function HoleScreen() {
           fullBleed
           holeNumber={hole.number}
           shots={shots}
-          userFix={fix}
+          userFix={catchUpFullScreen ? null : fix}
           green={green}
           yardsToGreen={{
             yards: playHeaderYards.yards,
             quality: playHeaderYards.quality,
           }}
           fmb={fmb}
-          osmOverlay={osmOverlay}
+          osmOverlay={overlay}
           placedFrom={placeMode === 'edit-from' || placeMode === 'edit-to' ? placeFrom : addShotFrom}
           placedTo={placeToDraft ?? placeTo}
           lineFrom={placeMode === 'edit-from' || placeMode === 'edit-to' ? placeFrom : addShotFrom}
@@ -980,12 +989,10 @@ export default function HoleScreen() {
           onFrameReady={setMapFramed}
           heading={holeCamera?.heading ?? null}
           framePoints={
-            holeCamera
-              ? holeCamera.points.map((point) => ({
-                  latitude: point.lat,
-                  longitude: point.lng,
-                }))
-              : undefined
+            (addShotPoints ?? holeCamera?.points)?.map((point) => ({
+              latitude: point.lat,
+              longitude: point.lng,
+            }))
           }
           placeHint={placeHint}
           onShotPress={placing ? undefined : openEdit}

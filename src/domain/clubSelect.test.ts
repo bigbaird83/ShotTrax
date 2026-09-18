@@ -17,6 +17,7 @@ import {
 } from './clubSelect';
 import { clubStripOpeningIds, clubStripWindowKey, planClubStrip } from './clubStrip';
 import {
+  addShotFramePoints,
   addShotMapUsesPhoneFix,
   addShotMapWaitsForPhoneFix,
   addShotShowsWaitingWithCardYards,
@@ -158,11 +159,16 @@ test("Add shot opening region contains tee and green and does not wait when 282 
   const tee = { lat: 37.0, lng: -122.0 };
   const green = { lat: 37.01, lng: -122.0 };
   const home = { lat: 40.7128, lng: -74.006 };
-  const camera = lockHoleCamera({ tee, green, shotPins: [], phone: home });
+  const camera = lockHoleCamera({ tee, green, shotPins: [], phone: null });
+  const fromHome = lockHoleCamera({ tee, green, shotPins: [], phone: home });
   assert.ok(camera);
   assert.equal(camera.mode, 'tee_green');
   assert.equal(camera.heading, holeCameraHeading(tee, green));
   assert.notEqual(camera.heading, holeCameraHeading(home, green));
+  assert.deepEqual(camera.center, fromHome?.center);
+  assert.deepEqual(addShotFramePoints({ tee, green, phone: null }), [tee, green]);
+  assert.deepEqual(addShotFramePoints({ tee, green, phone: home }), [tee, green]);
+  assert.equal(addShotFramePoints({ tee: null, green, phone: home }), null);
   assert.equal(openingHoleRegionContainsTeeAndGreen(holeFrameRegion(camera.points), tee, green), true);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
@@ -171,8 +177,13 @@ test("Add shot opening region contains tee and green and does not wait when 282 
   assert.match(playMap, /framePoints=/);
   assert.match(playMap, /heading=\{holeCamera\?\.heading/);
   assert.match(playMap, /showPhonePin=\{!catchUpFullScreen\}/);
+  assert.match(playMap, /userFix=\{catchUpFullScreen \? null : fix\}/);
+  assert.match(playMap, /addShotPoints/);
   assert.match(playMap, /playHeaderYards\.yards/);
   assert.match(hole, /resolveOverlayTee/);
+  assert.match(hole, /cachedOsmOverlay/);
+  assert.match(hole, /phone: null/);
+  assert.doesNotMatch(playMap, /getCurrentFix/);
   assert.match(hole, /styles\.catchUpHint/);
   assert.match(hole, /COPY\.placeFromHint/);
 
