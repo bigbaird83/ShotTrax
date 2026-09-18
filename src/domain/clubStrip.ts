@@ -56,6 +56,15 @@ export function clubStripTapMarksLikeChip(): true {
   return true;
 }
 
+export function clubStripTapUsesHomeClubTap(): true {
+  return true;
+}
+
+/** Center is closest carry to hole yards / yards left — never bag order or the tee club. */
+export function clubStripCenterUsesHoleYards(): true {
+  return true;
+}
+
 export function carryFromClubLabel(label: string): number | null {
   const raw = label.split(' · ')[1]?.trim();
   if (!raw || raw === '—') return null;

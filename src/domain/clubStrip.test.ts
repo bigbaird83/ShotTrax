@@ -19,8 +19,11 @@ import {
   clubStripSortedByName,
   clubStripSwipeMarksShot,
   clubStripTapMarksLikeChip,
+  clubStripTapUsesHomeClubTap,
+  clubStripCenterUsesHoleYards,
   planClubStrip,
 } from './clubStrip';
+import { planClubTapStart } from './homeClubTap';
 
 test('strip is carry-sorted, full bag, putter off, center is closest to yards left', () => {
   assert.equal(clubStripSortedByCarry(), true);
@@ -36,6 +39,8 @@ test('strip is carry-sorted, full bag, putter off, center is closest to yards le
   assert.equal(clubStripCenterIsTeeClub(), false);
   assert.equal(clubStripPhoneMatchesWatch(), true);
   assert.equal(clubStripTapMarksLikeChip(), true);
+  assert.equal(clubStripTapUsesHomeClubTap(), true);
+  assert.equal(clubStripCenterUsesHoleYards(), true);
   assert.equal(carryFromClubLabel('6i · 185'), 185);
   assert.equal(carryFromClubLabel('6i · —'), null);
   assert.equal(formatSuggestedClubChip('6i', 185), '6i · 185');
@@ -73,6 +78,56 @@ test('strip is carry-sorted, full bag, putter off, center is closest to yards le
   assert.notEqual(afterShot.pickId, 'club_driver');
   assert.equal(afterShot.ids[afterShot.openIndex - 1], 'club_pw');
   assert.equal(afterShot.ids[afterShot.openIndex + 1], 'club_6i');
+});
+
+test('phone strip tap is the old chip mark, and the center pill is closest to hole yards', () => {
+  assert.equal(clubStripTapMarksLikeChip(), true);
+  assert.equal(clubStripTapUsesHomeClubTap(), true);
+  assert.equal(clubStripCenterUsesHoleYards(), true);
+  assert.equal(clubStripCenterIsTeeClub(), false);
+  assert.equal(HOME_CLUB_TAP_MAX_YD, 600);
+
+  const bag = [
+    { id: 'club_driver', carry: 250 },
+    { id: 'club_5i', carry: 205 },
+    { id: 'club_6i', carry: 185 },
+    { id: 'club_7i', carry: 165 },
+  ];
+  const mid = planClubStrip({ clubs: bag, yardsLeft: 190 });
+  assert.equal(mid.pickId, 'club_6i');
+  assert.notEqual(mid.pickId, 'club_driver');
+  assert.notEqual(mid.ids[0], mid.pickId);
+
+  const tee = { lat: 37.0, lng: -122.0 };
+  const home = { lat: 40.7128, lng: -74.006 };
+  const onCourse = { lat: 37.0 + (80 * 0.9144) / 111_320, lng: -122.0 };
+  assert.deepEqual(planClubTapStart({ phone: home, tee }), {
+    kind: 'tee',
+    start: tee,
+    source: 'placed',
+    runsAcceptFix: false,
+  });
+  assert.deepEqual(planClubTapStart({ phone: onCourse, tee }), {
+    kind: 'phone',
+    start: onCourse,
+    source: 'gps',
+    runsAcceptFix: true,
+  });
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const strip = hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.allClubs'));
+  assert.match(strip, /void markClub\(full\)/);
+  const mark = hole.slice(hole.indexOf('const markClub'), hole.indexOf('const onMark'));
+  assert.match(mark, /markShotWithClub/);
+  assert.match(mark, /tee: holeTee/);
+  assert.doesNotMatch(mark, /skipHomeClubTap|withoutTee/);
+
+  const pick = readFileSync(new URL('../../app/round/[id]/club-pick.tsx', import.meta.url), 'utf8');
+  const pickStrip = pick.slice(pick.indexOf('<ClubStrip'), pick.indexOf('styles.grid'));
+  assert.match(pickStrip, /void markClub\(full\)/);
+  const pickMark = pick.slice(pick.indexOf('const markClub'), pick.indexOf('const rankedRef'));
+  assert.match(pickMark, /markShotWithClub/);
+  assert.match(pickMark, /tee: holeTee/);
 });
 
 test('phone and Watch strip UIs peek neighbors and mark only on tap', () => {

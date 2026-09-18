@@ -28,9 +28,16 @@ export function homeClubTapUsesHouseStart(): false {
   return false;
 }
 
-/** Suggested, Same club, Say a club, Watch top-3, and Watch bag all use this 600-yard rule. */
-export function homeClubTapPaths(): readonly ['suggested', 'same_club', 'say_club', 'watch', 'watch_bag'] {
-  return ['suggested', 'same_club', 'say_club', 'watch', 'watch_bag'];
+/** Suggested, phone strip, Same club, Say a club, Watch, and Watch bag all use this 600-yard rule. */
+export function homeClubTapPaths(): readonly [
+  'suggested',
+  'phone_strip',
+  'same_club',
+  'say_club',
+  'watch',
+  'watch_bag',
+] {
+  return ['suggested', 'phone_strip', 'same_club', 'say_club', 'watch', 'watch_bag'];
 }
 
 /** Prefer Watch vs phone first. The 600-yard check is on that chosen fix. */
