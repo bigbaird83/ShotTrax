@@ -31,7 +31,8 @@ import { clubPickLeaveHref, clubPickLeaveRunsAcceptFix, planClubPickLeave } from
 import { COPY, finishPuttsChip, finishShotChip, formatHoleHeader, formatSuggestedClubChip, markedSuggestedMessage, voiceFailRecovery } from '@/src/domain/playerCopy';
 import { canAdvanceHole, holesNeedingOpenShots } from '@/src/domain/holeAdvance';
 import { isPutterClubId } from '@/src/domain/defaultBag';
-import { catchUpPinFromTap, planCancelCatchUp, planCatchUpFrame, planCatchUpSheet } from '@/src/domain/catchUpMap';
+import { catchUpPinFromTap, planCancelCatchUp, planCatchUpSheet } from '@/src/domain/catchUpMap';
+import { planHoleCamera } from '@/src/domain/holeCamera';
 import { planInsertSlots } from '@/src/domain/insertShot';
 import { planPlacedShot } from '@/src/domain/shotSource';
 import { planUndoPlacePins } from '@/src/domain/undoLastShot';
@@ -343,7 +344,7 @@ export default function HoleScreen() {
     averages.map((row) => clubToRankInput(row.club, row)),
     target,
   );
-  const catchUpFrame = planCatchUpFrame({
+  const holeCamera = planHoleCamera({
     tee: teePointForHole(osmOverlay, holeNumber),
     green,
     shotPins: shots.flatMap((shot) => {
@@ -841,10 +842,11 @@ export default function HoleScreen() {
           osmOverlay={osmOverlay}
           placedFrom={placeFrom}
           placedTo={placeTo}
-          lockFrame={catchUpFullScreen}
+          lockFrame
+          heading={holeCamera?.heading ?? null}
           framePoints={
-            catchUpFullScreen
-              ? catchUpFrame?.points.map((point) => ({
+            holeCamera
+              ? holeCamera.points.map((point) => ({
                   latitude: point.lat,
                   longitude: point.lng,
                 }))
