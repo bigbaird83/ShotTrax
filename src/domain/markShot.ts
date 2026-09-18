@@ -19,7 +19,7 @@ export type MarkPlan =
   | { status: 'needs_force_impossible_jump'; yards: number }
   | {
       status: 'commit';
-      startFixQuality: FixQuality;
+      startFixQuality: FixQuality | null;
       closePrior: ClosedShotPlan | null;
     };
 
@@ -53,7 +53,9 @@ export function planCloseOpenShot(
   const endFixQuality = endQualityForFix(fix, Boolean(flags.forcePoorGps), jump);
   const overall = jump
     ? 'forced'
-    : worstFixQuality(open.startFixQuality, endFixQuality);
+    : open.startFixQuality
+      ? worstFixQuality(open.startFixQuality, endFixQuality)
+      : endFixQuality;
   return {
     status: 'ok',
     close: {

@@ -637,18 +637,19 @@ export function getOpenShotForHole(db: SQLiteDatabase, holeId: string): OpenShot
     `SELECT * FROM shots
      WHERE hole_id = ?
        AND ended_at IS NULL
-       AND IFNULL(source, 'gps') = 'gps'
+       AND IFNULL(source, 'gps') IN ('gps', 'placed')
        AND start_lat IS NOT NULL
        AND start_lng IS NOT NULL
      ORDER BY seq DESC LIMIT 1`,
     [holeId],
   );
   if (!row || row.start_lat == null || row.start_lng == null) return null;
+  const source = mapSource(row.source);
   return {
     id: row.id,
     startLat: row.start_lat,
     startLng: row.start_lng,
-    startFixQuality: (row.start_fix_quality as FixQuality) ?? 'good',
+    startFixQuality: source === 'placed' ? null : (row.start_fix_quality as FixQuality) ?? 'good',
   };
 }
 
@@ -669,17 +670,19 @@ export function insertOpenShot(
     lat: number;
     lng: number;
     accuracyM: number | null;
-    startFixQuality: FixQuality;
+    startFixQuality: FixQuality | null;
+    source?: ShotSource;
     suggested?: boolean;
   },
 ): string {
   const id = newId();
+  const source = args.source ?? 'gps';
   db.runSync(
     `INSERT INTO shots (
       id, hole_id, club_id, seq,
       start_lat, start_lng, start_accuracy_m, start_fix_quality,
       distance_yards, fix_quality, impossible_jump, started_at, source, suggested
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 0, ?, 'gps', ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 0, ?, ?, ?)`,
     [
       id,
       args.holeId,
@@ -691,6 +694,7 @@ export function insertOpenShot(
       args.startFixQuality,
       args.startFixQuality,
       new Date().toISOString(),
+      source,
       args.suggested ? 1 : 0,
     ],
   );

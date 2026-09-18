@@ -385,11 +385,12 @@ export default function HoleScreen() {
     drag: placeToDraft,
     green,
   });
+  const holeTee = resolveHoleTee({
+    holeTee: teePointFromHoleFeature(osmOverlay, holeNumber, green),
+    osmTee: teePointForHole(osmOverlay, holeNumber),
+  });
   const holeCamera = lockHoleCamera({
-    tee: resolveHoleTee({
-      holeTee: teePointFromHoleFeature(osmOverlay, holeNumber, green),
-      osmTee: teePointForHole(osmOverlay, holeNumber),
-    }),
+    tee: holeTee,
     green,
     shotPins: shotPinsForHoleCamera(shots),
     phone: fix ? { lat: fix.lat, lng: fix.lng } : null,
@@ -495,6 +496,7 @@ export default function HoleScreen() {
       roundId: id,
       holeNumber,
       readOnly,
+      tee: holeTee,
       bump,
       onMarked: () => setCheckNonce((n) => n + 1),
       onPutter: () => {
@@ -561,6 +563,7 @@ export default function HoleScreen() {
         holeNumber,
         clubId: next?.id ?? null,
         force,
+        tee: holeTee,
       });
       const waiting = promptForPlan(plan, () => {
         void markClub(club, true);

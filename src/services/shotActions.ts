@@ -26,6 +26,7 @@ import { preferWatchFix } from '../domain/preferWatchFix';
 import { isPutterClubId } from '../domain/defaultBag';
 import type { LatLng } from '../domain/latLng';
 import { planChangeShotClub, planMoveShotPin, type ShotEditSnapshot } from '../domain/shotEdit';
+import { homeClubTapRunsAcceptFix, planClubTapStart } from '../domain/homeClubTap';
 import { confirmPlacedShot, placedShotRunsAcceptFix, planPlacedShot } from '../domain/shotSource';
 import type { GpsFix, OpenShot, PenaltyReason } from '../domain/types';
 import { COPY } from '../domain/playerCopy';
@@ -61,7 +62,11 @@ function closePriorFrom(
   yards: number,
   impossibleJump: boolean,
 ): ClosedShotPlan {
-  const overall = impossibleJump ? 'forced' : worstFixQuality(open.startFixQuality, quality);
+  const overall = impossibleJump
+    ? 'forced'
+    : open.startFixQuality
+      ? worstFixQuality(open.startFixQuality, quality)
+      : quality;
   return {
     shotId: open.id,
     endLat: fix.lat,
@@ -121,13 +126,46 @@ export async function markShotWithClub(
     watchFix?: GpsFix | null;
     fixOverride?: GpsFix | null;
     suggested?: boolean;
+    tee?: { lat: number; lng: number } | null;
   },
 ): Promise<{ plan: MarkPlan; fix: GpsFix }> {
   const hole = getHole(db, args.roundId, args.holeNumber);
   if (!hole) {
     throw new Error(`Hole ${args.holeNumber} not found`);
   }
+  // Prefer Watch vs phone first. Then measure that chosen fix to the tee.
   const fix = args.fixOverride ?? (await resolveMarkFix(args.watchFix));
+  const tap = planClubTapStart({
+    phone: { lat: fix.lat, lng: fix.lng },
+    tee: args.tee ?? null,
+  });
+  if (tap?.kind === 'tee') {
+    if (homeClubTapRunsAcceptFix()) {
+      throw new Error('Home club tap must not run acceptFix.');
+    }
+    const open = getOpenShotForHole(db, hole.id);
+    db.withTransactionSync(() => {
+      if (open) {
+        if (args.clubId) updateShotClub(db, open.id, args.clubId);
+      } else {
+        insertOpenShot(db, {
+          holeId: hole.id,
+          clubId: args.clubId,
+          seq: nextShotSeq(db, hole.id),
+          lat: tap.start.lat,
+          lng: tap.start.lng,
+          accuracyM: null,
+          startFixQuality: null,
+          source: 'placed',
+          suggested: Boolean(args.suggested),
+        });
+      }
+      if (args.clubId) {
+        setRoundLastClub(db, args.roundId, args.clubId);
+      }
+    });
+    return { plan: { status: 'commit', startFixQuality: null, closePrior: null }, fix };
+  }
   const open = getOpenShotForHole(db, hole.id);
   const plan = decide(fix, open, Boolean(args.force));
   if (plan.status !== 'commit') {

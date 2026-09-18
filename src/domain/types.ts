@@ -133,5 +133,6 @@ export type OpenShot = {
   id: string;
   startLat: number;
   startLng: number;
-  startFixQuality: FixQuality;
+  /** Null on a home-scale Placed tee start — no GPS quality. */
+  startFixQuality: FixQuality | null;
 };
