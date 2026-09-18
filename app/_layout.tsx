@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { DbProvider } from '@/src/db/DbProvider';
 import { startWatchClubBridge } from '@/src/services/watchClub';
+import { useWatchNearbyStart } from '@/src/services/useWatchNearbyStart';
 import { BrandedSplash } from '@/src/ui/BrandedSplash';
 import { colors } from '@/src/ui/theme';
 
@@ -21,6 +22,11 @@ const theme = {
   },
 };
 
+function WatchNearbyHost() {
+  useWatchNearbyStart();
+  return null;
+}
+
 export default function RootLayout() {
   const [splashDone, setSplashDone] = useState(false);
   const onSplashDone = useCallback(() => setSplashDone(true), []);
@@ -32,6 +38,7 @@ export default function RootLayout() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <DbProvider>
+        <WatchNearbyHost />
         <ThemeProvider value={theme}>
           <StatusBar style="light" />
           <Stack

@@ -1,7 +1,9 @@
 /** Watch Connectivity: clubList + clubPick, plus puttSheet + puttPick for hole finish,
- * and clubNav (Back / Home — never a mark).
- * Phone owns undo, averages, Drop/Penalty. Ranking/seeds/avgs stay on phone.
- * Watch UI shows top-3 Suggested by default; All clubs reveals the bag payload.
+ * clubNav (Back / Home — never a mark), and nearbyCourses / startRound.
+ * Phone owns undo, averages, Drop/Penalty, GPS, and marks.
+ * Nearby course list uses the phone fix only. Watch never guesses a course.
+ * Ranking/seeds/avgs stay on phone. Bag, settings, and scoring stay off the Watch.
+ * Watch UI shows a carry-sorted bag strip by default; All clubs opens the bag menu.
  * Putter opens the putt sheet (buckets + Made it) — never a GPS mark.
  * Stretch: prefer a fresh Watch GPS fix; else phone GPS. Same acceptFix bands.
  * Watch never marks alone, never silent-forces, no motion/mic, no auto-detect putts.
@@ -9,12 +11,24 @@
 
 import { isPutterClubId } from './defaultBag';
 import { isPuttLengthId, PUTT_LENGTHS, type PuttLengthId } from './putts';
+import { OPEN_PHONE } from './watchNearby';
 
 export type ClubId = string;
 
 export type YardsQuality = 'good' | 'soft' | 'none';
 
-export const WATCH_MESSAGE_TYPES = ['clubList', 'clubPick', 'puttSheet', 'puttPick', 'clubNav'] as const;
+export const WATCH_MESSAGE_TYPES = [
+  'clubList',
+  'clubPick',
+  'puttSheet',
+  'puttPick',
+  'clubNav',
+  'nearbyCourses',
+  'nearbyTees',
+  'nearbyRequest',
+  'nearbyCoursePick',
+  'startRound',
+] as const;
 export type WatchMessageType = (typeof WATCH_MESSAGE_TYPES)[number];
 
 /** Phone → Watch. Push on hole change / fix quality change / bag rank change.
@@ -369,4 +383,206 @@ export function parsePuttPick(raw: unknown): PuttPickMessage | null {
     return { type: 'puttPick', action: 'add', at: row.at, lengthId: row.lengthId };
   }
   return { type: 'puttPick', action: row.action, at: row.at };
+}
+
+export type NearbyCourseRow = {
+  id: string;
+  name: string;
+  distanceMeters: number | null;
+};
+
+export type NearbyTeeRow = {
+  name: string;
+  rating: number | null;
+  slope: number | null;
+  totalYards: number | null;
+};
+
+/** Phone → Watch. Short nearby list from the phone fix, or open the phone. */
+export type NearbyCoursesMessage = {
+  type: 'nearbyCourses';
+  status: 'ok' | 'open_phone';
+  line: string | null;
+  courses: NearbyCourseRow[];
+};
+
+/** Phone → Watch. Named tees for the course the wrist just tapped. */
+export type NearbyTeesMessage = {
+  type: 'nearbyTees';
+  courseId: string;
+  courseName: string;
+  tees: NearbyTeeRow[];
+};
+
+/** Watch → Phone. Ask for the nearby list. Never carries Watch GPS. */
+export type NearbyRequestMessage = {
+  type: 'nearbyRequest';
+  at: string;
+};
+
+/** Watch → Phone. Player tapped a course. Phone loads tees. */
+export type NearbyCoursePickMessage = {
+  type: 'nearbyCoursePick';
+  courseId: string;
+  at: string;
+};
+
+/** Watch → Phone. Player tapped a tee. Phone opens that round. */
+export type StartRoundMessage = {
+  type: 'startRound';
+  courseId: string;
+  teeName: string;
+  at: string;
+};
+
+export type WatchNearbyIntent =
+  | { kind: 'nearbyRequest'; runsAcceptFix: false; usesWatchFix: false }
+  | { kind: 'nearbyCoursePick'; courseId: string; runsAcceptFix: false; usesWatchFix: false }
+  | { kind: 'startRound'; courseId: string; teeName: string; runsAcceptFix: false; usesWatchFix: false };
+
+export function nearbyRequestPayload(args?: { at?: string }): NearbyRequestMessage {
+  return {
+    type: 'nearbyRequest',
+    at: args?.at ?? new Date().toISOString(),
+  };
+}
+
+export function nearbyCoursePickPayload(args: { courseId: string; at?: string }): NearbyCoursePickMessage {
+  return {
+    type: 'nearbyCoursePick',
+    courseId: args.courseId,
+    at: args.at ?? new Date().toISOString(),
+  };
+}
+
+export function startRoundPayload(args: {
+  courseId: string;
+  teeName: string;
+  at?: string;
+}): StartRoundMessage {
+  return {
+    type: 'startRound',
+    courseId: args.courseId,
+    teeName: args.teeName,
+    at: args.at ?? new Date().toISOString(),
+  };
+}
+
+export function parseNearbyRequest(raw: unknown): NearbyRequestMessage | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as Record<string, unknown>;
+  if (row.type !== 'nearbyRequest') return null;
+  if (typeof row.at !== 'string' || !isIso8601(row.at)) return null;
+  return { type: 'nearbyRequest', at: row.at };
+}
+
+export function parseNearbyCoursePick(raw: unknown): NearbyCoursePickMessage | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as Record<string, unknown>;
+  if (row.type !== 'nearbyCoursePick') return null;
+  if (typeof row.courseId !== 'string' || !row.courseId.trim()) return null;
+  if (typeof row.at !== 'string' || !isIso8601(row.at)) return null;
+  return { type: 'nearbyCoursePick', courseId: row.courseId.trim(), at: row.at };
+}
+
+export function parseStartRound(raw: unknown): StartRoundMessage | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as Record<string, unknown>;
+  if (row.type !== 'startRound') return null;
+  if (typeof row.courseId !== 'string' || !row.courseId.trim()) return null;
+  if (typeof row.teeName !== 'string' || !row.teeName.trim()) return null;
+  if (typeof row.at !== 'string' || !isIso8601(row.at)) return null;
+  return {
+    type: 'startRound',
+    courseId: row.courseId.trim(),
+    teeName: row.teeName.trim(),
+    at: row.at,
+  };
+}
+
+export function parseNearbyCourses(raw: unknown): NearbyCoursesMessage | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as Record<string, unknown>;
+  if (row.type !== 'nearbyCourses') return null;
+  if (row.status !== 'ok' && row.status !== 'open_phone') return null;
+  if (!Array.isArray(row.courses)) return null;
+  const courses: NearbyCourseRow[] = [];
+  for (const item of row.courses) {
+    if (!item || typeof item !== 'object') continue;
+    const course = item as Record<string, unknown>;
+    if (typeof course.id !== 'string' || !course.id.trim()) continue;
+    if (typeof course.name !== 'string' || !course.name.trim()) continue;
+    courses.push({
+      id: course.id,
+      name: course.name,
+      distanceMeters:
+        typeof course.distanceMeters === 'number' && Number.isFinite(course.distanceMeters)
+          ? course.distanceMeters
+          : null,
+    });
+  }
+  if (row.status === 'open_phone') {
+    return { type: 'nearbyCourses', status: 'open_phone', line: OPEN_PHONE, courses: [] };
+  }
+  return {
+    type: 'nearbyCourses',
+    status: 'ok',
+    line: null,
+    courses,
+  };
+}
+
+export function parseNearbyTees(raw: unknown): NearbyTeesMessage | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as Record<string, unknown>;
+  if (row.type !== 'nearbyTees') return null;
+  if (typeof row.courseId !== 'string' || !row.courseId.trim()) return null;
+  if (typeof row.courseName !== 'string' || !row.courseName.trim()) return null;
+  if (!Array.isArray(row.tees)) return null;
+  const tees: NearbyTeeRow[] = [];
+  for (const item of row.tees) {
+    if (!item || typeof item !== 'object') continue;
+    const tee = item as Record<string, unknown>;
+    if (typeof tee.name !== 'string' || !tee.name.trim()) continue;
+    tees.push({
+      name: tee.name,
+      rating: typeof tee.rating === 'number' && Number.isFinite(tee.rating) ? tee.rating : null,
+      slope: typeof tee.slope === 'number' && Number.isFinite(tee.slope) ? tee.slope : null,
+      totalYards:
+        typeof tee.totalYards === 'number' && Number.isFinite(tee.totalYards) ? tee.totalYards : null,
+    });
+  }
+  return {
+    type: 'nearbyTees',
+    courseId: row.courseId.trim(),
+    courseName: row.courseName.trim(),
+    tees,
+  };
+}
+
+/** Nearby / start-round Watch messages never mark GPS. */
+export function parseWatchNearbyIntent(raw: unknown): WatchNearbyIntent | null {
+  if (parseNearbyRequest(raw)) {
+    return { kind: 'nearbyRequest', runsAcceptFix: false, usesWatchFix: false };
+  }
+  const pick = parseNearbyCoursePick(raw);
+  if (pick) {
+    return {
+      kind: 'nearbyCoursePick',
+      courseId: pick.courseId,
+      runsAcceptFix: false,
+      usesWatchFix: false,
+    };
+  }
+  const start = parseStartRound(raw);
+  if (start) {
+    return {
+      kind: 'startRound',
+      courseId: start.courseId,
+      teeName: start.teeName,
+      runsAcceptFix: false,
+      usesWatchFix: false,
+    };
+  }
+  return null;
 }

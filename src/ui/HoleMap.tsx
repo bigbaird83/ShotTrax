@@ -1,5 +1,13 @@
 import { Component, type ErrorInfo, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  StyleSheet,
+  Text,
+  View,
+  type GestureResponderEvent,
+  type LayoutChangeEvent,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import MapView, { Marker, Polygon, Polyline } from 'react-native-maps';
 import type { OsmFeature, OsmGolfKind, OsmOverlay } from '@/src/course/types';
 import { featuresForHole } from '@/src/course/osmOverlay';
@@ -37,6 +45,8 @@ type Props = {
   placedFrom?: { lat: number; lng: number } | null;
   placedTo?: { lat: number; lng: number } | null;
   onPlaceToDrag?: (coord: { lat: number; lng: number }) => void;
+  /** To pin is live: one finger moves the pin. Two fingers pan and pinch. */
+  freezePan?: boolean;
   placeHint?: string | null;
   fullBleed?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -121,6 +131,7 @@ function NativeHoleMap({
   placedFrom,
   placedTo,
   onPlaceToDrag,
+  freezePan,
   placeHint,
   fullBleed,
   style,
@@ -135,6 +146,40 @@ function NativeHoleMap({
   const framedOnce = useRef(false);
   const pendingLocked = useRef(false);
   const [holeCameraReady, setHoleCameraReady] = useState(false);
+  const [mapsChrome, setMapsChrome] = useState(false);
+  const panStart = useRef<{ x: number; y: number } | null>(null);
+  const toPinLive = Boolean(freezePan || onPlaceToDrag);
+  const [mapOwnsGesture, setMapOwnsGesture] = useState(false);
+
+  const revealMapsChrome = () => setMapsChrome(true);
+
+  const movedRef = useRef(false);
+
+  const coordFromTouch = (event: GestureResponderEvent, kind: 'drag' | 'tap') => {
+    const map = mapRef.current as
+      | (MapView & {
+          coordinateForPoint?: (point: { x: number; y: number }) => Promise<{
+            latitude: number;
+            longitude: number;
+          }>;
+        })
+      | null;
+    if (!map || typeof map.coordinateForPoint !== 'function') return;
+    void map
+      .coordinateForPoint({ x: event.nativeEvent.locationX, y: event.nativeEvent.locationY })
+      .then((point) => {
+        if (!point) return;
+        const next = { lat: point.latitude, lng: point.longitude };
+        if (!isValidLatLng(next)) return;
+        if (kind === 'tap') {
+          revealMapsChrome();
+          onPlacePoint?.(next);
+          return;
+        }
+        onPlaceToDrag?.(next);
+      })
+      .catch(() => undefined);
+  };
 
   const closed = useMemo(() => shots.filter(hasClosedGpsTrail), [shots]);
   const osmFeatures = useMemo(
@@ -192,7 +237,7 @@ function NativeHoleMap({
     if (!onPlaceToDrag || !placedFrom || !placedTo) return null;
     return planPlaceToDragPreview({
       from: placedFrom,
-      drag: placedTo,
+      pin: placedTo,
       green,
     });
   }, [onPlaceToDrag, placedFrom, placedTo, green]);
@@ -241,6 +286,10 @@ function NativeHoleMap({
   }, [lockFrame, holeCameraReady, onFrameReady]);
 
   useEffect(() => {
+    if (!toPinLive) setMapOwnsGesture(false);
+  }, [toPinLive]);
+
+  useEffect(() => {
     if (lockFrame) {
       if (framedOnce.current) return;
       markFramedIfLive(frameLockedMap());
@@ -269,6 +318,8 @@ function NativeHoleMap({
       setHoleCameraReady(true);
       return;
     }
+    // One-finger pin or two-finger pan/zoom must not snap the hole back.
+    if (toPinLive) return;
     // House / default GPS region is not framed. Do not stick. Re-apply the hole.
     framedOnce.current = false;
     pendingLocked.current = true;
@@ -303,7 +354,14 @@ function NativeHoleMap({
     <View
       style={[fullBleed ? styles.bleed : styles.wrap, style]}
       onLayout={onMapLayout}
-      pointerEvents={lockFrame && !holeCameraReady ? 'none' : 'auto'}>
+      pointerEvents={lockFrame && !holeCameraReady ? 'none' : 'auto'}
+      onTouchStart={(event) => {
+        if (event.nativeEvent.touches.length >= 2) setMapOwnsGesture(true);
+      }}
+      onTouchEnd={(event) => {
+        if (event.nativeEvent.touches.length === 0) setMapOwnsGesture(false);
+      }}
+      onTouchCancel={() => setMapOwnsGesture(false)}>
       <MapView
         ref={mapRef}
         style={[styles.map, lockFrame && !holeCameraReady ? styles.mapHidden : null]}
@@ -316,10 +374,21 @@ function NativeHoleMap({
         showsUserLocation={holeMapShowsUserLocation(Boolean(lockFrame))}
         showsMyLocationButton={false}
         followsUserLocation={false}
+        showsCompass={mapsChrome}
+        legalLabelInsets={
+          mapsChrome ? undefined : { top: 0, right: 0, bottom: -160, left: 0 }
+        }
         zoomEnabled
-        scrollEnabled
+        zoomTapEnabled
+        scrollEnabled={mapOwnsGesture || !toPinLive}
         pitchEnabled={false}
         rotateEnabled={false}
+        moveOnMarkerPress={false}
+        onPanDrag={(event) => {
+          if (!onPlaceToDrag || mapOwnsGesture) return;
+          const { latitude, longitude } = event.nativeEvent.coordinate;
+          onPlaceToDrag({ lat: latitude, lng: longitude });
+        }}
         onMapReady={() => {
           if (!lockFrame) return;
           if (framedOnce.current) {
@@ -330,6 +399,7 @@ function NativeHoleMap({
         }}
         onRegionChangeComplete={onRegionSettled}
         onPress={(event) => {
+          revealMapsChrome();
           if (!onPlacePoint) return;
           const { latitude, longitude } = event.nativeEvent.coordinate;
           onPlacePoint({ lat: latitude, lng: longitude });
@@ -407,14 +477,14 @@ function NativeHoleMap({
             coordinate={toCoord(placedTo.lat, placedTo.lng)}
             title="Landed"
             pinColor="green"
-            draggable={Boolean(onPlaceToDrag)}
+            draggable={Boolean(onPlaceToDrag) && !mapOwnsGesture}
             onDrag={(event) => {
-              if (!onPlaceToDrag) return;
+              if (!onPlaceToDrag || mapOwnsGesture) return;
               const { latitude, longitude } = event.nativeEvent.coordinate;
               onPlaceToDrag({ lat: latitude, lng: longitude });
             }}
             onDragEnd={(event) => {
-              if (!onPlaceToDrag) return;
+              if (!onPlaceToDrag || mapOwnsGesture) return;
               const { latitude, longitude } = event.nativeEvent.coordinate;
               onPlaceToDrag({ lat: latitude, lng: longitude });
             }}
@@ -439,8 +509,8 @@ function NativeHoleMap({
         ) : null}
         {dragPreview ? (
           <Marker
-            coordinate={toCoord(dragPreview.shotAt.lat, dragPreview.shotAt.lng)}
-            anchor={{ x: 0.5, y: 0.5 }}
+            coordinate={toCoord(dragPreview.pinAt.lat, dragPreview.pinAt.lng)}
+            anchor={{ x: 0.5, y: 1 }}
             tappable={false}
             tracksViewChanges>
             <View pointerEvents="none" style={styles.dragChip}>
@@ -462,6 +532,38 @@ function NativeHoleMap({
           </Marker>
         ) : null}
       </MapView>
+      {toPinLive ? (
+        <View
+          testID="to-pin-drag-layer"
+          style={styles.dragLayer}
+          pointerEvents={mapOwnsGesture ? 'none' : 'auto'}
+          onStartShouldSetResponder={(event) => {
+            if (event.nativeEvent.touches.length !== 1) return false;
+            panStart.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY };
+            movedRef.current = false;
+            return true;
+          }}
+          onMoveShouldSetResponder={(event) => event.nativeEvent.touches.length === 1}
+          onResponderTerminationRequest={() => true}
+          onResponderMove={(event) => {
+            if (event.nativeEvent.touches.length !== 1) {
+              setMapOwnsGesture(true);
+              return;
+            }
+            if (!panStart.current) return;
+            const dx = event.nativeEvent.pageX - panStart.current.x;
+            const dy = event.nativeEvent.pageY - panStart.current.y;
+            if (dx * dx + dy * dy <= 36) return;
+            movedRef.current = true;
+            coordFromTouch(event, 'drag');
+          }}
+          onResponderRelease={(event) => {
+            coordFromTouch(event, movedRef.current ? 'drag' : 'tap');
+            panStart.current = null;
+            movedRef.current = false;
+          }}
+        />
+      ) : null}
       {lockFrame && !holeCameraReady ? <View pointerEvents="none" style={styles.mapCover} /> : null}
       {!placeHint && !hideYardsOverlay ? (
         <View pointerEvents="none" style={styles.toGreen}>
@@ -525,12 +627,20 @@ const styles = StyleSheet.create({
     left: 0,
     backgroundColor: colors.bgElevated,
   },
+  dragLayer: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  },
   dragChip: {
     backgroundColor: 'rgba(11,26,18,0.88)',
     borderRadius: 10,
     paddingHorizontal: 8,
     paddingVertical: 4,
     alignItems: 'center',
+    marginBottom: 28,
   },
   dragChipGreen: { borderWidth: 1, borderColor: colors.lime },
   dragChipKicker: {

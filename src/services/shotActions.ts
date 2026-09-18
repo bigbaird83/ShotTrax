@@ -294,7 +294,7 @@ export function addPlacedShot(
   const plan = planPlacedShot(args.from, args.to);
   if (!plan.ok) return { status: 'rejected' };
   const gate = confirmPlacedShot(plan, Boolean(args.force));
-  if (gate.status !== 'commit') return gate;
+  if (gate.status !== 'commit') return { status: 'rejected' };
   const hole = getHole(db, args.roundId, args.holeNumber);
   if (!hole) {
     throw new Error(`Hole ${args.holeNumber} not found`);
@@ -364,7 +364,7 @@ export function moveShotPin(
   const planned = planMoveShotPin(shot, args.which, args.point);
   if (!planned.ok) return { status: 'rejected' };
   const gate = confirmPlacedShot(planned.plan, Boolean(args.force));
-  if (gate.status !== 'commit') return gate;
+  if (gate.status !== 'commit') return { status: 'rejected' };
   const ok = applyShotPlacement(db, args.shotId, planned.from, planned.to);
   if (!ok) return { status: 'rejected' };
   return { status: 'commit', snapshot: planned.snapshot };

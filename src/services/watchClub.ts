@@ -2,6 +2,7 @@ import { Alert } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getWatchBridgeNative } from '@/modules/watch-bridge';
 import { COPY } from '../domain/playerCopy';
+import { watchClubListTop3 } from '../domain/watchClubPick';
 import { watchFixFromPick } from '../domain/preferWatchFix';
 import {
   MADE_IT_FEEDBACK,
@@ -22,6 +23,7 @@ import {
 import type { PuttLengthId } from '../domain/putts';
 import { hapticMark, hapticSelect, hapticWarn } from '../ui/haptics';
 import { markShotWithClub, promptForPlan } from './shotActions';
+import { handleWatchNearbyJson, isWatchNearbyJson } from './watchNearby';
 
 export type WatchClubContext = {
   db: SQLiteDatabase;
@@ -102,7 +104,7 @@ export function buildClubList(args: {
     labels[club.id] = club.shortName;
   }
   return clubListPayload({
-    top3: args.top3.map((club) => club.id),
+    top3: watchClubListTop3(args.top3.map((club) => club.id)),
     bag: args.bag.map((club) => club.id),
     labels,
     holeNumber: args.holeNumber,
@@ -123,6 +125,11 @@ async function replyToken(token: string, payload: ClubPickReply | PuttPickReply)
 }
 
 async function handlePick(token: string, json: string): Promise<void> {
+  if (isWatchNearbyJson(json)) {
+    const result = await handleWatchNearbyJson(json);
+    await replyToken(token, result);
+    return;
+  }
   let raw: unknown;
   try {
     raw = JSON.parse(json) as unknown;
@@ -159,7 +166,8 @@ async function handlePick(token: string, json: string): Promise<void> {
   const label = ctx.labelForClub(pick.clubId) ?? pick.clubId;
   const watchFix = watchFixFromPick(pick);
   try {
-    // Club tap / Watch tap / Same club — the only Watch path that runs acceptFix.
+    // Top-3 and bag taps share this mark. Same 600-yard tee check, same
+    // phone or Watch fix, same Placed start past 600. Back / Home never mark.
     const { plan } = await markShotWithClub(ctx.db, {
       roundId: ctx.roundId,
       holeNumber: ctx.holeNumber,

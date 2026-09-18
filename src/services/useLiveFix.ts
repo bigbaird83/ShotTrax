@@ -5,6 +5,10 @@ import { watchFixes } from './location';
 /** Last real GPS sample. Reused across hole remounts so clubList can push the new hole's yards immediately. Never invented. */
 let lastLiveFix: GpsFix | null = null;
 
+export function getLastLiveFix(): GpsFix | null {
+  return lastLiveFix;
+}
+
 /**
  * Live GPS for yards-to-green / Watch clubList. Same bands as phone marks —
  * never invents a coordinate. `null` until a real fix arrives (quality none).

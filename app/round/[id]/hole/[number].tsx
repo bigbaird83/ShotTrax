@@ -27,7 +27,7 @@ import {
   updateHoleScore,
 } from '@/src/db/repo';
 import { pinOrNull, formatFmbRow, hasApiFmb, yardsToGreenDepth } from '@/src/domain/greenDepth';
-import { clubPickLeaveHref, clubPickLeaveRunsAcceptFix, planClubPickLeave } from '@/src/domain/clubPickNav';
+import { clubPickLeaveRunsAcceptFix, planClubPickLeave } from '@/src/domain/clubPickNav';
 import { COPY, finishPuttsChip, finishShotChip, formatHoleHeader, formatPlayHeader, formatSuggestedClubChip, markedSuggestedMessage, voiceFailRecovery } from '@/src/domain/playerCopy';
 import { canAdvanceHole, holesNeedingOpenShots } from '@/src/domain/holeAdvance';
 import { isPutterClubId } from '@/src/domain/defaultBag';
@@ -37,6 +37,7 @@ import { deleteShotPrompt } from '@/src/domain/deleteShot';
 import { planInsertSlots } from '@/src/domain/insertShot';
 import { confirmUndoIsLive, planConfirmUndo, type ConfirmUndoWindow } from '@/src/domain/confirmUndo';
 import { confirmPlaceToDraft, planPlaceToDragPreview } from '@/src/domain/placeToDrag';
+import { planClubStrip } from '@/src/domain/clubStrip';
 import { planPlayLayout } from '@/src/domain/playLayout';
 import { planPlacedShot } from '@/src/domain/shotSource';
 import { planUndoPlacePins } from '@/src/domain/undoLastShot';
@@ -57,7 +58,7 @@ import {
   type PuttLengthId,
 } from '@/src/domain/putts';
 import { canMoveFromPin, canMoveToPin, type ShotEditSnapshot } from '@/src/domain/shotEdit';
-import { clubToRankInput, lastClosedShotYards, rankCatchUpClubs, rankDistanceYards, rankTopClubs, resolveNextShotDistanceTarget } from '@/src/domain/rankClubs';
+import { clubToRankInput, lastClosedShotYards, rankDistanceYards, rankTopClubs, resolveNextShotDistanceTarget } from '@/src/domain/rankClubs';
 import { planScorecardDismiss } from '@/src/domain/scorecard';
 import { reconcileHoleScore, scoreMismatchMessage } from '@/src/domain/scoreReconcile';
 import { resolveStickyClub, selectClubForMark } from '@/src/domain/stickyClub';
@@ -74,6 +75,7 @@ import { MADE_IT_FEEDBACK, PHONE_UNAVAILABLE } from '@/src/domain/watchMessages'
 import { QualityBadge } from '@/src/ui/Badge';
 import { BigButton } from '@/src/ui/BigButton';
 import { ClubButton } from '@/src/ui/ClubButton';
+import { ClubStrip } from '@/src/ui/ClubStrip';
 import { GpsBanner } from '@/src/ui/GpsBanner';
 import { hapticMark, hapticSelect, hapticTap, hapticWarn } from '@/src/ui/haptics';
 import { HoleMap } from '@/src/ui/HoleMap';
@@ -84,7 +86,12 @@ import { ScorecardBody } from '@/src/ui/ScorecardBody';
 import { colors, tapTarget, type } from '@/src/ui/theme';
 
 export default function HoleScreen() {
-  const { id, number, putts: puttsParam } = useLocalSearchParams<{ id: string; number: string; putts?: string }>();
+  const { id, number, putts: puttsParam, menu: menuParam } = useLocalSearchParams<{
+    id: string;
+    number: string;
+    putts?: string;
+    menu?: string;
+  }>();
   const holeNumber = Number(number);
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -178,12 +185,23 @@ export default function HoleScreen() {
   const placedYards = placedPlan && placedPlan.ok ? placedPlan.distanceYards : null;
   const editingShot = editShotId ? shots.find((shot) => shot.id === editShotId) ?? null : null;
   const pickerYards = editClubOpen ? (editingShot?.distanceYards ?? null) : placedYards;
-  const placedRanked = rankCatchUpClubs(
-    averages.map((row) => clubToRankInput(row.club, row)),
-    pickerYards,
-  );
+  const placeStripPlan = planClubStrip({
+    clubs: clubs.map((club) => {
+      const row = averages.find((item) => item.club.id === club.id);
+      return {
+        id: club.id,
+        carry: row ? rankDistanceYards(clubToRankInput(row.club, row)) : null,
+      };
+    }),
+    yardsLeft: pickerYards,
+  });
+  const placeStripItems = placeStripPlan.ids.map((id) => {
+    const club = clubs.find((row) => row.id === id);
+    const row = averages.find((item) => item.club.id === id);
+    const carry = row ? rankDistanceYards(clubToRankInput(row.club, row)) : null;
+    return { id, label: formatSuggestedClubChip(club?.shortName ?? id, carry) };
+  });
   const placeBag = clubs.filter((club) => !isPutterClubId(club.id));
-  const placeRest = placeBag.filter((club) => !placedRanked.some((row) => row.id === club.id));
 
   const resetPlace = () => {
     const cancel = planCancelCatchUp();
@@ -380,9 +398,25 @@ export default function HoleScreen() {
     averages.map((row) => clubToRankInput(row.club, row)),
     target,
   );
+  const stripPlan = planClubStrip({
+    clubs: clubs.map((club) => {
+      const row = averages.find((item) => item.club.id === club.id);
+      return {
+        id: club.id,
+        carry: row ? rankDistanceYards(clubToRankInput(row.club, row)) : null,
+      };
+    }),
+    yardsLeft: target?.dYards ?? toGreen.yards,
+  });
+  const stripItems = stripPlan.ids.map((id) => {
+    const club = clubs.find((row) => row.id === id);
+    const row = averages.find((item) => item.club.id === id);
+    const carry = row ? rankDistanceYards(clubToRankInput(row.club, row)) : null;
+    return { id, label: formatSuggestedClubChip(club?.shortName ?? id, carry) };
+  });
   const dragPreview = planPlaceToDragPreview({
     from: placeFrom,
-    drag: placeToDraft,
+    pin: placeToDraft,
     green,
   });
   const holeTee = resolveHoleTee({
@@ -460,6 +494,12 @@ export default function HoleScreen() {
   }, [puttsParam, holeNumber, readOnly, openPuttSheet]);
 
   useEffect(() => {
+    if (menuParam !== '1' || readOnly) return;
+    setMenuOpen(true);
+    router.setParams({ menu: undefined });
+  }, [menuParam, readOnly]);
+
+  useEffect(() => {
     if (!puttOpen) return;
     void pushWatchPuttSheet({ open: true, holeNumber: puttSheetHole, lengths: puttDraft.lengths });
   }, [puttOpen, puttSheetHole, puttDraft]);
@@ -515,7 +555,10 @@ export default function HoleScreen() {
         ) {
           return;
         }
-        if (plan.dest === 'rounds') router.replace(clubPickLeaveHref({ action, roundId: id, holeNumber }));
+        if (action === 'home') {
+          setMenuOpen(true);
+          return;
+        }
       },
       onPuttPick: onWatchPuttPick,
       labelForClub: (clubId) => clubMap[clubId]?.shortName ?? clubs.find((club) => club.id === clubId)?.shortName ?? null,
@@ -531,7 +574,7 @@ export default function HoleScreen() {
         return { id: club.id, shortName: formatSuggestedClubChip(club.shortName, carry) };
       }),
       holeNumber,
-      yardsToGreen: toGreen.yards,
+      yardsToGreen: target?.dYards ?? toGreen.yards,
       yardsQuality: toGreen.quality,
       lastClubId: sticky?.id ?? null,
     },
@@ -762,21 +805,14 @@ export default function HoleScreen() {
     router.push(`/round/${id}/club-pick?hole=${holeNumber}`);
   };
 
-  const confirmToPin = (force = false) => {
-    const result = confirmPlaceToDraft({ from: placeFrom, draft: placeToDraft, force });
+  const confirmToPin = () => {
+    const result = confirmPlaceToDraft({ from: placeFrom, draft: placeToDraft });
     if (result.status === 'empty') return;
-    if (result.status === 'needs_confirm') {
-      Alert.alert(COPY.tooFar, '', [
-        { text: COPY.cancel, style: 'cancel' },
-        { text: COPY.markAnyway, onPress: () => confirmToPin(true) },
-      ]);
-      return;
-    }
     setPlaceTo(result.to);
     setPlaceClubOpen(true);
   };
 
-  const commitPlaced = (clubId: string, force = false) => {
+  const commitPlaced = (clubId: string) => {
     if (!placeFrom || !placeTo) return;
     const result = addPlacedShot(db, {
       roundId: round.id,
@@ -784,16 +820,8 @@ export default function HoleScreen() {
       clubId,
       from: placeFrom,
       to: placeTo,
-      force,
       seq: insertSeq ?? undefined,
     });
-    if (result.status === 'needs_confirm') {
-      Alert.alert(COPY.tooFar, '', [
-        { text: COPY.cancel, style: 'cancel' },
-        { text: COPY.markAnyway, onPress: () => commitPlaced(clubId, true) },
-      ]);
-      return;
-    }
     if (result.status !== 'commit') {
       hapticWarn();
       return;
@@ -840,16 +868,9 @@ export default function HoleScreen() {
     bump();
   };
 
-  const commitMovePin = (point: LatLng, which: 'from' | 'to', force = false) => {
+  const commitMovePin = (point: LatLng, which: 'from' | 'to') => {
     if (!editShotId) return;
-    const result = moveShotPin(db, { shotId: editShotId, which, point, force });
-    if (result.status === 'needs_confirm') {
-      Alert.alert(COPY.tooFar, '', [
-        { text: COPY.cancel, style: 'cancel' },
-        { text: COPY.markAnyway, onPress: () => commitMovePin(point, which, true) },
-      ]);
-      return;
-    }
+    const result = moveShotPin(db, { shotId: editShotId, which, point });
     if (result.status !== 'commit') {
       hapticWarn();
       return;
@@ -902,16 +923,20 @@ export default function HoleScreen() {
   const catchUpSheet = planCatchUpSheet(placing);
   const hideHoleButtons = catchUpSheet.holeButtons === 'hidden';
   const catchUpFullScreen = catchUpSheet.map === 'fullscreen';
+  const livePlaceHint =
+    placeToDraft && dragPreview
+      ? `${COPY.shot} ${dragPreview.shotLabel} · ${COPY.toGreen} ${dragPreview.toGreenLabel}`
+      : null;
   const placeHint =
     placeMode === 'edit-from'
       ? COPY.editFromHint
       : placeMode === 'edit-to'
-        ? COPY.editToHint
+        ? livePlaceHint ?? COPY.editToHint
         : placing
           ? placeTo
             ? `${placedYards ?? '—'} yd · ${COPY.pickClub}`
-            : placeToDraft && dragPreview
-              ? `${COPY.shot} ${dragPreview.shotLabel} · ${COPY.toGreen} ${dragPreview.toGreenLabel}`
+            : livePlaceHint
+              ? livePlaceHint
               : placeFrom
                 ? COPY.placeToHint
                 : COPY.placeFromHint
@@ -937,7 +962,12 @@ export default function HoleScreen() {
           osmOverlay={osmOverlay}
           placedFrom={placeFrom}
           placedTo={placeToDraft ?? placeTo}
-          onPlaceToDrag={placeMode === 'to' ? (point) => setPlaceToDraft(point) : undefined}
+          freezePan={placeMode === 'to' || placeMode === 'edit-to'}
+          onPlaceToDrag={
+            placeMode === 'to' || placeMode === 'edit-to'
+              ? (point) => setPlaceToDraft(point)
+              : undefined
+          }
           lockFrame
           hideYardsOverlay={!catchUpFullScreen}
           frameEpoch={catchUpFullScreen ? 'catchup' : `play-${hole.number}-${playFrameNonce}`}
@@ -973,7 +1003,7 @@ export default function HoleScreen() {
                     return;
                   }
                   if (placeMode === 'edit-to') {
-                    commitMovePin(tap, 'to');
+                    setPlaceToDraft(tap);
                   }
                 }
           }
@@ -996,11 +1026,6 @@ export default function HoleScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.holeTitle}>{formatHoleHeader(hole.number, hole.par)}</Text>
                 </View>
-                {placeMode === 'to' && placeToDraft && !placeClubOpen ? (
-                  <Pressable onPress={() => confirmToPin()} style={styles.back} accessibilityRole="button">
-                    <Text style={styles.backLabel}>{COPY.confirmPlace}</Text>
-                  </Pressable>
-                ) : null}
               </View>
               {placeHint ? <Text style={styles.catchUpHint}>{placeHint}</Text> : null}
             </View>
@@ -1113,35 +1138,49 @@ export default function HoleScreen() {
             </View>
           )}
         </View>
+        {catchUpFullScreen &&
+        (placeMode === 'to' || placeMode === 'edit-to') &&
+        placeToDraft &&
+        !placeClubOpen ? (
+          <View
+            pointerEvents="box-none"
+            style={[styles.confirmDock, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+            <BigButton
+              label={COPY.confirmPlace}
+              onPress={() => {
+                if (placeMode === 'edit-to') {
+                  commitMovePin(placeToDraft, 'to');
+                  return;
+                }
+                confirmToPin();
+              }}
+            />
+          </View>
+        ) : null}
       </View>
 
       {!hideHoleButtons && (catchUpFullScreen || !holeCamera || mapFramed) ? (
         <View style={[styles.dock, { paddingBottom: Math.max(insets.bottom, 8) }]}>
           <View style={styles.dockRow}>
-            {ranked.map((club, index) => (
-              <Pressable
-                key={club.id}
-                onPress={() => {
+            <View style={styles.dockStrip}>
+              <ClubStrip
+                compact
+                items={stripItems}
+                pickId={stripPlan.pickId}
+                disabled={readOnly || placing}
+                onPick={(id) => {
                   if (placing) return;
-                  const full = clubs.find((row) => row.id === club.id);
+                  const full = clubs.find((row) => row.id === id);
                   if (full) void markClub(full);
                 }}
-                style={[
-                  styles.dockChip,
-                  index === 0 && styles.dockChipPrimary,
-                  sticky?.id === club.id && styles.chipOn,
-                ]}>
-                <Text style={[styles.dockChipText, index === 0 && styles.dockChipPrimaryText]}>
-                  {formatSuggestedClubChip(club.shortName, rankDistanceYards(club))}
-                </Text>
-              </Pressable>
-            ))}
+              />
+            </View>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={COPY.allClubs}
               disabled={readOnly || placing}
               onPress={openBag}
-              style={styles.dockChip}>
+              style={styles.dockChipSide}>
               <Text style={styles.dockChipText}>{COPY.allClubs}</Text>
             </Pressable>
             <Pressable
@@ -1149,7 +1188,7 @@ export default function HoleScreen() {
               accessibilityLabel={COPY.sayClub}
               disabled={placing}
               onPress={() => void onListen()}
-              style={styles.dockChip}>
+              style={styles.dockChipSide}>
               <Text style={styles.dockChipText}>{listening ? COPY.listening : COPY.sayClub}</Text>
             </Pressable>
           </View>
@@ -1327,34 +1366,26 @@ export default function HoleScreen() {
           <Text style={styles.muted}>
             {pickerYards != null ? `${pickerYards} yd` : COPY.placeToHint}
           </Text>
-          {placedRanked.length > 0 ? (
-            <View style={styles.placeTop3}>
-              {placedRanked.map((club, index) => (
-                <Pressable
-                  key={club.id}
-                  onPress={() => {
-                    const full = clubs.find((row) => row.id === club.id);
-                    if (!full) return;
-                    if (editClubOpen) commitEditClub(full.id);
-                    else commitPlaced(full.id);
-                  }}
-                  style={[styles.top3Chip, index === 0 && styles.top3Primary]}>
-                  <Text style={[styles.top3Text, index === 0 && styles.top3PrimaryText]}>
-                    {formatSuggestedClubChip(club.shortName, rankDistanceYards(club))}
-                  </Text>
-                  {index === 0 ? <Text style={styles.suggest}>{COPY.suggested}</Text> : null}
-                </Pressable>
-              ))}
-            </View>
+          {placeStripItems.length > 0 ? (
+            <ClubStrip
+              items={placeStripItems}
+              pickId={placeStripPlan.pickId}
+              onPick={(id) => {
+                const full = clubs.find((row) => row.id === id);
+                if (!full) return;
+                if (editClubOpen) commitEditClub(full.id);
+                else commitPlaced(full.id);
+              }}
+            />
           ) : null}
           <BigButton
             label={COPY.allClubs}
             variant="secondary"
             onPress={() => setShowAllClubs((open) => !open)}
           />
-          {showAllClubs || placedRanked.length === 0 ? (
+          {showAllClubs || placeStripItems.length === 0 ? (
             <View style={styles.placeGrid}>
-              {(placedRanked.length === 0 ? placeBag : placeRest).map((club) => (
+              {placeBag.map((club) => (
                 <ClubButton
                   key={club.id}
                   shortName={club.shortName}
@@ -1423,6 +1454,13 @@ export default function HoleScreen() {
                   variant="secondary"
                   disabled={readOnly || !canMoveToPin(editingShot)}
                   onPress={() => {
+                    if (!editingShot) return;
+                    if (editingShot.startLat != null && editingShot.startLng != null) {
+                      setPlaceFrom({ lat: editingShot.startLat, lng: editingShot.startLng });
+                    }
+                    if (editingShot.endLat != null && editingShot.endLng != null) {
+                      setPlaceToDraft({ lat: editingShot.endLat, lng: editingShot.endLng });
+                    }
                     setEditOpen(false);
                     setPlaceMode('edit-to');
                   }}
@@ -1677,6 +1715,12 @@ const styles = StyleSheet.create({
     fontSize: type.body,
     fontWeight: '800',
   },
+  confirmDock: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    bottom: 0,
+  },
   sticky: {
     position: 'absolute',
     top: 0,
@@ -1756,6 +1800,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   dockRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dockStrip: { flex: 1, minWidth: 0, height: 40 },
   dockChip: {
     flex: 1,
     minHeight: 36,
@@ -1766,6 +1811,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.bgElevated,
     paddingHorizontal: 4,
+  },
+  dockChipSide: {
+    flexShrink: 0,
+    minHeight: 36,
+    minWidth: 64,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bgElevated,
+    paddingHorizontal: 8,
   },
   dockChipPrimary: { borderColor: colors.lime, borderWidth: 2, backgroundColor: '#1C3A24' },
   dockChipText: { color: colors.cream, fontWeight: '800', fontSize: type.tiny },

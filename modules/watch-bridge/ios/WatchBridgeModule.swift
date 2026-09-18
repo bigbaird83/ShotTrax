@@ -132,7 +132,7 @@ final class PhoneWatchSession: NSObject, WCSessionDelegate {
   private func emitWatchMessage(_ message: [String: Any], replyHandler: (([String: Any]) -> Void)?) {
     let type = message["type"] as? String
     let event: String
-    if type == "clubPick" || type == "clubNav" {
+    if type == "clubPick" || type == "clubNav" || type == "nearbyRequest" || type == "nearbyCoursePick" || type == "startRound" {
       event = "onClubPick"
     } else if type == "puttPick" {
       event = "onPuttPick"

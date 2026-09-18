@@ -9,6 +9,8 @@ import {
   includeInTop3Samples,
   isNoGpsShot,
   parseTypedYards,
+  placedPinUsesJumpGate,
+  placedShotAsksPast400,
   planNoGpsShot,
   planPlacedShot,
 } from './shotSource';
@@ -247,18 +249,17 @@ test('placed shots have no soft/good quality and never go through acceptFix', ()
   assert.equal(a.includesForced, false);
 });
 
-test('placed 400-yard cap asks before a silent save; confirm still has no GPS quality', () => {
+test('a placed pin over 400 saves without the ask; still no GPS quality', () => {
   const from = { lat: 37.0, lng: -122.0 };
   const to = { lat: 37.01, lng: -122.0 };
   const plan = planPlacedShot(from, to);
   assert.equal(plan.ok, true);
   if (!plan.ok) return;
-  assert.equal(plan.impossibleJump, true);
   assert.ok(plan.distanceYards > MAX_SHOT_YD);
-  assert.deepEqual(confirmPlacedShot(plan, false), {
-    status: 'needs_confirm',
-    yards: plan.distanceYards,
-  });
+  assert.equal(plan.impossibleJump, false);
+  assert.equal(placedPinUsesJumpGate(), false);
+  assert.equal(placedShotAsksPast400(), false);
+  assert.deepEqual(confirmPlacedShot(plan, false), { status: 'commit' });
   assert.deepEqual(confirmPlacedShot(plan, true), { status: 'commit' });
   assert.equal(plan.fixQuality, null);
   assert.equal(plan.source, 'placed');

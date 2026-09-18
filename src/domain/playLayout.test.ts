@@ -31,6 +31,10 @@ import {
   playInPlayShowsTwice,
   playHidesMapsLegal,
   playHidesMapsCompass,
+  playMapsChromeUntilTap,
+  playSuggestedIsSidewaysStrip,
+  playStackedSuggestionChips,
+  playStripCappedAtThree,
 } from './playLayout';
 
 test('play map fills at least 60% down to a two-row dock; header is overlay', () => {
@@ -160,13 +164,18 @@ test('opening, Prev/Next, and Scorecard or Menu return reframe before the dock c
 test('after a shot lands the next suggested club is already the primary chip', () => {
   assert.equal(nextSuggestedIsNewButton(), false);
   assert.equal(nextSuggestedIsPrimaryChip(), true);
+  assert.equal(playSuggestedIsSidewaysStrip(), true);
+  assert.equal(playStackedSuggestionChips(), false);
+  assert.equal(playStripCappedAtThree(), false);
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
-  assert.match(hole, /ranked\.map\(\(club, index\) => \(/);
-  assert.match(hole, /index === 0 && styles\.dockChipPrimary/);
+  assert.match(hole, /<ClubStrip/);
+  assert.match(hole, /planClubStrip/);
+  assert.match(hole, /target\?\.dYards/);
   assert.match(hole, /void markClub\(full\)/);
   assert.match(hole, /resolveNextShotDistanceTarget/);
   assert.match(hole, /lastLandingMark/);
   assert.doesNotMatch(hole, /nextClub|Next club|suggestedButton/);
+  assert.doesNotMatch(hole, /ranked\.map\(\(club, index\) =>/);
 });
 
 test('tapping a previous shot shows Delete on that shot, not the dock', () => {
@@ -192,8 +201,9 @@ test('play header is one line; shot list is one overlay row with + and In play o
   assert.equal(playShotLineIsColumn(), false);
   assert.equal(playInsertPlusIsOwnBand(), false);
   assert.equal(playInPlayShowsTwice(), false);
-  assert.equal(playHidesMapsLegal(), false);
-  assert.equal(playHidesMapsCompass(), false);
+  assert.equal(playHidesMapsLegal(), true);
+  assert.equal(playHidesMapsCompass(), true);
+  assert.equal(playMapsChromeUntilTap(), true);
   assert.equal(playHeaderEatsMap(), false);
   assert.ok(playMapMinRatio() >= 0.6);
   assert.equal(playDockRowCount(), 2);
@@ -215,6 +225,7 @@ test('play header is one line; shot list is one overlay row with + and In play o
   assert.match(overlayShots, /styles\.shotLinePlus/);
 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
-  assert.doesNotMatch(map, /showsCompass=\{false\}/);
-  assert.doesNotMatch(map, /legalLabelInsets/);
+  assert.match(map, /showsCompass=\{mapsChrome\}/);
+  assert.match(map, /legalLabelInsets/);
+  assert.match(map, /revealMapsChrome/);
 });

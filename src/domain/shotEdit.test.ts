@@ -114,18 +114,15 @@ test('no_gps shots cannot grow invented pins; club change still works', () => {
   assert.equal(planChangeShotClub(logged, 'club_pw').ok, true);
 });
 
-test('400-yard pin move still asks before a silent save', () => {
+test('a placed pin move over 400 saves without the 400-yard ask', () => {
   const gps = shot({ id: 's4' });
   const far = { lat: 37.02, lng: -122 };
   const moved = planMoveShotPin(gps, 'to', far);
   assert.equal(moved.ok, true);
   if (!moved.ok) return;
-  assert.equal(moved.plan.impossibleJump, true);
+  assert.equal(moved.plan.impossibleJump, false);
   assert.ok(moved.plan.distanceYards > MAX_SHOT_YD);
-  assert.deepEqual(confirmPlacedShot(moved.plan, false), {
-    status: 'needs_confirm',
-    yards: moved.plan.distanceYards,
-  });
+  assert.deepEqual(confirmPlacedShot(moved.plan, false), { status: 'commit' });
   assert.deepEqual(confirmPlacedShot(moved.plan, true), { status: 'commit' });
   assert.equal(moved.plan.fixQuality, null);
 });
@@ -192,7 +189,7 @@ test('editing an earlier shot does not read the phone fix or run acceptFix', () 
   const editMove = hole.slice(hole.indexOf('const commitMovePin'), hole.indexOf('const onUndoEdit'));
   assert.doesNotMatch(editClub, /getCurrentFix|resolveMarkFix|getFix|acceptFix/);
   assert.doesNotMatch(editMove, /getCurrentFix|resolveMarkFix|getFix|acceptFix/);
-  assert.match(editMove, /COPY\.tooFar/);
+  assert.doesNotMatch(editMove, /COPY\.tooFar/);
 });
 
 test('snapshot is a restore copy of the shot before the edit', () => {

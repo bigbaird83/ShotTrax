@@ -59,19 +59,21 @@ test('Signal Lab: Placed shots never go through acceptFix and have no soft/good 
 
   const live = sliceFn(src, 'function decide(', 'export async function resolveMarkFix');
   assert.match(live, /acceptFix/);
+
+  const prompt = sliceFn(src, 'export function promptForPlan', 'function priorOf');
+  assert.match(prompt, /needs_force_impossible_jump/);
+  assert.match(prompt, /COPY\.tooFar/);
 });
 
-test('Signal Lab: 400-yard cap asks before a silent Placed save', () => {
+test('a placed pin over 400 saves without the 400-yard ask', () => {
   const from = { lat: 37.0, lng: -122.0 };
   const to = { lat: 37.01, lng: -122.0 };
   const plan = planPlacedShot(from, to);
   assert.equal(plan.ok, true);
   if (!plan.ok) return;
   assert.ok(plan.distanceYards > MAX_SHOT_YD);
-  assert.deepEqual(confirmPlacedShot(plan, false), {
-    status: 'needs_confirm',
-    yards: plan.distanceYards,
-  });
+  assert.equal(plan.impossibleJump, false);
+  assert.deepEqual(confirmPlacedShot(plan, false), { status: 'commit' });
   assert.deepEqual(confirmPlacedShot(plan, true), { status: 'commit' });
   assert.equal(plan.fixQuality, null);
   assert.equal(plan.source, 'placed');
