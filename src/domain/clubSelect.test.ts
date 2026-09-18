@@ -186,6 +186,9 @@ test("Add shot opening region contains tee and green and does not wait when 282 
   assert.match(hole, /cachedOsmOverlay/);
   assert.match(hole, /cachedResolvedTee/);
   assert.match(hole, /rememberResolvedTee/);
+  assert.match(hole, /courseTeeFromHole/);
+  assert.match(hole, /resolvePlayHoleTee/);
+  assert.match(hole, /saveHoleTee/);
   assert.match(hole, /phone: null/);
   assert.doesNotMatch(playMap, /getCurrentFix/);
   assert.match(hole, /styles\.catchUpHint/);

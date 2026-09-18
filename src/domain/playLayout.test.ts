@@ -119,7 +119,7 @@ test('play hole screen uses the fill layout and does not keep the empty middle',
   assert.equal(playPhonePinMovesCamera(), false);
   assert.equal(playShowsUserLocationFit(), false);
   assert.deepEqual([...PLAY_REFRAME_ON], ['open', 'prev', 'next', 'scorecard_return', 'menu_return']);
-  assert.match(hole, /resolveHoleTee/);
+  assert.match(hole, /resolvePlayHoleTee/);
   assert.match(hole, /resolveOverlayTee/);
   assert.equal(playUsesAddShotCamera(), true);
 

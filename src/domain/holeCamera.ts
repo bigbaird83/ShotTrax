@@ -92,6 +92,43 @@ export function addShotFramePoints(args: {
   return [args.tee, args.green];
 }
 
+/** Course tee stored on the hole. Never invented from the phone. */
+export function courseTeeFromHole(
+  hole:
+    | {
+        teeLat?: number | null;
+        teeLng?: number | null;
+      }
+    | null
+    | undefined,
+): LatLng | null {
+  if (!hole) return null;
+  const tee = { lat: hole.teeLat ?? Number.NaN, lng: hole.teeLng ?? Number.NaN };
+  return isValidLatLng(tee) ? tee : null;
+}
+
+/**
+ * Play / Add shot tee: course coordinate, then overlay / cache.
+ * Phone GPS is never a tee.
+ */
+export function resolvePlayHoleTee(args: {
+  courseTee?: LatLng | null;
+  overlayTee?: LatLng | null;
+  cachedTee?: LatLng | null;
+  green?: LatLng | null;
+}): LatLng | null {
+  return resolveHoleTee({
+    holeTee: args.courseTee ?? args.overlayTee ?? args.cachedTee ?? null,
+    osmTee: args.cachedTee ?? args.overlayTee ?? null,
+    green: args.green ?? null,
+  });
+}
+
+/** Opening lock-frame maps need tee + green. A lone green is the house / pin-zoom miss. */
+export function lockFramePointsNeedTeeAndGreen(): true {
+  return true;
+}
+
 /** Add shot never pairs a card number with Waiting on your location. */
 export function addShotShowsWaitingWithCardYards(): false {
   return false;

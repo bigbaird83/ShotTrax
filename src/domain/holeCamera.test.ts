@@ -33,6 +33,9 @@ import {
   planHoleCamera,
   regionIsHoleFrame,
   resolveHoleTee,
+  resolvePlayHoleTee,
+  courseTeeFromHole,
+  lockFramePointsNeedTeeAndGreen,
   shotPinsForHoleCamera,
   editShotMapUsesLockFrame,
   everyHoleMapUsesLockFrame,
@@ -288,6 +291,25 @@ test('opening region contains tee and green; heading is tee-to-green, not device
   assert.equal(addShotPlaceHintShowsOnMap(), true);
   assert.equal(addShotPlaceHintShowsAsFooter(), false);
   assert.equal(addShotShowsWaitingOnLocation(), false);
+});
+
+test('round start frames the course tee and green with no phone fix', () => {
+  const home = { lat: 40.7128, lng: -74.006 };
+  const courseTee = { lat: 34.11, lng: -85.64 };
+  const overlayTee = { lat: 34.109, lng: -85.64 };
+  assert.deepEqual(courseTeeFromHole({ teeLat: courseTee.lat, teeLng: courseTee.lng }), courseTee);
+  assert.equal(courseTeeFromHole({ teeLat: null, teeLng: null }), null);
+  assert.deepEqual(
+    resolvePlayHoleTee({ courseTee, overlayTee, cachedTee: null, green: greenNorth }),
+    resolveHoleTee({ holeTee: courseTee, osmTee: overlayTee, green: greenNorth }),
+  );
+  assert.equal(lockFramePointsNeedTeeAndGreen(), true);
+  const locked = lockHoleCamera({ tee: courseTee, green: greenNorth, shotPins: [], phone: home });
+  assert.ok(locked);
+  assert.equal(locked.mode, 'tee_green');
+  assert.deepEqual(locked.points, [courseTee, greenNorth]);
+  assert.notEqual(locked.center.lat, home.lat);
+  assert.equal(locked.heading, holeCameraHeading(courseTee, greenNorth));
 });
 
 test('opening camera puts tee below green and fits both, not sideways', () => {

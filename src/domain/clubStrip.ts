@@ -4,7 +4,8 @@ import { MIN_CLOSED_SHOTS_FOR_RANK } from './rankClubs';
 
 /** Phone wheel pills are taller than the Watch pills. */
 export const PHONE_WHEEL_PILL_HEIGHT = 52;
-export const WATCH_WHEEL_PILL_HEIGHT = 36;
+/** Watch pills sit in the 40% control band and must fit three full labels. */
+export const WATCH_WHEEL_PILL_HEIGHT = 44;
 
 export function phoneWheelPillTallerThanWatch(): true {
   return true;
@@ -255,9 +256,15 @@ export function openingClubStripWindow(args: {
   return { windowStart: 0, openIndex: 1 };
 }
 
+/** Clamp so the longest club cannot scroll off the right of a three-pill frame. */
+export function clubStripWindowStartClamped(windowStart: number, count: number): number {
+  if (count <= CLUB_STRIP_VISIBLE_PILLS) return 0;
+  return Math.max(0, Math.min(windowStart, count - CLUB_STRIP_VISIBLE_PILLS));
+}
+
 export function clubStripOpeningIds(ids: string[], windowStart: number): string[] {
   if (ids.length <= CLUB_STRIP_VISIBLE_PILLS) return ids.slice();
-  const start = Math.max(0, Math.min(windowStart, ids.length - CLUB_STRIP_VISIBLE_PILLS));
+  const start = clubStripWindowStartClamped(windowStart, ids.length);
   return ids.slice(start, start + CLUB_STRIP_VISIBLE_PILLS);
 }
 

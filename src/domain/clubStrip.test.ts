@@ -44,6 +44,7 @@ import {
   clubStripVisiblePills,
   clubStripOpeningIds,
   clubStripWindowKey,
+  clubStripWindowStartClamped,
   openingClubStripWindow,
   CLUB_STRIP_GAP,
   CLUB_STRIP_SEAM_GAP,
@@ -285,12 +286,12 @@ test('phone and Watch strip UIs peek neighbors and mark only on tap', () => {
 
   assert.equal(phoneWheelPillTallerThanWatch(), true);
   assert.ok(PHONE_WHEEL_PILL_HEIGHT > WATCH_WHEEL_PILL_HEIGHT);
-  assert.equal(WATCH_WHEEL_PILL_HEIGHT, 36);
+  assert.equal(WATCH_WHEEL_PILL_HEIGHT, 44);
   assert.match(phone, /PHONE_WHEEL_PILL_HEIGHT/);
   assert.doesNotMatch(dock, /compact/);
 
   const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
-  assert.match(watch, /height: 36/);
+  assert.match(watch, /height: 44/);
   assert.match(watch, /ScrollView\(\.horizontal/);
   assert.match(watch, /onTapGesture/);
   assert.match(watch, /scrollTo\(stripWindowToken/);
@@ -451,6 +452,9 @@ test('282-yard hole opens 2i, 3W, Dr with no wedge; 100-yard hole centers the cl
   assert.equal(clubStripNeighborPillsShowCarry(), true);
   assert.deepEqual(openingClubStripWindow({ count: 5, closestIndex: 4 }), { windowStart: 2, openIndex: 3 });
   assert.deepEqual(openingClubStripWindow({ count: 5, closestIndex: 1 }), { windowStart: 0, openIndex: 1 });
+  assert.equal(clubStripWindowStartClamped(4, 5), 2);
+  assert.equal(clubStripWindowStartClamped(2, 5), 2);
+  assert.equal(clubStripWindowStartClamped(0, 2), 0);
 
   const tee = planClubStrip({
     clubs: [

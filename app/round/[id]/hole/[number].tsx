@@ -26,6 +26,7 @@ import {
   listHoles,
   listPenaltiesForHole,
   listShotsForHole,
+  saveHoleTee,
   setHoleGreen,
   updateHolePar,
   updateHolePutts,
@@ -38,7 +39,7 @@ import { COPY, finishPuttsChip, finishShotChip, formatHoleHeader, formatPlayHead
 import { canAdvanceHole, holesNeedingOpenShots } from '@/src/domain/holeAdvance';
 import { isPutterClubId } from '@/src/domain/defaultBag';
 import { catchUpPinFromTap, planCancelCatchUp, planCatchUpSheet } from '@/src/domain/catchUpMap';
-import { addShotFramePoints, lockHoleCamera, resolveHoleTee, shotPinsForHoleCamera, type LockedHoleCamera } from '@/src/domain/holeCamera';
+import { addShotFramePoints, courseTeeFromHole, lockHoleCamera, resolvePlayHoleTee, shotPinsForHoleCamera, type LockedHoleCamera } from '@/src/domain/holeCamera';
 import { deleteShotPrompt } from '@/src/domain/deleteShot';
 import { planInsertSlots } from '@/src/domain/insertShot';
 import { confirmUndoIsLive, planConfirmUndo, type ConfirmUndoWindow } from '@/src/domain/confirmUndo';
@@ -424,16 +425,22 @@ export default function HoleScreen() {
   const overlay =
     osmOverlay ??
     cachedOsmOverlay({ courseId: round?.courseApiId, holeNumber, green });
+  const courseTee = courseTeeFromHole(hole);
   const overlayTee = resolveOverlayTee(overlay, holeNumber, green);
   const cachedTee = cachedResolvedTee({ courseId: round?.courseApiId, holeNumber, green });
-  const holeTee = resolveHoleTee({
-    holeTee: overlayTee ?? cachedTee,
-    osmTee: cachedTee,
+  const holeTee = resolvePlayHoleTee({
+    courseTee,
+    overlayTee,
+    cachedTee,
     green,
   });
   if (holeTee) {
     rememberResolvedTee({ courseId: round?.courseApiId, holeNumber, green }, holeTee);
   }
+  useEffect(() => {
+    if (!hole?.id || !holeTee) return;
+    saveHoleTee(db, hole.id, holeTee);
+  }, [db, hole?.id, holeTee?.lat, holeTee?.lng]);
   const holeCamera = lockHoleCamera({
     tee: holeTee,
     green,

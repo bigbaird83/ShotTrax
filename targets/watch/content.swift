@@ -197,125 +197,140 @@ struct ContentView: View {
 
   @ViewBuilder
   private var clubPick: some View {
-    VStack(alignment: .leading, spacing: 4) {
-      Text(session.list.statusLine)
-        .font(.system(size: 13, weight: .bold))
-        .foregroundStyle(Color("cream"))
-        .lineLimit(1)
-        .minimumScaleFactor(0.8)
-
-      HStack(spacing: 6) {
-        Button(action: { session.leave("back") }) {
-          Text("Back")
-            .font(.system(size: 13, weight: .heavy))
+    GeometryReader { geo in
+      let mapHeight = geo.size.height * 0.6
+      let controlHeight = geo.size.height * 0.4
+      VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 6) {
+          Text(session.list.statusLine)
+            .font(.system(size: 16, weight: .bold))
             .foregroundStyle(Color("cream"))
-            .frame(maxWidth: .infinity, minHeight: 32)
-            .overlay(
-              RoundedRectangle(cornerRadius: 8)
-                .stroke(Color("cream"), lineWidth: 1)
-            )
+            .lineLimit(2)
+            .minimumScaleFactor(0.8)
+          if !session.feedback.isEmpty {
+            Text(session.feedback)
+              .font(.system(size: 12, weight: .bold))
+              .foregroundStyle(session.feedback.contains("✓") ? Color("accent") : Color.orange)
+              .lineLimit(2)
+          }
+          Spacer(minLength: 0)
         }
-        .buttonStyle(.plain)
-        .disabled(session.sending)
-        Button(action: { session.leave("home") }) {
-          Text("Home")
-            .font(.system(size: 13, weight: .heavy))
-            .foregroundStyle(Color("cream"))
-            .frame(maxWidth: .infinity, minHeight: 32)
-            .overlay(
-              RoundedRectangle(cornerRadius: 8)
-                .stroke(Color("cream"), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-        .disabled(session.sending)
-      }
+        .frame(height: mapHeight, alignment: .topLeading)
 
-      if !session.feedback.isEmpty {
-        Text(session.feedback)
-          .font(.system(size: 10, weight: .bold))
-          .foregroundStyle(session.feedback.contains("✓") ? Color("accent") : Color.orange)
-          .lineLimit(1)
-      }
+        VStack(alignment: .leading, spacing: 6) {
+          HStack(spacing: 8) {
+            Button(action: { session.leave("back") }) {
+              Text("Back")
+                .font(.system(size: 16, weight: .heavy))
+                .foregroundStyle(Color("cream"))
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .overlay(
+                  RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color("cream"), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(session.sending)
+            Button(action: { session.leave("home") }) {
+              Text("Home")
+                .font(.system(size: 16, weight: .heavy))
+                .foregroundStyle(Color("cream"))
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .overlay(
+                  RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color("cream"), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(session.sending)
+          }
 
-      GeometryReader { geo in
-        let visible = min(3, max(stripClubs.count, 1))
-        let pillWidth = max(44.0, (geo.size.width - CGFloat(max(visible - 1, 0)) * 8) / CGFloat(visible))
-        ScrollViewReader { proxy in
-          ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-              ForEach(wheelClubs, id: \.token) { club in
-                Text(session.list.label(for: club.id))
-                  .font(.system(size: 15, weight: .black))
-                  .foregroundStyle(club.id == stripSelectedId ? Color("accent") : Color("cream"))
+          GeometryReader { wheelGeo in
+            let visible = min(3, max(stripClubs.count, 1))
+            let gaps = CGFloat(max(visible - 1, 0)) * 8
+            let pillWidth = max(1, (wheelGeo.size.width - gaps) / CGFloat(visible))
+            ScrollViewReader { proxy in
+              ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                  ForEach(wheelClubs, id: \.token) { club in
+                    Text(session.list.label(for: club.id))
+                      .font(.system(size: 16, weight: .black))
+                      .foregroundStyle(club.id == stripSelectedId ? Color("accent") : Color("cream"))
+                      .lineLimit(1)
+                      .minimumScaleFactor(0.65)
+                      .frame(width: pillWidth, height: 44)
+                      .background(Color("bg"))
+                      .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                          .stroke(club.id == stripSelectedId ? Color("accent") : Color("cream"), lineWidth: 1)
+                      )
+                      .padding(.trailing, club.seamAfter ? 24 : 0)
+                      .id(club.token)
+                      .onTapGesture {
+                        if !session.sending { session.select(club.id) }
+                      }
+                  }
+                }
+                .padding(.horizontal, 0)
+              }
+              .onAppear { proxy.scrollTo(stripWindowToken, anchor: .leading) }
+              .onChange(of: stripScrollKey) { _ in
+                proxy.scrollTo(stripWindowToken, anchor: .leading)
+              }
+            }
+          }
+          .frame(height: 52)
+
+          HStack(spacing: 8) {
+            if session.list.lastClubId != nil {
+              Button(action: { session.pickSameClub() }) {
+                Text(sameClubTitle)
+                  .font(.system(size: 15, weight: .heavy))
+                  .foregroundStyle(Color("cream"))
                   .lineLimit(1)
                   .minimumScaleFactor(0.7)
-                  .frame(width: pillWidth, height: 36)
-                  .background(Color("bg"))
-                  .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                      .stroke(club.id == stripSelectedId ? Color("accent") : Color("cream"), lineWidth: 1)
-                  )
-                  .padding(.trailing, club.seamAfter ? 24 : 0)
-                  .id(club.token)
-                  .onTapGesture {
-                    if !session.sending { session.select(club.id) }
-                  }
+                  .frame(maxWidth: .infinity, minHeight: 40)
               }
-            }
-            .padding(.horizontal, 0)
-          }
-          .onAppear { proxy.scrollTo(stripWindowToken, anchor: .leading) }
-          .onChange(of: stripScrollKey) { _ in
-            proxy.scrollTo(stripWindowToken, anchor: .leading)
-          }
-        }
-      }
-      .frame(height: 44)
-
-      HStack(spacing: 6) {
-        if session.list.lastClubId != nil {
-          Button(action: { session.pickSameClub() }) {
-            Text(sameClubTitle)
-              .font(.system(size: 12, weight: .heavy))
-              .foregroundStyle(Color("cream"))
-              .lineLimit(1)
-              .minimumScaleFactor(0.7)
-              .frame(maxWidth: .infinity, minHeight: 28)
-          }
-          .buttonStyle(.plain)
-          .disabled(session.sending)
-        }
-
-        Button(action: { showAllClubs.toggle() }) {
-          Text("All clubs")
-            .font(.system(size: 12, weight: .heavy))
-            .foregroundStyle(Color("cream"))
-            .frame(maxWidth: .infinity, minHeight: 28)
-        }
-        .buttonStyle(.plain)
-      }
-
-      if showAllClubs {
-        ScrollView {
-          VStack(spacing: 2) {
-            ForEach(moreClubs, id: \.self) { clubId in
-              Button(action: { session.pick(clubId: clubId) }) { // same pick as strip — marks the shot
-                Text(session.list.label(for: clubId))
-                  .font(.system(size: 13, weight: .heavy))
-                  .foregroundStyle(Color("cream"))
-                  .frame(maxWidth: .infinity, alignment: .leading)
-                  .frame(minHeight: 24)
-              }
-              .buttonStyle(.bordered)
-              .tint(Color("cream"))
+              .buttonStyle(.plain)
               .disabled(session.sending)
             }
+
+            Button(action: { showAllClubs.toggle() }) {
+              Text("All clubs")
+                .font(.system(size: 15, weight: .heavy))
+                .foregroundStyle(Color("cream"))
+                .frame(maxWidth: .infinity, minHeight: 40)
+                .overlay(
+                  RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color("cream"), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+          }
+
+          if showAllClubs {
+            ScrollView {
+              VStack(spacing: 4) {
+                ForEach(moreClubs, id: \.self) { clubId in
+                  Button(action: { session.pick(clubId: clubId) }) { // same pick as strip — marks the shot
+                    Text(session.list.label(for: clubId))
+                      .font(.system(size: 15, weight: .heavy))
+                      .foregroundStyle(Color("cream"))
+                      .frame(maxWidth: .infinity, alignment: .leading)
+                      .frame(minHeight: 36)
+                  }
+                  .buttonStyle(.bordered)
+                  .tint(Color("cream"))
+                  .disabled(session.sending)
+                }
+              }
+            }
           }
         }
+        .frame(minHeight: controlHeight, alignment: .top)
       }
     }
-    .padding(.horizontal, 2)
+    .padding(.horizontal, 4)
   }
 
   private var sameClubTitle: String {
@@ -331,7 +346,8 @@ struct ContentView: View {
   }
 
   private var stripScrollKey: String {
-    "\(session.list.bag.joined(separator: ","))-\(session.list.yardsToGreen ?? -1)"
+    let clubs = stripClubs.map { "\($0.id):\($0.carry)" }.joined(separator: ",")
+    return "\(clubs)|\(stripWindowStart)|\(session.list.yardsToGreen ?? -1)"
   }
 
   private var stripPickId: String? {
@@ -351,16 +367,22 @@ struct ContentView: View {
     guard n > 0 else { return 0 }
     let closest = clubs.firstIndex(where: { $0.id == stripPickId }) ?? 0
     if n <= 2 { return 0 }
-    if closest > 0 && closest < n - 1 { return closest - 1 }
-    if closest >= n - 1 { return n - 3 }
-    return 0
+    let raw: Int
+    if closest > 0 && closest < n - 1 {
+      raw = closest - 1
+    } else if closest >= n - 1 {
+      raw = n - 3
+    } else {
+      raw = 0
+    }
+    return min(max(raw, 0), max(n - 3, 0))
   }
 
   private var stripWindowToken: String? {
     let clubs = stripClubs
     guard !clubs.isEmpty else { return wheelClubs.first?.token }
     if clubs.count <= 1 { return clubs[0].id }
-    let start = min(max(stripWindowStart, 0), clubs.count - 1)
+    let start = stripWindowStart
     return "\(clubs[start].id)#1"
   }
 

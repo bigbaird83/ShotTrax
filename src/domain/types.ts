@@ -73,6 +73,9 @@ export type Hole = {
   greenBackLat: number | null;
   greenBackLng: number | null;
   greenDepthYards: number | null;
+  /** Course tee coordinate from the API or OSM. Never the phone / house. */
+  teeLat: number | null;
+  teeLng: number | null;
   /** 0–5. Stats / scoring only — never a map mark or club-distance sample. */
   putts: number;
   /** One length bucket per putt, same order. Stats only — no green GPS. */

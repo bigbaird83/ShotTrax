@@ -24,7 +24,7 @@ test('phone wheel pill is taller than the Watch pill; map stays at least 60%', (
   assert.equal(phoneWheelPillTallerThanWatch(), true);
   assert.ok(PHONE_WHEEL_PILL_HEIGHT > WATCH_WHEEL_PILL_HEIGHT);
   assert.equal(PHONE_WHEEL_PILL_HEIGHT, 52);
-  assert.equal(WATCH_WHEEL_PILL_HEIGHT, 36);
+  assert.equal(WATCH_WHEEL_PILL_HEIGHT, 44);
   assert.ok(playMapMinRatio() >= 0.6);
   assert.equal(playSameClubSitsUnderWheel(), true);
   assert.equal(playAllClubsSitsUnderWheel(), true);
@@ -34,7 +34,7 @@ test('phone wheel pill is taller than the Watch pill; map stays at least 60%', (
   assert.match(phone, /height: PHONE_WHEEL_PILL_HEIGHT/);
 
   const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
-  assert.match(watch, /height: 36/);
+  assert.match(watch, /height: 44/);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const dock = hole.slice(hole.indexOf('styles.dock'), hole.indexOf('<FullSheet'));

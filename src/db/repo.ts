@@ -88,6 +88,8 @@ type HoleRow = {
   green_back_lat: number | null;
   green_back_lng: number | null;
   green_depth_yards: number | null;
+  tee_lat: number | null;
+  tee_lng: number | null;
   putts: number | null;
   putt_lengths: string | null;
   putts_done: number | null;
@@ -187,6 +189,8 @@ function mapHole(row: HoleRow): Hole {
     greenBackLat: row.green_back_lat ?? null,
     greenBackLng: row.green_back_lng ?? null,
     greenDepthYards: row.green_depth_yards ?? null,
+    teeLat: row.tee_lat ?? null,
+    teeLng: row.tee_lng ?? null,
     putts: clampPutts(row.putts ?? 0),
     puttLengths: parsePuttLengths(row.putt_lengths),
     puttsDone: (row.putts_done ?? 0) === 1,
@@ -423,7 +427,7 @@ export function startRound(
       const seed = layout?.holes?.find((hole) => hole.number === n);
       const applied = seedHoleFromCourse(seed ?? null);
       db.runSync(
-        'INSERT INTO holes (id, round_id, number, par, par_source, score, yards, handicap, green_lat, green_lng, green_source, green_front_lat, green_front_lng, green_back_lat, green_back_lng, green_depth_yards) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO holes (id, round_id, number, par, par_source, score, yards, handicap, green_lat, green_lng, green_source, green_front_lat, green_front_lng, green_back_lat, green_back_lng, green_depth_yards, tee_lat, tee_lng) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
           newId(),
           id,
@@ -440,6 +444,8 @@ export function startRound(
           applied.greenBack?.lat ?? null,
           applied.greenBack?.lng ?? null,
           applied.greenDepthYards,
+          isValidLatLng(seed?.teeCentroid ?? null) ? seed!.teeCentroid!.lat : null,
+          isValidLatLng(seed?.teeCentroid ?? null) ? seed!.teeCentroid!.lng : null,
         ],
       );
       const tee = isValidLatLng(seed?.teeCentroid ?? null) ? seed?.teeCentroid ?? null : null;
@@ -508,8 +514,9 @@ export function attachCourseToRound(
         },
         seed ?? null,
       );
+      const tee = isValidLatLng(seed?.teeCentroid ?? null) ? seed?.teeCentroid ?? null : null;
       db.runSync(
-        'UPDATE holes SET par = ?, par_source = ?, yards = ?, handicap = ?, green_lat = ?, green_lng = ?, green_source = ?, green_front_lat = ?, green_front_lng = ?, green_back_lat = ?, green_back_lng = ?, green_depth_yards = ? WHERE id = ?',
+        'UPDATE holes SET par = ?, par_source = ?, yards = ?, handicap = ?, green_lat = ?, green_lng = ?, green_source = ?, green_front_lat = ?, green_front_lng = ?, green_back_lat = ?, green_back_lng = ?, green_depth_yards = ?, tee_lat = COALESCE(?, tee_lat), tee_lng = COALESCE(?, tee_lng) WHERE id = ?',
         [
           applied.par,
           applied.parSource,
@@ -523,10 +530,11 @@ export function attachCourseToRound(
           applied.greenBack?.lat ?? null,
           applied.greenBack?.lng ?? null,
           applied.greenDepthYards,
+          tee?.lat ?? null,
+          tee?.lng ?? null,
           row.id,
         ],
       );
-      const tee = isValidLatLng(seed?.teeCentroid ?? null) ? seed?.teeCentroid ?? null : null;
       if (tee && applied.green) {
         rememberResolvedTee({ courseId: layout.apiId, holeNumber: row.number, green: applied.green }, tee);
       }
@@ -566,6 +574,23 @@ export function getHole(db: SQLiteDatabase, roundId: string, number: number): Ho
     [roundId, number],
   );
   return row ? mapHole(row) : null;
+}
+
+/** Persist a course / OSM tee. Never writes the phone. Skips if already stored. */
+export function saveHoleTee(
+  db: SQLiteDatabase,
+  holeId: string,
+  tee: { lat: number; lng: number } | null,
+): void {
+  if (!holeId || !isValidLatLng(tee)) return;
+  const row = db.getFirstSync<{ tee_lat: number | null; tee_lng: number | null }>(
+    'SELECT tee_lat, tee_lng FROM holes WHERE id = ?',
+    [holeId],
+  );
+  if (row && isValidLatLng({ lat: row.tee_lat ?? Number.NaN, lng: row.tee_lng ?? Number.NaN })) {
+    return;
+  }
+  db.runSync('UPDATE holes SET tee_lat = ?, tee_lng = ? WHERE id = ?', [tee.lat, tee.lng, holeId]);
 }
 
 export function updateHolePar(db: SQLiteDatabase, holeId: string, par: number | null): void {
