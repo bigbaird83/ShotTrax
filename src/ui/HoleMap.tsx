@@ -6,6 +6,7 @@ import { featuresForHole } from '@/src/course/osmOverlay';
 import { COPY } from '@/src/domain/playerCopy';
 import type { GpsFix, Shot } from '@/src/domain/types';
 import type { YardsToGreenResult } from '@/src/sensing/yardsToGreen';
+import { holeNativeCamera } from '@/src/domain/holeCamera';
 import { hasClosedGpsTrail, hasGpsStart } from '@/src/domain/shotSource';
 import { FmbRow } from './FmbRow';
 import { YardsToGreenBadge } from './YardsToGreenBadge';
@@ -29,9 +30,11 @@ type Props = {
   placeHint?: string | null;
   fullBleed?: boolean;
   style?: StyleProp<ViewStyle>;
-  /** Catch-up: frame once to these points. Never includes the phone fix. */
+  /** Frame once to these points. Never includes the phone fix. */
   framePoints?: Coord[] | null;
   lockFrame?: boolean;
+  /** Tee-to-green bearing. Null = do not rotate. */
+  heading?: number | null;
 };
 
 class MapGuard extends Component<{ children: ReactNode; fallback: ReactNode }, { failed: boolean }> {
@@ -106,9 +109,11 @@ function NativeHoleMap({
   style,
   framePoints,
   lockFrame,
+  heading,
 }: Props) {
   const mapRef = useRef<MapView | null>(null);
   const framedOnce = useRef(false);
+  const pendingHeading = useRef<number | null>(null);
 
   const closed = useMemo(() => shots.filter(hasClosedGpsTrail), [shots]);
   const osmFeatures = useMemo(
@@ -149,14 +154,33 @@ function NativeHoleMap({
     };
   }, [coords, userFix, lockFrame, framePoints]);
 
+  const holeUpCamera = useMemo(() => {
+    if (heading == null || !Number.isFinite(heading)) return null;
+    const points = framePoints && framePoints.length > 0 ? framePoints : coords;
+    if (points.length === 0) return null;
+    return holeNativeCamera(
+      points.map((point) => ({ lat: point.latitude, lng: point.longitude })),
+      heading,
+    );
+  }, [coords, framePoints, heading]);
+
   const lockKey = lockFrame
-    ? (framePoints ?? []).map((point) => `${point.latitude},${point.longitude}`).join('|')
+    ? `${(framePoints ?? []).map((point) => `${point.latitude},${point.longitude}`).join('|')}|h:${heading ?? 'none'}`
     : '';
+
+  const applyHoleHeading = (degrees: number) => {
+    mapRef.current?.setCamera({ heading: degrees, pitch: 0 });
+  };
 
   const frameLockedMap = () => {
     const padding = { edgePadding: { top: 88, right: 36, bottom: 56, left: 36 }, animated: false };
     const points = framePoints && framePoints.length > 0 ? framePoints : coords;
     if (points.length === 0) return false;
+    pendingHeading.current = heading != null && Number.isFinite(heading) ? heading : null;
+    if (holeUpCamera) {
+      mapRef.current?.setCamera(holeUpCamera);
+      return true;
+    }
     if (points.length === 1) {
       mapRef.current?.animateToRegion({
         latitude: points[0].latitude,
@@ -172,7 +196,8 @@ function NativeHoleMap({
 
   useEffect(() => {
     framedOnce.current = false;
-  }, [lockFrame, lockKey]);
+    pendingHeading.current = heading != null && Number.isFinite(heading) ? heading : null;
+  }, [lockFrame, lockKey, heading]);
 
   useEffect(() => {
     const padding = { edgePadding: { top: 72, right: 36, bottom: 48, left: 36 }, animated: !lockFrame };
@@ -183,7 +208,11 @@ function NativeHoleMap({
     }
     if (coords.length < 2) return;
     mapRef.current?.fitToCoordinates(coords, padding);
-  }, [coords, framePoints, lockFrame]);
+    if (heading != null && Number.isFinite(heading)) {
+      pendingHeading.current = heading;
+      applyHoleHeading(heading);
+    }
+  }, [coords, framePoints, lockFrame, heading, holeUpCamera]);
 
   const onMapLayout = (event: LayoutChangeEvent) => {
     if (!lockFrame) return;
@@ -191,6 +220,13 @@ function NativeHoleMap({
     if (width < 80 || height < 80) return;
     if (framedOnce.current) return;
     if (frameLockedMap()) framedOnce.current = true;
+  };
+
+  const onRegionSettled = () => {
+    const degrees = pendingHeading.current;
+    if (degrees == null) return;
+    pendingHeading.current = null;
+    applyHoleHeading(degrees);
   };
 
   if (!region) {
@@ -210,7 +246,9 @@ function NativeHoleMap({
         ref={mapRef}
         style={styles.map}
         mapType="satellite"
-        initialRegion={region}
+        {...(holeUpCamera
+          ? { initialCamera: holeUpCamera }
+          : { initialRegion: region })}
         showsUserLocation={Boolean(userFix)}
         showsMyLocationButton={false}
         followsUserLocation={false}
@@ -218,6 +256,12 @@ function NativeHoleMap({
         scrollEnabled
         pitchEnabled={false}
         rotateEnabled={false}
+        onMapReady={() => {
+          if (!lockFrame) return;
+          if (framedOnce.current) return;
+          if (frameLockedMap()) framedOnce.current = true;
+        }}
+        onRegionChangeComplete={onRegionSettled}
         onPress={(event) => {
           if (!onPlacePoint) return;
           const { latitude, longitude } = event.nativeEvent.coordinate;
