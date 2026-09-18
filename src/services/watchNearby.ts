@@ -6,10 +6,12 @@ import { layoutFromTee } from '@/src/course/layout';
 import { startRound } from '@/src/db/repo';
 import type { GpsFix } from '@/src/domain/types';
 import {
+  builtNearbyCourses,
   nearbyCoursesPayload,
   nearbyTeesPayload,
   phoneFixForNearbyCourses,
   planNearbyCourses,
+  rememberBuiltNearbyCourses,
 } from '@/src/domain/watchNearby';
 import {
   PHONE_UNAVAILABLE,
@@ -120,9 +122,12 @@ export async function pushWatchNearbyCourses(opts?: {
   if (chosen) {
     try {
       courses = await getCourseDataClient().nearbyCourses(chosen);
+      rememberBuiltNearbyCourses(courses);
     } catch {
-      courses = [];
+      courses = builtNearbyCourses();
     }
+  } else {
+    courses = builtNearbyCourses();
   }
   const plan = planNearbyCourses({
     phoneFix,

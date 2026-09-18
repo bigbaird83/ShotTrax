@@ -5,6 +5,7 @@ import { getCourseDataClient } from '@/src/course/client';
 import { formatTeeHoleYards, formatTeeMeta } from '@/src/course/layout';
 import type { CourseDetail, CourseSummary, TeeSet } from '@/src/course/types';
 import { COPY } from '@/src/domain/playerCopy';
+import { rememberBuiltNearbyCourses } from '@/src/domain/watchNearby';
 import { formatCourseDistance, type CourseDistanceUnit } from '@/src/domain/courseDistance';
 import { getCurrentFix } from '@/src/services/location';
 import { BigButton } from './BigButton';
@@ -59,6 +60,13 @@ export function CoursePicker({
     try {
       const fix = await getCurrentFix();
       const nearby = await getCourseDataClient().nearbyCourses({ lat: fix.lat, lng: fix.lng });
+      rememberBuiltNearbyCourses(
+        nearby.map((course) => ({
+          id: course.id,
+          name: course.name,
+          distanceMeters: course.distanceMeters,
+        })),
+      );
       setResults(nearby);
       if (nearby.length === 0) {
         setError(COPY.nearbyEmpty);

@@ -1,7 +1,8 @@
 /** Watch starts the round from a short nearby-course list.
- * The list uses the phone fix only. Watch GPS never chooses a course.
- * Finding a course skips the 15 m / 25 m mark gates. No search box.
- * No fresh phone fix, or an empty list → one line: open the phone.
+ * The list uses the phone fix when the phone has one. Watch GPS never
+ * chooses a course. Finding a course skips the 15 m / 25 m mark gates.
+ * No search box. An empty list → one line: open the phone.
+ * No phone fix still starts from the last list the phone built.
  */
 
 import { COPY } from './playerCopy';
@@ -63,6 +64,19 @@ export function liveRoundReplacedByWatchCoursePick(): false {
 
 export function watchCoursePickSetsPhoneCourse(): true {
   return true;
+}
+
+/** No phone fix still uses the last phone-built list. Never a Watch guess. */
+export function watchStartsFromBuiltListWithoutPhoneFix(): true {
+  return true;
+}
+
+export function planWatchCoursePick(args: {
+  hasLiveRound: boolean;
+  replaceAllowed?: boolean;
+}): 'keep_live_round' | 'set_phone_course' {
+  if (args.hasLiveRound && !args.replaceAllowed) return 'keep_live_round';
+  return 'set_phone_course';
 }
 
 export type WatchOpenFace = 'hole' | 'select_course' | 'nearby' | 'hole_count' | 'tees';
@@ -160,17 +174,8 @@ export type NearbyCoursesPlan =
   | { status: 'ok'; line: null; courses: WatchNearbyCourse[] }
   | { status: 'open_phone'; line: typeof OPEN_PHONE; courses: [] };
 
-export function planNearbyCourses(args: {
-  phoneFix: GpsFix | null | undefined;
-  watchFix?: GpsFix | null;
-  courses: WatchNearbyCourse[];
-  nowMs: number;
-}): NearbyCoursesPlan {
-  const phone = phoneFixForNearbyCourses(args);
-  if (!phone) {
-    return { status: 'open_phone', line: OPEN_PHONE, courses: [] };
-  }
-  const courses = args.courses
+function normalizeNearbyCourses(courses: WatchNearbyCourse[]): WatchNearbyCourse[] {
+  return courses
     .filter((course) => typeof course.id === 'string' && course.id.trim() && course.name.trim())
     .slice(0, NEARBY_COURSE_LIST_MAX)
     .map((course) => ({
@@ -181,6 +186,33 @@ export function planNearbyCourses(args: {
           ? course.distanceMeters
           : null,
     }));
+}
+
+let lastBuiltNearby: WatchNearbyCourse[] = [];
+
+/** Last nearby list the phone built. Watch GPS never writes this. */
+export function rememberBuiltNearbyCourses(courses: WatchNearbyCourse[]): void {
+  lastBuiltNearby = normalizeNearbyCourses(courses);
+}
+
+export function builtNearbyCourses(): WatchNearbyCourse[] {
+  return lastBuiltNearby.slice();
+}
+
+export function resetBuiltNearbyCourses(): void {
+  lastBuiltNearby = [];
+}
+
+export function planNearbyCourses(args: {
+  phoneFix: GpsFix | null | undefined;
+  watchFix?: GpsFix | null;
+  courses: WatchNearbyCourse[];
+  nowMs: number;
+}): NearbyCoursesPlan {
+  void args.watchFix;
+  void args.phoneFix;
+  void args.nowMs;
+  const courses = normalizeNearbyCourses(args.courses);
   if (courses.length === 0) {
     return { status: 'open_phone', line: OPEN_PHONE, courses: [] };
   }
