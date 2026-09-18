@@ -171,16 +171,16 @@ struct ContentView: View {
           .lineLimit(1)
       }
 
-      ForEach(Array(session.list.top3.enumerated()), id: \.element) { _, clubId in
+      ForEach(Array(session.list.top3.enumerated()), id: \.element) { index, clubId in
         Button(action: { session.pick(clubId: clubId) }) { // same pick as bag — marks the shot
           Text(session.list.label(for: clubId))
-            .font(.system(size: 13, weight: .heavy))
-            .foregroundStyle(Color("cream"))
+            .font(.system(size: index == 0 ? 16 : 13, weight: index == 0 ? .black : .heavy))
+            .foregroundStyle(index == 0 ? Color("accent") : Color("cream"))
             .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(minHeight: 24)
+            .frame(minHeight: index == 0 ? 28 : 24)
         }
         .buttonStyle(.bordered)
-        .tint(Color("cream"))
+        .tint(index == 0 ? Color("accent") : Color("cream"))
         .disabled(session.sending)
       }
 

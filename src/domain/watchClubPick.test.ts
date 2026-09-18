@@ -28,11 +28,17 @@ import {
   watchBackHomeDarkensRows,
   watchFirstScreenFitsWithoutScroll,
   watchTop3DropsYards,
+  watchTop3NumberIsCarry,
+  watchTop3NumberIsYardsLeft,
+  watchFirstSuggestedIsThePick,
+  watchSuggestedPillsLookTheSame,
   formatWatchSameClub,
   watchTop3MatchesPhone,
   watchTop3RequiresScroll,
 } from './watchClubPick';
 import { HOME_CLUB_TAP_MAX_YD, homeClubTapPaths } from './homeClubTap';
+import { formatPickerLeftYards, formatSuggestedClubChip } from './playerCopy';
+import { rankDistanceYards, rankTopClubs } from './rankClubs';
 
 test('Watch opens on the same top 3 as the phone; no scroll to hit one', () => {
   assert.equal(watchClubPickOpensOnTop3(), true);
@@ -91,11 +97,83 @@ test('Watch opens on the same top 3 as the phone; no scroll to hit one', () => {
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const push = hole.slice(hole.indexOf('useWatchClubList'), hole.indexOf('if (!round || !hole)'));
   assert.match(push, /top3: ranked\.map/);
-  assert.doesNotMatch(push, /guess|invent/);
+  assert.match(push, /formatSuggestedClubChip\(club\.shortName, rankDistanceYards\(club\)\)/);
+  assert.doesNotMatch(push, /formatPickerLeftYards|guess|invent/);
 
   const clubPick = readFileSync(new URL('../../app/round/[id]/club-pick.tsx', import.meta.url), 'utf8');
   const clubPush = clubPick.slice(clubPick.indexOf('useWatchClubList'), clubPick.indexOf('const markClub'));
   assert.match(clubPush, /top3: ranked\.map/);
+  assert.match(clubPush, /formatSuggestedClubChip\(club\.shortName, rankDistanceYards\(club\)\)/);
+  assert.doesNotMatch(clubPush, /formatPickerLeftYards/);
+});
+
+test('Watch suggested rows show that club\'s carry; the first row is the pick', () => {
+  assert.equal(watchTop3NumberIsCarry(), true);
+  assert.equal(watchTop3NumberIsYardsLeft(), false);
+  assert.equal(watchFirstSuggestedIsThePick(), true);
+  assert.equal(watchSuggestedPillsLookTheSame(), false);
+  assert.equal(formatSuggestedClubChip('5i', 205), '5i · 205');
+  assert.equal(formatSuggestedClubChip('6i', 185), '6i · 185');
+  assert.notEqual(formatSuggestedClubChip('5i', 205), formatPickerLeftYards({ yards: 164, quality: 'good' }));
+  assert.equal(formatPickerLeftYards({ yards: 164, quality: 'good' }), '164 left');
+
+  const five = {
+    id: 'club_5i',
+    name: '5 Iron',
+    shortName: '5i',
+    loftRank: 7,
+    avgYards: 205,
+    count: 8,
+  };
+  const six = {
+    id: 'club_6i',
+    name: '6 Iron',
+    shortName: '6i',
+    loftRank: 8,
+    avgYards: 185,
+    count: 8,
+  };
+  const seven = {
+    id: 'club_7i',
+    name: '7 Iron',
+    shortName: '7i',
+    loftRank: 9,
+    avgYards: 165,
+    count: 8,
+  };
+  const putter = {
+    id: PUTTER_CLUB_ID,
+    name: 'Putter',
+    shortName: 'Pt',
+    loftRank: 18,
+    avgYards: 8,
+    count: 20,
+    typicalCarryYards: 8,
+  };
+  const ranked = rankTopClubs([five, six, seven, putter], { source: 'yards_to_green', dYards: 190 });
+  assert.equal(ranked[0]?.id, 'club_6i');
+  assert.equal(rankDistanceYards(ranked[0]), 185);
+  assert.equal(formatSuggestedClubChip(ranked[0].shortName, rankDistanceYards(ranked[0])), '6i · 185');
+  assert.notEqual(formatSuggestedClubChip(ranked[0].shortName, rankDistanceYards(ranked[0])), '6i · 190');
+  assert.ok(!ranked.some((club) => club.id === PUTTER_CLUB_ID));
+  assert.equal(watchPutterInTop3(), false);
+
+  const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  const rows = watchUi.slice(
+    watchUi.indexOf('session.list.top3.enumerated()'),
+    watchUi.indexOf('pickSameClub'),
+  );
+  assert.match(rows, /index == 0 \? 16 : 13/);
+  assert.match(rows, /index == 0 \? \.black : \.heavy/);
+  assert.match(rows, /index == 0 \? Color\("accent"\) : Color\("cream"\)/);
+  assert.match(rows, /index == 0 \? 28 : 24/);
+  assert.match(rows, /session\.list\.label\(for: clubId\)/);
+  assert.doesNotMatch(rows, /statusLine|yardsToGreen|left/);
+
+  const rankSrc = readFileSync(new URL('./rankClubs.ts', import.meta.url), 'utf8');
+  assert.match(rankSrc, /lowest \|rank yards − D\|/);
+  assert.match(rankSrc, /Putter is never eligible/);
+  assert.match(rankSrc, /export function rankTopClubs/);
 });
 
 test('Watch Back returns to the hole and does not mark; Home opens the in-round menu', () => {

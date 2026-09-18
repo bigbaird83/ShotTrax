@@ -61,6 +61,24 @@ export function watchTop3DropsYards(): false {
   return false;
 }
 
+/** Each top-3 number is that club's carry, not yards left to the hole. */
+export function watchTop3NumberIsCarry(): true {
+  return true;
+}
+
+export function watchTop3NumberIsYardsLeft(): false {
+  return false;
+}
+
+/** First row is the closest carry to the hole yards — it reads as the pick. */
+export function watchFirstSuggestedIsThePick(): true {
+  return true;
+}
+
+export function watchSuggestedPillsLookTheSame(): false {
+  return false;
+}
+
 /** Same club · 2i — club name only. Top-3 rows keep their yards. */
 export function formatWatchSameClub(label: string | null | undefined): string {
   const name = label?.split(' · ')[0]?.trim();
