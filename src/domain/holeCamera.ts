@@ -7,6 +7,26 @@ function toRad(deg: number): number {
   return (deg * Math.PI) / 180;
 }
 
+function midpoint(points: LatLng[]): LatLng | null {
+  const valid = points.filter((point) => isValidLatLng(point));
+  if (valid.length === 0) return null;
+  const lat = valid.reduce((sum, point) => sum + point.lat, 0) / valid.length;
+  const lng = valid.reduce((sum, point) => sum + point.lng, 0) / valid.length;
+  const center = { lat, lng };
+  return isValidLatLng(center) ? center : null;
+}
+
+function maxSpanYards(points: LatLng[]): number {
+  const valid = points.filter((point) => isValidLatLng(point));
+  let maxYd = 0;
+  for (let i = 0; i < valid.length; i += 1) {
+    for (let j = i + 1; j < valid.length; j += 1) {
+      maxYd = Math.max(maxYd, haversineYards(valid[i], valid[j]));
+    }
+  }
+  return maxYd;
+}
+
 /** Rotation is the map camera only. Pin coordinates and yards do not change. */
 export function holeCameraIsCameraOnly(): true {
   return true;
@@ -14,6 +34,11 @@ export function holeCameraIsCameraOnly(): true {
 
 /** Bearing is tee → green. Never the phone compass / GPS heading. */
 export function holeCameraUsesPhoneHeading(): false {
+  return false;
+}
+
+/** Phone GPS never enters camera bounds, heading, or center. */
+export function holeCameraIncludesPhoneFix(): false {
   return false;
 }
 
@@ -50,21 +75,64 @@ export type HoleCameraPlan = {
   heading: number | null;
 };
 
+export type LockedHoleCamera = HoleCameraPlan & {
+  center: LatLng;
+  /** Max pairwise yards of the framed points only. Phone never widens this. */
+  spanYards: number;
+};
+
+export type HoleMapRegion = {
+  latitude: number;
+  longitude: number;
+  latitudeDelta: number;
+  longitudeDelta: number;
+};
+
 /**
  * Frame + heading for the play map and the Add shot map.
  * Tee + green → fit those points and rotate hole-up.
  * Missing tee or green → existing shot pins, else the green, and do not rotate.
+ * `phone` is ignored — never a frame point, center, span, or heading.
  */
 export function planHoleCamera(args: {
   tee: LatLng | null;
   green: LatLng | null;
   shotPins: LatLng[];
+  phone?: LatLng | null;
 }): HoleCameraPlan | null {
-  const frame = planCatchUpFrame(args);
+  void args.phone;
+  const frame = planCatchUpFrame({
+    tee: args.tee,
+    green: args.green,
+    shotPins: args.shotPins,
+  });
   if (!frame) return null;
   return {
     ...frame,
     heading: frame.mode === 'tee_green' ? holeCameraHeading(args.tee, args.green) : null,
+  };
+}
+
+/**
+ * Locked Add shot / hole camera. Center, span, and heading come from the hole
+ * only (tee + green, else shot pins, else the green). A home-scale phone fix
+ * or an on-course fix must not change any of those. Never invents a point
+ * from the phone.
+ */
+export function lockHoleCamera(args: {
+  tee: LatLng | null;
+  green: LatLng | null;
+  shotPins: LatLng[];
+  phone?: LatLng | null;
+}): LockedHoleCamera | null {
+  const plan = planHoleCamera(args);
+  if (!plan) return null;
+  const center = midpoint(plan.points);
+  if (!center) return null;
+  return {
+    ...plan,
+    center,
+    spanYards: maxSpanYards(plan.points),
   };
 }
 
@@ -79,20 +147,9 @@ export type HoleNativeCamera = {
 /** Apple Maps altitude / Google zoom that fits the framed points after rotation. */
 export function holeNativeCamera(points: LatLng[], heading: number): HoleNativeCamera | null {
   if (!Number.isFinite(heading)) return null;
-  const valid = points.filter((point) => isValidLatLng(point));
-  if (valid.length === 0) return null;
-  const lat = valid.reduce((sum, point) => sum + point.lat, 0) / valid.length;
-  const lng = valid.reduce((sum, point) => sum + point.lng, 0) / valid.length;
-  const center = { lat, lng };
-  if (!isValidLatLng(center)) return null;
-
-  let maxYd = 0;
-  for (let i = 0; i < valid.length; i += 1) {
-    for (let j = i + 1; j < valid.length; j += 1) {
-      maxYd = Math.max(maxYd, haversineYards(valid[i], valid[j]));
-    }
-  }
-  const spanM = Math.max(80, maxYd * METERS_PER_YARD);
+  const center = midpoint(points);
+  if (!center) return null;
+  const spanM = Math.max(80, maxSpanYards(points) * METERS_PER_YARD);
   return {
     center: { latitude: center.lat, longitude: center.lng },
     heading,
@@ -100,4 +157,26 @@ export function holeNativeCamera(points: LatLng[], heading: number): HoleNativeC
     altitude: Math.max(600, spanM * 3.4),
     zoom: Math.max(12, Math.min(19, 16.6 - Math.log2(Math.max(spanM, 80) / 220))),
   };
+}
+
+/**
+ * North-up fallback region from framed points only.
+ * Used when tee or green is missing so we do not rotate.
+ * Never includes or invents a phone coordinate.
+ */
+export function holeFrameRegion(points: LatLng[]): HoleMapRegion | null {
+  const valid = points.filter((point) => isValidLatLng(point));
+  if (valid.length === 0) return null;
+  const lats = valid.map((point) => point.lat);
+  const lngs = valid.map((point) => point.lng);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+  const latitude = (minLat + maxLat) / 2;
+  const longitude = (minLng + maxLng) / 2;
+  if (!isValidLatLng({ lat: latitude, lng: longitude })) return null;
+  const latitudeDelta = Math.max((maxLat - minLat) * 1.7, 0.0016);
+  const longitudeDelta = Math.max((maxLng - minLng) * 1.7, 0.0016);
+  return { latitude, longitude, latitudeDelta, longitudeDelta };
 }
