@@ -144,7 +144,7 @@ test('play hole screen uses the fill layout and does not keep the empty middle',
   assert.equal(playAndAddShotShareCourseCardCamera(), true);
 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
-  assert.match(map, /holeMapShowsUserLocation\(Boolean\(lockFrame\)\)/);
+  assert.match(map, /holeMapUserLocationVisible\(\{/);
   assert.match(map, /styles\.mapCover/);
   assert.match(map, /tee \+ green only/);
   assert.doesNotMatch(
@@ -244,7 +244,7 @@ test('opening, Prev/Next, and Scorecard or Menu return reframe before the dock c
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   assert.match(map, /onFrameReady/);
   assert.match(map, /styles\.userDot/);
-  assert.match(map, /holeMapShowsUserLocation\(Boolean\(lockFrame\)\)/);
+  assert.match(map, /holeMapUserLocationVisible\(\{/);
   assert.doesNotMatch(
     map.slice(map.indexOf('const coords = useMemo'), map.indexOf('const lockedPoints')),
     /userFix/,
@@ -342,8 +342,9 @@ test('Add shot hides the user puck, Legal, and compass; play and edit wait for a
 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   const userLoc = map.slice(map.indexOf('showsUserLocation='), map.indexOf('showsMyLocationButton'));
-  assert.match(userLoc, /allowMapsChrome/);
-  assert.match(userLoc, /: false/);
+  assert.match(userLoc, /holeMapUserLocationVisible\(\{/);
+  assert.match(userLoc, /lockFrame,/);
+  assert.match(userLoc, /allowMapsChrome,/);
   assert.doesNotMatch(userLoc, /true/);
   assert.match(map, /followsUserLocation=\{false\}/);
   assert.match(map, /showPhonePin && userDot/);

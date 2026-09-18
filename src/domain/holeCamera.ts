@@ -128,6 +128,28 @@ export function addShotFramePoints(args: {
   return planCourseCardCamera(args)?.points ?? null;
 }
 
+/**
+ * Opening region from the shared helper only. Tee + green center.
+ * Phone / house never enter the bounds.
+ */
+export function courseCardCameraRegion(args: {
+  tee: LatLng | null;
+  green: LatLng | null;
+  phone?: LatLng | null;
+}): HoleMapRegion | null {
+  const camera = planCourseCardCamera(args);
+  if (!camera) return null;
+  return holeFrameRegion(camera.points);
+}
+
+export function courseCardCameraRegionUsesPhone(): false {
+  return false;
+}
+
+export function courseCardCameraRegionUsesHouse(): false {
+  return false;
+}
+
 /** Course tee stored on the hole. Never invented from the phone. */
 export function courseTeeFromHole(
   hole:
@@ -478,6 +500,19 @@ export function holeMapRevealsBeforeHoleFrame(): false {
 /** Every hole map never lets Apple/Google follow the phone into the frame. */
 export function holeMapShowsUserLocation(lockFrame: boolean): boolean {
   return !lockFrame;
+}
+
+/**
+ * Native showsUserLocation for play, Add shot, and edit.
+ * Lock-frame maps stay false even when a phone pin or Maps chrome is allowed.
+ */
+export function holeMapUserLocationVisible(args: {
+  lockFrame?: boolean;
+  showPhonePin?: boolean;
+  allowMapsChrome?: boolean;
+}): boolean {
+  if (!args.allowMapsChrome) return false;
+  return Boolean(args.showPhonePin) && holeMapShowsUserLocation(Boolean(args.lockFrame));
 }
 
 /** Play, Add shot, edit-shot, and the Nerd out trail all lock tee-to-green. */

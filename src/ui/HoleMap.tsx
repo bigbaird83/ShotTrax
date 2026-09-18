@@ -18,7 +18,7 @@ import {
   holeCameraFramedAfterApply,
   holeCameraHeading,
   holeFrameRegion,
-  holeMapShowsUserLocation,
+  holeMapUserLocationVisible,
   holeNativeCamera,
   regionIsHoleFrame,
 } from '@/src/domain/holeCamera';
@@ -404,9 +404,11 @@ function NativeHoleMap({
           : holeUpCamera
             ? { initialCamera: holeUpCamera }
             : { initialRegion: lockedRegion })}
-        showsUserLocation={
-          allowMapsChrome ? Boolean(showPhonePin) && holeMapShowsUserLocation(Boolean(lockFrame)) : false
-        }
+        showsUserLocation={holeMapUserLocationVisible({
+          lockFrame,
+          showPhonePin,
+          allowMapsChrome,
+        })}
         showsMyLocationButton={false}
         followsUserLocation={false}
         showsCompass={allowMapsChrome && mapsChrome}

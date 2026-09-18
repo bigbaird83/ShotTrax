@@ -145,6 +145,24 @@ export function playAndAddShotShareCourseCardCamera(): true {
   return true;
 }
 
+export const COURSE_CARD_CAMERA_SURFACES = ['round_start', 'add_shot', 'edit'] as const;
+
+export function courseCardCameraSurfacesShareHelper(): true {
+  return true;
+}
+
+export function roundStartShowsUserLocation(): false {
+  return false;
+}
+
+export function addShotShowsUserLocation(): false {
+  return false;
+}
+
+export function editShowsUserLocation(): false {
+  return false;
+}
+
 /** Edit is tap-the-shot → club / from / to. Not a dock button or a third row. */
 export function playEditIsDockRow(): false {
   return false;
