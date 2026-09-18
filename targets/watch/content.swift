@@ -140,61 +140,99 @@ struct ContentView: View {
 
   @ViewBuilder
   private var clubPick: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      statusHeader
-
-      HStack(spacing: 6) {
+    VStack(alignment: .leading, spacing: 2) {
+      HStack(alignment: .center, spacing: 4) {
+        Text(session.list.statusLine)
+          .font(.system(size: 11, weight: .bold))
+          .foregroundStyle(Color("cream"))
+          .lineLimit(1)
+          .minimumScaleFactor(0.8)
+        Spacer(minLength: 2)
         Button(action: { session.leave("back") }) {
           Text("Back")
-            .font(.caption.weight(.heavy))
-            .frame(maxWidth: .infinity, minHeight: 32)
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(Color("cream"))
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.plain)
         .disabled(session.sending)
         Button(action: { session.leave("home") }) {
           Text("Home")
-            .font(.caption.weight(.heavy))
-            .frame(maxWidth: .infinity, minHeight: 32)
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(Color("cream"))
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.plain)
         .disabled(session.sending)
       }
 
-      ForEach(Array(session.list.top3.enumerated()), id: \.element) { index, clubId in
+      if !session.feedback.isEmpty {
+        Text(session.feedback)
+          .font(.system(size: 10, weight: .bold))
+          .foregroundStyle(session.feedback.contains("✓") ? Color("accent") : Color.orange)
+          .lineLimit(1)
+      }
+
+      ForEach(Array(session.list.top3.enumerated()), id: \.element) { _, clubId in
         Button(action: { session.pick(clubId: clubId) }) { // same pick as bag — marks the shot
           Text(session.list.label(for: clubId))
-            .frame(maxWidth: .infinity, minHeight: index == 0 ? 40 : 36)
+            .font(.system(size: 13, weight: .heavy))
+            .foregroundStyle(Color("cream"))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minHeight: 24)
         }
         .buttonStyle(.bordered)
-        .font(index == 0 ? .headline.weight(.black) : .caption.weight(.heavy))
-        .tint(index == 0 ? Color("accent") : Color("cream"))
+        .tint(Color("cream"))
         .disabled(session.sending)
       }
+
+      Button(action: { session.pickSameClub() }) {
+        Text(sameClubTitle)
+          .font(.system(size: 13, weight: .heavy))
+          .foregroundStyle(Color("cream"))
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .frame(minHeight: 24)
+      }
+      .buttonStyle(.bordered)
+      .tint(Color("cream"))
+      .disabled(session.sending)
 
       Button(action: { showAllClubs.toggle() }) {
         Text("All clubs")
-          .font(.headline.weight(.heavy))
-          .frame(maxWidth: .infinity, minHeight: 36)
+          .font(.system(size: 13, weight: .heavy))
+          .foregroundStyle(Color("cream"))
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .frame(minHeight: 24)
       }
       .buttonStyle(.bordered)
+      .tint(Color("cream"))
 
       if showAllClubs || session.list.top3.isEmpty {
         ScrollView {
-          VStack(spacing: 6) {
+          VStack(spacing: 2) {
             ForEach(moreClubs, id: \.self) { clubId in
               Button(action: { session.pick(clubId: clubId) }) { // same pick as top 3 — marks the shot
                 Text(session.list.label(for: clubId))
-                  .font(.caption.weight(.heavy))
-                  .frame(maxWidth: .infinity, minHeight: 36)
+                  .font(.system(size: 13, weight: .heavy))
+                  .foregroundStyle(Color("cream"))
+                  .frame(maxWidth: .infinity, alignment: .leading)
+                  .frame(minHeight: 24)
               }
               .buttonStyle(.bordered)
+              .tint(Color("cream"))
               .disabled(session.sending)
             }
           }
         }
       }
     }
-    .padding(.horizontal, 4)
+    .padding(.horizontal, 2)
+  }
+
+  private var sameClubTitle: String {
+    guard let id = session.list.lastClubId else { return "Same club" }
+    let raw = session.list.label(for: id)
+    let name = raw.components(separatedBy: " · ").first ?? raw
+    if name.isEmpty { return "Same club" }
+    return "Same club · \(name)"
   }
 
   private var moreClubs: [String] {

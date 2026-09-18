@@ -40,6 +40,34 @@ export function watchSameClubSitsAboveTop3(): false {
   return false;
 }
 
+export function watchSameClubSitsOnFirstScreen(): true {
+  return true;
+}
+
+/** First screen is Hole · yards, top 3, Same club, All clubs — no scroll. */
+export function watchFirstScreenFitsWithoutScroll(): true {
+  return true;
+}
+
+export function watchBackHomeDarkensRows(): false {
+  return false;
+}
+
+export function watchSameClubIsLightOnDark(): true {
+  return true;
+}
+
+export function watchTop3DropsYards(): false {
+  return false;
+}
+
+/** Same club · 2i — club name only. Top-3 rows keep their yards. */
+export function formatWatchSameClub(label: string | null | undefined): string {
+  const name = label?.split(' · ')[0]?.trim();
+  if (!name) return COPY.stickyClub;
+  return `${COPY.stickyClub} · ${name}`;
+}
+
 export function watchClubPickBackMarksShot(): false {
   return false;
 }

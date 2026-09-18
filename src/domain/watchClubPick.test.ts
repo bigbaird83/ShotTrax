@@ -23,6 +23,12 @@ import {
   watchPutterOpensPuttSheet,
   watchRestOfBagBelowAllClubs,
   watchSameClubSitsAboveTop3,
+  watchSameClubSitsOnFirstScreen,
+  watchSameClubIsLightOnDark,
+  watchBackHomeDarkensRows,
+  watchFirstScreenFitsWithoutScroll,
+  watchTop3DropsYards,
+  formatWatchSameClub,
   watchTop3MatchesPhone,
   watchTop3RequiresScroll,
 } from './watchClubPick';
@@ -37,6 +43,14 @@ test('Watch opens on the same top 3 as the phone; no scroll to hit one', () => {
   assert.equal(COPY.allClubs, 'All clubs');
   assert.equal(watchRestOfBagBelowAllClubs(), true);
   assert.equal(watchSameClubSitsAboveTop3(), false);
+  assert.equal(watchSameClubSitsOnFirstScreen(), true);
+  assert.equal(watchFirstScreenFitsWithoutScroll(), true);
+  assert.equal(watchBackHomeDarkensRows(), false);
+  assert.equal(watchSameClubIsLightOnDark(), true);
+  assert.equal(watchTop3DropsYards(), false);
+  assert.equal(formatWatchSameClub('2i · 190'), 'Same club · 2i');
+  assert.equal(formatWatchSameClub('2i'), 'Same club · 2i');
+  assert.equal(formatWatchSameClub(null), 'Same club');
 
   const phoneTop3 = ['club_7i', 'club_8i', 'club_6i'];
   assert.deepEqual(watchClubListTop3([...phoneTop3, PUTTER_CLUB_ID, 'club_pw']), phoneTop3);
@@ -54,14 +68,25 @@ test('Watch opens on the same top 3 as the phone; no scroll to hit one', () => {
   assert.match(pick, /session\.leave\("home"\)/);
   assert.match(pick, /Text\("Back"\)/);
   assert.match(pick, /Text\("Home"\)/);
+  assert.match(pick, /\.buttonStyle\(\.plain\)/);
+  assert.match(pick, /session\.list\.statusLine/);
   assert.match(pick, /session\.list\.top3/);
+  assert.match(pick, /session\.list\.label\(for: clubId\)/);
+  assert.match(pick, /pickSameClub/);
+  assert.match(pick, /sameClubTitle/);
   assert.match(pick, /Text\("All clubs"\)/);
-  const allClubsAt = pick.indexOf('Text("All clubs")');
+  const headerAt = pick.indexOf('session.list.statusLine');
   const top3At = pick.indexOf('session.list.top3');
-  assert.ok(top3At >= 0 && allClubsAt > top3At);
-  assert.doesNotMatch(pick, /pickSameClub|Same club/);
+  const sameAt = pick.indexOf('pickSameClub');
+  const allClubsAt = pick.indexOf('Text("All clubs")');
+  assert.ok(headerAt >= 0 && top3At > headerAt && sameAt > top3At && allClubsAt > sameAt);
+  const sameClub = pick.slice(sameAt, allClubsAt);
+  assert.match(sameClub, /Color\("cream"\)/);
+  assert.doesNotMatch(sameClub, /Color\.black|borderedProminent/);
+  assert.match(watchUi, /"Same club · \\\(name\)"/);
   assert.match(pick, /moreClubs/);
   assert.match(watchUi, /session\.list\.bag\.filter \{ !session\.list\.top3\.contains/);
+  assert.doesNotMatch(pick.slice(0, allClubsAt), /ScrollView/);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const push = hole.slice(hole.indexOf('useWatchClubList'), hole.indexOf('if (!round || !hole)'));
