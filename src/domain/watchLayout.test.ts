@@ -6,10 +6,14 @@ import {
   addShotFramePoints,
   addShotMapUsesPhoneFix,
   addShotMapWaitsForPhoneFix,
+  courseCardCameraFramesLonePin,
+  courseCardCameraUsesPhone,
+  courseCardCameraWaitsForPhoneFix,
   courseTeeFromHole,
   holeCameraHeading,
+  holeCameraTeeBelowGreenOnScreen,
   lockFramePointsNeedTeeAndGreen,
-  lockHoleCamera,
+  planCourseCardCamera,
   resolvePlayHoleTee,
 } from './holeCamera';
 import { showWaitingOnLocationLine } from './playerCopy';
@@ -74,17 +78,27 @@ test('282 opening window includes Dr; Watch control band is ~40%; round start fr
   const home = { lat: 40.7128, lng: -74.006 };
   assert.equal(addShotMapWaitsForPhoneFix(), false);
   assert.equal(addShotMapUsesPhoneFix(), false);
+  assert.equal(courseCardCameraWaitsForPhoneFix(), false);
+  assert.equal(courseCardCameraUsesPhone(), false);
+  assert.equal(courseCardCameraFramesLonePin(), false);
   assert.equal(lockFramePointsNeedTeeAndGreen(), true);
+  const roundStart = planCourseCardCamera({ tee, green, phone: null });
+  const addShot = planCourseCardCamera({ tee, green, phone: null });
+  const fromHome = planCourseCardCamera({ tee, green, phone: home });
+  assert.deepEqual(roundStart, addShot);
+  assert.deepEqual(roundStart?.points, [tee, green]);
+  assert.deepEqual(addShot?.points, [tee, green]);
+  assert.deepEqual(fromHome?.points, [tee, green]);
   assert.deepEqual(addShotFramePoints({ tee, green, phone: home }), [tee, green]);
   assert.deepEqual(addShotFramePoints({ tee, green, phone: null }), [tee, green]);
-  const fromHome = lockHoleCamera({ tee, green, shotPins: [], phone: home });
-  const noFix = lockHoleCamera({ tee, green, shotPins: [], phone: null });
+  assert.equal(addShotFramePoints({ tee: null, green, phone: home }), null);
+  assert.equal(planCourseCardCamera({ tee: null, green, phone: home }), null);
+  assert.ok(roundStart);
   assert.ok(fromHome);
-  assert.ok(noFix);
-  assert.equal(fromHome.mode, 'tee_green');
-  assert.deepEqual(fromHome.center, noFix.center);
+  assert.deepEqual(fromHome, roundStart);
   assert.equal(fromHome.heading, holeCameraHeading(tee, green));
   assert.notEqual(fromHome.heading, holeCameraHeading(home, green));
+  assert.equal(holeCameraTeeBelowGreenOnScreen(tee, green, roundStart.heading), true);
   assert.deepEqual(courseTeeFromHole({ teeLat: tee.lat, teeLng: tee.lng }), tee);
   assert.equal(courseTeeFromHole({ teeLat: null, teeLng: null }), null);
   assert.deepEqual(resolvePlayHoleTee({ courseTee: tee, overlayTee: null, cachedTee: null, green }), tee);
@@ -109,9 +123,13 @@ test('282 opening window includes Dr; Watch control band is ~40%; round start fr
   assert.match(hole, /resolvePlayHoleTee/);
   assert.match(hole, /saveHoleTee/);
   assert.match(hole, /phone: null/);
-  assert.match(hole, /addShotFramePoints/);
+  assert.match(hole, /planCourseCardCamera/);
+  assert.equal((hole.match(/planCourseCardCamera\(/g) ?? []).length, 1);
+  assert.doesNotMatch(hole, /lockHoleCamera/);
+  assert.doesNotMatch(hole, /addShotFramePoints/);
   const playMap = hole.slice(hole.indexOf('<HoleMap'), hole.indexOf('onDropGreenEstimate'));
-  assert.match(playMap, /addShotPoints/);
+  assert.match(playMap, /courseCamera\?\.points/);
+  assert.match(playMap, /heading=\{courseCamera\?\.heading/);
   assert.doesNotMatch(playMap, /holeCamera\?\.points/);
   assert.doesNotMatch(playMap, /getCurrentFix/);
 

@@ -78,18 +78,54 @@ export function addShotMapUsesPhoneFix(): false {
   return false;
 }
 
+export type CourseCardCamera = {
+  points: LatLng[];
+  heading: number;
+};
+
+/** Course-card camera never waits on a phone fix. */
+export function courseCardCameraWaitsForPhoneFix(): false {
+  return false;
+}
+
+/** Phone GPS never enters the course-card frame. */
+export function courseCardCameraUsesPhone(): false {
+  return false;
+}
+
+/** A lone pin or house coordinate is not a course-card frame. */
+export function courseCardCameraFramesLonePin(): false {
+  return false;
+}
+
 /**
- * Add shot camera points. Tee + green only. Phone is ignored even when it is
- * the only coordinate we have. Missing green → null (do not use the phone).
+ * One camera for round start, Add shot, and edit.
+ * Same function, same inputs: course tee + green center from the course card.
+ * Phone is ignored. Tee at the bottom, green at the top.
+ * Missing tee or green → null. Never a lone pin. Never the house.
+ */
+export function planCourseCardCamera(args: {
+  tee: LatLng | null;
+  green: LatLng | null;
+  phone?: LatLng | null;
+}): CourseCardCamera | null {
+  void args.phone;
+  if (!isValidLatLng(args.tee) || !isValidLatLng(args.green)) return null;
+  const heading = holeCameraHeading(args.tee, args.green);
+  if (heading == null) return null;
+  return { points: [args.tee, args.green], heading };
+}
+
+/**
+ * Add shot camera points. Same helper as round start and edit:
+ * planCourseCardCamera. Phone is ignored. Missing tee or green → null.
  */
 export function addShotFramePoints(args: {
   tee: LatLng | null;
   green: LatLng | null;
   phone?: LatLng | null;
 }): LatLng[] | null {
-  void args.phone;
-  if (!isValidLatLng(args.tee) || !isValidLatLng(args.green)) return null;
-  return [args.tee, args.green];
+  return planCourseCardCamera(args)?.points ?? null;
 }
 
 /** Course tee stored on the hole. Never invented from the phone. */

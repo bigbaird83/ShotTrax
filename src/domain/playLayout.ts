@@ -122,12 +122,26 @@ export function playUsesAddShotCamera(): true {
   return true;
 }
 
-/** Round start does not open a second camera path. Same addShotFramePoints. */
+/** Round start does not open a second camera path. Same planCourseCardCamera. */
 export function playRoundStartSecondCameraPath(): false {
   return false;
 }
 
+/** Round start and Add shot both use planCourseCardCamera. */
 export function playRoundStartUsesAddShotFramePoints(): true {
+  return true;
+}
+
+/** Play, Add shot, and edit call the same course-card helper. */
+export function playUsesCourseCardCamera(): true {
+  return true;
+}
+
+export function playEditUsesCourseCardCamera(): true {
+  return true;
+}
+
+export function playAndAddShotShareCourseCardCamera(): true {
   return true;
 }
 

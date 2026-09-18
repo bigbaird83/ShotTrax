@@ -39,7 +39,7 @@ import { COPY, finishPuttsChip, finishShotChip, formatHoleHeader, formatPlayHead
 import { canAdvanceHole, holesNeedingOpenShots } from '@/src/domain/holeAdvance';
 import { isPutterClubId } from '@/src/domain/defaultBag';
 import { catchUpPinFromTap, planCancelCatchUp, planCatchUpSheet } from '@/src/domain/catchUpMap';
-import { addShotFramePoints, courseTeeFromHole, lockHoleCamera, resolvePlayHoleTee, shotPinsForHoleCamera, type LockedHoleCamera } from '@/src/domain/holeCamera';
+import { courseTeeFromHole, planCourseCardCamera, resolvePlayHoleTee } from '@/src/domain/holeCamera';
 import { deleteShotPrompt } from '@/src/domain/deleteShot';
 import { planInsertSlots } from '@/src/domain/insertShot';
 import { confirmUndoIsLive, planConfirmUndo, type ConfirmUndoWindow } from '@/src/domain/confirmUndo';
@@ -114,7 +114,6 @@ export default function HoleScreen() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [playFrameNonce, setPlayFrameNonce] = useState(0);
   const [mapFramed, setMapFramed] = useState(false);
-  const lastHoleCamera = useRef<LockedHoleCamera | null>(null);
   const addShotFromRef = useRef<LatLng | null>(null);
   const [confirmUndo, setConfirmUndo] = useState<ConfirmUndoWindow | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -296,7 +295,6 @@ export default function HoleScreen() {
 
   useEffect(() => {
     setMapFramed(false);
-    lastHoleCamera.current = null;
     setSelectedClubId(null);
   }, [holeNumber]);
 
@@ -441,15 +439,11 @@ export default function HoleScreen() {
     if (!hole?.id || !holeTee) return;
     saveHoleTee(db, hole.id, holeTee);
   }, [db, hole?.id, holeTee?.lat, holeTee?.lng]);
-  const holeCamera = lockHoleCamera({
+  const courseCamera = planCourseCardCamera({
     tee: holeTee,
     green,
-    shotPins: shotPinsForHoleCamera(shots),
     phone: null,
-    previous: lastHoleCamera.current,
   });
-  const addShotPoints = addShotFramePoints({ tee: holeTee, green, phone: null });
-  if (holeCamera) lastHoleCamera.current = holeCamera;
   const addShotFrom = resolveAddShotFromPin({
     tee: holeTee,
     lastLanding: lastLandingMark(shots),
@@ -1007,9 +1001,9 @@ export default function HoleScreen() {
           hideYardsOverlay
           frameEpoch={catchUpFullScreen ? 'catchup' : `play-${hole.number}-${playFrameNonce}`}
           onFrameReady={setMapFramed}
-          heading={holeCamera?.heading ?? null}
+          heading={courseCamera?.heading ?? null}
           framePoints={
-            addShotPoints?.map((point) => ({
+            courseCamera?.points.map((point) => ({
               latitude: point.lat,
               longitude: point.lng,
             }))
@@ -1195,7 +1189,7 @@ export default function HoleScreen() {
         ) : null}
       </View>
 
-      {!hideHoleButtons && (catchUpFullScreen || !holeCamera || mapFramed) ? (
+      {!hideHoleButtons && (catchUpFullScreen || !courseCamera || mapFramed) ? (
         <View style={[styles.dock, { paddingBottom: Math.max(insets.bottom, 8) }]}>
           <View style={styles.dockRow}>
             <View style={styles.dockStrip}>
@@ -1476,14 +1470,12 @@ export default function HoleScreen() {
             showPhonePin={false}
             allowMapsChrome
             frameEpoch={`edit-${hole.number}-${editingShot?.id ?? 'none'}`}
-            heading={holeCamera?.heading ?? null}
+            heading={courseCamera?.heading ?? null}
             framePoints={
-              holeCamera
-                ? holeCamera.points.map((point) => ({
-                    latitude: point.lat,
-                    longitude: point.lng,
-                  }))
-                : undefined
+              courseCamera?.points.map((point) => ({
+                latitude: point.lat,
+                longitude: point.lng,
+              }))
             }
           />
           <ScrollView contentContainerStyle={styles.sheetPad}>

@@ -379,6 +379,7 @@ test('build 26 locks stay: delete confirm, 60% map, one-line header, 600-yard te
   assert.match(hole, /planConfirmUndo/);
   assert.match(hole, /formatPlayHeader/);
   assert.match(hole, /styles\.mapFill/);
-  assert.match(hole, /lockHoleCamera/);
+  assert.match(hole, /planCourseCardCamera/);
+  assert.doesNotMatch(hole, /lockHoleCamera/);
   assert.equal(COPY.deleteShotConfirm, 'Delete this shot?');
 });
