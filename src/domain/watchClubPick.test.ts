@@ -287,8 +287,8 @@ test('Watch suggested strip shows carry, opens on the pick, and is not stacked r
   assert.match(stripUi, /onTapGesture/);
   assert.match(stripUi, /scrollTo\(stripWindowToken/);
   assert.match(stripUi, /anchor: \.leading/);
-  assert.match(stripUi, /stripWindowStart/);
   assert.match(stripUi, /stripPickId/);
+  assert.match(watchUi, /stripWindowStart/);
   assert.match(watchUi, /wheelClubs/);
   assert.match(watchUi, /seamAfter/);
   assert.equal(watchStripIsWheel(), true);

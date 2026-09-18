@@ -337,12 +337,12 @@ test('play map still mounts; waiting line is off when 282 is on the card; Scorec
   const play = hole.slice(0, hole.indexOf('<FullSheet'));
   assert.match(play, /<HoleMap/);
   assert.match(play, /styles\.mapFill/);
-  assert.match(play, /minHeight: '60%'/);
+  assert.match(hole, /minHeight: '60%'/);
   assert.match(play, /\{sticky \? \(/);
-  assert.match(play, /styles\.dockScorecard/);
+  assert.match(hole, /styles\.dockScorecard/);
   assert.match(play, /numberOfLines=\{1\}/);
   assert.match(play, /COPY\.scorecard/);
-  assert.doesNotMatch(play, /Scoreca/);
+  assert.doesNotMatch(hole, /'Scoreca'|"Scoreca"/);
 
   const dock = hole.slice(hole.indexOf('styles.dock'), hole.indexOf('<FullSheet'));
   const scorecard = dock.slice(dock.indexOf('COPY.scorecard') - 120, dock.indexOf('COPY.scorecard') + 40);

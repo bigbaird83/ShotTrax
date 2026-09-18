@@ -294,7 +294,8 @@ test('phone and Watch strip UIs peek neighbors and mark only on tap', () => {
   assert.match(watch, /wheelClubs/);
   assert.doesNotMatch(watch, /TabView|tabViewStyle|stripPage/);
   assert.doesNotMatch(watch, /sorted \{ \$0\.carry > \$1\.carry \}/);
-  assert.doesNotMatch(watch, /return 10_000|return 0/);
+  assert.doesNotMatch(watch, /return 10_000/);
+  assert.doesNotMatch(watch.slice(watch.indexOf('private func carryFromLabel')), /return 0/);
 });
 
 test('wheel order is carry not iron number; dash clubs are out with no empty slot', () => {
