@@ -19,6 +19,7 @@ import {
   placeToStoresBeforeConfirm,
   planPlaceToDragPreview,
 } from './placeToDrag';
+import { PLAY_MAP_MIN_RATIO, playMapMinRatio } from './playLayout';
 import { includeInDistanceAverages, placedShotRunsAcceptFix } from './shotSource';
 import { TO_GREEN_LIVE_MAX_YD } from './yardsToGreen';
 
@@ -28,6 +29,20 @@ const previousFrom = { lat: 36.998, lng: -122.002 };
 const green = { lat: 37.003, lng: -122.0 };
 const phone = { lat: 40.7128, lng: -74.006 };
 const house = { lat: 40.7, lng: -74.0 };
+
+test('live yards are from the from pin to the drag point, not the phone, and nothing is stored before Confirm', () => {
+  const yards = liveYardsFromPinToDrag({ from, drag, phone });
+  assert.equal(yards, roundYards(haversineYards(from, drag)));
+  assert.notEqual(yards, roundYards(haversineYards(from, phone)));
+  assert.notEqual(yards, roundYards(haversineYards(house, drag)));
+  assert.equal(liveYardsUsesPhone(), false);
+  assert.equal(placeToStoresBeforeConfirm(), false);
+  assert.deepEqual(cancelPlaceToDraft(), { to: null, stored: false });
+  assert.equal(confirmPlaceToDraft({ from, draft: null }).status, 'empty');
+  assert.equal(dragRecentersOnPhone(), false);
+  assert.ok(playMapMinRatio() >= 0.6);
+  assert.equal(PLAY_MAP_MIN_RATIO, 0.6);
+});
 
 test('preview shot yards are this shot from pin to the finger, not the prior shot', () => {
   const yards = liveShotYardsFromThisFromPin({ from, drag, phone, previousFrom });
