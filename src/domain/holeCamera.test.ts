@@ -2,13 +2,18 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { haversineYards } from './haversine';
 import {
+  applyHoleMapCamera,
+  holeCameraFramedAfterApply,
   holeCameraHeading,
   holeCameraIncludesPhoneFix,
   holeCameraIsCameraOnly,
   holeCameraUsesPhoneHeading,
   holeFrameRegion,
+  holeNativeCamera,
   lockHoleCamera,
   planHoleCamera,
+  regionIsHoleFrame,
+  resolveHoleTee,
 } from './holeCamera';
 
 const tee = { lat: 37.0, lng: -122.0 };
@@ -166,4 +171,59 @@ test('missing tee or green does not invent a camera point from the phone', () =>
     lockHoleCamera({ tee: null, green: null, shotPins: [], phone: home }),
     null,
   );
+});
+
+test('null map ref does not stick framed; home GPS stays out; hole tee still frames', () => {
+  const home = { lat: 40.7128, lng: -74.006 };
+  const holeTee = { lat: 37.0, lng: -122.0 };
+  const osmTee = null;
+  const tee = resolveHoleTee({ holeTee, osmTee });
+  assert.deepEqual(tee, holeTee);
+
+  const locked = lockHoleCamera({
+    tee,
+    green: greenNorth,
+    shotPins: [],
+    phone: home,
+  });
+  assert.ok(locked);
+  assert.equal(locked.mode, 'tee_green');
+  assert.deepEqual(locked.points, [holeTee, greenNorth]);
+  assert.equal(locked.heading, 0);
+  assert.notEqual(locked.center.lat, home.lat);
+  assert.notEqual(locked.center.lng, home.lng);
+  assert.equal(locked.spanYards, lockHoleCamera({ tee: holeTee, green: greenNorth, shotPins: [] })?.spanYards);
+  assert.equal(locked.heading, lockHoleCamera({ tee: holeTee, green: greenNorth, shotPins: [] })?.heading);
+  assert.deepEqual(locked.center, lockHoleCamera({ tee: holeTee, green: greenNorth, shotPins: [] })?.center);
+
+  const camera = holeNativeCamera(locked.points, locked.heading ?? 0);
+  const region = holeFrameRegion(locked.points);
+  assert.ok(camera);
+  assert.ok(region);
+
+  let framed = holeCameraFramedAfterApply(applyHoleMapCamera(null, camera, region));
+  assert.equal(framed, false);
+
+  let appliedCamera: unknown = null;
+  let appliedRegion: unknown = null;
+  const live = {
+    setCamera(next: typeof camera) {
+      appliedCamera = next;
+    },
+    animateToRegion(next: typeof region) {
+      appliedRegion = next;
+    },
+  };
+  framed = holeCameraFramedAfterApply(applyHoleMapCamera(live, camera, region));
+  assert.equal(framed, true);
+  assert.deepEqual(appliedCamera, camera);
+  assert.equal(appliedRegion, null);
+  assert.notEqual((appliedCamera as { center: { latitude: number } }).center.latitude, home.lat);
+
+  assert.equal(regionIsHoleFrame({ latitude: home.lat, longitude: home.lng }, locked.center), false);
+  assert.equal(
+    regionIsHoleFrame({ latitude: locked.center.lat, longitude: locked.center.lng }, locked.center),
+    true,
+  );
+  assert.equal(resolveHoleTee({ holeTee: null, osmTee: null }), null);
 });

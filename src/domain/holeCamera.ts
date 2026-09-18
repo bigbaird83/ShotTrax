@@ -180,3 +180,65 @@ export function holeFrameRegion(points: LatLng[]): HoleMapRegion | null {
   const longitudeDelta = Math.max((maxLng - minLng) * 1.7, 0.0016);
   return { latitude, longitude, latitudeDelta, longitudeDelta };
 }
+
+/**
+ * Tee for hole-up framing. Prefer the hole's own tee. OSM tee is fallback only.
+ * Never invents a point from the phone.
+ */
+export function resolveHoleTee(args: {
+  holeTee?: LatLng | null;
+  osmTee?: LatLng | null;
+}): LatLng | null {
+  if (isValidLatLng(args.holeTee)) return args.holeTee;
+  if (isValidLatLng(args.osmTee)) return args.osmTee;
+  return null;
+}
+
+export type HoleMapHandle = {
+  setCamera?: (camera: HoleNativeCamera) => void;
+  animateToRegion?: (region: HoleMapRegion, duration?: number) => void;
+} | null | undefined;
+
+/**
+ * Apply the locked hole camera to a live map. A null ref is not success —
+ * the caller must not stick a framed flag, and must re-apply when the map exists.
+ */
+export function applyHoleMapCamera(
+  map: HoleMapHandle,
+  camera: HoleNativeCamera | null | undefined,
+  region?: HoleMapRegion | null,
+): boolean {
+  if (map == null) return false;
+  if (camera) {
+    if (typeof map.setCamera !== 'function') return false;
+    map.setCamera(camera);
+    return true;
+  }
+  if (region) {
+    if (typeof map.animateToRegion !== 'function') return false;
+    map.animateToRegion(region, 0);
+    return true;
+  }
+  return false;
+}
+
+/** Only a successful live apply may stick the framed flag. */
+export function holeCameraFramedAfterApply(applied: boolean): boolean {
+  return applied;
+}
+
+/**
+ * True when the visible region is already the hole, not a home-scale GPS fix.
+ * Used so the first thing shown is tee-to-green, not a later correction.
+ */
+export function regionIsHoleFrame(
+  region: { latitude: number; longitude: number } | null | undefined,
+  holeCenter: LatLng | null | undefined,
+): boolean {
+  if (!region || !isValidLatLng(holeCenter)) return false;
+  if (!Number.isFinite(region.latitude) || !Number.isFinite(region.longitude)) return false;
+  return (
+    Math.abs(region.latitude - holeCenter.lat) < 0.05 &&
+    Math.abs(region.longitude - holeCenter.lng) < 0.05
+  );
+}

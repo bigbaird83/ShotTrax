@@ -1,4 +1,5 @@
 import { featureCentroid } from '../domain/catchUpMap';
+import { haversineYards } from '../domain/haversine';
 import { isValidLatLng, type LatLng } from '../domain/latLng';
 import type { OsmFeature, OsmGolfKind, OsmOverlay, OsmOverlayHook, OsmOverlayQuery } from './types';
 
@@ -103,11 +104,49 @@ export function featuresForHole(overlay: OsmOverlay | null, holeNumber: number):
   return overlay.features.filter((f) => f.holeNumber == null);
 }
 
-/** Tee centroid for catch-up framing. Missing tee → null, never invented. */
+/** OSM tee-box centroid. Missing tee polygon → null, never invented. */
 export function teePointForHole(overlay: OsmOverlay | null, holeNumber: number): LatLng | null {
   const tees = featuresForHole(overlay, holeNumber).filter((feature) => feature.kind === 'tee');
   if (tees.length === 0) return null;
   return featureCentroid(tees[0].coordinates);
+}
+
+/**
+ * Tee from the hole line itself (golf=hole), not the tee-box polygon.
+ * First/last point: the end farther from the green is the tee. No green → first point.
+ * Missing hole line → null. Never invents a coordinate.
+ */
+export function teePointFromHoleFeature(
+  overlay: OsmOverlay | null,
+  holeNumber: number,
+  green?: LatLng | null,
+): LatLng | null {
+  const lines = featuresForHole(overlay, holeNumber)
+    .filter((feature) => feature.kind === 'hole')
+    .map((feature) => feature.coordinates.filter((point) => isValidLatLng(point)))
+    .filter((coordinates) => coordinates.length >= 2);
+  if (lines.length === 0) return null;
+
+  let coords = lines[0];
+  if (isValidLatLng(green) && lines.length > 1) {
+    let bestDist = Number.POSITIVE_INFINITY;
+    for (const line of lines) {
+      const start = line[0];
+      const end = line[line.length - 1];
+      const dist = Math.min(haversineYards(start, green), haversineYards(end, green));
+      if (dist < bestDist) {
+        bestDist = dist;
+        coords = line;
+      }
+    }
+  }
+
+  const first = coords[0];
+  const last = coords[coords.length - 1];
+  if (isValidLatLng(green)) {
+    return haversineYards(first, green) >= haversineYards(last, green) ? first : last;
+  }
+  return first;
 }
 
 function overpassQuery(location: LatLng, radiusM: number): string {
