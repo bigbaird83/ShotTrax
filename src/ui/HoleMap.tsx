@@ -45,7 +45,7 @@ type Props = {
   placedFrom?: { lat: number; lng: number } | null;
   placedTo?: { lat: number; lng: number } | null;
   onPlaceToDrag?: (coord: { lat: number; lng: number }) => void;
-  /** Freeze one-finger pan so the to pin follows the finger. Pinch zoom stays. */
+  /** To pin is live: one finger moves the pin. Two fingers pan and pinch. */
   freezePan?: boolean;
   placeHint?: string | null;
   fullBleed?: boolean;
@@ -148,7 +148,8 @@ function NativeHoleMap({
   const [holeCameraReady, setHoleCameraReady] = useState(false);
   const [mapsChrome, setMapsChrome] = useState(false);
   const panStart = useRef<{ x: number; y: number } | null>(null);
-  const panFrozen = Boolean(freezePan || onPlaceToDrag);
+  const toPinLive = Boolean(freezePan || onPlaceToDrag);
+  const [mapOwnsGesture, setMapOwnsGesture] = useState(false);
 
   const revealMapsChrome = () => setMapsChrome(true);
 
@@ -285,6 +286,10 @@ function NativeHoleMap({
   }, [lockFrame, holeCameraReady, onFrameReady]);
 
   useEffect(() => {
+    if (!toPinLive) setMapOwnsGesture(false);
+  }, [toPinLive]);
+
+  useEffect(() => {
     if (lockFrame) {
       if (framedOnce.current) return;
       markFramedIfLive(frameLockedMap());
@@ -313,8 +318,8 @@ function NativeHoleMap({
       setHoleCameraReady(true);
       return;
     }
-    // Pinch-zoom while the to pin is live must not snap the hole back.
-    if (panFrozen) return;
+    // One-finger pin or two-finger pan/zoom must not snap the hole back.
+    if (toPinLive) return;
     // House / default GPS region is not framed. Do not stick. Re-apply the hole.
     framedOnce.current = false;
     pendingLocked.current = true;
@@ -349,7 +354,14 @@ function NativeHoleMap({
     <View
       style={[fullBleed ? styles.bleed : styles.wrap, style]}
       onLayout={onMapLayout}
-      pointerEvents={lockFrame && !holeCameraReady ? 'none' : 'auto'}>
+      pointerEvents={lockFrame && !holeCameraReady ? 'none' : 'auto'}
+      onTouchStart={(event) => {
+        if (event.nativeEvent.touches.length >= 2) setMapOwnsGesture(true);
+      }}
+      onTouchEnd={(event) => {
+        if (event.nativeEvent.touches.length === 0) setMapOwnsGesture(false);
+      }}
+      onTouchCancel={() => setMapOwnsGesture(false)}>
       <MapView
         ref={mapRef}
         style={[styles.map, lockFrame && !holeCameraReady ? styles.mapHidden : null]}
@@ -368,12 +380,12 @@ function NativeHoleMap({
         }
         zoomEnabled
         zoomTapEnabled
-        scrollEnabled={!panFrozen}
+        scrollEnabled={mapOwnsGesture || !toPinLive}
         pitchEnabled={false}
         rotateEnabled={false}
         moveOnMarkerPress={false}
         onPanDrag={(event) => {
-          if (!onPlaceToDrag) return;
+          if (!onPlaceToDrag || mapOwnsGesture) return;
           const { latitude, longitude } = event.nativeEvent.coordinate;
           onPlaceToDrag({ lat: latitude, lng: longitude });
         }}
@@ -520,19 +532,25 @@ function NativeHoleMap({
           </Marker>
         ) : null}
       </MapView>
-      {panFrozen ? (
+      {toPinLive ? (
         <View
           testID="to-pin-drag-layer"
           style={styles.dragLayer}
+          pointerEvents={mapOwnsGesture ? 'none' : 'auto'}
           onStartShouldSetResponder={(event) => {
             if (event.nativeEvent.touches.length !== 1) return false;
             panStart.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY };
             movedRef.current = false;
             return true;
           }}
+          onMoveShouldSetResponder={(event) => event.nativeEvent.touches.length === 1}
           onResponderTerminationRequest={() => true}
           onResponderMove={(event) => {
-            if (event.nativeEvent.touches.length !== 1 || !panStart.current) return;
+            if (event.nativeEvent.touches.length !== 1) {
+              setMapOwnsGesture(true);
+              return;
+            }
+            if (!panStart.current) return;
             const dx = event.nativeEvent.pageX - panStart.current.x;
             const dy = event.nativeEvent.pageY - panStart.current.y;
             if (dx * dx + dy * dy <= 36) return;

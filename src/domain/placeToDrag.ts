@@ -66,8 +66,17 @@ export function confirmPlaceIsInTopBar(): false {
   return false;
 }
 
-/** While the to pin is live, one finger moves the pin. The hole does not pan. */
-export function dragFreezesPan(): true {
+/** Do not freeze all panning. One finger moves the pin. Two fingers pan. */
+export function dragFreezesPan(): false {
+  return false;
+}
+
+export function dragOneFingerMovesToPin(): true {
+  return true;
+}
+
+/** Two fingers pan the map and pinch to zoom while the to pin is live. */
+export function dragTwoFingersPanAndZoom(): true {
   return true;
 }
 
@@ -75,9 +84,17 @@ export function dragKeepsPinchZoom(): true {
   return true;
 }
 
-/** Same pan freeze when moving an earlier shot's landing pin. */
-export function editToFreezesPan(): true {
-  return true;
+/** Same one-finger pin / two-finger map on an earlier shot's landing. */
+export function editToFreezesPan(): false {
+  return false;
+}
+
+export function editToOneFingerMovesToPin(): true {
+  return dragOneFingerMovesToPin();
+}
+
+export function editToTwoFingersPanAndZoom(): true {
+  return dragTwoFingersPanAndZoom();
 }
 
 export function liveYardsSitAboveFinger(): true {

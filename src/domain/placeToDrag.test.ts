@@ -11,7 +11,11 @@ import {
   confirmPlaceToDraft,
   dragFreezesPan,
   dragKeepsPinchZoom,
+  dragOneFingerMovesToPin,
+  dragTwoFingersPanAndZoom,
   editToFreezesPan,
+  editToOneFingerMovesToPin,
+  editToTwoFingersPanAndZoom,
   dragPreviewInventsGreen,
   dragPreviewRunsAcceptFix,
   dragPreviewUsesFixQuality,
@@ -264,14 +268,22 @@ test('to pin follows the finger; live yards are this shot only; nothing stores b
   assert.doesNotMatch(live, /acceptFix\(|forceMark\(/);
 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
-  assert.equal(dragFreezesPan(), true);
+  assert.equal(dragFreezesPan(), false);
+  assert.equal(dragOneFingerMovesToPin(), true);
+  assert.equal(dragTwoFingersPanAndZoom(), true);
   assert.equal(dragKeepsPinchZoom(), true);
-  assert.equal(editToFreezesPan(), true);
+  assert.equal(editToFreezesPan(), false);
+  assert.equal(editToOneFingerMovesToPin(), true);
+  assert.equal(editToTwoFingersPanAndZoom(), true);
   assert.equal(confirmPlaceIsInTopBar(), false);
-  assert.match(map, /scrollEnabled=\{!panFrozen\}/);
+  assert.match(map, /scrollEnabled=\{mapOwnsGesture \|\| !toPinLive\}/);
   assert.match(map, /zoomEnabled/);
   assert.match(map, /to-pin-drag-layer/);
+  assert.match(map, /touches\.length >= 2/);
+  assert.match(map, /pointerEvents=\{mapOwnsGesture \? 'none' : 'auto'\}/);
+  assert.match(map, /if \(!onPlaceToDrag \|\| mapOwnsGesture\) return/);
   assert.match(map, /onPlaceToDrag\(\{ lat: latitude, lng: longitude \}\)/);
+  assert.doesNotMatch(map, /scrollEnabled=\{!panFrozen\}/);
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   assert.match(hole, /freezePan=\{placeMode === 'to' \|\| placeMode === 'edit-to'\}/);
   assert.match(hole, /placeMode === 'to' \|\| placeMode === 'edit-to'/);
