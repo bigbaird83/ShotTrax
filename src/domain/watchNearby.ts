@@ -56,6 +56,14 @@ export function startDifferentRoundLivesUnderHome(): true {
   return true;
 }
 
+export function liveRoundReplacedByWatchCoursePick(): false {
+  return false;
+}
+
+export function watchCoursePickSetsPhoneCourse(): true {
+  return true;
+}
+
 export type WatchOpenFace = 'hole' | 'nearby';
 
 /** A live round opens that hole. Nearby / a different round lives under Home. */

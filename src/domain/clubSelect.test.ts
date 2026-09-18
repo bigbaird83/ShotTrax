@@ -16,7 +16,14 @@ import {
   wheelSelectionSyncsPhoneAndWatch,
 } from './clubSelect';
 import { clubStripOpeningIds, planClubStrip } from './clubStrip';
-import { holeFrameRegion, lockHoleCamera, openingHoleRegionContainsTeeAndGreen, holeCameraHeading } from './holeCamera';
+import {
+  addShotMapUsesPhoneFix,
+  addShotMapWaitsForPhoneFix,
+  holeFrameRegion,
+  lockHoleCamera,
+  openingHoleRegionContainsTeeAndGreen,
+  holeCameraHeading,
+} from './holeCamera';
 import { parseClubSelect, parseWatchInboundIntent, clubSelectPayload, clubListPayload, clubListPushKey } from './watchMessages';
 
 test('a non-driver tap stays selected and does not mark or reopen the window', () => {
@@ -135,6 +142,8 @@ test('Watch selection is the phone selection; strip tap does not mark', () => {
 });
 
 test("Add shot opening region contains tee and green and does not wait when 282 is showing", () => {
+  assert.equal(addShotMapWaitsForPhoneFix(), false);
+  assert.equal(addShotMapUsesPhoneFix(), false);
   const tee = { lat: 37.0, lng: -122.0 };
   const green = { lat: 37.01, lng: -122.0 };
   const home = { lat: 40.7128, lng: -74.006 };
@@ -158,4 +167,8 @@ test("Add shot opening region contains tee and green and does not wait when 282 
   assert.match(map, /showWaitingOnLocationLine/);
   assert.match(map, /!yardsOnCard/);
   assert.doesNotMatch(map, /styles\.placeHint/);
+  assert.doesNotMatch(
+    map.slice(map.indexOf('const lockedRegion'), map.indexOf('const dragLines')),
+    /userFix/,
+  );
 });

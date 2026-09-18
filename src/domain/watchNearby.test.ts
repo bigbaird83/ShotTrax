@@ -25,6 +25,8 @@ import {
   watchShowsScoring,
   watchShowsSettings,
   liveRoundOpensThatHole,
+  liveRoundReplacedByWatchCoursePick,
+  watchCoursePickSetsPhoneCourse,
   watchOpenCoversLiveHoleWithCourses,
   startDifferentRoundLivesUnderHome,
   planWatchOpenFace,
@@ -193,6 +195,8 @@ test('Watch start messages never run acceptFix and never send Watch GPS', () => 
 test('a live round opens that hole; a different round lives under Home', () => {
   assert.equal(liveRoundOpensThatHole(), true);
   assert.equal(watchOpenCoversLiveHoleWithCourses(), false);
+  assert.equal(liveRoundReplacedByWatchCoursePick(), false);
+  assert.equal(watchCoursePickSetsPhoneCourse(), true);
   assert.equal(startDifferentRoundLivesUnderHome(), true);
   assert.equal(planWatchOpenFace({ hasLiveRound: true }), 'hole');
   assert.equal(planWatchOpenFace({ hasLiveRound: true, openedFromHome: false }), 'hole');
@@ -227,6 +231,13 @@ test('a live round opens that hole; a different round lives under Home', () => {
   const service = readFileSync(new URL('../services/watchNearby.ts', import.meta.url), 'utf8');
   assert.match(service, /allowDuringRound/);
   assert.match(service, /hasActiveRound\(\) && !opts\?\.allowDuringRound/);
+  assert.match(service, /hasActiveRound\(\) && !replaceLiveRoundAllowed/);
+  assert.match(service, /coursePickedHandler/);
+  assert.match(service, /Round in progress/);
+
+  const home = readFileSync(new URL('../../app/(tabs)/index.tsx', import.meta.url), 'utf8');
+  assert.match(home, /setWatchCoursePickedHandler/);
+  assert.match(home, /setPicked\(pick\.course\)/);
 });
 
 test('Watch nearby UI is a short list — no search, bag, settings, or scoring', () => {

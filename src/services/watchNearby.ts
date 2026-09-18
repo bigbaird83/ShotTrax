@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getCourseDataClient } from '@/src/course/client';
+import type { CourseDetail, CourseSummary } from '@/src/course/types';
 import { layoutFromTee, roundHoleCountFromCourse } from '@/src/course/layout';
 import { startRound } from '@/src/db/repo';
 import type { GpsFix } from '@/src/domain/types';
@@ -32,6 +33,28 @@ export type WatchNearbyContext = {
 
 let context: WatchNearbyContext | null = null;
 let lastNearbyJson = '';
+let replaceLiveRoundAllowed = false;
+let coursePickedHandler: ((pick: { course: CourseSummary; detail: CourseDetail }) => void) | null =
+  null;
+
+export function setWatchCoursePickedHandler(
+  fn: ((pick: { course: CourseSummary; detail: CourseDetail }) => void) | null,
+): void {
+  coursePickedHandler = fn;
+}
+
+function summaryFromDetail(detail: CourseDetail): CourseSummary {
+  return {
+    id: detail.id,
+    name: detail.name,
+    club: null,
+    city: null,
+    state: null,
+    country: null,
+    location: detail.location,
+    distanceMeters: null,
+  };
+}
 
 export function setWatchNearbyContext(next: WatchNearbyContext | null): void {
   context = next;
@@ -86,6 +109,7 @@ export async function pushWatchNearbyCourses(opts?: {
     await pushNearbyJson(msg);
     return msg;
   }
+  replaceLiveRoundAllowed = Boolean(opts?.allowDuringRound);
   if (ctx.hasActiveRound() && !opts?.allowDuringRound) {
     const plan = planNearbyCourses({ phoneFix: null, courses: [], nowMs });
     return nearbyCoursesPayload(plan);
@@ -127,6 +151,9 @@ export async function handleWatchNearbyJson(json: string): Promise<{ ok: boolean
 
   const pick = parseNearbyCoursePick(raw);
   if (pick) {
+    if (ctx.hasActiveRound() && !replaceLiveRoundAllowed) {
+      return { ok: true, feedback: 'Round in progress' };
+    }
     try {
       const detail = await getCourseDataClient().getCourse(pick.courseId);
       if (!detail) {
@@ -134,6 +161,7 @@ export async function handleWatchNearbyJson(json: string): Promise<{ ok: boolean
         await pushNearbyJson(nearbyCoursesPayload(plan));
         return { ok: false, feedback: 'open the phone' };
       }
+      coursePickedHandler?.({ course: summaryFromDetail(detail), detail });
       if (detail.tees.length === 0) {
         const holeCount = roundHoleCountFromCourse(detail.holeCount, 18);
         const layout = layoutFromTee(detail, null);
@@ -157,6 +185,9 @@ export async function handleWatchNearbyJson(json: string): Promise<{ ok: boolean
 
   const start = parseStartRound(raw);
   if (start) {
+    if (ctx.hasActiveRound() && !replaceLiveRoundAllowed) {
+      return { ok: true, feedback: 'Round in progress' };
+    }
     try {
       const detail = await getCourseDataClient().getCourse(start.courseId);
       if (!detail) return { ok: false, feedback: 'open the phone' };

@@ -69,6 +69,15 @@ export function keepLastGoodHoleFrameWhenGreenMissing(): true {
   return true;
 }
 
+/** Add shot draws tee + green immediately. It does not wait for a phone fix. */
+export function addShotMapWaitsForPhoneFix(): false {
+  return false;
+}
+
+export function addShotMapUsesPhoneFix(): false {
+  return false;
+}
+
 /** Add shot keeps the map chip. The extra footer is the duplicate. */
 export function addShotPlaceHintShowsAsFooter(): false {
   return false;
