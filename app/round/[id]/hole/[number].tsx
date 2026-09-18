@@ -1089,13 +1089,6 @@ export default function HoleScreen() {
           onPress={() => setScorecardOpen(true)}
         />
 
-        <BigButton
-          label={COPY.allClubs}
-          variant="secondary"
-          disabled={readOnly || placing}
-          onPress={openBag}
-        />
-
         <View style={styles.markWrap}>
           <BigButton
             label={sticky ? `${COPY.stickyClub} · ${sticky.shortName}` : COPY.stickyClub}
@@ -1125,39 +1118,11 @@ export default function HoleScreen() {
         ) : null}
 
         {!readOnly ? (
-          <View style={styles.row}>
-            <BigButton
-              label={COPY.undoLast}
-              variant="ghost"
-              style={{ flex: 1 }}
-              disabled={busy || shots.length === 0}
-              onPress={onUndo}
-            />
-            <BigButton
-              label={COPY.drop}
-              variant="secondary"
-              style={{ flex: 1 }}
-              disabled={placing}
-              onPress={() => setDropOpen(true)}
-            />
-          </View>
-        ) : null}
-
-        {!readOnly ? (
-          <View style={styles.row}>
-            <BigButton
-              label={COPY.addShot}
-              variant="ghost"
-              style={{ flex: 1 }}
-              onPress={() => startCatchUp(null)}
-            />
-            <BigButton
-              label={COPY.penalty}
-              variant="ghost"
-              style={{ flex: 1 }}
-              onPress={() => setPenaltyOpen(true)}
-            />
-          </View>
+          <BigButton
+            label={COPY.addShot}
+            variant="ghost"
+            onPress={() => startCatchUp(null)}
+          />
         ) : null}
       </ThumbZone>
       ) : null}
@@ -1199,6 +1164,33 @@ export default function HoleScreen() {
             onPress={() => {
               setMenuOpen(false);
               setScorecardOpen(true);
+            }}
+          />
+          <BigButton
+            label={COPY.undoLast}
+            variant="ghost"
+            disabled={busy || readOnly || shots.length === 0}
+            onPress={() => {
+              setMenuOpen(false);
+              onUndo();
+            }}
+          />
+          <BigButton
+            label={COPY.drop}
+            variant="ghost"
+            disabled={readOnly || placing}
+            onPress={() => {
+              setMenuOpen(false);
+              setDropOpen(true);
+            }}
+          />
+          <BigButton
+            label={COPY.penalty}
+            variant="ghost"
+            disabled={readOnly}
+            onPress={() => {
+              setMenuOpen(false);
+              setPenaltyOpen(true);
             }}
           />
           <BigButton
