@@ -137,6 +137,30 @@ export function parseGreenCentroid(raw: unknown): LatLng | null {
   return isValidLatLng(point) ? point : null;
 }
 
+/**
+ * Tee coordinate on a scorecard hole. Green uses green_* / green_center only.
+ * Top-level lat/lng on a hole row is the tee — never invented, never the phone.
+ */
+export function parseHoleTee(raw: unknown): LatLng | null {
+  const record = asRecord(raw);
+  if (!record) return null;
+  const nested = parseLatLng(
+    pick(record, ['tee', 'tee_center', 'teeCenter', 'tee_centroid', 'teebox', 'tee_box']),
+  );
+  if (nested) return nested;
+  const lat = asFiniteNumber(pick(record, ['tee_lat', 'teeLat', 'tee_latitude']));
+  const lng = asFiniteNumber(pick(record, ['tee_lng', 'teeLng', 'tee_longitude']));
+  const named = lat != null && lng != null ? { lat, lng } : null;
+  if (isValidLatLng(named)) return named;
+  if (pick(record, ['green_lat', 'greenLat', 'green', 'green_center', 'greenCenter']) != null) {
+    return null;
+  }
+  return parseLatLng({
+    lat: pick(record, ['lat', 'latitude']),
+    lng: pick(record, ['lng', 'lon', 'longitude']),
+  });
+}
+
 /** Course pin from `coordinates` or top-level lat/lng. Ignores address `location`. */
 export function parseCourseLocation(raw: unknown): LatLng | null {
   const record = asRecord(raw);
@@ -241,6 +265,7 @@ function parseHoleRow(item: unknown): HoleCourseData | null {
     greenFront: parseGreenFront(item),
     greenBack: parseGreenBack(item),
     greenDepthYards: parseGreenDepthYards(item),
+    teeCentroid: parseHoleTee(item),
   };
 }
 
@@ -341,6 +366,7 @@ export function mergeGreenCenters(
       greenFront: hole.greenFront ?? fromApi?.greenFront ?? null,
       greenBack: hole.greenBack ?? fromApi?.greenBack ?? null,
       greenDepthYards: hole.greenDepthYards ?? fromApi?.greenDepthYards ?? null,
+      teeCentroid: hole.teeCentroid,
     };
   });
   for (const row of greens) {
@@ -354,6 +380,7 @@ export function mergeGreenCenters(
       greenFront: row.greenFront,
       greenBack: row.greenBack,
       greenDepthYards: row.greenDepthYards,
+      teeCentroid: null,
     });
   }
   merged.sort((a, b) => a.holeNumber - b.holeNumber);

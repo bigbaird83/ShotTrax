@@ -4,7 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCourseDataClient } from '@/src/course/client';
-import { cachedOsmOverlay, rememberOsmOverlay, resolveOverlayTee } from '@/src/course/osmOverlay';
+import {
+  cachedOsmOverlay,
+  cachedResolvedTee,
+  rememberOsmOverlay,
+  rememberResolvedTee,
+  resolveOverlayTee,
+} from '@/src/course/osmOverlay';
 import { formatParLabel } from '@/src/course/layout';
 import type { OsmOverlay } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
@@ -330,6 +336,8 @@ export default function HoleScreen() {
           { courseId: round?.courseApiId, holeNumber, green: location },
           overlay,
         );
+        const tee = resolveOverlayTee(overlay, holeNumber, location);
+        if (tee) rememberResolvedTee({ courseId: round?.courseApiId, holeNumber, green: location }, tee);
         setOsmOverlay(overlay);
       })
       .catch(() => {
@@ -416,11 +424,16 @@ export default function HoleScreen() {
   const overlay =
     osmOverlay ??
     cachedOsmOverlay({ courseId: round?.courseApiId, holeNumber, green });
+  const overlayTee = resolveOverlayTee(overlay, holeNumber, green);
+  const cachedTee = cachedResolvedTee({ courseId: round?.courseApiId, holeNumber, green });
   const holeTee = resolveHoleTee({
-    holeTee: resolveOverlayTee(overlay, holeNumber, green),
-    osmTee: null,
+    holeTee: overlayTee ?? cachedTee,
+    osmTee: cachedTee,
     green,
   });
+  if (holeTee) {
+    rememberResolvedTee({ courseId: round?.courseApiId, holeNumber, green }, holeTee);
+  }
   const holeCamera = lockHoleCamera({
     tee: holeTee,
     green,

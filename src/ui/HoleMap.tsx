@@ -118,21 +118,22 @@ function TrailFallback({
   hideYardsOverlay?: boolean;
 }) {
   const yardsOnCard = Boolean(yardsToGreen && yardsToGreen.yards != null && Number.isFinite(yardsToGreen.yards));
-  const waiting = showWaitingOnLocationLine({
-    yards: yardsToGreen?.yards ?? null,
-    quality: yardsToGreen?.quality,
-    hasFix,
-    hasGreen,
-  });
+  const waiting =
+    !hideYardsOverlay &&
+    !yardsOnCard &&
+    showWaitingOnLocationLine({
+      yards: yardsToGreen?.yards ?? null,
+      quality: yardsToGreen?.quality,
+      hasFix,
+      hasGreen,
+    });
   return (
     <View style={styles.fallback}>
       <Text style={styles.holeBadgeText}>Hole {holeNumber}</Text>
       {yardsToGreen && !hideYardsOverlay ? (
         <YardsToGreenBadge result={yardsToGreen} hasFix={hasFix} hasGreen={hasGreen} />
       ) : null}
-      {!hideYardsOverlay && !yardsOnCard && waiting ? (
-        <Text style={styles.fallbackMsg}>{COPY.waitingOnLocation}</Text>
-      ) : null}
+      {waiting ? <Text style={styles.fallbackMsg}>{COPY.waitingOnLocation}</Text> : null}
     </View>
   );
 }
@@ -241,7 +242,10 @@ function NativeHoleMap({
     if (fromParent.length >= 2) return fromParent;
     const overlayTee = resolveOverlayTee(osmOverlay ?? null, holeNumber, green);
     if (isValidLatLng(overlayTee) && isValidLatLng(green)) return [overlayTee, green];
-    return fromParent;
+    if (fromParent.length > 0) return fromParent;
+    // Green is enough to put a map on screen. Never wait on a phone fix.
+    if (isValidLatLng(green)) return [green];
+    return [];
   }, [lockFrame, framePoints, osmOverlay, holeNumber, green]);
 
   const holeUpCamera = useMemo(() => {
@@ -260,6 +264,8 @@ function NativeHoleMap({
     // Lock-frame maps use tee + green only. Do not zoom a lone pin or the phone.
     return null;
   }, [lockedPoints]);
+
+  const holeFrameOnScreen = Boolean(holeUpCamera || lockedRegion);
 
   const dragLines = useMemo(() => {
     if (!onPlaceToDrag || !placedTo) return { shot: null, toGreen: null };
@@ -385,7 +391,7 @@ function NativeHoleMap({
     <View
       style={[fullBleed ? styles.bleed : styles.wrap, style]}
       onLayout={onMapLayout}
-      pointerEvents={lockFrame && !holeCameraReady && !holeUpCamera ? 'none' : 'auto'}
+      pointerEvents={lockFrame && !holeCameraReady && !holeFrameOnScreen ? 'none' : 'auto'}
       onTouchStart={(event) => {
         if (event.nativeEvent.touches.length >= 2) setMapOwnsGesture(true);
       }}
@@ -395,7 +401,7 @@ function NativeHoleMap({
       onTouchCancel={() => setMapOwnsGesture(false)}>
       <MapView
         ref={mapRef}
-        style={[styles.map, lockFrame && !holeCameraReady && !holeUpCamera ? styles.mapHidden : null]}
+        style={[styles.map, lockFrame && !holeCameraReady && !holeFrameOnScreen ? styles.mapHidden : null]}
         mapType="satellite"
         {...(lockFrame
           ? lockedCameraProps
@@ -619,7 +625,7 @@ function NativeHoleMap({
           }}
         />
       ) : null}
-      {lockFrame && !holeCameraReady && !holeUpCamera ? (
+      {lockFrame && !holeCameraReady && !holeFrameOnScreen ? (
         <View pointerEvents="none" style={styles.mapCover} />
       ) : null}
       {!allowMapsChrome ? <View pointerEvents="none" style={styles.legalCover} /> : null}

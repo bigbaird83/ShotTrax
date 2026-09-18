@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   cachedOsmOverlay,
+  cachedResolvedTee,
   featuresForHole,
   fetchOsmOverlay,
   parseOverpassOverlay,
   rememberOsmOverlay,
+  rememberResolvedTee,
   resolveOverlayTee,
   teePointForHole,
   teePointFromFairway,
@@ -173,6 +175,10 @@ test('cached overlay is available without a phone fix', () => {
   rememberOsmOverlay({ courseId: 'c1', holeNumber: 1, green }, overlay);
   assert.equal(cachedOsmOverlay({ courseId: 'c1', holeNumber: 1, green }), overlay);
   assert.equal(cachedOsmOverlay({ courseId: 'c1', holeNumber: 1, green: null }), null);
+  const tee = { lat: 37.0, lng: -122.0 };
+  rememberResolvedTee({ courseId: 'c1', holeNumber: 1, green }, tee);
+  assert.deepEqual(cachedResolvedTee({ courseId: 'c1', holeNumber: 1, green }), tee);
+  assert.equal(cachedResolvedTee({ courseId: 'c1', holeNumber: 1, green: null }), null);
 });
 
 test('fetchOsmOverlay returns null on Overpass failure — graceful empty overlay', async () => {

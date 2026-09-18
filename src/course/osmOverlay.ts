@@ -246,6 +246,7 @@ export async function fetchOsmOverlay(
 }
 
 const overlayCache = new Map<string, OsmOverlay>();
+const teeCache = new Map<string, LatLng>();
 
 export function osmOverlayCacheKey(args: {
   courseId?: string | null;
@@ -254,6 +255,30 @@ export function osmOverlayCacheKey(args: {
 }): string | null {
   if (!isValidLatLng(args.green)) return null;
   return `${args.courseId ?? ''}:${args.holeNumber}:${args.green.lat.toFixed(5)},${args.green.lng.toFixed(5)}`;
+}
+
+/** Sync tee so Add shot can draw tee + green without waiting on a fetch or a phone fix. */
+export function cachedResolvedTee(args: {
+  courseId?: string | null;
+  holeNumber: number;
+  green: LatLng | null;
+}): LatLng | null {
+  const key = osmOverlayCacheKey(args);
+  const tee = key ? teeCache.get(key) ?? null : null;
+  return isValidLatLng(tee) ? tee : null;
+}
+
+export function rememberResolvedTee(
+  args: {
+    courseId?: string | null;
+    holeNumber: number;
+    green: LatLng | null;
+  },
+  tee: LatLng | null,
+): void {
+  const key = osmOverlayCacheKey(args);
+  if (!key || !isValidLatLng(tee)) return;
+  teeCache.set(key, tee);
 }
 
 /** Sync cache so Add shot can frame tee + green without waiting on a new fetch or a phone fix. */

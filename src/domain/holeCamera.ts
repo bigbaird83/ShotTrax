@@ -97,6 +97,11 @@ export function addShotShowsWaitingWithCardYards(): false {
   return false;
 }
 
+/** Add shot never says Waiting on your location. 282 is already the course number. */
+export function addShotShowsWaitingOnLocation(): false {
+  return false;
+}
+
 /** Add shot keeps the map chip. The extra footer is the duplicate. */
 export function addShotPlaceHintShowsAsFooter(): false {
   return false;

@@ -20,6 +20,7 @@ import {
   addShotFramePoints,
   addShotMapUsesPhoneFix,
   addShotMapWaitsForPhoneFix,
+  addShotShowsWaitingOnLocation,
   addShotShowsWaitingWithCardYards,
   holeFrameRegion,
   lockHoleCamera,
@@ -156,6 +157,7 @@ test("Add shot opening region contains tee and green and does not wait when 282 
   assert.equal(addShotMapWaitsForPhoneFix(), false);
   assert.equal(addShotMapUsesPhoneFix(), false);
   assert.equal(addShotShowsWaitingWithCardYards(), false);
+  assert.equal(addShotShowsWaitingOnLocation(), false);
   const tee = { lat: 37.0, lng: -122.0 };
   const green = { lat: 37.01, lng: -122.0 };
   const home = { lat: 40.7128, lng: -74.006 };
@@ -182,6 +184,8 @@ test("Add shot opening region contains tee and green and does not wait when 282 
   assert.match(playMap, /playHeaderYards\.yards/);
   assert.match(hole, /resolveOverlayTee/);
   assert.match(hole, /cachedOsmOverlay/);
+  assert.match(hole, /cachedResolvedTee/);
+  assert.match(hole, /rememberResolvedTee/);
   assert.match(hole, /phone: null/);
   assert.doesNotMatch(playMap, /getCurrentFix/);
   assert.match(hole, /styles\.catchUpHint/);
@@ -191,8 +195,12 @@ test("Add shot opening region contains tee and green and does not wait when 282 
   assert.match(map, /showWaitingOnLocationLine/);
   assert.match(map, /!yardsOnCard/);
   assert.match(map, /hideYardsOverlay/);
+  assert.match(map, /holeFrameOnScreen/);
+  assert.match(map, /Never wait on a phone fix/);
   assert.doesNotMatch(map, /styles\.placeHint/);
   const locked = map.slice(map.indexOf('const lockedRegion'), map.indexOf('const dragLines'));
   assert.doesNotMatch(locked, /userFix/);
   assert.doesNotMatch(locked, /coords\.length/);
+  const catchUp = hole.slice(hole.indexOf('catchUpFullScreen ? ('), hole.indexOf('playLayout.shotLine'));
+  assert.doesNotMatch(catchUp, /waitingOnLocation|Waiting on your location/);
 });

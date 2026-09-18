@@ -4,6 +4,7 @@ import { haversineYards } from './haversine';
 import {
   addShotPlaceHintShowsAsFooter,
   addShotPlaceHintShowsOnMap,
+  addShotShowsWaitingOnLocation,
   applyHoleMapCamera,
   holeCameraFramedAfterApply,
   holeCameraHeading,
@@ -286,6 +287,7 @@ test('opening region contains tee and green; heading is tee-to-green, not device
   assert.notEqual(locked.center.lat, home.lat);
   assert.equal(addShotPlaceHintShowsOnMap(), true);
   assert.equal(addShotPlaceHintShowsAsFooter(), false);
+  assert.equal(addShotShowsWaitingOnLocation(), false);
 });
 
 test('opening camera puts tee below green and fits both, not sideways', () => {

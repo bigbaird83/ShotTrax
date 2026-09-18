@@ -6,6 +6,7 @@ import {
   parseCourseLocation,
   parseGreenCenters,
   parseGreenCentroid,
+  parseHoleTee,
   parseHandicap,
   parseNearbyCourses,
   parsePar,
@@ -30,6 +31,17 @@ test('parseGreenCentroid ignores tee lat/lng and 0,0 — never invents a green',
     lat: 34.11,
     lng: -85.64,
   });
+});
+
+test('parseHoleTee reads the tee coordinate and never the green or the phone', () => {
+  assert.deepEqual(parseHoleTee({ lat: 37, lng: -122 }), { lat: 37, lng: -122 });
+  assert.deepEqual(parseHoleTee({ tee_lat: 37.0, tee_lng: -122.0 }), { lat: 37.0, lng: -122.0 });
+  assert.deepEqual(parseHoleTee({ tee: { latitude: 37.0, longitude: -122.0 } }), {
+    lat: 37.0,
+    lng: -122.0,
+  });
+  assert.equal(parseHoleTee({ green_lat: 34.11, green_lng: -85.64, lat: 37, lng: -122 }), null);
+  assert.equal(parseHoleTee({}), null);
 });
 
 test('parseNearbyCourses maps list payload, distance_km, and skips nameless rows', () => {
@@ -141,8 +153,8 @@ test('parseGreenCenters copies F/M/B only when the API supplies them — never i
 test('mergeGreenCenters fills blank greens and does not invent par', () => {
   const merged = mergeGreenCenters(
     [
-      { holeNumber: 1, par: 4, yards: 437, handicap: 7, greenCentroid: null, greenFront: null, greenBack: null, greenDepthYards: null },
-      { holeNumber: 2, par: null, yards: null, handicap: null, greenCentroid: null, greenFront: null, greenBack: null, greenDepthYards: null },
+      { holeNumber: 1, par: 4, yards: 437, handicap: 7, greenCentroid: null, greenFront: null, greenBack: null, greenDepthYards: null, teeCentroid: null },
+      { holeNumber: 2, par: null, yards: null, handicap: null, greenCentroid: null, greenFront: null, greenBack: null, greenDepthYards: null, teeCentroid: null },
     ],
     [{ holeNumber: 1, greenCentroid: { lat: 37.01, lng: -86.43 }, greenFront: null, greenBack: null, greenDepthYards: null }],
   );
