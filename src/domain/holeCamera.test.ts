@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { haversineYards } from './haversine';
 import {
   holeCameraHeading,
   holeCameraIsCameraOnly,
@@ -52,6 +53,33 @@ test('missing tee or green means no rotation — do not invent a bearing', () =>
   assert.equal(holeCameraHeading({ lat: 0, lng: 0 }, greenNorth), null);
   assert.equal(holeCameraHeading(tee, { lat: 0, lng: 0 }), null);
   assert.equal(holeCameraHeading(tee, tee), null);
+});
+
+test('sensing lock: camera-only tee-to-green; pins and yards unchanged; missing point does not rotate', () => {
+  const teePin = { lat: 37.0, lng: -122.0 };
+  const greenPin = { lat: 37.01, lng: -122.0 };
+  const shot = { lat: 37.005, lng: -122.005 };
+  const phone = { lat: 36.5, lng: -121.5 };
+  const yardsBefore = haversineYards(teePin, greenPin);
+
+  assert.equal(holeCameraIsCameraOnly(), true);
+  assert.equal(holeCameraUsesPhoneHeading(), false);
+
+  const plan = planHoleCamera({ tee: teePin, green: greenPin, shotPins: [shot, phone] });
+  assert.equal(plan?.heading, holeCameraHeading(teePin, greenPin));
+  assert.equal(plan?.heading, 0);
+  assert.notEqual(plan?.heading, holeCameraHeading(phone, greenPin));
+  assert.deepEqual(plan?.points, [teePin, greenPin]);
+  assert.equal(teePin.lat, 37.0);
+  assert.equal(teePin.lng, -122.0);
+  assert.equal(greenPin.lat, 37.01);
+  assert.equal(greenPin.lng, -122.0);
+  assert.equal(shot.lat, 37.005);
+  assert.equal(shot.lng, -122.005);
+  assert.equal(haversineYards(teePin, greenPin), yardsBefore);
+
+  assert.equal(planHoleCamera({ tee: null, green: greenPin, shotPins: [shot] })?.heading, null);
+  assert.equal(planHoleCamera({ tee: teePin, green: null, shotPins: [shot] })?.heading, null);
 });
 
 test('planHoleCamera rotates only on the tee-to-green line', () => {
