@@ -15,8 +15,13 @@ export function placeToStoresBeforeConfirm(): false {
   return false;
 }
 
-export function placeToAskOn(): 'confirm' {
-  return 'confirm';
+/** Placed / dragged pins never run the 400-yard GPS jump ask. */
+export function placeToAskOn(): 'never' {
+  return 'never';
+}
+
+export function placedToPinAsksPast400(): false {
+  return false;
 }
 
 export function placeToFilterOn(): 'confirm' {
@@ -76,6 +81,11 @@ export function editToFreezesPan(): true {
 }
 
 export function liveYardsSitAboveFinger(): true {
+  return true;
+}
+
+/** To-green stays on the green center. Not above the finger. */
+export function toGreenYardsSitOnGreen(): true {
   return true;
 }
 
@@ -139,9 +149,9 @@ export type PlaceToDragPreview = {
 };
 
 /**
- * Both live numbers for a to-pin drag. Labels sit above the finger. Mid-drag
- * is a preview: no save, no 20% filter, no 400-yard ask, no acceptFix, no
- * quality band.
+ * Shot yards sit above the finger (this from pin → fingertip). To-green
+ * sits on the green center, not the finger. Mid-drag is a preview: no
+ * save, no 20% filter, no 400-yard ask, no acceptFix, no quality band.
  */
 export function planPlaceToDragPreview(args: {
   from: LatLng | null;
@@ -163,17 +173,17 @@ export function planPlaceToDragPreview(args: {
     shotAt: args.drag,
     toGreenYards,
     toGreenLabel: formatDragPreviewYards(toGreenYards),
-    toGreenAt: isValidLatLng(args.green) ? args.drag : null,
+    toGreenAt: isValidLatLng(args.green) ? args.green : null,
     fingerAt: args.drag,
   };
 }
 
 export type ConfirmPlaceToDraft =
   | { status: 'empty' }
-  | { status: 'needs_confirm'; yards: number }
   | { status: 'commit'; to: LatLng; plan: { ok: true } & PlacedShotPlan };
 
-/** Confirm locks the draft tap as the to pin. Nothing is stored before this. */
+/** Confirm locks the draft as the to pin. Nothing is stored before this.
+ * A placed landing does not run the 400-yard GPS jump ask. */
 export function confirmPlaceToDraft(args: {
   from: LatLng | null;
   draft: LatLng | null;
@@ -183,8 +193,7 @@ export function confirmPlaceToDraft(args: {
   if (!isValidLatLng(args.from) || !isValidLatLng(args.draft)) return { status: 'empty' };
   const plan = planPlacedShot(args.from, args.draft);
   if (!plan.ok) return { status: 'empty' };
-  const gate = confirmPlacedShot(plan, Boolean(args.force));
-  if (gate.status === 'needs_confirm') return gate;
+  confirmPlacedShot(plan, Boolean(args.force));
   return { status: 'commit', to: args.draft, plan };
 }
 

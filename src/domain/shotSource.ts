@@ -1,4 +1,3 @@
-import { MAX_SHOT_YD } from '../config/sensing';
 import { clubCountsTowardDistanceSamples } from './defaultBag';
 import { haversineYards, roundYards } from './haversine';
 import { isValidLatLng, type LatLng } from './latLng';
@@ -98,7 +97,8 @@ export function planPlacedShot(from: LatLng, to: LatLng): { ok: false } | ({ ok:
     distanceYards: yards,
     typedYards: null,
     fixQuality: null,
-    impossibleJump: yards > MAX_SHOT_YD,
+    // Not a GPS jump. The 400-yard gate is live GPS only.
+    impossibleJump: false,
   };
 }
 
@@ -107,17 +107,25 @@ export function placedShotRunsAcceptFix(): false {
   return false;
 }
 
+/** A pin the player placed or dragged is not a GPS jump. Do not ask past 400. */
+export function placedPinUsesJumpGate(): false {
+  return false;
+}
+
+export function placedShotAsksPast400(): false {
+  return false;
+}
+
 /**
- * 400-yard cap: ask before a silent save. Confirming still stores `placed`
- * with no GPS quality — never acceptFix / forceMark / forced.
+ * Placed / dragged pins save without the 400-yard jump ask. That gate is
+ * live GPS only. Still `placed` with no GPS quality — never acceptFix.
  */
 export function confirmPlacedShot(
   plan: { ok: true } & PlacedShotPlan,
-  force: boolean,
-): { status: 'commit' } | { status: 'needs_confirm'; yards: number } {
-  if (plan.impossibleJump && !force) {
-    return { status: 'needs_confirm', yards: plan.distanceYards };
-  }
+  _force?: boolean,
+): { status: 'commit' } {
+  void plan;
+  void _force;
   return { status: 'commit' };
 }
 

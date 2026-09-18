@@ -504,6 +504,16 @@ function NativeHoleMap({
             <View pointerEvents="none" style={styles.dragChip}>
               <Text style={styles.dragChipKicker}>{COPY.shot}</Text>
               <Text style={styles.dragChipValue}>{dragPreview.shotLabel}</Text>
+            </View>
+          </Marker>
+        ) : null}
+        {dragPreview?.toGreenAt ? (
+          <Marker
+            coordinate={toCoord(dragPreview.toGreenAt.lat, dragPreview.toGreenAt.lng)}
+            anchor={{ x: 0.5, y: 0.5 }}
+            tappable={false}
+            tracksViewChanges>
+            <View pointerEvents="none" style={[styles.dragChip, styles.dragChipGreen]}>
               <Text style={styles.dragChipKicker}>{COPY.toGreen}</Text>
               <Text style={styles.dragChipValue}>{dragPreview.toGreenLabel}</Text>
             </View>

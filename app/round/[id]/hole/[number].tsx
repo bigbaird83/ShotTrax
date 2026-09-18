@@ -762,21 +762,14 @@ export default function HoleScreen() {
     router.push(`/round/${id}/club-pick?hole=${holeNumber}`);
   };
 
-  const confirmToPin = (force = false) => {
-    const result = confirmPlaceToDraft({ from: placeFrom, draft: placeToDraft, force });
+  const confirmToPin = () => {
+    const result = confirmPlaceToDraft({ from: placeFrom, draft: placeToDraft });
     if (result.status === 'empty') return;
-    if (result.status === 'needs_confirm') {
-      Alert.alert(COPY.tooFar, '', [
-        { text: COPY.cancel, style: 'cancel' },
-        { text: COPY.markAnyway, onPress: () => confirmToPin(true) },
-      ]);
-      return;
-    }
     setPlaceTo(result.to);
     setPlaceClubOpen(true);
   };
 
-  const commitPlaced = (clubId: string, force = false) => {
+  const commitPlaced = (clubId: string) => {
     if (!placeFrom || !placeTo) return;
     const result = addPlacedShot(db, {
       roundId: round.id,
@@ -784,16 +777,8 @@ export default function HoleScreen() {
       clubId,
       from: placeFrom,
       to: placeTo,
-      force,
       seq: insertSeq ?? undefined,
     });
-    if (result.status === 'needs_confirm') {
-      Alert.alert(COPY.tooFar, '', [
-        { text: COPY.cancel, style: 'cancel' },
-        { text: COPY.markAnyway, onPress: () => commitPlaced(clubId, true) },
-      ]);
-      return;
-    }
     if (result.status !== 'commit') {
       hapticWarn();
       return;
@@ -840,16 +825,9 @@ export default function HoleScreen() {
     bump();
   };
 
-  const commitMovePin = (point: LatLng, which: 'from' | 'to', force = false) => {
+  const commitMovePin = (point: LatLng, which: 'from' | 'to') => {
     if (!editShotId) return;
-    const result = moveShotPin(db, { shotId: editShotId, which, point, force });
-    if (result.status === 'needs_confirm') {
-      Alert.alert(COPY.tooFar, '', [
-        { text: COPY.cancel, style: 'cancel' },
-        { text: COPY.markAnyway, onPress: () => commitMovePin(point, which, true) },
-      ]);
-      return;
-    }
+    const result = moveShotPin(db, { shotId: editShotId, which, point });
     if (result.status !== 'commit') {
       hapticWarn();
       return;

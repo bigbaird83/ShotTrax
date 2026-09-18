@@ -23,13 +23,16 @@ import {
   liveYardsFromPinToDrag,
   liveYardsUsesPhone,
   liveYardsUsesPreviousShot,
+  placedToPinAsksPast400,
   placeToAskOn,
   placeToFilterOn,
   placeToStoresBeforeConfirm,
   liveYardsSitAboveFinger,
   planPlaceToDragPreview,
+  toGreenYardsSitOnGreen,
   toPinFollowsFinger,
 } from './placeToDrag';
+import { placedPinUsesJumpGate, placedShotAsksPast400 } from './shotSource';
 import { COPY } from './playerCopy';
 import { PLAY_MAP_MIN_RATIO, playMapMinRatio } from './playLayout';
 import { includeInDistanceAverages, placedShotRunsAcceptFix } from './shotSource';
@@ -66,7 +69,7 @@ test('preview is this shot from pin to the finger, not the prior shot', () => {
   assert.notEqual(yards, roundYards(haversineYards(house, drag)));
   assert.equal(liveYardsFromPinToDrag({ from, drag, phone, previousFrom }), yards);
   assert.equal(liveYardsUsesPreviousShot(), false);
-  assert.equal(placeToAskOn(), 'confirm');
+  assert.equal(placeToAskOn(), 'never');
   assert.equal(placeToFilterOn(), 'confirm');
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const preview = hole.slice(hole.indexOf('const dragPreview'), hole.indexOf('const holeCamera'));
@@ -89,7 +92,7 @@ test('preview to-green is fingertip to green center; over 600 or no green is a d
   assert.equal(formatDragPreviewYards(null), '—');
 });
 
-test('both preview numbers and the 600 dash move with the finger', () => {
+test('shot yards sit above the finger; to-green stays on the green', () => {
   const preview = planPlaceToDragPreview({ from, drag, green, phone, previousFrom });
   assert.ok(preview);
   assert.equal(preview.shotYards, roundYards(haversineYards(from, drag)));
@@ -100,15 +103,18 @@ test('both preview numbers and the 600 dash move with the finger', () => {
   assert.equal(preview.shotLabel, `${preview.shotYards} yd`);
   assert.equal(preview.toGreenLabel, `${preview.toGreenYards} yd`);
   assert.equal(liveYardsSitAboveFinger(), true);
+  assert.equal(toGreenYardsSitOnGreen(), true);
   assert.equal(preview.fingerAt.lat, drag.lat);
   assert.equal(preview.fingerAt.lng, drag.lng);
   assert.equal(preview.shotAt.lat, drag.lat);
   assert.ok(preview.toGreenAt);
-  assert.equal(preview.toGreenAt.lat, drag.lat);
+  assert.equal(preview.toGreenAt.lat, green.lat);
+  assert.equal(preview.toGreenAt.lng, green.lng);
+  assert.notEqual(preview.toGreenAt.lat, drag.lat);
   assert.notEqual(preview.shotAt.lat, phone.lat);
   assert.notEqual(preview.toGreenAt.lat, phone.lat);
   assert.equal(dragPreviewInventsGreen(), false);
-  assert.equal(placeToAskOn(), 'confirm');
+  assert.equal(placeToAskOn(), 'never');
   assert.equal(placeToFilterOn(), 'confirm');
 
   const noGreen = planPlaceToDragPreview({ from, drag, green: null, phone });
@@ -134,14 +140,18 @@ test('both preview numbers and the 600 dash move with the finger', () => {
   assert.match(map, /COPY\.shot/);
   assert.match(map, /COPY\.toGreen/);
   assert.match(map, /dragPreview\.fingerAt/);
+  assert.match(map, /dragPreview\.toGreenAt/);
   assert.match(map, /anchor=\{\{ x: 0\.5, y: 1 \}\}/);
+  const fingerChip = map.slice(map.indexOf('dragPreview.fingerAt'), map.indexOf('dragPreview?.toGreenAt'));
+  assert.match(fingerChip, /dragPreview\.shotLabel/);
+  assert.doesNotMatch(fingerChip, /dragPreview\.toGreenLabel/);
 });
 
 test('finger preview has no GPS quality and does not run acceptFix', () => {
   assert.equal(dragPreviewUsesFixQuality(), false);
   assert.equal(dragPreviewRunsAcceptFix(), false);
   assert.equal(dragPreviewUsesPhoneFixGate(), false);
-  assert.equal(placeToAskOn(), 'confirm');
+  assert.equal(placeToAskOn(), 'never');
   assert.equal(placeToFilterOn(), 'confirm');
   const preview = planPlaceToDragPreview({ from, drag, green, phone });
   assert.ok(preview);
@@ -188,20 +198,33 @@ test('nothing is stored before Confirm; cancel leaves no to pin', () => {
   );
 });
 
-test('400-yard ask happens on Confirm, not mid-drag', () => {
-  assert.equal(placeToAskOn(), 'confirm');
+test('a placed pin over 400 saves without the 400-yard ask', () => {
+  assert.equal(placeToAskOn(), 'never');
+  assert.equal(placedToPinAsksPast400(), false);
+  assert.equal(placedPinUsesJumpGate(), false);
+  assert.equal(placedShotAsksPast400(), false);
   const far = { lat: from.lat + 0.01, lng: from.lng };
   const live = liveShotYardsFromThisFromPin({ from, drag: far, phone });
   assert.ok(live != null && live > MAX_SHOT_YD);
-  assert.deepEqual(confirmPlaceToDraft({ from, draft: far, force: false }), {
-    status: 'needs_confirm',
-    yards: live,
-  });
-  const forced = confirmPlaceToDraft({ from, draft: far, force: true });
-  assert.equal(forced.status, 'commit');
-  if (forced.status !== 'commit') return;
-  assert.equal(forced.plan.impossibleJump, true);
-  assert.equal(forced.plan.source, 'placed');
+  const saved = confirmPlaceToDraft({ from, draft: far, force: false });
+  assert.equal(saved.status, 'commit');
+  if (saved.status !== 'commit') return;
+  assert.equal(saved.plan.source, 'placed');
+  assert.equal(saved.plan.impossibleJump, false);
+  assert.ok(saved.plan.distanceYards > MAX_SHOT_YD);
+  assert.equal(saved.to.lat, far.lat);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const confirm = hole.slice(hole.indexOf('const confirmToPin'), hole.indexOf('const commitPlaced'));
+  const placed = hole.slice(hole.indexOf('const commitPlaced'), hole.indexOf('const onConfirmUndo'));
+  const move = hole.slice(hole.indexOf('const commitMovePin'), hole.indexOf('const onUndoEdit'));
+  assert.doesNotMatch(confirm, /COPY\.tooFar|Alert\.alert/);
+  assert.doesNotMatch(placed, /COPY\.tooFar|Alert\.alert|force:\s*true/);
+  assert.doesNotMatch(move, /COPY\.tooFar|Alert\.alert/);
+  const actions = readFileSync(new URL('../services/shotActions.ts', import.meta.url), 'utf8');
+  const prompt = actions.slice(actions.indexOf('export function promptForPlan'), actions.indexOf('function priorOf'));
+  assert.match(prompt, /needs_force_impossible_jump/);
+  assert.match(prompt, /COPY\.tooFar/);
 });
 
 test('Add shot to-pin is a draft until Confirm shot; edit still does not read the phone', () => {
@@ -226,7 +249,7 @@ test('Add shot to-pin is a draft until Confirm shot; edit still does not read th
 test('to pin follows the finger; live yards are this shot only; nothing stores before Confirm shot', () => {
   assert.equal(toPinFollowsFinger(), true);
   assert.equal(placeToStoresBeforeConfirm(), false);
-  assert.equal(placeToAskOn(), 'confirm');
+  assert.equal(placeToAskOn(), 'never');
   assert.equal(placeToFilterOn(), 'confirm');
   const yards = liveShotYardsFromThisFromPin({ from, drag, phone, previousFrom });
   assert.equal(yards, roundYards(haversineYards(from, drag)));

@@ -171,11 +171,9 @@ test('insert does not change neighbor coordinates or yards', () => {
   });
   assert.equal(far.ok, true);
   if (!far.ok) return;
-  assert.equal(far.plan.impossibleJump, true);
-  assert.deepEqual(confirmPlacedShot(far.plan, false), {
-    status: 'needs_confirm',
-    yards: far.plan.distanceYards,
-  });
+  assert.ok(far.plan.distanceYards > 400);
+  assert.equal(far.plan.impossibleJump, false);
+  assert.deepEqual(confirmPlacedShot(far.plan, false), { status: 'commit' });
   assert.deepEqual(confirmPlacedShot(far.plan, true), { status: 'commit' });
   assert.equal(far.neighbors[0]?.distanceYards, 188);
   assert.equal(far.neighbors[1]?.distanceYards, 77);
