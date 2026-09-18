@@ -125,7 +125,7 @@ test('missing tee does not invent a point or save the house', () => {
 });
 
 test('suggested, Same club, Say a club, and Watch picks all use the 600-yard tee rule', () => {
-  assert.deepEqual([...homeClubTapPaths()], ['suggested', 'same_club', 'say_club', 'watch']);
+  assert.deepEqual([...homeClubTapPaths()], ['suggested', 'same_club', 'say_club', 'watch', 'watch_bag']);
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   assert.match(hole, /tee: holeTee/);
   assert.match(hole, /markShotWithClub/);

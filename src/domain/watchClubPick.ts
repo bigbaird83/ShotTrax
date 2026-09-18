@@ -44,8 +44,34 @@ export function watchClubPickBackMarksShot(): false {
   return false;
 }
 
+/** Only Back leaves the ball where it is. It does not mark. */
+export function watchClubPickBackLeavesBall(): true {
+  return true;
+}
+
 /** Watch Home is the in-round menu, not a mark. */
 export function watchClubPickHomeOpensInRoundMenu(): true {
+  return true;
+}
+
+export function watchClubPickHomeMarksShot(): false {
+  return false;
+}
+
+/** A bag club under All clubs marks with the same rules as a top-3 tap. */
+export function watchBagPickMarksLikeTop3(): true {
+  return true;
+}
+
+export function watchBagPickUsesHomeClubTap(): true {
+  return true;
+}
+
+export function watchBagPickUsesChosenFix(): true {
+  return true;
+}
+
+export function watchBagPutterOpensPuttSheet(): true {
   return true;
 }
 
@@ -56,4 +82,43 @@ export function watchClubListTop3(ids: string[]): string[] {
 export function watchClubPickRestOfBag(args: { top3: string[]; bag: string[] }): string[] {
   const top = new Set(watchClubListTop3(args.top3));
   return args.bag.filter((id) => !top.has(id));
+}
+
+export type WatchClubTapPlan =
+  | { marks: false; dest: 'hole'; leaveBall: true; opensPuttSheet: false }
+  | { marks: false; dest: 'menu'; leaveBall: true; opensPuttSheet: false }
+  | { marks: false; dest: 'putts'; leaveBall: true; opensPuttSheet: true; clubId: string }
+  | {
+      marks: true;
+      dest: 'mark';
+      usesHomeClubTap: true;
+      usesChosenFix: true;
+      from: 'top3' | 'bag';
+      clubId: string;
+    };
+
+/** Top-3 and bag taps share this plan. Back / Home never mark. Putter never marks. */
+export function planWatchClubTap(
+  args:
+    | { action: 'back' }
+    | { action: 'home' }
+    | { action: 'club'; clubId: string; from: 'top3' | 'bag' },
+): WatchClubTapPlan {
+  if (args.action === 'back') {
+    return { marks: false, dest: 'hole', leaveBall: true, opensPuttSheet: false };
+  }
+  if (args.action === 'home') {
+    return { marks: false, dest: 'menu', leaveBall: true, opensPuttSheet: false };
+  }
+  if (isPutterClubId(args.clubId)) {
+    return { marks: false, dest: 'putts', leaveBall: true, opensPuttSheet: true, clubId: args.clubId };
+  }
+  return {
+    marks: true,
+    dest: 'mark',
+    usesHomeClubTap: true,
+    usesChosenFix: true,
+    from: args.from,
+    clubId: args.clubId,
+  };
 }

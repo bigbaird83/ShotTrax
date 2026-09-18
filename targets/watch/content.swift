@@ -161,7 +161,7 @@ struct ContentView: View {
       }
 
       ForEach(Array(session.list.top3.enumerated()), id: \.element) { index, clubId in
-        Button(action: { session.pick(clubId: clubId) }) {
+        Button(action: { session.pick(clubId: clubId) }) { // same pick as bag — marks the shot
           Text(session.list.label(for: clubId))
             .frame(maxWidth: .infinity, minHeight: index == 0 ? 40 : 36)
         }
@@ -182,7 +182,7 @@ struct ContentView: View {
         ScrollView {
           VStack(spacing: 6) {
             ForEach(moreClubs, id: \.self) { clubId in
-              Button(action: { session.pick(clubId: clubId) }) {
+              Button(action: { session.pick(clubId: clubId) }) { // same pick as top 3 — marks the shot
                 Text(session.list.label(for: clubId))
                   .font(.caption.weight(.heavy))
                   .frame(maxWidth: .infinity, minHeight: 36)
