@@ -15,8 +15,8 @@ export type PlayLayout = {
   headerItems: readonly ['menu', 'hole', 'to-green', 'shots'];
   dockRows: readonly ['chips', 'actions'];
   dockActions: readonly PlayDockAction[];
-  allClubs: 'once';
-  sayClub: 'not_dock';
+  allClubs: 'chip';
+  sayClub: 'chip';
   sameClub: 'short';
   shotLine: 'header';
   insertPlus: 'header';
@@ -31,8 +31,8 @@ export function planPlayLayout(): PlayLayout {
     headerItems: ['menu', 'hole', 'to-green', 'shots'],
     dockRows: ['chips', 'actions'],
     dockActions: PLAY_DOCK_ACTIONS,
-    allClubs: 'once',
-    sayClub: 'not_dock',
+    allClubs: 'chip',
+    sayClub: 'chip',
     sameClub: 'short',
     shotLine: 'header',
     insertPlus: 'header',
@@ -60,10 +60,19 @@ export function playShowsFatSayClub(): false {
   return false;
 }
 
+export function playChipRowIncludes(): readonly ['suggested', 'all_clubs', 'say_club'] {
+  return ['suggested', 'all_clubs', 'say_club'];
+}
+
 export function playShowsTallSameClub(): false {
   return false;
 }
 
 export function playEmptyMiddle(): false {
   return false;
+}
+
+/** Play map uses the same tee-to-green lock as Add shot, before Add shot opens. */
+export function playUsesAddShotCamera(): true {
+  return true;
 }

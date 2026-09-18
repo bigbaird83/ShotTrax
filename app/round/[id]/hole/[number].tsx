@@ -1064,8 +1064,16 @@ export default function HoleScreen() {
               accessibilityLabel={COPY.allClubs}
               disabled={readOnly || placing}
               onPress={openBag}
-              style={styles.dockAll}>
-              <Text style={styles.dockAllText}>{COPY.allClubs}</Text>
+              style={styles.dockChip}>
+              <Text style={styles.dockChipText}>{COPY.allClubs}</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={COPY.sayClub}
+              disabled={placing}
+              onPress={() => void onListen()}
+              style={styles.dockChip}>
+              <Text style={styles.dockChipText}>{listening ? COPY.listening : COPY.sayClub}</Text>
             </Pressable>
           </View>
           <View style={styles.dockRow}>
@@ -1176,15 +1184,6 @@ export default function HoleScreen() {
             onPress={() => {
               setMenuOpen(false);
               setPenaltyOpen(true);
-            }}
-          />
-          <BigButton
-            label={listening ? COPY.listening : COPY.sayClub}
-            variant="ghost"
-            disabled={placing}
-            onPress={() => {
-              setMenuOpen(false);
-              void onListen();
             }}
           />
           <BigButton
@@ -1684,14 +1683,6 @@ const styles = StyleSheet.create({
   dockChipPrimary: { borderColor: colors.lime, borderWidth: 2, backgroundColor: '#1C3A24' },
   dockChipText: { color: colors.cream, fontWeight: '800', fontSize: type.tiny },
   dockChipPrimaryText: { color: colors.lime, fontWeight: '900' },
-  dockAll: {
-    minHeight: 36,
-    paddingHorizontal: 8,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dockAllText: { color: colors.lime, fontWeight: '800', fontSize: type.tiny },
   dockAction: {
     flex: 1,
     minHeight: 36,

@@ -2,9 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { MAX_SHOT_YD } from '../config/sensing';
 import { confirmPlacedShot, includeInDistanceAverages } from './shotSource';
+import { readFileSync } from 'node:fs';
 import {
   canMoveFromPin,
   canMoveToPin,
+  editReadsPhoneFix,
+  editRunsAcceptFix,
   planChangeShotClub,
   planMoveShotPin,
   snapshotShot,
@@ -131,6 +134,21 @@ test('invalid or 0,0 pins are rejected — never invented GPS', () => {
   const gps = shot({ id: 's5' });
   assert.equal(planMoveShotPin(gps, 'from', { lat: 0, lng: 0 }).ok, false);
   assert.equal(planMoveShotPin(gps, 'to', { lat: 99, lng: 0 }).ok, false);
+});
+
+test('editing an earlier shot does not read the phone fix or run acceptFix', () => {
+  assert.equal(editReadsPhoneFix(), false);
+  assert.equal(editRunsAcceptFix(), false);
+  const actions = readFileSync(new URL('../services/shotActions.ts', import.meta.url), 'utf8');
+  const changeStart = actions.indexOf('export function changeShotClub');
+  const moveStart = actions.indexOf('export function moveShotPin');
+  const undoStart = actions.indexOf('export function undoShotEdit');
+  assert.ok(changeStart >= 0 && moveStart > changeStart && undoStart > moveStart);
+  const editFns = actions.slice(changeStart, undoStart);
+  assert.doesNotMatch(editFns, /getCurrentFix|resolveMarkFix|acceptFix|forceMark/);
+  assert.match(editFns, /planChangeShotClub/);
+  assert.match(editFns, /planMoveShotPin/);
+  assert.match(editFns, /confirmPlacedShot/);
 });
 
 test('snapshot is a restore copy of the shot before the edit', () => {

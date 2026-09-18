@@ -9,9 +9,11 @@ import {
   playEmptyMiddle,
   playHeaderEatsMap,
   playMapMinRatio,
+  playChipRowIncludes,
   playShowsFatAllClubs,
   playShowsFatSayClub,
   playShowsTallSameClub,
+  playUsesAddShotCamera,
 } from './playLayout';
 
 test('play map fills at least 60% down to a two-row dock; header is overlay', () => {
@@ -35,9 +37,10 @@ test('play map fills at least 60% down to a two-row dock; header is overlay', ()
 
 test('dock is not fat All clubs, Say a club, or a tall Same club', () => {
   const layout = planPlayLayout();
-  assert.equal(layout.allClubs, 'once');
-  assert.equal(layout.sayClub, 'not_dock');
+  assert.equal(layout.allClubs, 'chip');
+  assert.equal(layout.sayClub, 'chip');
   assert.equal(layout.sameClub, 'short');
+  assert.deepEqual(playChipRowIncludes(), ['suggested', 'all_clubs', 'say_club']);
   assert.equal(playShowsFatAllClubs(), false);
   assert.equal(playShowsFatSayClub(), false);
   assert.equal(playShowsTallSameClub(), false);
@@ -51,7 +54,16 @@ test('play hole screen uses the fill layout and does not keep the empty middle',
   assert.match(hole, /styles\.mapFill/);
   assert.match(hole, /styles\.dock/);
   assert.match(hole, /styles\.shotLine/);
+  assert.match(hole, /COPY\.allClubs/);
+  assert.match(hole, /COPY\.sayClub/);
+  assert.match(hole, /styles\.dockChip/);
   assert.doesNotMatch(hole, /ThumbZone/);
   assert.doesNotMatch(hole, /styles\.shotList/);
   assert.doesNotMatch(hole, /styles\.clubChip/);
+  assert.match(hole, /lockHoleCamera/);
+  assert.match(hole, /lockFrame/);
+  assert.match(hole, /frameEpoch=\{catchUpFullScreen \? 'catchup' : 'play'\}/);
+  assert.match(hole, /resolveHoleTee/);
+  assert.match(hole, /teePointFromHoleFeature/);
+  assert.equal(playUsesAddShotCamera(), true);
 });

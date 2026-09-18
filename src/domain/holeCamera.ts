@@ -114,10 +114,10 @@ export function planHoleCamera(args: {
 }
 
 /**
- * Locked Add shot / hole camera. Center, span, and heading come from the hole
+ * Locked play / Add shot camera. Center, span, and heading come from the hole
  * only (tee + green, else shot pins, else the green). A home-scale phone fix
  * or an on-course fix must not change any of those. Never invents a point
- * from the phone.
+ * from the phone. The play map uses this before Add shot opens.
  */
 export function lockHoleCamera(args: {
   tee: LatLng | null;
