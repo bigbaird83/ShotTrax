@@ -2,10 +2,16 @@ import { fillEstimatedCarries, type CarryClub } from './carryFill';
 import { isPutterClubId, typicalCarrySeedForClub } from './defaultBag';
 import { MIN_CLOSED_SHOTS_FOR_RANK } from './rankClubs';
 
-/** Phone wheel pills are taller than the Watch pills. */
-export const PHONE_WHEEL_PILL_HEIGHT = 52;
+/** Build 31 club-pill height. Dock actions stay this tall. */
+export const BUILD_31_CLUB_PILL_HEIGHT = 52;
+/** Phone wheel is slightly taller than the build 31 pills. */
+export const PHONE_WHEEL_PILL_HEIGHT = 58;
 /** Watch pills sit in the 40% control band and must fit three full labels. */
 export const WATCH_WHEEL_PILL_HEIGHT = 44;
+
+export function phoneWheelLargerThanBuild31(): true {
+  return true;
+}
 
 export function phoneWheelPillTallerThanWatch(): true {
   return true;

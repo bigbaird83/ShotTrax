@@ -175,6 +175,7 @@ function NativeHoleMap({
   const panStart = useRef<{ x: number; y: number } | null>(null);
   const toPinLive = Boolean(freezePan || onPlaceToDrag);
   const [mapOwnsGesture, setMapOwnsGesture] = useState(false);
+  const framedForGestures = !lockFrame || holeCameraReady;
 
   const revealMapsChrome = () => {
     if (allowMapsChrome) setMapsChrome(true);
@@ -417,9 +418,9 @@ function NativeHoleMap({
             ? undefined
             : { top: -120, right: -120, bottom: -280, left: -120 }
         }
-        zoomEnabled
-        zoomTapEnabled
-        scrollEnabled={mapOwnsGesture || !toPinLive}
+        zoomEnabled={framedForGestures}
+        zoomTapEnabled={framedForGestures}
+        scrollEnabled={framedForGestures}
         pitchEnabled={false}
         rotateEnabled={false}
         moveOnMarkerPress={false}
@@ -597,12 +598,21 @@ function NativeHoleMap({
           style={styles.dragLayer}
           pointerEvents={mapOwnsGesture ? 'none' : 'auto'}
           onStartShouldSetResponder={(event) => {
-            if (event.nativeEvent.touches.length !== 1) return false;
+            if (event.nativeEvent.touches.length !== 1) {
+              setMapOwnsGesture(true);
+              return false;
+            }
             panStart.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY };
             movedRef.current = false;
             return true;
           }}
-          onMoveShouldSetResponder={(event) => event.nativeEvent.touches.length === 1}
+          onMoveShouldSetResponder={(event) => {
+            if (event.nativeEvent.touches.length !== 1) {
+              setMapOwnsGesture(true);
+              return false;
+            }
+            return true;
+          }}
           onResponderTerminationRequest={() => true}
           onResponderMove={(event) => {
             if (event.nativeEvent.touches.length !== 1) {

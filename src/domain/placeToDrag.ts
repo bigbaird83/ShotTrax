@@ -84,6 +84,19 @@ export function dragKeepsPinchZoom(): true {
   return true;
 }
 
+/** After the tee→green frame, scroll and zoom stay on. Pin-live does not flip them off. */
+export function addShotMapScrollEnabledAfterFrame(): true {
+  return true;
+}
+
+export function addShotMapZoomEnabledAfterFrame(): true {
+  return true;
+}
+
+export function addShotMapFrozenWhilePinLive(): false {
+  return false;
+}
+
 /** Same one-finger pin / two-finger map on an earlier shot's landing. */
 export function editToFreezesPan(): false {
   return false;

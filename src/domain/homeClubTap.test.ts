@@ -124,26 +124,23 @@ test('missing tee does not invent a point or save the house', () => {
   assert.deepEqual(noPin, { kind: 'phone', start: home, source: 'gps', runsAcceptFix: true });
 });
 
-test('suggested, Same club, Say a club, and Watch picks all use the 600-yard tee rule', () => {
+test('suggested, Same club, All clubs, and Watch picks all use the 600-yard tee rule', () => {
   assert.deepEqual(
     [...homeClubTapPaths()],
-    ['same_club', 'all_clubs', 'say_club', 'watch_bag'],
+    ['same_club', 'all_clubs', 'watch_bag'],
   );
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   assert.match(hole, /tee: holeTee/);
   assert.match(hole, /markShotWithClub/);
-  assert.match(hole, /void markClub\(matched\)/);
   assert.match(hole, /<ClubStrip/);
   assert.match(hole, /onMark/);
-  assert.match(hole, /COPY\.sayClub/);
-  const strip = hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.allClubs'));
+  assert.doesNotMatch(hole, /COPY\.sayClub/);
+  const strip = hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.stickyClub'));
   assert.match(strip, /applyWheelSelection/);
   assert.doesNotMatch(strip, /void markClub\(full\)/);
   const mark = hole.slice(hole.indexOf('const markClub'), hole.indexOf('const onMark'));
   assert.match(mark, /markShotWithClub/);
   assert.match(mark, /tee: holeTee/);
-  const say = hole.slice(hole.indexOf('const applyTranscript'), hole.indexOf('const startListening'));
-  assert.match(say, /markClub\(matched\)/);
   const watch = readFileSync(new URL('../services/watchClub.ts', import.meta.url), 'utf8');
   assert.match(watch, /tee: ctx\.tee/);
   assert.match(watch, /markShotWithClub/);

@@ -16,8 +16,8 @@ export type PlayLayout = {
   headerLines: 1;
   dockRows: readonly ['chips', 'actions'];
   dockActions: readonly PlayDockAction[];
-  allClubs: 'chip';
-  sayClub: 'chip';
+  allClubs: 'float';
+  sayClub: 'off';
   sameClub: 'short';
   shotLine: 'header';
   insertPlus: 'header';
@@ -33,8 +33,8 @@ export function planPlayLayout(): PlayLayout {
     headerLines: 1,
     dockRows: ['chips', 'actions'],
     dockActions: PLAY_DOCK_ACTIONS,
-    allClubs: 'chip',
-    sayClub: 'chip',
+    allClubs: 'float',
+    sayClub: 'off',
     sameClub: 'short',
     shotLine: 'header',
     insertPlus: 'header',
@@ -62,24 +62,41 @@ export function playShowsFatSayClub(): false {
   return false;
 }
 
-/** Wheel is the first dock row. Same club and All clubs sit under it. */
+/** Wheel is the first dock row. Same club sits under it. All clubs floats above. */
 export function playChipRowIncludes(): readonly ['suggested'] {
   return ['suggested'];
 }
 
-export function playUnderWheelIncludes(): readonly ['same_club', 'all_clubs'] {
-  return ['same_club', 'all_clubs'];
+export function playUnderWheelIncludes(): readonly ['same_club'] {
+  return ['same_club'];
 }
 
 export function playSameClubSitsUnderWheel(): true {
   return true;
 }
 
-export function playAllClubsSitsUnderWheel(): true {
+export function playAllClubsSitsUnderWheel(): false {
+  return false;
+}
+
+export function playAllClubsSitsAboveWheel(): true {
   return true;
 }
 
+export function playAllClubsSitsInDockRow(): false {
+  return false;
+}
+
 export function playAllClubsSitsBesideWheel(): false {
+  return false;
+}
+
+/** Voice club pick is gone. Strip / wheel stays. */
+export function playShowsSayClub(): false {
+  return false;
+}
+
+export function watchShowsSayClub(): false {
   return false;
 }
 
@@ -257,4 +274,24 @@ export function addShotHidesUserLocation(): true {
 
 export function addShotFollowsUserLocation(): false {
   return false;
+}
+
+/** Build 31 club-pill height. Dock actions match this, not the tiny 31 dock chips. */
+export const PLAY_DOCK_ACTION_MIN_HEIGHT = 52;
+
+export function playDockActionMinHeight(): number {
+  return PLAY_DOCK_ACTION_MIN_HEIGHT;
+}
+
+/** Menu is a button, not lime text, on home and play. */
+export function playMenuIsButton(): true {
+  return true;
+}
+
+export function homeMenuIsButton(): true {
+  return true;
+}
+
+export function homeMenuOpensSettings(): true {
+  return true;
 }

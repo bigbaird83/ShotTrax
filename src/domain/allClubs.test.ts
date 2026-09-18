@@ -4,8 +4,10 @@ import { test } from 'node:test';
 import { PUTTER_CLUB_ID } from './defaultBag';
 import { HOME_CLUB_TAP_MAX_YD, homeClubTapPaths } from './homeClubTap';
 import {
+  BUILD_31_CLUB_PILL_HEIGHT,
   PHONE_WHEEL_PILL_HEIGHT,
   WATCH_WHEEL_PILL_HEIGHT,
+  phoneWheelLargerThanBuild31,
   phoneWheelPillTallerThanWatch,
   planClubStrip,
 } from './clubStrip';
@@ -18,16 +20,28 @@ import {
   phoneAllClubsScreenScrolls,
   planAllClubsBag,
 } from './allClubs';
-import { playAllClubsSitsUnderWheel, playMapMinRatio, playSameClubSitsUnderWheel } from './playLayout';
+import {
+  PLAY_DOCK_ACTION_MIN_HEIGHT,
+  playAllClubsSitsAboveWheel,
+  playAllClubsSitsInDockRow,
+  playAllClubsSitsUnderWheel,
+  playMapMinRatio,
+  playSameClubSitsUnderWheel,
+} from './playLayout';
 
 test('phone wheel pill is taller than the Watch pill; map stays at least 60%', () => {
   assert.equal(phoneWheelPillTallerThanWatch(), true);
+  assert.equal(phoneWheelLargerThanBuild31(), true);
   assert.ok(PHONE_WHEEL_PILL_HEIGHT > WATCH_WHEEL_PILL_HEIGHT);
-  assert.equal(PHONE_WHEEL_PILL_HEIGHT, 52);
+  assert.ok(PHONE_WHEEL_PILL_HEIGHT > BUILD_31_CLUB_PILL_HEIGHT);
+  assert.equal(BUILD_31_CLUB_PILL_HEIGHT, 52);
+  assert.equal(PLAY_DOCK_ACTION_MIN_HEIGHT, BUILD_31_CLUB_PILL_HEIGHT);
   assert.equal(WATCH_WHEEL_PILL_HEIGHT, 44);
   assert.ok(playMapMinRatio() >= 0.6);
   assert.equal(playSameClubSitsUnderWheel(), true);
-  assert.equal(playAllClubsSitsUnderWheel(), true);
+  assert.equal(playAllClubsSitsUnderWheel(), false);
+  assert.equal(playAllClubsSitsAboveWheel(), true);
+  assert.equal(playAllClubsSitsInDockRow(), false);
 
   const phone = readFileSync(new URL('../ui/ClubStrip.tsx', import.meta.url), 'utf8');
   assert.match(phone, /PHONE_WHEEL_PILL_HEIGHT/);
@@ -37,7 +51,7 @@ test('phone wheel pill is taller than the Watch pill; map stays at least 60%', (
   assert.match(watch, /height: 44/);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
-  const dock = hole.slice(hole.indexOf('styles.dock'), hole.indexOf('<FullSheet'));
+  const dock = hole.slice(hole.indexOf('<View style={[styles.dock'), hole.indexOf('<FullSheet'));
   const strip = dock.slice(dock.indexOf('<ClubStrip'), dock.indexOf('COPY.stickyClub'));
   assert.doesNotMatch(strip, /compact/);
   assert.match(hole, /minHeight: '60%'/);
@@ -45,7 +59,9 @@ test('phone wheel pill is taller than the Watch pill; map stays at least 60%', (
   const sameAt = dock.indexOf('COPY.stickyClub');
   const allAt = dock.indexOf('COPY.allClubs');
   const wheelAt = dock.indexOf('<ClubStrip');
-  assert.ok(wheelAt >= 0 && sameAt > wheelAt && allAt > sameAt);
+  assert.ok(wheelAt >= 0 && sameAt > wheelAt);
+  assert.equal(allAt, -1);
+  assert.match(hole, /styles\.allClubsFloat/);
 });
 
 test('phone All clubs screen renders every bag club, including putter and dash clubs, with no ScrollView', () => {
