@@ -14,6 +14,7 @@ import {
   liveToGreenYardsFromFinger,
   liveYardsFromPinToDrag,
   liveYardsUsesPhone,
+  liveYardsUsesPreviousShot,
   placeToAskOn,
   placeToFilterOn,
   placeToStoresBeforeConfirm,
@@ -31,11 +32,13 @@ const phone = { lat: 40.7128, lng: -74.006 };
 const house = { lat: 40.7, lng: -74.0 };
 
 test('live yards are from the from pin to the drag point, not the phone, and nothing is stored before Confirm', () => {
-  const yards = liveYardsFromPinToDrag({ from, drag, phone });
+  const yards = liveYardsFromPinToDrag({ from, drag, phone, previousFrom });
   assert.equal(yards, roundYards(haversineYards(from, drag)));
+  assert.notEqual(yards, roundYards(haversineYards(previousFrom, drag)));
   assert.notEqual(yards, roundYards(haversineYards(from, phone)));
   assert.notEqual(yards, roundYards(haversineYards(house, drag)));
   assert.equal(liveYardsUsesPhone(), false);
+  assert.equal(liveYardsUsesPreviousShot(), false);
   assert.equal(placeToStoresBeforeConfirm(), false);
   assert.deepEqual(cancelPlaceToDraft(), { to: null, stored: false });
   assert.equal(confirmPlaceToDraft({ from, draft: null }).status, 'empty');
@@ -44,15 +47,20 @@ test('live yards are from the from pin to the drag point, not the phone, and not
   assert.equal(PLAY_MAP_MIN_RATIO, 0.6);
 });
 
-test('preview shot yards are this shot from pin to the finger, not the prior shot', () => {
+test('preview is this shot from pin to the finger, not the prior shot', () => {
   const yards = liveShotYardsFromThisFromPin({ from, drag, phone, previousFrom });
   assert.equal(yards, roundYards(haversineYards(from, drag)));
   assert.notEqual(yards, roundYards(haversineYards(previousFrom, drag)));
   assert.notEqual(yards, roundYards(haversineYards(from, phone)));
   assert.notEqual(yards, roundYards(haversineYards(house, drag)));
   assert.equal(liveYardsFromPinToDrag({ from, drag, phone, previousFrom }), yards);
-  assert.equal(liveYardsUsesPhone(), false);
-  assert.equal(dragRecentersOnPhone(), false);
+  assert.equal(liveYardsUsesPreviousShot(), false);
+  assert.equal(placeToAskOn(), 'confirm');
+  assert.equal(placeToFilterOn(), 'confirm');
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const preview = hole.slice(hole.indexOf('const dragPreview'), hole.indexOf('const holeCamera'));
+  assert.match(preview, /from: placeFrom/);
+  assert.doesNotMatch(preview, /previousFrom|lastClosed/);
 });
 
 test('preview to-green is fingertip to green center; over 600 or no green is a dash', () => {

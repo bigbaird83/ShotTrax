@@ -348,17 +348,11 @@ export default function HoleScreen() {
     averages.map((row) => clubToRankInput(row.club, row)),
     target,
   );
-  const lastClosedForPreview = [...shots].filter((shot) => shot.endedAt != null).at(-1) ?? null;
-  const previousFrom =
-    lastClosedForPreview?.startLat != null && lastClosedForPreview.startLng != null
-      ? { lat: lastClosedForPreview.startLat, lng: lastClosedForPreview.startLng }
-      : null;
   const dragPreview = planPlaceToDragPreview({
     from: placeFrom,
     drag: placeToDraft,
     green,
     phone: fix,
-    previousFrom,
   });
   const holeCamera = lockHoleCamera({
     tee: resolveHoleTee({

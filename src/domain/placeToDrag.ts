@@ -7,6 +7,10 @@ export function liveYardsUsesPhone(): false {
   return false;
 }
 
+export function liveYardsUsesPreviousShot(): false {
+  return false;
+}
+
 export function placeToStoresBeforeConfirm(): false {
   return false;
 }
