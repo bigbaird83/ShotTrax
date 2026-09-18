@@ -364,18 +364,18 @@ struct ContentView: View {
   private var stripWindowStart: Int {
     let clubs = stripClubs
     let n = clubs.count
-    guard n > 0 else { return 0 }
-    let closest = clubs.firstIndex(where: { $0.id == stripPickId }) ?? 0
-    if n <= 2 { return 0 }
-    let raw: Int
-    if closest > 0 && closest < n - 1 {
-      raw = closest - 1
-    } else if closest >= n - 1 {
-      raw = n - 3
-    } else {
-      raw = 0
-    }
-    return min(max(raw, 0), max(n - 3, 0))
+    guard n > 3 else { return 0 }
+    guard let hole = session.list.yardsToGreen else { return 0 }
+    let closestThree = Array(
+      clubs.sorted { a, b in
+        let da = abs(a.carry - hole)
+        let db = abs(b.carry - hole)
+        if da != db { return da < db }
+        return a.carry < b.carry
+      }.prefix(3)
+    ).sorted { $0.carry < $1.carry }
+    guard let first = closestThree.first else { return 0 }
+    return min(max(clubs.firstIndex(where: { $0.id == first.id }) ?? 0, 0), n - 3)
   }
 
   private var stripWindowToken: String? {

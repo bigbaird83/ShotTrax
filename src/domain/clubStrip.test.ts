@@ -34,6 +34,10 @@ import {
   clubStripWraps,
   clubStripFillsBeforeSort,
   clubStripEstimatedEntersWheel,
+  clubStripSortsByIronHybridName,
+  clubStripDropsNumberedClub,
+  clubStripPicksThreeClosest,
+  clubStripThreeClosestIds,
   clubStripSeamGapOnly,
   clubStripWrapsToFillEmptySide,
   clubStripCentersClosestWhenNeighborsExist,
@@ -404,6 +408,9 @@ test('scrolling past the longest wraps to the shortest', () => {
 test('fill estimated carries before sort; estimable iron is in, outside the span is out', () => {
   assert.equal(clubStripFillsBeforeSort(), true);
   assert.equal(clubStripEstimatedEntersWheel(), true);
+  assert.equal(clubStripSortsByIronHybridName(), false);
+  assert.equal(clubStripDropsNumberedClub(), false);
+  assert.equal(clubStripPicksThreeClosest(), true);
   assert.equal(clubStripSortedByCarry(), true);
   assert.equal(clubStripSortedByIronNumber(), false);
   assert.equal(clubStripSortedByName(), false);
@@ -531,4 +538,52 @@ test('282-yard hole opens 2i, 3W, Dr with no wedge; 100-yard hole centers the cl
   assert.match(watch, /stripWindowToken/);
   assert.match(watch, /anchor: \.leading/);
   assert.doesNotMatch(watch, /0\.62/);
+});
+
+test('282-yard hole: fill then sort then three closest keeps Dr · 280; Hy+3W without Dr is wrong', () => {
+  assert.equal(clubStripFillsBeforeSort(), true);
+  assert.equal(clubStripSortsByIronHybridName(), false);
+  assert.equal(clubStripDropsNumberedClub(), false);
+  assert.equal(clubStripPicksThreeClosest(), true);
+  assert.equal(clubStripAllowsDashPill(), false);
+  assert.equal(clubStripSortedByName(), false);
+
+  const filled = planClubStrip({
+    clubs: [
+      { id: 'club_4h', loftRank: 3, typicalCarryYards: 243 },
+      { id: 'club_3w', loftRank: 1, typicalCarryYards: 261 },
+      { id: 'club_driver', loftRank: 0, typicalCarryYards: 280 },
+      { id: 'club_pw', loftRank: 12, typicalCarryYards: 130 },
+      { id: 'club_gw', loftRank: 15, typicalCarryYards: 110 },
+    ],
+    yardsLeft: 282,
+  });
+  assert.equal(filled.carries.club_driver, 280);
+  assert.ok(filled.ids.includes('club_driver'));
+  const opening = clubStripOpeningIds(filled.ids, filled.windowStart);
+  assert.deepEqual(opening, ['club_4h', 'club_3w', 'club_driver']);
+  assert.deepEqual(
+    clubStripThreeClosestIds(
+      filled.ids.map((id) => ({ id, carry: filled.carries[id] })),
+      282,
+    ),
+    ['club_4h', 'club_3w', 'club_driver'],
+  );
+  assert.ok(opening.includes('club_driver'));
+  assert.notDeepEqual(opening, ['club_4h', 'club_3w']);
+  assert.ok(!opening.includes('club_pw'));
+  assert.notDeepEqual(
+    filled.ids,
+    ['club_3w', 'club_4h', 'club_driver', 'club_gw', 'club_pw'],
+  );
+
+  const src = readFileSync(new URL('./clubStrip.ts', import.meta.url), 'utf8');
+  const plan = src.slice(src.indexOf('export function planClubStrip'), src.length);
+  assert.ok(plan.indexOf('resolveWheelCarries') < plan.indexOf('.sort((a, b) => a.carry - b.carry)'));
+  assert.ok(plan.indexOf('.sort((a, b) => a.carry - b.carry)') < plan.indexOf('clubStripThreeClosestIds'));
+  assert.doesNotMatch(plan, /shortName|localeCompare|iron|hybrid/);
+  const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  assert.match(watch, /prefix\(3\)/);
+  assert.match(watch, /sorted \{ \$0\.carry < \$1\.carry \}/);
+  assert.doesNotMatch(watch.slice(watch.indexOf('private var stripClubs')), /sorted \{ \$0\.id|localizedStandardCompare/);
 });

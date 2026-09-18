@@ -100,8 +100,8 @@ test('282 opening window includes Dr; Watch control band is ~40%; round start fr
   assert.match(watchUi, /minHeight: 40/);
   assert.match(watchUi, /height: 44/);
   assert.match(watchUi, /stripWindowStart/);
-  assert.match(watchUi, /max\(n - 3, 0\)/);
-  assert.match(watchUi, /stripWindowStart/);
+  assert.match(watchUi, /\.prefix\(3\)/);
+  assert.match(watchUi, /sorted \{ \$0\.carry < \$1\.carry \}/);
   assert.doesNotMatch(watchUi, /max\(44\.0,/);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
@@ -110,7 +110,10 @@ test('282 opening window includes Dr; Watch control band is ~40%; round start fr
   assert.match(hole, /saveHoleTee/);
   assert.match(hole, /phone: null/);
   assert.match(hole, /addShotFramePoints/);
-  assert.doesNotMatch(hole.slice(hole.indexOf('<HoleMap'), hole.indexOf('onDropGreenEstimate')), /getCurrentFix/);
+  const playMap = hole.slice(hole.indexOf('<HoleMap'), hole.indexOf('onDropGreenEstimate'));
+  assert.match(playMap, /addShotPoints/);
+  assert.doesNotMatch(playMap, /holeCamera\?\.points/);
+  assert.doesNotMatch(playMap, /getCurrentFix/);
 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   assert.match(map, /A lone green is the house/);

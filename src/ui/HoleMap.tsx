@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import MapView, { Marker, Polygon, Polyline } from 'react-native-maps';
 import type { OsmFeature, OsmGolfKind, OsmOverlay } from '@/src/course/types';
-import { featuresForHole, resolveOverlayTee } from '@/src/course/osmOverlay';
+import { featuresForHole } from '@/src/course/osmOverlay';
 import type { GpsFix, Shot } from '@/src/domain/types';
 import type { YardsToGreenResult } from '@/src/sensing/yardsToGreen';
 import {
@@ -239,11 +239,9 @@ function NativeHoleMap({
     const fromParent = (framePoints ?? [])
       .map((point) => ({ lat: point.latitude, lng: point.longitude }))
       .filter((point) => isValidLatLng(point));
-    if (fromParent.length >= 2) return fromParent;
-    const overlayTee = resolveOverlayTee(osmOverlay ?? null, holeNumber, green);
-    if (isValidLatLng(overlayTee) && isValidLatLng(green)) return [overlayTee, green];
-    // Tee + green only. A lone green is the house / pin-zoom miss. Never wait on a phone fix.
-    return [];
+    // Same camera path as Add shot: parent tee + green only.
+    // A lone green is the house / pin-zoom miss. Never wait on a phone fix.
+    return fromParent.length >= 2 ? fromParent : [];
   }, [lockFrame, framePoints, osmOverlay, holeNumber, green]);
 
   const holeUpCamera = useMemo(() => {

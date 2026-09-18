@@ -1009,7 +1009,7 @@ export default function HoleScreen() {
           onFrameReady={setMapFramed}
           heading={holeCamera?.heading ?? null}
           framePoints={
-            (addShotPoints ?? holeCamera?.points)?.map((point) => ({
+            addShotPoints?.map((point) => ({
               latitude: point.lat,
               longitude: point.lng,
             }))

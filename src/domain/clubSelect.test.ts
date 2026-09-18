@@ -181,6 +181,7 @@ test("Add shot opening region contains tee and green and does not wait when 282 
   assert.match(playMap, /showPhonePin=\{!catchUpFullScreen\}/);
   assert.match(playMap, /userFix=\{catchUpFullScreen \? null : fix\}/);
   assert.match(playMap, /addShotPoints/);
+  assert.doesNotMatch(playMap, /holeCamera\?\.points/);
   assert.match(playMap, /playHeaderYards\.yards/);
   assert.match(hole, /resolveOverlayTee/);
   assert.match(hole, /cachedOsmOverlay/);

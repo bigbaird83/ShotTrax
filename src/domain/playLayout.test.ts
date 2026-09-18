@@ -54,6 +54,8 @@ import {
   playScorecardWraps,
   playSameClubHiddenUntilShot,
   playMapMountsWhenYardsShown,
+  playRoundStartSecondCameraPath,
+  playRoundStartUsesAddShotFramePoints,
 } from './playLayout';
 
 test('play map fills at least 60% down to a two-row dock; header is overlay', () => {
@@ -122,6 +124,8 @@ test('play hole screen uses the fill layout and does not keep the empty middle',
   assert.match(hole, /resolvePlayHoleTee/);
   assert.match(hole, /resolveOverlayTee/);
   assert.equal(playUsesAddShotCamera(), true);
+  assert.equal(playRoundStartUsesAddShotFramePoints(), true);
+  assert.equal(playRoundStartSecondCameraPath(), false);
 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   assert.match(map, /holeMapShowsUserLocation\(Boolean\(lockFrame\)\)/);
@@ -192,6 +196,8 @@ test('Add shot, play, and edit open hole-up once; map chip stays, footer does no
   const playMap = hole.slice(hole.indexOf('<HoleMap'), hole.indexOf('onDropGreenEstimate'));
   assert.match(playMap, /lockFrame/);
   assert.match(playMap, /framePoints=/);
+  assert.match(playMap, /addShotPoints/);
+  assert.doesNotMatch(playMap, /holeCamera\?\.points/);
   const editMap = hole.slice(hole.indexOf('visible={editOpen && !editClubOpen}'), hole.indexOf('visible={scoreOpen}'));
   assert.match(editMap, /<HoleMap/);
   assert.match(editMap, /lockFrame/);

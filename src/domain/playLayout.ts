@@ -122,6 +122,15 @@ export function playUsesAddShotCamera(): true {
   return true;
 }
 
+/** Round start does not open a second camera path. Same addShotFramePoints. */
+export function playRoundStartSecondCameraPath(): false {
+  return false;
+}
+
+export function playRoundStartUsesAddShotFramePoints(): true {
+  return true;
+}
+
 /** Edit is tap-the-shot → club / from / to. Not a dock button or a third row. */
 export function playEditIsDockRow(): false {
   return false;
