@@ -34,6 +34,7 @@ type Props = {
   onShotPress?: (shotId: string) => void;
   placedFrom?: { lat: number; lng: number } | null;
   placedTo?: { lat: number; lng: number } | null;
+  onPlaceToDrag?: (coord: { lat: number; lng: number }) => void;
   placeHint?: string | null;
   fullBleed?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -115,6 +116,7 @@ function NativeHoleMap({
   onShotPress,
   placedFrom,
   placedTo,
+  onPlaceToDrag,
   placeHint,
   fullBleed,
   style,
@@ -391,6 +393,17 @@ function NativeHoleMap({
             coordinate={toCoord(placedTo.lat, placedTo.lng)}
             title="Landed"
             pinColor="green"
+            draggable={Boolean(onPlaceToDrag)}
+            onDrag={(event) => {
+              if (!onPlaceToDrag) return;
+              const { latitude, longitude } = event.nativeEvent.coordinate;
+              onPlaceToDrag({ lat: latitude, lng: longitude });
+            }}
+            onDragEnd={(event) => {
+              if (!onPlaceToDrag) return;
+              const { latitude, longitude } = event.nativeEvent.coordinate;
+              onPlaceToDrag({ lat: latitude, lng: longitude });
+            }}
           />
         ) : null}
         {green ? (

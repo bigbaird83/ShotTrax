@@ -139,16 +139,60 @@ test('invalid or 0,0 pins are rejected — never invented GPS', () => {
 test('editing an earlier shot does not read the phone fix or run acceptFix', () => {
   assert.equal(editReadsPhoneFix(), false);
   assert.equal(editRunsAcceptFix(), false);
+
+  const earlier = shot({
+    id: 's-early',
+    seq: 1,
+    startLat: 37.01,
+    startLng: -122.01,
+    endLat: 37.012,
+    endLng: -122.01,
+    distanceYards: 150,
+  });
+  const phone = { lat: 40.7128, lng: -74.006 };
+  const club = planChangeShotClub(earlier, 'club_8i');
+  assert.equal(club.ok, true);
+  if (!club.ok) return;
+  assert.equal(club.keepsCoordinates, true);
+  assert.equal(club.snapshot.startLat, earlier.startLat);
+  assert.equal(club.snapshot.startLng, earlier.startLng);
+  assert.equal(club.snapshot.endLat, earlier.endLat);
+  assert.equal(club.snapshot.endLng, earlier.endLng);
+  assert.equal(club.snapshot.source, 'gps');
+  assert.notEqual(club.snapshot.startLat, phone.lat);
+
+  const tap = { lat: 37.013, lng: -122.01 };
+  const moved = planMoveShotPin(earlier, 'to', tap);
+  assert.equal(moved.ok, true);
+  if (!moved.ok) return;
+  assert.equal(moved.to.lat, tap.lat);
+  assert.equal(moved.to.lng, tap.lng);
+  assert.notEqual(moved.to.lat, phone.lat);
+  assert.notEqual(moved.from.lat, phone.lat);
+  assert.equal(moved.plan.source, 'placed');
+  assert.equal(moved.plan.fixQuality, null);
+  assert.equal(includeInDistanceAverages(moved.plan), true);
+  assert.equal(
+    includeInDistanceAverages({ ...moved.plan, clubId: 'club_putter' }),
+    false,
+  );
+
   const actions = readFileSync(new URL('../services/shotActions.ts', import.meta.url), 'utf8');
   const changeStart = actions.indexOf('export function changeShotClub');
-  const moveStart = actions.indexOf('export function moveShotPin');
   const undoStart = actions.indexOf('export function undoShotEdit');
-  assert.ok(changeStart >= 0 && moveStart > changeStart && undoStart > moveStart);
+  assert.ok(changeStart >= 0 && undoStart > changeStart);
   const editFns = actions.slice(changeStart, undoStart);
-  assert.doesNotMatch(editFns, /getCurrentFix|resolveMarkFix|acceptFix|forceMark/);
+  assert.doesNotMatch(editFns, /getCurrentFix|resolveMarkFix|getFix|acceptFix|forceMark/);
   assert.match(editFns, /planChangeShotClub/);
   assert.match(editFns, /planMoveShotPin/);
   assert.match(editFns, /confirmPlacedShot/);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const editClub = hole.slice(hole.indexOf('const commitEditClub'), hole.indexOf('const commitMovePin'));
+  const editMove = hole.slice(hole.indexOf('const commitMovePin'), hole.indexOf('const onUndoEdit'));
+  assert.doesNotMatch(editClub, /getCurrentFix|resolveMarkFix|getFix|acceptFix/);
+  assert.doesNotMatch(editMove, /getCurrentFix|resolveMarkFix|getFix|acceptFix/);
+  assert.match(editMove, /COPY\.tooFar/);
 });
 
 test('snapshot is a restore copy of the shot before the edit', () => {

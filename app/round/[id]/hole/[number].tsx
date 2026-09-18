@@ -35,6 +35,7 @@ import { catchUpPinFromTap, planCancelCatchUp, planCatchUpSheet } from '@/src/do
 import { lockHoleCamera, resolveHoleTee } from '@/src/domain/holeCamera';
 import { deleteShotPrompt } from '@/src/domain/deleteShot';
 import { planInsertSlots } from '@/src/domain/insertShot';
+import { confirmPlaceToDraft, liveYardsFromPinToDrag } from '@/src/domain/placeToDrag';
 import { planPlayLayout } from '@/src/domain/playLayout';
 import { planPlacedShot } from '@/src/domain/shotSource';
 import { planUndoPlacePins } from '@/src/domain/undoLastShot';
@@ -96,6 +97,7 @@ export default function HoleScreen() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [placeFrom, setPlaceFrom] = useState<LatLng | null>(null);
   const [placeTo, setPlaceTo] = useState<LatLng | null>(null);
+  const [placeToDraft, setPlaceToDraft] = useState<LatLng | null>(null);
   const [placeClubOpen, setPlaceClubOpen] = useState(false);
   const [placeMode, setPlaceMode] = useState<'off' | 'from' | 'to' | 'edit-from' | 'edit-to'>('off');
   const [insertSeq, setInsertSeq] = useState<number | null>(null);
@@ -168,6 +170,7 @@ export default function HoleScreen() {
     [db, holes, holeNumber, revision],
   );
   const placedPlan = placeFrom && placeTo ? planPlacedShot(placeFrom, placeTo) : null;
+  const draftYards = liveYardsFromPinToDrag({ from: placeFrom, drag: placeToDraft, phone: fix });
   const placedYards = placedPlan && placedPlan.ok ? placedPlan.distanceYards : null;
   const editingShot = editShotId ? shots.find((shot) => shot.id === editShotId) ?? null : null;
   const pickerYards = editClubOpen ? (editingShot?.distanceYards ?? null) : placedYards;
@@ -182,6 +185,7 @@ export default function HoleScreen() {
     const cancel = planCancelCatchUp();
     setPlaceFrom(cancel.from);
     setPlaceTo(cancel.to);
+    setPlaceToDraft(null);
     setPlaceClubOpen(cancel.clubOpen);
     setPlaceMode(cancel.mode);
     setInsertSeq(cancel.insertSeq);
@@ -562,11 +566,12 @@ export default function HoleScreen() {
 
   const onUndo = () => {
     if (readOnly) return;
-    if (placing && (placeFrom || placeTo)) {
-      const next = planUndoPlacePins({ from: placeFrom, to: placeTo });
+    if (placing && (placeFrom || placeTo || placeToDraft)) {
+      const next = planUndoPlacePins({ from: placeFrom, to: placeTo ?? placeToDraft });
       if (!next) return;
       setPlaceFrom(next.from);
       setPlaceTo(next.to);
+      setPlaceToDraft(next.to);
       setPlaceClubOpen(false);
       setPlaceMode(next.mode);
       hapticTap();
@@ -724,6 +729,20 @@ export default function HoleScreen() {
     router.push(`/round/${id}/club-pick?hole=${holeNumber}`);
   };
 
+  const confirmToPin = (force = false) => {
+    const result = confirmPlaceToDraft({ from: placeFrom, draft: placeToDraft, force });
+    if (result.status === 'empty') return;
+    if (result.status === 'needs_confirm') {
+      Alert.alert(COPY.tooFar, '', [
+        { text: COPY.cancel, style: 'cancel' },
+        { text: COPY.markAnyway, onPress: () => confirmToPin(true) },
+      ]);
+      return;
+    }
+    setPlaceTo(result.to);
+    setPlaceClubOpen(true);
+  };
+
   const commitPlaced = (clubId: string, force = false) => {
     if (!placeFrom || !placeTo) return;
     const result = addPlacedShot(db, {
@@ -840,9 +859,11 @@ export default function HoleScreen() {
         : placing
           ? placeTo
             ? `${placedYards ?? '—'} yd · ${COPY.pickClub}`
-            : placeFrom
-              ? COPY.placeToHint
-              : COPY.placeFromHint
+            : placeToDraft
+              ? `${draftYards ?? '—'} yd`
+              : placeFrom
+                ? COPY.placeToHint
+                : COPY.placeFromHint
           : null;
 
   const onCancelPlace = () => {
@@ -864,7 +885,8 @@ export default function HoleScreen() {
           fmb={fmb}
           osmOverlay={osmOverlay}
           placedFrom={placeFrom}
-          placedTo={placeTo}
+          placedTo={placeToDraft ?? placeTo}
+          onPlaceToDrag={placeMode === 'to' ? (point) => setPlaceToDraft(point) : undefined}
           lockFrame
           hideYardsOverlay={!catchUpFullScreen}
           frameEpoch={catchUpFullScreen ? 'catchup' : 'play'}
@@ -891,8 +913,7 @@ export default function HoleScreen() {
                     return;
                   }
                   if (placeMode === 'to') {
-                    setPlaceTo(tap);
-                    setPlaceClubOpen(true);
+                    setPlaceToDraft(tap);
                     return;
                   }
                   if (placeMode === 'edit-from') {
@@ -923,6 +944,11 @@ export default function HoleScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.holeTitle}>{formatHoleHeader(hole.number, hole.par)}</Text>
                 </View>
+                {placeMode === 'to' && placeToDraft && !placeClubOpen ? (
+                  <Pressable onPress={() => confirmToPin()} style={styles.back} accessibilityRole="button">
+                    <Text style={styles.backLabel}>{COPY.confirmPlace}</Text>
+                  </Pressable>
+                ) : null}
               </View>
               {placeHint ? <Text style={styles.catchUpHint}>{placeHint}</Text> : null}
             </View>

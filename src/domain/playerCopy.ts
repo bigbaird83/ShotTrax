@@ -66,6 +66,7 @@ export const COPY = {
   placeFromHint: 'Tap where you hit from.',
   placeToHint: 'Tap where it landed.',
   cancelPlace: 'Cancel',
+  confirmPlace: 'Confirm',
   score: 'Score',
   shots: 'Shots',
   noShots: 'No shots yet.',

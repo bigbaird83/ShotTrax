@@ -70,6 +70,7 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.placeFromHint, 'Tap where you hit from.');
   assert.equal(COPY.placeToHint, 'Tap where it landed.');
   assert.equal(COPY.cancelPlace, 'Cancel');
+  assert.equal(COPY.confirmPlace, 'Confirm');
   assert.equal(COPY.nextHole, 'Next');
   assert.equal(COPY.courseDistance, 'Course distance');
   assert.equal(COPY.courseDistanceSetting, 'Course distance: Miles / Kilometers');
