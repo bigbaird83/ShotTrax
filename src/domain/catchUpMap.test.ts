@@ -4,7 +4,9 @@ import {
   catchUpFrameIncludesUserFix,
   catchUpPinFromTap,
   catchUpPinSeedsFromUserFix,
+  planCancelCatchUp,
   planCatchUpFrame,
+  planCatchUpSheet,
 } from './catchUpMap';
 
 const tee = { lat: 37.0, lng: -122.0 };
@@ -31,6 +33,27 @@ test('missing tee or green frames existing shot pins', () => {
 test('no pins frames the green', () => {
   const frame = planCatchUpFrame({ tee: null, green, shotPins: [] });
   assert.deepEqual(frame, { mode: 'green', points: [green] });
+});
+
+test('add-shot catch-up is fullscreen and hides hole buttons; cancel marks nothing', () => {
+  assert.deepEqual(planCatchUpSheet(true), {
+    map: 'fullscreen',
+    holeButtons: 'hidden',
+    cancelMarks: 'nothing',
+  });
+  assert.deepEqual(planCatchUpSheet(false), {
+    map: 'strip',
+    holeButtons: 'visible',
+    cancelMarks: 'nothing',
+  });
+  const cancel = planCancelCatchUp();
+  assert.equal(cancel.from, null);
+  assert.equal(cancel.to, null);
+  assert.equal(cancel.mode, 'off');
+  assert.equal(cancel.clubOpen, false);
+  assert.equal(cancel.insertSeq, null);
+  assert.equal(cancel.marksShot, false);
+  assert.equal(cancel.marksClub, false);
 });
 
 test('catch-up pins are taps, not the phone fix', () => {

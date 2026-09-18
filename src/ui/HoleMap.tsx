@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode, useEffect, useMemo, useRef } from 'react';
-import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 import MapView, { Marker, Polygon, Polyline } from 'react-native-maps';
 import type { OsmFeature, OsmGolfKind, OsmOverlay } from '@/src/course/types';
 import { featuresForHole } from '@/src/course/osmOverlay';
@@ -153,34 +153,45 @@ function NativeHoleMap({
     ? (framePoints ?? []).map((point) => `${point.latitude},${point.longitude}`).join('|')
     : '';
 
-  useEffect(() => {
-    if (lockFrame) {
-      framedOnce.current = false;
+  const frameLockedMap = () => {
+    const padding = { edgePadding: { top: 88, right: 36, bottom: 56, left: 36 }, animated: false };
+    const points = framePoints && framePoints.length > 0 ? framePoints : coords;
+    if (points.length === 0) return false;
+    if (points.length === 1) {
+      mapRef.current?.animateToRegion({
+        latitude: points[0].latitude,
+        longitude: points[0].longitude,
+        latitudeDelta: 0.004,
+        longitudeDelta: 0.004,
+      });
+    } else {
+      mapRef.current?.fitToCoordinates(points, padding);
     }
+    return true;
+  };
+
+  useEffect(() => {
+    framedOnce.current = false;
   }, [lockFrame, lockKey]);
 
   useEffect(() => {
     const padding = { edgePadding: { top: 72, right: 36, bottom: 48, left: 36 }, animated: !lockFrame };
     if (lockFrame) {
       if (framedOnce.current) return;
-      const points = framePoints && framePoints.length > 0 ? framePoints : coords;
-      if (points.length === 0) return;
-      if (points.length === 1) {
-        mapRef.current?.animateToRegion({
-          latitude: points[0].latitude,
-          longitude: points[0].longitude,
-          latitudeDelta: 0.004,
-          longitudeDelta: 0.004,
-        });
-      } else {
-        mapRef.current?.fitToCoordinates(points, padding);
-      }
-      framedOnce.current = true;
+      if (frameLockedMap()) framedOnce.current = true;
       return;
     }
     if (coords.length < 2) return;
     mapRef.current?.fitToCoordinates(coords, padding);
   }, [coords, framePoints, lockFrame]);
+
+  const onMapLayout = (event: LayoutChangeEvent) => {
+    if (!lockFrame) return;
+    const { width, height } = event.nativeEvent.layout;
+    if (width < 80 || height < 80) return;
+    if (framedOnce.current) return;
+    if (frameLockedMap()) framedOnce.current = true;
+  };
 
   if (!region) {
     return (
@@ -194,7 +205,7 @@ function NativeHoleMap({
   }
 
   return (
-    <View style={[fullBleed ? styles.bleed : styles.wrap, style]}>
+    <View style={[fullBleed ? styles.bleed : styles.wrap, style]} onLayout={onMapLayout}>
       <MapView
         ref={mapRef}
         style={styles.map}
@@ -295,21 +306,23 @@ function NativeHoleMap({
           />
         ) : null}
       </MapView>
-      <View pointerEvents="none" style={styles.toGreen}>
-        <YardsToGreenBadge
-          compact
-          result={yardsToGreen}
-          hasFix={Boolean(userFix)}
-          hasGreen={Boolean(green)}
-        />
-        {fmb ? (
-          <View style={{ marginTop: 6 }}>
-            <FmbRow f={fmb.f} m={fmb.m} b={fmb.b} />
-          </View>
-        ) : null}
-      </View>
+      {!placeHint ? (
+        <View pointerEvents="none" style={styles.toGreen}>
+          <YardsToGreenBadge
+            compact
+            result={yardsToGreen}
+            hasFix={Boolean(userFix)}
+            hasGreen={Boolean(green)}
+          />
+          {fmb ? (
+            <View style={{ marginTop: 6 }}>
+              <FmbRow f={fmb.f} m={fmb.m} b={fmb.b} />
+            </View>
+          ) : null}
+        </View>
+      ) : null}
       {!green && !placeHint ? <Text style={styles.hint}>{COPY.longPressGreen}</Text> : null}
-      {placeHint ? <Text style={styles.hint}>{placeHint}</Text> : null}
+      {placeHint ? <Text style={[styles.hint, styles.placeHint]}>{placeHint}</Text> : null}
     </View>
   );
 }
@@ -367,6 +380,11 @@ const styles = StyleSheet.create({
     fontSize: type.tiny,
     paddingHorizontal: 10,
     paddingVertical: 8,
+  },
+  placeHint: {
+    fontSize: type.body,
+    fontWeight: '800',
+    paddingVertical: 12,
   },
   fallback: {
     minHeight: 160,

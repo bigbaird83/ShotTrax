@@ -13,7 +13,7 @@ import {
   parseCourseDistanceUnit,
   type CourseDistanceUnit,
 } from '../domain/courseDistance';
-import { averageWithBadges, type ClubAverage } from '../domain/averages';
+import { clubAverageFromShots, type ClubAverage } from '../domain/averages';
 import { isValidLatLng } from '../domain/latLng';
 import { clampPenaltyStrokes, scoreAfterPenalty } from '../domain/penalty';
 import { clampPutts, planMadeIt, parsePuttLengths, serializePuttLengths, type PuttLengthId } from '../domain/putts';
@@ -1019,7 +1019,8 @@ export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
        AND (
          (IFNULL(source, 'gps') = 'gps' AND fix_quality IN ('good', 'soft', 'forced'))
          OR IFNULL(source, 'gps') = 'placed'
-       )`,
+       )
+     ORDER BY started_at ASC`,
   );
   return clubs.map((club) => {
     const forClub = shots
@@ -1050,11 +1051,15 @@ export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
               : null;
         return { yards: s.distance_yards, fixQuality: quality };
       });
+    const fill = filled.get(club.id);
     return {
       club,
       typicalCarryYards: filled.get(club.id)?.yards ?? null,
       carrySource: filled.get(club.id)?.source ?? null,
-      ...averageWithBadges(forClub),
+      ...clubAverageFromShots(forClub, {
+        typedCarryYards: fill?.source === 'typed' ? fill.yards : null,
+        estimatedCarryYards: fill?.source === 'estimated' ? fill.yards : null,
+      }),
     };
   });
 }

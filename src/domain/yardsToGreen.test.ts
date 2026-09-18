@@ -1,10 +1,23 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { MAX_SHOT_YD } from '../config/sensing';
+import { haversineYards, roundYards } from './haversine';
 import { isValidLatLng } from './latLng';
-import { resolveGreenPin, yardsToGreenLabel } from './yardsToGreen';
+import {
+  lastClubMark,
+  markToGreen,
+  planToGreenDisplay,
+  resolveGreenPin,
+  toGreenDisplayFromHole,
+  yardsToGreenLabel,
+} from './yardsToGreen';
 
 const from = { lat: 37.0, lng: -122.0 };
 const green = { lat: 37.0 + 150 / 111_320, lng: -122.0 };
+
+function northOf(origin: { lat: number; lng: number }, yards: number) {
+  return { lat: origin.lat + (yards * 0.9144) / 111_320, lng: origin.lng };
+}
 
 test('isValidLatLng rejects missing, 0,0, and out-of-range — never invent a pin', () => {
   assert.equal(isValidLatLng(null), false);
@@ -39,4 +52,185 @@ test('yardsToGreenLabel shows — when quality is none', () => {
 test('yardsToGreenLabel shows yards without GPS preaching', () => {
   const copy = yardsToGreenLabel({ yards: 164, quality: 'soft' });
   assert.equal(copy.value, '164 yd');
+});
+
+test('before a mark, To green is the course tee yardage, never the phone', () => {
+  const home = planToGreenDisplay({
+    courseYards: 282,
+    liveYards: 14167,
+    liveQuality: 'good',
+    shotCount: 0,
+    hasGreen: true,
+  });
+  assert.deepEqual(home, { yards: 282, source: 'course', quality: 'good' });
+
+  const fromHole = toGreenDisplayFromHole({
+    courseYards: 282,
+    green,
+    shots: [],
+  });
+  assert.equal(fromHole.yards, 282);
+  assert.equal(fromHole.source, 'course');
+
+  assert.deepEqual(
+    planToGreenDisplay({
+      courseYards: null,
+      liveYards: 148,
+      liveQuality: 'good',
+      shotCount: 0,
+      hasGreen: true,
+    }),
+    { yards: null, source: 'none', quality: 'none' },
+  );
+});
+
+test('after a mark, comparison is shot start to green, not the phone', () => {
+  const start = northOf(from, 80);
+  const holeGreen = northOf(from, 280);
+  const startToGreen = roundYards(haversineYards(start, holeGreen));
+  assert.ok(Math.abs(startToGreen - 282) > 50);
+  assert.ok(startToGreen <= 600);
+
+  const display = toGreenDisplayFromHole({
+    courseYards: 282,
+    green: holeGreen,
+    shots: [{ seq: 1, startLat: start.lat, startLng: start.lng, fixQuality: 'good' }],
+  });
+  assert.equal(display.source, 'live');
+  assert.equal(display.yards, startToGreen);
+  assert.equal(display.yards, markToGreen(start, holeGreen).yards);
+
+  const keepCard = toGreenDisplayFromHole({
+    courseYards: 282,
+    green: northOf(from, 282),
+    shots: [{ seq: 1, startLat: from.lat, startLng: from.lng, fixQuality: 'good' }],
+  });
+  assert.equal(keepCard.source, 'course');
+  assert.equal(keepCard.yards, 282);
+});
+
+test('quality none after a mark keeps the course number', () => {
+  assert.deepEqual(
+    planToGreenDisplay({
+      courseYards: 282,
+      liveYards: 200,
+      liveQuality: 'none',
+      shotCount: 1,
+      hasGreen: true,
+    }),
+    { yards: 282, source: 'course', quality: 'good' },
+  );
+
+  const start = northOf(from, 80);
+  const holeGreen = northOf(from, 280);
+  const none = toGreenDisplayFromHole({
+    courseYards: 282,
+    green: holeGreen,
+    shots: [{ seq: 1, startLat: start.lat, startLng: start.lng, fixQuality: 'none' }],
+  });
+  assert.equal(none.source, 'course');
+  assert.equal(none.yards, 282);
+  assert.notEqual(none.yards, markToGreen(start, holeGreen).yards);
+});
+
+test('over 600 does not replace the course number', () => {
+  assert.deepEqual(
+    planToGreenDisplay({
+      courseYards: 282,
+      liveYards: 14167,
+      liveQuality: 'good',
+      shotCount: 1,
+      hasGreen: true,
+    }),
+    { yards: 282, source: 'course', quality: 'good' },
+  );
+  assert.deepEqual(
+    planToGreenDisplay({
+      courseYards: 520,
+      liveYards: 601,
+      liveQuality: 'good',
+      shotCount: 1,
+      hasGreen: true,
+    }),
+    { yards: 520, source: 'course', quality: 'good' },
+  );
+  assert.deepEqual(
+    planToGreenDisplay({
+      courseYards: 520,
+      liveYards: 600,
+      liveQuality: 'good',
+      shotCount: 1,
+      hasGreen: true,
+    }),
+    { yards: 600, source: 'live', quality: 'good' },
+  );
+
+  const farStart = northOf(from, 0);
+  const farGreen = northOf(from, 750);
+  const far = toGreenDisplayFromHole({
+    courseYards: 282,
+    green: farGreen,
+    shots: [{ seq: 1, startLat: farStart.lat, startLng: farStart.lng, fixQuality: 'good' }],
+  });
+  assert.ok((markToGreen(farStart, farGreen).yards ?? 0) > 600);
+  assert.equal(far.source, 'course');
+  assert.equal(far.yards, 282);
+});
+
+test('no course yardage uses start-to-green at 600 or under; no green is —', () => {
+  assert.deepEqual(
+    planToGreenDisplay({
+      courseYards: null,
+      liveYards: 148,
+      liveQuality: 'good',
+      shotCount: 1,
+      hasGreen: true,
+    }),
+    { yards: 148, source: 'live', quality: 'good' },
+  );
+  assert.deepEqual(
+    planToGreenDisplay({
+      courseYards: null,
+      liveYards: 700,
+      liveQuality: 'good',
+      shotCount: 1,
+      hasGreen: true,
+    }),
+    { yards: null, source: 'none', quality: 'none' },
+  );
+  assert.deepEqual(
+    planToGreenDisplay({
+      courseYards: 282,
+      liveYards: 200,
+      liveQuality: 'good',
+      shotCount: 0,
+      hasGreen: false,
+    }),
+    { yards: null, source: 'none', quality: 'none' },
+  );
+});
+
+test('400-yard shot-save confirm stays a separate gate from to-green display', () => {
+  assert.equal(MAX_SHOT_YD, 400);
+  const at401 = planToGreenDisplay({
+    courseYards: 282,
+    liveYards: 401,
+    liveQuality: 'good',
+    shotCount: 1,
+    hasGreen: true,
+  });
+  assert.equal(at401.yards, 401);
+  assert.equal(at401.source, 'live');
+});
+
+test('lastClubMark is the latest shot start, never invented', () => {
+  assert.equal(lastClubMark([]), null);
+  assert.equal(lastClubMark([{ seq: 1, startLat: null, startLng: null }]), null);
+  assert.deepEqual(
+    lastClubMark([
+      { seq: 1, startLat: 37, startLng: -122 },
+      { seq: 2, startLat: 37.1, startLng: -122.1 },
+    ]),
+    { lat: 37.1, lng: -122.1 },
+  );
 });

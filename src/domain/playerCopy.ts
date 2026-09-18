@@ -111,12 +111,16 @@ export function formatSuggestedClubChip(shortName: string, carryYards: number | 
   return carryYards != null && Number.isFinite(carryYards) ? `${shortName} · ${Math.round(carryYards)}` : `${shortName} · —`;
 }
 
-/** Picker remaining yards. Only when yards-to-green quality is good or soft. Never invent. */
+/** Picker remaining yards. Pass the planned to-green display. Never invent. */
 export function formatPickerLeftYards(result: {
   yards: number | null;
   quality: string;
 }): string {
-  if ((result.quality === 'good' || result.quality === 'soft') && result.yards != null && Number.isFinite(result.yards)) {
+  if (
+    (result.quality === 'good' || result.quality === 'soft') &&
+    result.yards != null &&
+    Number.isFinite(result.yards)
+  ) {
     return `${Math.round(result.yards)} left`;
   }
   return '—';
@@ -178,7 +182,7 @@ export function yardsToGreenPlayerLabel(
   ctx: { hasGreen?: boolean; hasFix?: boolean } = {},
 ): { heading: string; value: string; detail: string } {
   const heading = COPY.toGreen;
-  if (result.quality !== 'none' && result.yards != null) {
+  if (result.quality !== 'none' && result.yards != null && Number.isFinite(result.yards)) {
     return { heading, value: `${result.yards}`, detail: 'yd' };
   }
   const detail = !ctx.hasGreen

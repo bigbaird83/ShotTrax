@@ -41,6 +41,47 @@ export function catchUpFrameIncludesUserFix(): false {
   return false;
 }
 
+export type CatchUpSheetMap = 'fullscreen' | 'strip';
+export type CatchUpSheetButtons = 'hidden' | 'visible';
+
+export type CatchUpSheet = {
+  map: CatchUpSheetMap;
+  holeButtons: CatchUpSheetButtons;
+  cancelMarks: 'nothing';
+};
+
+/**
+ * Add shot / insert + / pin move takes the screen.
+ * Hole buttons stay off the map. Cancel never writes a mark, shot, or club.
+ */
+export function planCatchUpSheet(active: boolean): CatchUpSheet {
+  if (active) {
+    return { map: 'fullscreen', holeButtons: 'hidden', cancelMarks: 'nothing' };
+  }
+  return { map: 'strip', holeButtons: 'visible', cancelMarks: 'nothing' };
+}
+
+/** Cancel catch-up: no from, no to, no club, no saved shot. Neighbors stay put. */
+export function planCancelCatchUp(): {
+  from: null;
+  to: null;
+  mode: 'off';
+  clubOpen: false;
+  insertSeq: null;
+  marksShot: false;
+  marksClub: false;
+} {
+  return {
+    from: null,
+    to: null,
+    mode: 'off',
+    clubOpen: false,
+    insertSeq: null,
+    marksShot: false,
+    marksClub: false,
+  };
+}
+
 export function featureCentroid(coordinates: LatLng[]): LatLng | null {
   const valid = coordinates.filter((point) => isValidLatLng(point));
   if (valid.length === 0) return null;

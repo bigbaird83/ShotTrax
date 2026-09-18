@@ -60,7 +60,7 @@ test('yardsToGreen: same good/soft bands as acceptFix / shot marks', () => {
   });
 });
 
-test('yardsToGreen remaining distance is not gated by MAX_SHOT_YD', () => {
+test('yardsToGreen remaining distance is not the 400-yard shot-save confirm', () => {
   const far = { lat: origin.lat + ((MAX_SHOT_YD + 80) * 0.9144) / 111_320, lng: origin.lng };
   const result = yardsToGreen(fixAt(origin.lat, origin.lng, 6), far);
   assert.equal(result.quality, 'good');

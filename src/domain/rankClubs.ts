@@ -68,8 +68,9 @@ export function clubToRankInput(
 
 /**
  * Yards used for Suggested top-3.
- * Live average after ≥5 closed GPS shots fully replaces the seed (no blend);
- * else typical-carry seed. Putter is never rankable.
+ * Live average after ≥5 shots allowed into the average (20% filter) fully
+ * replaces the seed (no blend); else typical-carry seed. Outliers do not count.
+ * Putter is never rankable.
  */
 export function rankDistanceYards(club: RankClubInput): number | null {
   if (isPutterClubId(club.id)) return null;

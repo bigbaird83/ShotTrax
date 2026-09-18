@@ -9,6 +9,8 @@ import type { GpsFix, ShotFixQuality } from '../domain/types';
  * `quality` is `none` (and `yards` is null) when there is no usable fix or green —
  * ShotTraxx does not invent a pin or a range. Poor GPS (>25 m / unknown) matches
  * `acceptFix`: not auto-accepted, so quality is `none`.
+ * Display (course card / 50-yard switch / 600 cap) is `planToGreenDisplay`.
+ * This function does not apply the 400-yard shot-save confirm.
  */
 export type YardsToGreenResult = {
   yards: number | null;

@@ -31,7 +31,7 @@ import { clubPickLeaveHref, clubPickLeaveRunsAcceptFix, planClubPickLeave } from
 import { COPY, finishPuttsChip, finishShotChip, formatHoleHeader, formatSuggestedClubChip, markedSuggestedMessage, voiceFailRecovery } from '@/src/domain/playerCopy';
 import { canAdvanceHole, holesNeedingOpenShots } from '@/src/domain/holeAdvance';
 import { isPutterClubId } from '@/src/domain/defaultBag';
-import { catchUpPinFromTap, planCatchUpFrame } from '@/src/domain/catchUpMap';
+import { catchUpPinFromTap, planCancelCatchUp, planCatchUpFrame, planCatchUpSheet } from '@/src/domain/catchUpMap';
 import { planInsertSlots } from '@/src/domain/insertShot';
 import { planPlacedShot } from '@/src/domain/shotSource';
 import { planUndoPlacePins } from '@/src/domain/undoLastShot';
@@ -58,7 +58,7 @@ import { reconcileHoleScore, scoreMismatchMessage } from '@/src/domain/scoreReco
 import { resolveStickyClub, selectClubForMark } from '@/src/domain/stickyClub';
 import type { Club, PenaltyReason } from '@/src/domain/types';
 import { matchSpokenClub, speechContextualStrings } from '@/src/domain/voiceClub';
-import { yardsToGreen } from '@/src/sensing/api';
+import { toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
 import { describeGpsSource } from '@/src/services/location';
 import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, undoShotEdit } from '@/src/services/shotActions';
 import { startClubSpeech, type ClubSpeechSession } from '@/src/services/speechClub';
@@ -177,11 +177,12 @@ export default function HoleScreen() {
   const placeRest = placeBag.filter((club) => !placedRanked.some((row) => row.id === club.id));
 
   const resetPlace = () => {
-    setPlaceFrom(null);
-    setPlaceTo(null);
-    setPlaceClubOpen(false);
-    setPlaceMode('off');
-    setInsertSeq(null);
+    const cancel = planCancelCatchUp();
+    setPlaceFrom(cancel.from);
+    setPlaceTo(cancel.to);
+    setPlaceClubOpen(cancel.clubOpen);
+    setPlaceMode(cancel.mode);
+    setInsertSeq(cancel.insertSeq);
     setEditClubOpen(false);
     setShowAllClubs(false);
   };
@@ -323,9 +324,17 @@ export default function HoleScreen() {
     ),
     depthYards: hole?.greenDepthYards ?? null,
   };
-  const yardsToGreenResult = yardsToGreen(fix, green);
+  const toGreenDisplay = toGreenDisplayFromHole({
+    courseYards: hole?.yards ?? null,
+    green,
+    shots,
+  });
+  const yardsToGreenResult = {
+    yards: toGreenDisplay.yards,
+    quality: toGreenDisplay.quality,
+  };
   const fmb = hasApiFmb(pins) ? formatFmbRow(yardsToGreenDepth(fix, pins)) : null;
-  const toGreen = yardsToGreen(fix, green);
+  const toGreen = yardsToGreenResult;
   const target = resolveDistanceTarget({
     toGreen,
     lastClosedYards: lastClosedShotYards(shots),
@@ -796,9 +805,31 @@ export default function HoleScreen() {
       })
     : null;
 
+  const catchUpSheet = planCatchUpSheet(placing);
+  const hideHoleButtons = catchUpSheet.holeButtons === 'hidden';
+  const catchUpFullScreen = catchUpSheet.map === 'fullscreen';
+  const placeHint =
+    placeMode === 'edit-from'
+      ? COPY.editFromHint
+      : placeMode === 'edit-to'
+        ? COPY.editToHint
+        : placing
+          ? placeTo
+            ? `${placedYards ?? '—'} yd · ${COPY.pickClub}`
+            : placeFrom
+              ? COPY.placeToHint
+              : COPY.placeFromHint
+          : null;
+
+  const onCancelPlace = () => {
+    const editing = placeMode === 'edit-from' || placeMode === 'edit-to' || editClubOpen;
+    resetPlace();
+    if (editing && editShotId) setEditOpen(true);
+  };
+
   return (
     <View style={styles.fill}>
-      <View style={styles.mapWrap}>
+      <View style={catchUpFullScreen ? styles.mapWrapFull : styles.mapWrap}>
         <HoleMap
           fullBleed
           holeNumber={hole.number}
@@ -810,24 +841,16 @@ export default function HoleScreen() {
           osmOverlay={osmOverlay}
           placedFrom={placeFrom}
           placedTo={placeTo}
-          lockFrame={placing}
-          framePoints={catchUpFrame?.points.map((point) => ({
-            latitude: point.lat,
-            longitude: point.lng,
-          }))}
-          placeHint={
-            placeMode === 'edit-from'
-              ? COPY.editFromHint
-              : placeMode === 'edit-to'
-                ? COPY.editToHint
-                : placing
-                  ? placeTo
-                    ? `${placedYards ?? '—'} yd · ${COPY.pickClub}`
-                    : placeFrom
-                      ? COPY.placeToHint
-                      : COPY.placeFromHint
-                  : null
+          lockFrame={catchUpFullScreen}
+          framePoints={
+            catchUpFullScreen
+              ? catchUpFrame?.points.map((point) => ({
+                  latitude: point.lat,
+                  longitude: point.lng,
+                }))
+              : undefined
           }
+          placeHint={placeHint}
           onShotPress={readOnly || placing ? undefined : openEdit}
           onPlacePoint={
             readOnly || placeMode === 'off' || placeClubOpen || editClubOpen
@@ -864,35 +887,49 @@ export default function HoleScreen() {
           }
         />
         <View pointerEvents="box-none" style={[styles.sticky, { paddingTop: insets.top + 6 }]}>
-          <View style={styles.stickyInner}>
-            <Pressable onPress={() => setMenuOpen(true)} style={styles.back} accessibilityRole="button">
-              <Text style={styles.backLabel}>{COPY.menu}</Text>
-            </Pressable>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.holeTitle}>{formatHoleHeader(hole.number, hole.par)}</Text>
-              <Text style={styles.stickyMeta}>
-                {formatSiLabel(hole.handicap)}
-                {hole.yards != null ? ` · ${hole.yards} yd` : ''}
-              </Text>
-              {teeLine ? <Text style={styles.stickyMeta}>{teeLine}</Text> : null}
+          {catchUpFullScreen ? (
+            <View>
+              <View style={styles.catchUpBar}>
+                <Pressable onPress={onCancelPlace} style={styles.back} accessibilityRole="button">
+                  <Text style={styles.backLabel}>{COPY.cancelPlace}</Text>
+                </Pressable>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.holeTitle}>{formatHoleHeader(hole.number, hole.par)}</Text>
+                </View>
+              </View>
+              {placeHint ? <Text style={styles.catchUpHint}>{placeHint}</Text> : null}
             </View>
-            <Pressable
-              onPress={() => setScoreOpen(true)}
-              style={styles.scoreChip}
-              accessibilityRole="button">
-              <Text style={styles.scoreChipLabel}>{hole.score ?? '—'}</Text>
-            </Pressable>
-          </View>
+          ) : (
+            <View style={styles.stickyInner}>
+              <Pressable onPress={() => setMenuOpen(true)} style={styles.back} accessibilityRole="button">
+                <Text style={styles.backLabel}>{COPY.menu}</Text>
+              </Pressable>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.holeTitle}>{formatHoleHeader(hole.number, hole.par)}</Text>
+                <Text style={styles.stickyMeta}>
+                  {formatSiLabel(hole.handicap)}
+                  {hole.yards != null ? ` · ${hole.yards} yd` : ''}
+                </Text>
+                {teeLine ? <Text style={styles.stickyMeta}>{teeLine}</Text> : null}
+              </View>
+              <Pressable
+                onPress={() => setScoreOpen(true)}
+                style={styles.scoreChip}
+                accessibilityRole="button">
+                <Text style={styles.scoreChipLabel}>{hole.score ?? '—'}</Text>
+              </Pressable>
+            </View>
+          )}
         </View>
       </View>
 
-      {simBanner ? (
+      {!hideHoleButtons && simBanner ? (
         <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
           <GpsBanner message={simBanner} />
         </View>
       ) : null}
 
-      {voiceError ? (
+      {!hideHoleButtons && voiceError ? (
         <View style={styles.voiceFail}>
           <Text style={styles.warn}>{voiceError}</Text>
           <View style={styles.row}>
@@ -910,29 +947,15 @@ export default function HoleScreen() {
           </View>
         </View>
       ) : null}
-      {toast ? <Text style={styles.toast}>{toast}</Text> : null}
+      {!hideHoleButtons && toast ? <Text style={styles.toast}>{toast}</Text> : null}
 
-      {placing ? (
-        <View style={styles.pendingWrap}>
-          <BigButton
-            label={COPY.cancelPlace}
-            variant="ghost"
-            onPress={() => {
-              const editing = placeMode === 'edit-from' || placeMode === 'edit-to' || editClubOpen;
-              resetPlace();
-              if (editing && editShotId) setEditOpen(true);
-            }}
-          />
-        </View>
-      ) : null}
-
-      {!readOnly && editUndo && !placing ? (
+      {!hideHoleButtons && !readOnly && editUndo && !placing ? (
         <View style={styles.pendingWrap}>
           <BigButton label={COPY.undoEdit} variant="ghost" onPress={onUndoEdit} />
         </View>
       ) : null}
 
-      {pendingPutts.length > 0 || pendingShots.length > 0 ? (
+      {!hideHoleButtons && (pendingPutts.length > 0 || pendingShots.length > 0) ? (
         <View style={styles.pendingWrap}>
           {pendingShots.map((row) => (
             <Pressable
@@ -957,6 +980,7 @@ export default function HoleScreen() {
         </View>
       ) : null}
 
+      {!hideHoleButtons ? (
       <ScrollView style={styles.shotList} nestedScrollEnabled>
         {shots.length === 0 ? (
           <Text style={styles.muted}>{COPY.noShots}</Text>
@@ -1012,8 +1036,9 @@ export default function HoleScreen() {
           </Pressable>
         ) : null}
       </ScrollView>
+      ) : null}
 
-      {!readOnly && ranked.length > 0 ? (
+      {!hideHoleButtons && !readOnly && ranked.length > 0 ? (
         <View style={styles.top3}>
           {ranked.map((club, index) => (
             <Pressable
@@ -1037,6 +1062,7 @@ export default function HoleScreen() {
         </View>
       ) : null}
 
+      {!hideHoleButtons ? (
       <ThumbZone>
         <View style={styles.clubRow}>
           <Pressable
@@ -1061,13 +1087,6 @@ export default function HoleScreen() {
           label={COPY.scorecard}
           variant="ghost"
           onPress={() => setScorecardOpen(true)}
-        />
-
-        <BigButton
-          label={COPY.allClubs}
-          variant="secondary"
-          disabled={readOnly || placing}
-          onPress={openBag}
         />
 
         <View style={styles.markWrap}>
@@ -1099,41 +1118,14 @@ export default function HoleScreen() {
         ) : null}
 
         {!readOnly ? (
-          <View style={styles.row}>
-            <BigButton
-              label={COPY.undoLast}
-              variant="ghost"
-              style={{ flex: 1 }}
-              disabled={busy || shots.length === 0}
-              onPress={onUndo}
-            />
-            <BigButton
-              label={COPY.drop}
-              variant="secondary"
-              style={{ flex: 1 }}
-              disabled={placing}
-              onPress={() => setDropOpen(true)}
-            />
-          </View>
-        ) : null}
-
-        {!readOnly ? (
-          <View style={styles.row}>
-            <BigButton
-              label={COPY.addShot}
-              variant="ghost"
-              style={{ flex: 1 }}
-              onPress={() => startCatchUp(null)}
-            />
-            <BigButton
-              label={COPY.penalty}
-              variant="ghost"
-              style={{ flex: 1 }}
-              onPress={() => setPenaltyOpen(true)}
-            />
-          </View>
+          <BigButton
+            label={COPY.addShot}
+            variant="ghost"
+            onPress={() => startCatchUp(null)}
+          />
         ) : null}
       </ThumbZone>
+      ) : null}
 
       <FullSheet
         visible={menuOpen}
@@ -1172,6 +1164,33 @@ export default function HoleScreen() {
             onPress={() => {
               setMenuOpen(false);
               setScorecardOpen(true);
+            }}
+          />
+          <BigButton
+            label={COPY.undoLast}
+            variant="ghost"
+            disabled={busy || readOnly || shots.length === 0}
+            onPress={() => {
+              setMenuOpen(false);
+              onUndo();
+            }}
+          />
+          <BigButton
+            label={COPY.drop}
+            variant="ghost"
+            disabled={readOnly || placing}
+            onPress={() => {
+              setMenuOpen(false);
+              setDropOpen(true);
+            }}
+          />
+          <BigButton
+            label={COPY.penalty}
+            variant="ghost"
+            disabled={readOnly}
+            onPress={() => {
+              setMenuOpen(false);
+              setPenaltyOpen(true);
             }}
           />
           <BigButton
@@ -1538,6 +1557,26 @@ export default function HoleScreen() {
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: colors.bg },
   mapWrap: { flex: 1 },
+  mapWrapFull: { flex: 1, minHeight: 0 },
+  catchUpBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(11,26,18,0.88)',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  catchUpHint: {
+    marginTop: 8,
+    backgroundColor: 'rgba(11,26,18,0.88)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: colors.cream,
+    fontSize: type.body,
+    fontWeight: '800',
+  },
   sticky: {
     position: 'absolute',
     top: 0,
