@@ -33,7 +33,7 @@ type Props = {
   /** Frame once to these points. Never includes the phone fix. */
   framePoints?: Coord[] | null;
   lockFrame?: boolean;
-  /** Tee-to-green bearing. Null = do not rotate. */
+  /** Tee-to-green camera heading. Null = do not rotate. Does not rewrite pins. */
   heading?: number | null;
 };
 

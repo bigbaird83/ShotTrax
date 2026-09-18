@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { holeCameraHeading, planHoleCamera } from './holeCamera';
+import {
+  holeCameraHeading,
+  holeCameraIsCameraOnly,
+  holeCameraUsesPhoneHeading,
+  planHoleCamera,
+} from './holeCamera';
 
 const tee = { lat: 37.0, lng: -122.0 };
 const greenNorth = { lat: 37.01, lng: -122.0 };
@@ -27,6 +32,16 @@ test('tee-to-green west is around 270', () => {
   const heading = holeCameraHeading(tee, greenWest);
   assert.ok(heading != null);
   assert.ok(heading > 225 && heading < 315, `expected ~270, got ${heading}`);
+});
+
+test('bearing is tee-to-green, never the phone heading or compass north by default', () => {
+  const phone = { lat: 36.5, lng: -121.5 };
+  const holeUp = holeCameraHeading(tee, greenNorth);
+  const fromPhone = holeCameraHeading(phone, greenNorth);
+  assert.equal(holeUp, 0);
+  assert.notEqual(holeUp, fromPhone);
+  assert.equal(holeCameraUsesPhoneHeading(), false);
+  assert.equal(holeCameraIsCameraOnly(), true);
 });
 
 test('missing tee or green means no rotation — do not invent a bearing', () => {

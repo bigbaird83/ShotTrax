@@ -7,6 +7,16 @@ function toRad(deg: number): number {
   return (deg * Math.PI) / 180;
 }
 
+/** Rotation is the map camera only. Pin coordinates and yards do not change. */
+export function holeCameraIsCameraOnly(): true {
+  return true;
+}
+
+/** Bearing is tee → green. Never the phone compass / GPS heading. */
+export function holeCameraUsesPhoneHeading(): false {
+  return false;
+}
+
 /**
  * Camera heading that puts the tee at the bottom of the phone and the green
  * at the top, straight up the screen. That is the initial great-circle bearing
@@ -14,6 +24,7 @@ function toRad(deg: number): number {
  *
  * Missing / invalid tee or green → null. Coincident points → null.
  * Never invents a bearing. Not compass north unless the hole actually runs north.
+ * Not the phone heading. Pins and yards stay as stored.
  */
 export function holeCameraHeading(
   tee: LatLng | null | undefined,
