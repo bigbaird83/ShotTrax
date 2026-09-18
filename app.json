@@ -6,6 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "shottrax",
+    "owner": "bigbaird83",
     "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true,
@@ -17,8 +18,10 @@
       "infoPlist": {
         "CFBundleDisplayName": "ShotTraxx",
         "CFBundleName": "ShotTraxx",
+        "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "ShotTraxx captures GPS when you pick a club to mark where you hit from.",
         "NSPhotoLibraryUsageDescription": "ShotTraxx does not use your photo library. This description is required to ship on the App Store.",
+        "NSPhotoLibraryAddUsageDescription": "ShotTraxx does not save photos to your library. This description is required to ship on the App Store.",
         "NSMicrophoneUsageDescription": "ShotTraxx uses the microphone only when you tap Say a club so you can name a club like “seven iron”.",
         "NSSpeechRecognitionUsageDescription": "ShotTraxx uses speech recognition to match what you say to a club in your bag."
       }
@@ -75,7 +78,7 @@
     },
     "extra": {
       "eas": {
-        "_todo_projectId": "Run `eas init` or `eas build:configure` while logged in. Expo writes extra.eas.projectId here. Commit that UUID (it is not a secret). Do not invent a projectId, Apple Team ID, or ASC API key.",
+        "projectId": "0db22db7-ae58-42c6-9be8-fb6b07201a05",
         "build": {
           "experimental": {
             "ios": {
