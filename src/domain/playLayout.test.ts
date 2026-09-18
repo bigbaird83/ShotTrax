@@ -245,8 +245,12 @@ test('Add shot, play, and edit open hole-up once; map chip stays, footer does no
   assert.match(ready, /if \(framedOnce\.current\) return;/);
   assert.doesNotMatch(ready, /applyLockedCamera/);
   const settled = map.slice(map.indexOf('const onRegionSettled'), map.indexOf('if (!lockedRegion)'));
-  assert.match(settled, /if \(framedOnce\.current\)/);
+  assert.match(settled, /if \(framedOnce\.current\) return;/);
   assert.doesNotMatch(settled, /framedOnce\.current = false/);
+  assert.doesNotMatch(
+    settled.slice(settled.indexOf('if (framedOnce.current)'), settled.indexOf('if (regionIsHoleFrame')),
+    /applyLockedCamera|frameLockedMap|planCourseCardCamera/,
+  );
 });
 
 test('opening, Prev/Next, and Scorecard or Menu return reframe before the dock comes back', () => {

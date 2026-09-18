@@ -97,6 +97,42 @@ export function addShotMapFrozenWhilePinLive(): false {
   return false;
 }
 
+/** Signal Lab: two-finger pan and pinch work after the first tee→green frame. */
+export function addShotTwoFingerPanAfterFrame(): true {
+  return true;
+}
+
+export function addShotPinchZoomAfterFrame(): true {
+  return true;
+}
+
+/** Pan / pinch never flip the native user puck on. */
+export function addShotGesturesShowUserLocation(): false {
+  return false;
+}
+
+/** Pan / pinch never re-run planCourseCardCamera or apply the tee→green camera. */
+export function addShotGesturesRerunCourseCardCamera(): false {
+  return false;
+}
+
+export function addShotGesturesLeaveCameraAloneAfterFrame(): true {
+  return true;
+}
+
+/** Yards stay haversine from the pin's map point — not a finger pixel, not a re-frame. */
+export function addShotGestureYardsUsePinHaversine(): true {
+  return true;
+}
+
+export function addShotGestureYardsUseFingerPixel(): false {
+  return false;
+}
+
+export function addShotGestureYardsUseReframe(): false {
+  return false;
+}
+
 /** Same one-finger pin / two-finger map on an earlier shot's landing. */
 export function editToFreezesPan(): false {
   return false;

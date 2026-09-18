@@ -347,17 +347,16 @@ function NativeHoleMap({
 
   const onRegionSettled = (region: { latitude: number; longitude: number }) => {
     if (!lockFrame) return;
-    if (framedOnce.current) {
-      if (regionIsHoleFrame(region, holeCenterRef.current)) setHoleCameraReady(true);
-      return;
-    }
+    // After the first tee→green frame, leave the camera alone.
+    // Two-finger pan / pinch must not snap back or re-run the course-card camera.
+    if (framedOnce.current) return;
     if (regionIsHoleFrame(region, holeCenterRef.current)) {
       framedOnce.current = true;
       pendingLocked.current = false;
       setHoleCameraReady(true);
       return;
     }
-    // Pin drag and two-finger pan must not move the camera. GPS neither.
+    // Pin drag must not count as framed. GPS neither.
     if (toPinLive) return;
     // Opening house / default GPS is not framed. A null ref is not success.
     markFramedIfLive(frameLockedMap());
