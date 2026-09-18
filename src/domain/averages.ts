@@ -49,7 +49,9 @@ export function shotMovesClubAverage(args: { yards: number; baselineYards: numbe
   return Math.abs(args.yards - args.baselineYards) / Math.abs(args.baselineYards) < AVERAGE_OUTLIER_RATIO;
 }
 
-/** Walk shots in order. Compare each to the live average, or the seed if there is not one yet. */
+/** Walk shots in order. Compare each to the live average, or the seed if there is not one yet.
+ * Kept shots are the only ones that move the average or count toward the five-shot seed replacement.
+ * Live / soft / Placed use the same filter. The shot still saves on the hole. */
 export function shotsForClubAverage(shots: AverageShot[], seed: AverageSeed): AverageShot[] {
   const kept: AverageShot[] = [];
   for (const shot of shots) {
@@ -65,6 +67,11 @@ export function shotsForClubAverage(shots: AverageShot[], seed: AverageSeed): Av
     }
   }
   return kept;
+}
+
+/** Average and sample count after the 20% filter. `count` is what replaces the seed at 5. */
+export function clubAverageFromShots(shots: AverageShot[], seed: AverageSeed): ClubAverage {
+  return averageWithBadges(shotsForClubAverage(shots, seed));
 }
 
 /**
