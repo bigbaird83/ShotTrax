@@ -40,6 +40,10 @@ import {
   playHidesMapsLegal,
   playHidesMapsCompass,
   playMapsChromeUntilTap,
+  addShotHidesMapsLegal,
+  addShotHidesMapsCompass,
+  addShotHidesUserLocation,
+  addShotFollowsUserLocation,
   playSuggestedIsSidewaysStrip,
   playStackedSuggestionChips,
   playStripCappedAtThree,
@@ -287,4 +291,34 @@ test('play header is one line; shot list is one overlay row with + and In play o
   assert.match(map, /showsCompass=\{allowMapsChrome && mapsChrome\}/);
   assert.match(map, /legalLabelInsets/);
   assert.match(map, /revealMapsChrome/);
+});
+
+test('Add shot hides the user puck, Legal, and compass; play and edit wait for a tap', () => {
+  assert.equal(addShotHidesUserLocation(), true);
+  assert.equal(addShotFollowsUserLocation(), false);
+  assert.equal(addShotHidesMapsLegal(), true);
+  assert.equal(addShotHidesMapsCompass(), true);
+  assert.equal(playHidesMapsLegal(), true);
+  assert.equal(playHidesMapsCompass(), true);
+  assert.equal(playMapsChromeUntilTap(), true);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const playMap = hole.slice(hole.indexOf('<HoleMap'), hole.indexOf('onDropGreenEstimate'));
+  assert.match(playMap, /showPhonePin=\{!catchUpFullScreen\}/);
+  assert.match(playMap, /allowMapsChrome=\{!catchUpFullScreen\}/);
+  const editMap = hole.slice(hole.indexOf('visible={editOpen && !editClubOpen}'), hole.indexOf('visible={scoreOpen}'));
+  assert.match(editMap, /showPhonePin=\{false\}/);
+  assert.match(editMap, /allowMapsChrome/);
+
+  const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
+  const userLoc = map.slice(map.indexOf('showsUserLocation='), map.indexOf('showsMyLocationButton'));
+  assert.match(userLoc, /allowMapsChrome/);
+  assert.match(userLoc, /: false/);
+  assert.doesNotMatch(userLoc, /true/);
+  assert.match(map, /followsUserLocation=\{false\}/);
+  assert.match(map, /showPhonePin && userDot/);
+  assert.match(map, /!allowMapsChrome \? <View pointerEvents="none" style=\{styles\.legalCover\}/);
+  assert.match(map, /showsCompass=\{allowMapsChrome && mapsChrome\}/);
+  assert.doesNotMatch(map, /followsUserLocation=\{true\}/);
+  assert.doesNotMatch(map, /showsUserLocation=\{true\}/);
 });

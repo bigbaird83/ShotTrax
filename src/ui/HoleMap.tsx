@@ -381,12 +381,16 @@ function NativeHoleMap({
           : holeUpCamera
             ? { initialCamera: holeUpCamera }
             : { initialRegion: lockedRegion })}
-        showsUserLocation={Boolean(showPhonePin) && holeMapShowsUserLocation(Boolean(lockFrame))}
+        showsUserLocation={
+          allowMapsChrome ? Boolean(showPhonePin) && holeMapShowsUserLocation(Boolean(lockFrame)) : false
+        }
         showsMyLocationButton={false}
         followsUserLocation={false}
         showsCompass={allowMapsChrome && mapsChrome}
         legalLabelInsets={
-          allowMapsChrome && mapsChrome ? undefined : { top: 0, right: 0, bottom: -220, left: 0 }
+          allowMapsChrome && mapsChrome
+            ? undefined
+            : { top: -120, right: -120, bottom: -280, left: -120 }
         }
         zoomEnabled
         zoomTapEnabled
@@ -674,8 +678,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     bottom: 0,
-    width: 132,
-    height: 44,
+    width: 168,
+    height: 56,
     backgroundColor: colors.bgElevated,
   },
   holeBadgeText: {

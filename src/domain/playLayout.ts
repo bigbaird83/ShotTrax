@@ -187,3 +187,20 @@ export function playHidesMapsCompass(): true {
 export function playMapsChromeUntilTap(): true {
   return true;
 }
+
+/** Add shot never shows Legal, the compass, or the user-location puck. */
+export function addShotHidesMapsLegal(): true {
+  return true;
+}
+
+export function addShotHidesMapsCompass(): true {
+  return true;
+}
+
+export function addShotHidesUserLocation(): true {
+  return true;
+}
+
+export function addShotFollowsUserLocation(): false {
+  return false;
+}
