@@ -1,3 +1,11 @@
+import {
+  carryFromClubLabel,
+  clubStripCappedAtThree,
+  clubStripOnlyTapMarks,
+  clubStripSortedByCarry,
+  clubStripSortedByName,
+  planClubStrip,
+} from './clubStrip';
 import { isPutterClubId } from './defaultBag';
 import { COPY } from './playerCopy';
 
@@ -87,7 +95,7 @@ export function watchStackedSuggestionRows(): false {
   return false;
 }
 
-/** Swipe left shows a shorter club. Swipe right shows a longer club. */
+/** Shorter peeks on the left. Longer peeks on the right. */
 export function watchStripSwipeLeftIsShorter(): true {
   return true;
 }
@@ -96,33 +104,66 @@ export function watchStripSwipeRightIsLonger(): true {
   return true;
 }
 
+export function watchStripShorterPeeksLeft(): true {
+  return true;
+}
+
+export function watchStripLongerPeeksRight(): true {
+  return true;
+}
+
+export function watchStripSortedByCarry(): true {
+  return clubStripSortedByCarry();
+}
+
+export function watchStripSortedByName(): false {
+  return clubStripSortedByName();
+}
+
+export function watchStripSwipeMarksShot(): false {
+  return false;
+}
+
+export function watchStripScrollMarksShot(): false {
+  return false;
+}
+
+export function watchStripOnlyTapMarks(): true {
+  return clubStripOnlyTapMarks();
+}
+
+export function watchStripCappedAtThree(): false {
+  return clubStripCappedAtThree();
+}
+
+export function watchStripUsesFullBag(): true {
+  return true;
+}
+
 export function watchAllClubsExtendsStrip(): false {
   return false;
 }
 
 export function watchCarryFromLabel(label: string): number | null {
-  const raw = label.split(' · ')[1]?.trim();
-  if (!raw || raw === '—') return null;
-  const yards = Number(raw);
-  return Number.isFinite(yards) ? yards : null;
+  return carryFromClubLabel(label);
 }
 
 /**
- * Sideways strip of the same top 3 the phone ranked. Longer clubs sit to
- * the left so a left swipe is shorter and a right swipe is longer.
- * `openIndex` is the closest carry (the pick). Putter never enters.
+ * Sideways strip of the bag, sorted by carry (short left, long right) —
+ * never by club name, never capped at three. Opens centered on the carry
+ * closest to yards left. Putter never enters. Swipe / scroll does not mark.
  */
 export function planWatchClubStrip(args: {
-  top3: string[];
+  top3?: string[];
+  bag?: string[];
   labels: Record<string, string>;
-}): { ids: string[]; openIndex: number } {
-  const ranked = watchClubListTop3(args.top3);
-  const pick = ranked[0] ?? null;
-  const ordered = ranked
-    .map((id) => ({ id, carry: watchCarryFromLabel(args.labels[id] ?? '') }))
-    .sort((a, b) => (b.carry ?? Number.NEGATIVE_INFINITY) - (a.carry ?? Number.NEGATIVE_INFINITY));
-  const openIndex = pick ? Math.max(0, ordered.findIndex((club) => club.id === pick)) : 0;
-  return { ids: ordered.map((club) => club.id), openIndex };
+  holeYards?: number | null;
+}): { ids: string[]; openIndex: number; pickId: string | null } {
+  const source = args.bag ?? args.top3 ?? [];
+  return planClubStrip({
+    clubs: source.map((id) => ({ id, carry: watchCarryFromLabel(args.labels[id] ?? '') })),
+    yardsLeft: args.holeYards,
+  });
 }
 
 /** Same club · 2i — club name only. Top-3 rows keep their yards. */

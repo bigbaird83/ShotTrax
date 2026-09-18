@@ -66,6 +66,19 @@ export function playChipRowIncludes(): readonly ['suggested', 'all_clubs', 'say_
   return ['suggested', 'all_clubs', 'say_club'];
 }
 
+/** Suggested slot is the sideways carry strip, not stacked chips. */
+export function playSuggestedIsSidewaysStrip(): true {
+  return true;
+}
+
+export function playStackedSuggestionChips(): false {
+  return false;
+}
+
+export function playStripCappedAtThree(): false {
+  return false;
+}
+
 export function playShowsTallSameClub(): false {
   return false;
 }

@@ -3,7 +3,6 @@ import SwiftUI
 struct ContentView: View {
   @EnvironmentObject private var session: WatchClubSession
   @State private var showAllClubs = false
-  @State private var stripPage = ""
 
   private let buckets: [(id: String, label: String)] = [
     ("inside_3", "Under 3 ft"),
@@ -172,25 +171,36 @@ struct ContentView: View {
           .lineLimit(1)
       }
 
-      TabView(selection: $stripPage) {
-        ForEach(Array(stripClubs.enumerated()), id: \.element.id) { _, club in
-          Button(action: { session.pick(clubId: club.id) }) { // same pick as bag — marks the shot
-            Text(session.list.label(for: club.id))
-              .font(.system(size: 16, weight: .black))
-              .foregroundStyle(club.id == stripPickId ? Color("accent") : Color("cream"))
-              .frame(maxWidth: .infinity)
-              .frame(minHeight: 36)
+      GeometryReader { geo in
+        let pillWidth = geo.size.width * 0.62
+        ScrollViewReader { proxy in
+          ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+              ForEach(stripClubs, id: \.id) { club in
+                Text(session.list.label(for: club.id))
+                  .font(.system(size: 15, weight: .black))
+                  .foregroundStyle(club.id == stripPickId ? Color("accent") : Color("cream"))
+                  .frame(width: pillWidth, height: 36)
+                  .background(Color("bg"))
+                  .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                      .stroke(club.id == stripPickId ? Color("accent") : Color("cream"), lineWidth: 1)
+                  )
+                  .id(club.id)
+                  .onTapGesture {
+                    if !session.sending { session.pick(clubId: club.id) }
+                  }
+              }
+            }
+            .padding(.horizontal, (geo.size.width - pillWidth) / 2)
           }
-          .buttonStyle(.bordered)
-          .tint(club.id == stripPickId ? Color("accent") : Color("cream"))
-          .disabled(session.sending)
-          .tag(club.id)
+          .onAppear { proxy.scrollTo(stripPickId ?? stripClubs.first?.id, anchor: .center) }
+          .onChange(of: stripScrollKey) { _ in
+            proxy.scrollTo(stripPickId ?? stripClubs.first?.id, anchor: .center)
+          }
         }
       }
-      .tabViewStyle(.page)
-      .frame(height: 48)
-      .onAppear { openStripOnPick() }
-      .onChange(of: session.list.top3.joined(separator: ",")) { _ in openStripOnPick() }
+      .frame(height: 44)
 
       Button(action: { session.pickSameClub() }) {
         Text(sameClubTitle)
@@ -213,11 +223,11 @@ struct ContentView: View {
       .buttonStyle(.bordered)
       .tint(Color("cream"))
 
-      if showAllClubs || session.list.top3.isEmpty {
+      if showAllClubs {
         ScrollView {
           VStack(spacing: 2) {
             ForEach(moreClubs, id: \.self) { clubId in
-              Button(action: { session.pick(clubId: clubId) }) { // same pick as top 3 — marks the shot
+              Button(action: { session.pick(clubId: clubId) }) { // same pick as strip — marks the shot
                 Text(session.list.label(for: clubId))
                   .font(.system(size: 13, weight: .heavy))
                   .foregroundStyle(Color("cream"))
@@ -244,28 +254,31 @@ struct ContentView: View {
   }
 
   private var moreClubs: [String] {
-    session.list.bag.filter { !session.list.top3.contains($0) }
+    session.list.bag
+  }
+
+  private var stripScrollKey: String {
+    "\(session.list.bag.joined(separator: ","))-\(session.list.yardsToGreen ?? -1)"
   }
 
   private var stripPickId: String? {
-    session.list.top3.first { $0 != "club_putter" }
+    let clubs = stripClubs
+    guard !clubs.isEmpty else { return nil }
+    guard let hole = session.list.yardsToGreen else { return clubs.first?.id }
+    return clubs.min { abs($0.carry - hole) < abs($1.carry - hole) }?.id
   }
 
   private var stripClubs: [(id: String, carry: Int)] {
-    session.list.top3
+    session.list.bag
       .filter { $0 != "club_putter" }
       .map { id in (id: id, carry: carryFromLabel(session.list.label(for: id))) }
-      .sorted { $0.carry > $1.carry }
+      .sorted { $0.carry < $1.carry }
   }
 
   private func carryFromLabel(_ label: String) -> Int {
     let parts = label.components(separatedBy: " · ")
     if parts.count > 1, let yards = Int(parts[1]) { return yards }
-    return 0
-  }
-
-  private func openStripOnPick() {
-    stripPage = stripPickId ?? stripClubs.first?.id ?? ""
+    return 10_000
   }
 }
 

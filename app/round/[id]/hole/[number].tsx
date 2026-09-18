@@ -37,6 +37,7 @@ import { deleteShotPrompt } from '@/src/domain/deleteShot';
 import { planInsertSlots } from '@/src/domain/insertShot';
 import { confirmUndoIsLive, planConfirmUndo, type ConfirmUndoWindow } from '@/src/domain/confirmUndo';
 import { confirmPlaceToDraft, planPlaceToDragPreview } from '@/src/domain/placeToDrag';
+import { planClubStrip } from '@/src/domain/clubStrip';
 import { planPlayLayout } from '@/src/domain/playLayout';
 import { planPlacedShot } from '@/src/domain/shotSource';
 import { planUndoPlacePins } from '@/src/domain/undoLastShot';
@@ -57,7 +58,7 @@ import {
   type PuttLengthId,
 } from '@/src/domain/putts';
 import { canMoveFromPin, canMoveToPin, type ShotEditSnapshot } from '@/src/domain/shotEdit';
-import { clubToRankInput, lastClosedShotYards, rankCatchUpClubs, rankDistanceYards, rankTopClubs, resolveNextShotDistanceTarget } from '@/src/domain/rankClubs';
+import { clubToRankInput, lastClosedShotYards, rankDistanceYards, rankTopClubs, resolveNextShotDistanceTarget } from '@/src/domain/rankClubs';
 import { planScorecardDismiss } from '@/src/domain/scorecard';
 import { reconcileHoleScore, scoreMismatchMessage } from '@/src/domain/scoreReconcile';
 import { resolveStickyClub, selectClubForMark } from '@/src/domain/stickyClub';
@@ -74,6 +75,7 @@ import { MADE_IT_FEEDBACK, PHONE_UNAVAILABLE } from '@/src/domain/watchMessages'
 import { QualityBadge } from '@/src/ui/Badge';
 import { BigButton } from '@/src/ui/BigButton';
 import { ClubButton } from '@/src/ui/ClubButton';
+import { ClubStrip } from '@/src/ui/ClubStrip';
 import { GpsBanner } from '@/src/ui/GpsBanner';
 import { hapticMark, hapticSelect, hapticTap, hapticWarn } from '@/src/ui/haptics';
 import { HoleMap } from '@/src/ui/HoleMap';
@@ -183,12 +185,23 @@ export default function HoleScreen() {
   const placedYards = placedPlan && placedPlan.ok ? placedPlan.distanceYards : null;
   const editingShot = editShotId ? shots.find((shot) => shot.id === editShotId) ?? null : null;
   const pickerYards = editClubOpen ? (editingShot?.distanceYards ?? null) : placedYards;
-  const placedRanked = rankCatchUpClubs(
-    averages.map((row) => clubToRankInput(row.club, row)),
-    pickerYards,
-  );
+  const placeStripPlan = planClubStrip({
+    clubs: clubs.map((club) => {
+      const row = averages.find((item) => item.club.id === club.id);
+      return {
+        id: club.id,
+        carry: row ? rankDistanceYards(clubToRankInput(row.club, row)) : null,
+      };
+    }),
+    yardsLeft: pickerYards,
+  });
+  const placeStripItems = placeStripPlan.ids.map((id) => {
+    const club = clubs.find((row) => row.id === id);
+    const row = averages.find((item) => item.club.id === id);
+    const carry = row ? rankDistanceYards(clubToRankInput(row.club, row)) : null;
+    return { id, label: formatSuggestedClubChip(club?.shortName ?? id, carry) };
+  });
   const placeBag = clubs.filter((club) => !isPutterClubId(club.id));
-  const placeRest = placeBag.filter((club) => !placedRanked.some((row) => row.id === club.id));
 
   const resetPlace = () => {
     const cancel = planCancelCatchUp();
@@ -385,6 +398,22 @@ export default function HoleScreen() {
     averages.map((row) => clubToRankInput(row.club, row)),
     target,
   );
+  const stripPlan = planClubStrip({
+    clubs: clubs.map((club) => {
+      const row = averages.find((item) => item.club.id === club.id);
+      return {
+        id: club.id,
+        carry: row ? rankDistanceYards(clubToRankInput(row.club, row)) : null,
+      };
+    }),
+    yardsLeft: target?.dYards ?? toGreen.yards,
+  });
+  const stripItems = stripPlan.ids.map((id) => {
+    const club = clubs.find((row) => row.id === id);
+    const row = averages.find((item) => item.club.id === id);
+    const carry = row ? rankDistanceYards(clubToRankInput(row.club, row)) : null;
+    return { id, label: formatSuggestedClubChip(club?.shortName ?? id, carry) };
+  });
   const dragPreview = planPlaceToDragPreview({
     from: placeFrom,
     pin: placeToDraft,
@@ -545,7 +574,7 @@ export default function HoleScreen() {
         return { id: club.id, shortName: formatSuggestedClubChip(club.shortName, carry) };
       }),
       holeNumber,
-      yardsToGreen: toGreen.yards,
+      yardsToGreen: target?.dYards ?? toGreen.yards,
       yardsQuality: toGreen.quality,
       lastClubId: sticky?.id ?? null,
     },
@@ -1133,30 +1162,25 @@ export default function HoleScreen() {
       {!hideHoleButtons && (catchUpFullScreen || !holeCamera || mapFramed) ? (
         <View style={[styles.dock, { paddingBottom: Math.max(insets.bottom, 8) }]}>
           <View style={styles.dockRow}>
-            {ranked.map((club, index) => (
-              <Pressable
-                key={club.id}
-                onPress={() => {
+            <View style={styles.dockStrip}>
+              <ClubStrip
+                compact
+                items={stripItems}
+                pickId={stripPlan.pickId}
+                disabled={readOnly || placing}
+                onPick={(id) => {
                   if (placing) return;
-                  const full = clubs.find((row) => row.id === club.id);
+                  const full = clubs.find((row) => row.id === id);
                   if (full) void markClub(full);
                 }}
-                style={[
-                  styles.dockChip,
-                  index === 0 && styles.dockChipPrimary,
-                  sticky?.id === club.id && styles.chipOn,
-                ]}>
-                <Text style={[styles.dockChipText, index === 0 && styles.dockChipPrimaryText]}>
-                  {formatSuggestedClubChip(club.shortName, rankDistanceYards(club))}
-                </Text>
-              </Pressable>
-            ))}
+              />
+            </View>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={COPY.allClubs}
               disabled={readOnly || placing}
               onPress={openBag}
-              style={styles.dockChip}>
+              style={styles.dockChipSide}>
               <Text style={styles.dockChipText}>{COPY.allClubs}</Text>
             </Pressable>
             <Pressable
@@ -1164,7 +1188,7 @@ export default function HoleScreen() {
               accessibilityLabel={COPY.sayClub}
               disabled={placing}
               onPress={() => void onListen()}
-              style={styles.dockChip}>
+              style={styles.dockChipSide}>
               <Text style={styles.dockChipText}>{listening ? COPY.listening : COPY.sayClub}</Text>
             </Pressable>
           </View>
@@ -1342,34 +1366,26 @@ export default function HoleScreen() {
           <Text style={styles.muted}>
             {pickerYards != null ? `${pickerYards} yd` : COPY.placeToHint}
           </Text>
-          {placedRanked.length > 0 ? (
-            <View style={styles.placeTop3}>
-              {placedRanked.map((club, index) => (
-                <Pressable
-                  key={club.id}
-                  onPress={() => {
-                    const full = clubs.find((row) => row.id === club.id);
-                    if (!full) return;
-                    if (editClubOpen) commitEditClub(full.id);
-                    else commitPlaced(full.id);
-                  }}
-                  style={[styles.top3Chip, index === 0 && styles.top3Primary]}>
-                  <Text style={[styles.top3Text, index === 0 && styles.top3PrimaryText]}>
-                    {formatSuggestedClubChip(club.shortName, rankDistanceYards(club))}
-                  </Text>
-                  {index === 0 ? <Text style={styles.suggest}>{COPY.suggested}</Text> : null}
-                </Pressable>
-              ))}
-            </View>
+          {placeStripItems.length > 0 ? (
+            <ClubStrip
+              items={placeStripItems}
+              pickId={placeStripPlan.pickId}
+              onPick={(id) => {
+                const full = clubs.find((row) => row.id === id);
+                if (!full) return;
+                if (editClubOpen) commitEditClub(full.id);
+                else commitPlaced(full.id);
+              }}
+            />
           ) : null}
           <BigButton
             label={COPY.allClubs}
             variant="secondary"
             onPress={() => setShowAllClubs((open) => !open)}
           />
-          {showAllClubs || placedRanked.length === 0 ? (
+          {showAllClubs || placeStripItems.length === 0 ? (
             <View style={styles.placeGrid}>
-              {(placedRanked.length === 0 ? placeBag : placeRest).map((club) => (
+              {placeBag.map((club) => (
                 <ClubButton
                   key={club.id}
                   shortName={club.shortName}
@@ -1784,6 +1800,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   dockRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dockStrip: { flex: 1, minWidth: 0, height: 40 },
   dockChip: {
     flex: 1,
     minHeight: 36,
@@ -1794,6 +1811,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.bgElevated,
     paddingHorizontal: 4,
+  },
+  dockChipSide: {
+    flexShrink: 0,
+    minHeight: 36,
+    minWidth: 64,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bgElevated,
+    paddingHorizontal: 8,
   },
   dockChipPrimary: { borderColor: colors.lime, borderWidth: 2, backgroundColor: '#1C3A24' },
   dockChipText: { color: colors.cream, fontWeight: '800', fontSize: type.tiny },

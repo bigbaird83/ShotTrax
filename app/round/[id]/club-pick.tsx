@@ -7,6 +7,7 @@ import type { OsmOverlay } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
 import { getHole, getRound, listClubAverages, listClubs, listShotsForHole } from '@/src/db/repo';
 import { resolveHoleTee } from '@/src/domain/holeCamera';
+import { planClubStrip } from '@/src/domain/clubStrip';
 import { COPY, formatPickerLeftYards, formatSuggestedClubChip } from '@/src/domain/playerCopy';
 import { clubPickLeaveHref, clubPickLeaveRunsAcceptFix, planClubPickLeave } from '@/src/domain/clubPickNav';
 import { putterOpensPuttSheet } from '@/src/domain/putts';
@@ -23,9 +24,10 @@ import { useLiveFix } from '@/src/services/useLiveFix';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
 import { BigButton } from '@/src/ui/BigButton';
 import { ClubButton } from '@/src/ui/ClubButton';
+import { ClubStrip } from '@/src/ui/ClubStrip';
 import { hapticMark, hapticSelect, hapticWarn } from '@/src/ui/haptics';
 import { Screen } from '@/src/ui/Screen';
-import { colors, tapTarget, type } from '@/src/ui/theme';
+import { colors, type } from '@/src/ui/theme';
 
 export default function ClubPickScreen() {
   const { id, hole, noGps, shot: shotId } = useLocalSearchParams<{
@@ -172,6 +174,22 @@ export default function ClubPickScreen() {
     averages.map((row) => clubToRankInput(row.club, row)),
     target,
   );
+  const stripPlan = planClubStrip({
+    clubs: clubs.map((club) => {
+      const row = averages.find((item) => item.club.id === club.id);
+      return {
+        id: club.id,
+        carry: row ? rankDistanceYards(clubToRankInput(row.club, row)) : null,
+      };
+    }),
+    yardsLeft: target?.dYards ?? toGreen.yards,
+  });
+  const stripItems = stripPlan.ids.map((id) => {
+    const club = clubs.find((row) => row.id === id);
+    const row = averages.find((item) => item.club.id === id);
+    const carry = row ? rankDistanceYards(clubToRankInput(row.club, row)) : null;
+    return { id, label: formatSuggestedClubChip(club?.shortName ?? id, carry) };
+  });
   const lastLie = useMemo(() => {
     const last = [...shots].reverse().find((shot) => shot.startLat != null && shot.startLng != null);
     return last?.startLat != null && last.startLng != null
@@ -214,7 +232,7 @@ export default function ClubPickScreen() {
         return { id: club.id, shortName: formatSuggestedClubChip(club.shortName, carry) };
       }),
       holeNumber,
-      yardsToGreen: toGreen.yards,
+      yardsToGreen: target?.dYards ?? toGreen.yards,
       yardsQuality: toGreen.quality,
       lastClubId: selected?.id ?? null,
     },
@@ -431,28 +449,16 @@ export default function ClubPickScreen() {
       {heard ? <Text style={styles.heard}>“{heard}”</Text> : null}
       {voiceError ? <Text style={styles.warn}>{voiceError}</Text> : null}
 
-      {ranked.length > 0 ? (
-        <View style={styles.top3}>
-          {ranked.map((club, index) => (
-            <Pressable
-              key={club.id}
-              disabled={busy}
-              onPress={() => {
-                const full = clubs.find((row) => row.id === club.id);
-                if (full) void markClub(full);
-              }}
-              style={[
-                styles.chip,
-                index === 0 && styles.chipPrimary,
-                selected?.id === club.id && styles.chipOn,
-              ]}>
-              <Text style={[styles.chipText, index === 0 && styles.chipPrimaryText]}>
-                {formatSuggestedClubChip(club.shortName, rankDistanceYards(club))}
-              </Text>
-              {index === 0 ? <Text style={styles.suggest}>{COPY.suggested}</Text> : null}
-            </Pressable>
-          ))}
-        </View>
+      {stripItems.length > 0 ? (
+        <ClubStrip
+          items={stripItems}
+          pickId={stripPlan.pickId}
+          disabled={busy}
+          onPick={(id) => {
+            const full = clubs.find((row) => row.id === id);
+            if (full) void markClub(full);
+          }}
+        />
       ) : (
         <Text style={styles.unlock}>{COPY.top3Unlock}</Text>
       )}
@@ -497,27 +503,5 @@ const styles = StyleSheet.create({
     fontSize: 18,
     backgroundColor: colors.bgElevated,
   },
-  top3: { flexDirection: 'row', gap: 8 },
-  chip: {
-    flex: 1,
-    minHeight: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.line,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgElevated,
-  },
-  chipOn: { borderColor: colors.lime, backgroundColor: '#1C3A24' },
-  chipPrimary: {
-    flex: 2.2,
-    minHeight: tapTarget,
-    borderColor: colors.lime,
-    borderWidth: 2,
-    backgroundColor: '#1C3A24',
-  },
-  chipPrimaryText: { fontSize: type.button, color: colors.lime, fontWeight: '900' },
-  suggest: { color: colors.lime, fontSize: type.tiny, fontWeight: '800' },
-  chipText: { color: colors.cream, fontWeight: '800', fontSize: type.chip },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
 });
