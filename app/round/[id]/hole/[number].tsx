@@ -33,6 +33,7 @@ import { canAdvanceHole, holesNeedingOpenShots } from '@/src/domain/holeAdvance'
 import { isPutterClubId } from '@/src/domain/defaultBag';
 import { catchUpPinFromTap, planCancelCatchUp, planCatchUpSheet } from '@/src/domain/catchUpMap';
 import { lockHoleCamera, resolveHoleTee } from '@/src/domain/holeCamera';
+import { deleteShotPrompt } from '@/src/domain/deleteShot';
 import { planInsertSlots } from '@/src/domain/insertShot';
 import { planPlacedShot } from '@/src/domain/shotSource';
 import { planUndoPlacePins } from '@/src/domain/undoLastShot';
@@ -61,7 +62,7 @@ import type { Club, PenaltyReason } from '@/src/domain/types';
 import { matchSpokenClub, speechContextualStrings } from '@/src/domain/voiceClub';
 import { toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
 import { describeGpsSource } from '@/src/services/location';
-import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, undoShotEdit } from '@/src/services/shotActions';
+import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, undoShotEdit, deleteHoleShot } from '@/src/services/shotActions';
 import { startClubSpeech, type ClubSpeechSession } from '@/src/services/speechClub';
 import { useLiveFix } from '@/src/services/useLiveFix';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
@@ -204,7 +205,7 @@ export default function HoleScreen() {
   };
 
   const openEdit = (shotId: string) => {
-    if (readOnly || placing) return;
+    if (placing) return;
     resetPlace();
     setScoreOpen(false);
     setEditShotId(shotId);
@@ -794,6 +795,28 @@ export default function HoleScreen() {
     bump();
   };
 
+  const commitDeleteShot = (shotId: string) => {
+    const result = deleteHoleShot(db, {
+      roundId: id,
+      holeNumber,
+      shotId,
+      confirmed: true,
+    });
+    if (result.status !== 'commit') return;
+    hapticTap();
+    if (editUndo?.id === shotId) setEditUndo(null);
+    closeEdit();
+    bump();
+  };
+
+  const onDeleteShot = (shotId: string) => {
+    const prompt = deleteShotPrompt();
+    Alert.alert(prompt.title, '', [
+      { text: prompt.cancel, style: 'cancel' },
+      { text: prompt.confirm, style: 'destructive', onPress: () => commitDeleteShot(shotId) },
+    ]);
+  };
+
   const retryVoice = () => {
     stopListening();
     void startListening();
@@ -858,7 +881,7 @@ export default function HoleScreen() {
               : undefined
           }
           placeHint={placeHint}
-          onShotPress={readOnly || placing ? undefined : openEdit}
+          onShotPress={placing ? undefined : openEdit}
           onPlacePoint={
             readOnly || placeMode === 'off' || placeClubOpen || editClubOpen
               ? undefined
@@ -998,7 +1021,7 @@ export default function HoleScreen() {
             return (
               <View key={shot.id}>
                 <Pressable
-                  disabled={readOnly || placing}
+                  disabled={placing}
                   onPress={() => openEdit(shot.id)}
                   style={styles.shot}>
                   <Text style={styles.shotSeq}>{shot.seq}</Text>
@@ -1325,7 +1348,7 @@ export default function HoleScreen() {
               <BigButton
                 label={COPY.moveFrom}
                 variant="secondary"
-                disabled={!canMoveFromPin(editingShot)}
+                disabled={readOnly || !canMoveFromPin(editingShot)}
                 onPress={() => {
                   setEditOpen(false);
                   setPlaceMode('edit-from');
@@ -1334,7 +1357,7 @@ export default function HoleScreen() {
               <BigButton
                 label={COPY.moveTo}
                 variant="secondary"
-                disabled={!canMoveToPin(editingShot)}
+                disabled={readOnly || !canMoveToPin(editingShot)}
                 onPress={() => {
                   setEditOpen(false);
                   setPlaceMode('edit-to');
@@ -1342,6 +1365,7 @@ export default function HoleScreen() {
               />
               <BigButton
                 label={COPY.changeClub}
+                disabled={readOnly}
                 onPress={() => {
                   setShowAllClubs(false);
                   setEditClubOpen(true);
@@ -1350,6 +1374,11 @@ export default function HoleScreen() {
               {editUndo?.id === editingShot.id ? (
                 <BigButton label={COPY.undoEdit} variant="ghost" onPress={onUndoEdit} />
               ) : null}
+              <BigButton
+                label={COPY.deleteShot}
+                variant="danger"
+                onPress={() => onDeleteShot(editingShot.id)}
+              />
             </>
           ) : (
             <Text style={styles.muted}>{COPY.noShots}</Text>
@@ -1412,7 +1441,6 @@ export default function HoleScreen() {
               return (
                 <View key={shot.id}>
                   <Pressable
-                    disabled={readOnly}
                     onPress={() => openEdit(shot.id)}
                     style={styles.shot}>
                     <Text style={styles.shotSeq}>{shot.seq}</Text>

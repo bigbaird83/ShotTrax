@@ -16,6 +16,7 @@ import {
   sealOpenShotWithoutGps,
   setRoundLastClub,
   undoLastShot as undoLastShotInRepo,
+  deleteShotOnHole as deleteShotOnHoleInRepo,
   updateShotClub,
 } from '../db/repo';
 import { planDrop } from '../domain/drop';
@@ -277,6 +278,15 @@ export function undoLastShot(
   args: { roundId: string; holeNumber: number },
 ): boolean {
   return undoLastShotInRepo(db, args.roundId, args.holeNumber).ok;
+}
+
+/** Confirm required. Cancel is a no-op — the shot stays. */
+export function deleteHoleShot(
+  db: SQLiteDatabase,
+  args: { roundId: string; holeNumber: number; shotId: string; confirmed: boolean },
+): { status: 'cancel' } | { status: 'missing' } | { status: 'commit' } {
+  if (!args.confirmed) return { status: 'cancel' };
+  return deleteShotOnHoleInRepo(db, args);
 }
 
 export type ShotEditResult =

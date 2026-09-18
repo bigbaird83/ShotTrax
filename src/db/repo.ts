@@ -20,6 +20,7 @@ import { clampPutts, planMadeIt, parsePuttLengths, serializePuttLengths, type Pu
 import type { ShotEditSnapshot } from '../domain/shotEdit';
 import { includeInDistanceAverages, planNoGpsShot, planPlacedShot } from '../domain/shotSource';
 import { planUndoLastShot } from '../domain/undoLastShot';
+import { planDeleteShot } from '../domain/deleteShot';
 import type {
   Club,
   FixQuality,
@@ -774,6 +775,33 @@ export function reopenShot(db: SQLiteDatabase, shotId: string): void {
 
 export function deleteShot(db: SQLiteDatabase, shotId: string): void {
   db.runSync('DELETE FROM shots WHERE id = ?', [shotId]);
+}
+
+/**
+ * Delete any shot on the hole (live or Placed). Neighbors keep pins.
+ * Yards rewrite only when that shot's own distance actually changed.
+ * Does not reopen a neighbor. Averages recompute on the next listClubAverages().
+ */
+export function deleteShotOnHole(
+  db: SQLiteDatabase,
+  args: { roundId: string; holeNumber: number; shotId: string; confirmed: boolean },
+): { status: 'cancel' } | { status: 'missing' } | { status: 'commit' } {
+  if (!args.confirmed) return { status: 'cancel' };
+  const hole = getHole(db, args.roundId, args.holeNumber);
+  if (!hole) return { status: 'missing' };
+  const plan = planDeleteShot(listShotsForHole(db, hole.id), args.shotId);
+  if (!plan.ok) return { status: 'missing' };
+  db.withTransactionSync(() => {
+    deleteShot(db, plan.deleteShotId);
+    for (const row of plan.renumber) {
+      db.runSync('UPDATE shots SET seq = ? WHERE id = ?', [row.seq, row.id]);
+    }
+    for (const row of plan.yardsUpdates) {
+      db.runSync('UPDATE shots SET distance_yards = ? WHERE id = ?', [row.distanceYards, row.id]);
+    }
+    setRoundLastClub(db, args.roundId, plan.nextLastClubId);
+  });
+  return { status: 'commit' };
 }
 
 export function undoLastShot(

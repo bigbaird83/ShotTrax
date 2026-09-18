@@ -17,6 +17,8 @@ export const COPY = {
   finishRound: 'Finish round',
   deleteRound: 'Delete round',
   deleteRoundConfirm: 'Delete this round? Shots and scores go with it.',
+  deleteShot: 'Delete shot',
+  deleteShotConfirm: 'Delete this shot?',
   roundHistory: 'Round history',
   noRounds: 'No rounds yet.',
   roundInProgress: 'Round in progress',
