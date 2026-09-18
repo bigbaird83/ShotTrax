@@ -3,16 +3,18 @@ import { StyleSheet, Text, View, type LayoutChangeEvent, type StyleProp, type Vi
 import MapView, { Marker, Polygon, Polyline } from 'react-native-maps';
 import type { OsmFeature, OsmGolfKind, OsmOverlay } from '@/src/course/types';
 import { featuresForHole } from '@/src/course/osmOverlay';
-import { COPY } from '@/src/domain/playerCopy';
 import type { GpsFix, Shot } from '@/src/domain/types';
 import type { YardsToGreenResult } from '@/src/sensing/yardsToGreen';
 import {
   applyHoleMapCamera,
   holeCameraFramedAfterApply,
   holeFrameRegion,
+  holeMapShowsUserLocation,
   holeNativeCamera,
   regionIsHoleFrame,
 } from '@/src/domain/holeCamera';
+import { planPlaceToDragPreview } from '@/src/domain/placeToDrag';
+import { COPY } from '@/src/domain/playerCopy';
 import { isValidLatLng } from '@/src/domain/latLng';
 import { hasClosedGpsTrail, hasGpsStart } from '@/src/domain/shotSource';
 import { FmbRow } from './FmbRow';
@@ -171,13 +173,9 @@ function NativeHoleMap({
 
   const lockedRegion = useMemo(() => {
     if (lockedPoints.length > 0) return holeFrameRegion(lockedPoints);
-    if (lockFrame) {
-      return coords.length > 0
-        ? holeFrameRegion(coords.map((point) => ({ lat: point.latitude, lng: point.longitude })))
-        : null;
-    }
-    const fallback =
-      coords[0] ?? (userFix && isValidLatLng(userFix) ? toCoord(userFix.lat, userFix.lng) : null);
+    // Lock frame with no hole points: do not invent a phone/house region.
+    if (lockFrame) return null;
+    const fallback = coords[0];
     if (!fallback) return null;
     return {
       latitude: fallback.latitude,
@@ -185,7 +183,17 @@ function NativeHoleMap({
       latitudeDelta: 0.004,
       longitudeDelta: 0.004,
     };
-  }, [lockedPoints, lockFrame, coords, userFix]);
+  }, [lockedPoints, lockFrame, coords]);
+
+  const dragPreview = useMemo(() => {
+    if (!onPlaceToDrag || !placedFrom || !placedTo) return null;
+    return planPlaceToDragPreview({
+      from: placedFrom,
+      drag: placedTo,
+      green,
+      phone: userFix,
+    });
+  }, [onPlaceToDrag, placedFrom, placedTo, green, userFix]);
 
   const lockedCameraRef = useRef(holeUpCamera);
   lockedCameraRef.current = holeUpCamera;
@@ -299,7 +307,7 @@ function NativeHoleMap({
           : holeUpCamera
             ? { initialCamera: holeUpCamera }
             : { initialRegion: lockedRegion })}
-        showsUserLocation={!lockFrame && Boolean(userDot)}
+        showsUserLocation={holeMapShowsUserLocation(Boolean(lockFrame))}
         showsMyLocationButton={false}
         followsUserLocation={false}
         zoomEnabled
@@ -423,7 +431,32 @@ function NativeHoleMap({
             <View pointerEvents="none" style={styles.userDot} />
           </Marker>
         ) : null}
+        {dragPreview ? (
+          <Marker
+            coordinate={toCoord(dragPreview.shotAt.lat, dragPreview.shotAt.lng)}
+            anchor={{ x: 0.5, y: 0.5 }}
+            tappable={false}
+            tracksViewChanges>
+            <View pointerEvents="none" style={styles.dragChip}>
+              <Text style={styles.dragChipKicker}>{COPY.shot}</Text>
+              <Text style={styles.dragChipValue}>{dragPreview.shotLabel}</Text>
+            </View>
+          </Marker>
+        ) : null}
+        {dragPreview?.toGreenAt ? (
+          <Marker
+            coordinate={toCoord(dragPreview.toGreenAt.lat, dragPreview.toGreenAt.lng)}
+            anchor={{ x: 0.5, y: 0.5 }}
+            tappable={false}
+            tracksViewChanges>
+            <View pointerEvents="none" style={[styles.dragChip, styles.dragChipGreen]}>
+              <Text style={styles.dragChipKicker}>{COPY.toGreen}</Text>
+              <Text style={styles.dragChipValue}>{dragPreview.toGreenLabel}</Text>
+            </View>
+          </Marker>
+        ) : null}
       </MapView>
+      {lockFrame && !holeCameraReady ? <View pointerEvents="none" style={styles.mapCover} /> : null}
       {!placeHint && !hideYardsOverlay ? (
         <View pointerEvents="none" style={styles.toGreen}>
           <YardsToGreenBadge
@@ -478,6 +511,26 @@ const styles = StyleSheet.create({
   },
   map: { flex: 1 },
   mapHidden: { opacity: 0 },
+  mapCover: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.bgElevated,
+  },
+  dragChip: {
+    backgroundColor: 'rgba(11,26,18,0.88)',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    alignItems: 'center',
+  },
+  dragChipGreen: { borderWidth: 1, borderColor: colors.lime },
+  dragChipKicker: {
+    color: colors.lime,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  dragChipValue: { color: colors.cream, fontSize: 14, fontWeight: '900' },
   holeBadgeText: {
     color: colors.cream,
     fontSize: 18,

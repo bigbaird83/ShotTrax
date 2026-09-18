@@ -62,6 +62,7 @@ export const COPY = {
   undoPutt: 'Undo putt',
   forgotShot: 'Log a missed shot',
   addShot: 'Add shot',
+  shot: 'Shot',
   placed: 'Placed',
   placeFromHint: 'Tap where you hit from.',
   placeToHint: 'Tap where it landed.',

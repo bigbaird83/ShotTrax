@@ -9,7 +9,11 @@ import {
   holeCameraIsCameraOnly,
   holeCameraUsesPhoneHeading,
   holeFrameRegion,
+  holeMapFitsToCoordinates,
+  holeMapRevealsBeforeHoleFrame,
+  holeMapShowsUserLocation,
   holeNativeCamera,
+  lockFrameRegionIncludesPhone,
   lockHoleCamera,
   planHoleCamera,
   regionIsHoleFrame,
@@ -226,4 +230,8 @@ test('null map ref does not stick framed; home GPS stays out; hole tee still fra
     true,
   );
   assert.equal(resolveHoleTee({ holeTee: null, osmTee: null }), null);
+  assert.equal(holeMapRevealsBeforeHoleFrame(), false);
+  assert.equal(holeMapShowsUserLocation(true), false);
+  assert.equal(holeMapFitsToCoordinates(true), false);
+  assert.equal(lockFrameRegionIncludesPhone(), false);
 });

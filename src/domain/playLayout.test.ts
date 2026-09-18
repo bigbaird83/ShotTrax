@@ -64,10 +64,22 @@ test('play hole screen uses the fill layout and does not keep the empty middle',
   assert.doesNotMatch(hole, /styles\.clubChip/);
   assert.match(hole, /lockHoleCamera/);
   assert.match(hole, /lockFrame/);
+  assert.doesNotMatch(hole, /lockFrame=\{catchUpFullScreen|lockFrame=\{placing/);
   assert.match(hole, /frameEpoch=\{catchUpFullScreen \? 'catchup' : 'play'\}/);
   assert.match(hole, /resolveHoleTee/);
   assert.match(hole, /teePointFromHoleFeature/);
   assert.equal(playUsesAddShotCamera(), true);
+
+  const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
+  assert.match(map, /holeMapShowsUserLocation\(Boolean\(lockFrame\)\)/);
+  assert.match(map, /styles\.mapCover/);
+  assert.match(map, /if \(lockFrame\) return null;/);
+  assert.doesNotMatch(
+    map.slice(map.indexOf('const lockedRegion'), map.indexOf('const dragPreview')),
+    /userFix/,
+  );
+  const fitBlock = map.slice(map.indexOf('if (lockFrame) {'), map.indexOf('mapRef.current?.fitToCoordinates'));
+  assert.match(fitBlock, /if \(framedOnce\.current\) return;/);
 });
 
 test('All clubs and Say a club are chips in row 1; edit is tap a shot, not a dock row', () => {
@@ -89,4 +101,8 @@ test('All clubs and Say a club are chips in row 1; edit is tap a shot, not a doc
   assert.match(hole, /label=\{COPY\.moveTo\}/);
   assert.match(hole, /toGreenDisplayFromHole/);
   assert.match(hole, /yardsToGreenPlayerLabel/);
+  assert.doesNotMatch(dock, /COPY\.deleteShot/);
+  const editSheet = hole.slice(hole.indexOf('visible={editOpen && !editClubOpen}'), hole.indexOf('visible={scoreOpen}'));
+  assert.match(editSheet, /COPY\.deleteShot/);
+  assert.match(editSheet, /onDeleteShot\(editingShot\.id\)/);
 });

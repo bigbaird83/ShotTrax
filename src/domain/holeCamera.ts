@@ -227,6 +227,26 @@ export function holeCameraFramedAfterApply(applied: boolean): boolean {
   return applied;
 }
 
+/** Native maps ignore opacity. Cover until the hole region is actually on screen. */
+export function holeMapRevealsBeforeHoleFrame(): false {
+  return false;
+}
+
+/** Play / Add shot never let Apple/Google follow the phone into the frame. */
+export function holeMapShowsUserLocation(lockFrame: boolean): boolean {
+  return !lockFrame;
+}
+
+/** fitToCoordinates would pull the user dot in. The lock uses setCamera only. */
+export function holeMapFitsToCoordinates(lockFrame: boolean): boolean {
+  return !lockFrame;
+}
+
+/** A lock-frame region is tee/green/pins only. Phone GPS is never a fallback. */
+export function lockFrameRegionIncludesPhone(): false {
+  return false;
+}
+
 /**
  * True when the visible region is already the hole, not a home-scale GPS fix.
  * Used so the first thing shown is tee-to-green, not a later correction.

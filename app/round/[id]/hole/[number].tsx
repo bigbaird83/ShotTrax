@@ -35,7 +35,7 @@ import { catchUpPinFromTap, planCancelCatchUp, planCatchUpSheet } from '@/src/do
 import { lockHoleCamera, resolveHoleTee } from '@/src/domain/holeCamera';
 import { deleteShotPrompt } from '@/src/domain/deleteShot';
 import { planInsertSlots } from '@/src/domain/insertShot';
-import { confirmPlaceToDraft, liveYardsFromPinToDrag } from '@/src/domain/placeToDrag';
+import { confirmPlaceToDraft, planPlaceToDragPreview } from '@/src/domain/placeToDrag';
 import { planPlayLayout } from '@/src/domain/playLayout';
 import { planPlacedShot } from '@/src/domain/shotSource';
 import { planUndoPlacePins } from '@/src/domain/undoLastShot';
@@ -170,7 +170,6 @@ export default function HoleScreen() {
     [db, holes, holeNumber, revision],
   );
   const placedPlan = placeFrom && placeTo ? planPlacedShot(placeFrom, placeTo) : null;
-  const draftYards = liveYardsFromPinToDrag({ from: placeFrom, drag: placeToDraft, phone: fix });
   const placedYards = placedPlan && placedPlan.ok ? placedPlan.distanceYards : null;
   const editingShot = editShotId ? shots.find((shot) => shot.id === editShotId) ?? null : null;
   const pickerYards = editClubOpen ? (editingShot?.distanceYards ?? null) : placedYards;
@@ -349,6 +348,18 @@ export default function HoleScreen() {
     averages.map((row) => clubToRankInput(row.club, row)),
     target,
   );
+  const lastClosedForPreview = [...shots].filter((shot) => shot.endedAt != null).at(-1) ?? null;
+  const previousFrom =
+    lastClosedForPreview?.startLat != null && lastClosedForPreview.startLng != null
+      ? { lat: lastClosedForPreview.startLat, lng: lastClosedForPreview.startLng }
+      : null;
+  const dragPreview = planPlaceToDragPreview({
+    from: placeFrom,
+    drag: placeToDraft,
+    green,
+    phone: fix,
+    previousFrom,
+  });
   const holeCamera = lockHoleCamera({
     tee: resolveHoleTee({
       holeTee: teePointFromHoleFeature(osmOverlay, holeNumber, green),
@@ -859,8 +870,8 @@ export default function HoleScreen() {
         : placing
           ? placeTo
             ? `${placedYards ?? '—'} yd · ${COPY.pickClub}`
-            : placeToDraft
-              ? `${draftYards ?? '—'} yd`
+            : placeToDraft && dragPreview
+              ? `${COPY.shot} ${dragPreview.shotLabel} · ${COPY.toGreen} ${dragPreview.toGreenLabel}`
               : placeFrom
                 ? COPY.placeToHint
                 : COPY.placeFromHint
