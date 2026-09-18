@@ -902,16 +902,20 @@ export default function HoleScreen() {
   const catchUpSheet = planCatchUpSheet(placing);
   const hideHoleButtons = catchUpSheet.holeButtons === 'hidden';
   const catchUpFullScreen = catchUpSheet.map === 'fullscreen';
+  const livePlaceHint =
+    placeToDraft && dragPreview
+      ? `${COPY.shot} ${dragPreview.shotLabel} · ${COPY.toGreen} ${dragPreview.toGreenLabel}`
+      : null;
   const placeHint =
     placeMode === 'edit-from'
       ? COPY.editFromHint
       : placeMode === 'edit-to'
-        ? COPY.editToHint
+        ? livePlaceHint ?? COPY.editToHint
         : placing
           ? placeTo
             ? `${placedYards ?? '—'} yd · ${COPY.pickClub}`
-            : placeToDraft && dragPreview
-              ? `${COPY.shot} ${dragPreview.shotLabel} · ${COPY.toGreen} ${dragPreview.toGreenLabel}`
+            : livePlaceHint
+              ? livePlaceHint
               : placeFrom
                 ? COPY.placeToHint
                 : COPY.placeFromHint
@@ -937,7 +941,12 @@ export default function HoleScreen() {
           osmOverlay={osmOverlay}
           placedFrom={placeFrom}
           placedTo={placeToDraft ?? placeTo}
-          onPlaceToDrag={placeMode === 'to' ? (point) => setPlaceToDraft(point) : undefined}
+          freezePan={placeMode === 'to' || placeMode === 'edit-to'}
+          onPlaceToDrag={
+            placeMode === 'to' || placeMode === 'edit-to'
+              ? (point) => setPlaceToDraft(point)
+              : undefined
+          }
           lockFrame
           hideYardsOverlay={!catchUpFullScreen}
           frameEpoch={catchUpFullScreen ? 'catchup' : `play-${hole.number}-${playFrameNonce}`}
@@ -973,7 +982,7 @@ export default function HoleScreen() {
                     return;
                   }
                   if (placeMode === 'edit-to') {
-                    commitMovePin(tap, 'to');
+                    setPlaceToDraft(tap);
                   }
                 }
           }
@@ -1108,11 +1117,23 @@ export default function HoleScreen() {
             </View>
           )}
         </View>
-        {catchUpFullScreen && placeMode === 'to' && placeToDraft && !placeClubOpen ? (
+        {catchUpFullScreen &&
+        (placeMode === 'to' || placeMode === 'edit-to') &&
+        placeToDraft &&
+        !placeClubOpen ? (
           <View
             pointerEvents="box-none"
             style={[styles.confirmDock, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-            <BigButton label={COPY.confirmPlace} onPress={() => confirmToPin()} />
+            <BigButton
+              label={COPY.confirmPlace}
+              onPress={() => {
+                if (placeMode === 'edit-to') {
+                  commitMovePin(placeToDraft, 'to');
+                  return;
+                }
+                confirmToPin();
+              }}
+            />
           </View>
         ) : null}
       </View>
@@ -1425,6 +1446,13 @@ export default function HoleScreen() {
                   variant="secondary"
                   disabled={readOnly || !canMoveToPin(editingShot)}
                   onPress={() => {
+                    if (!editingShot) return;
+                    if (editingShot.startLat != null && editingShot.startLng != null) {
+                      setPlaceFrom({ lat: editingShot.startLat, lng: editingShot.startLng });
+                    }
+                    if (editingShot.endLat != null && editingShot.endLng != null) {
+                      setPlaceToDraft({ lat: editingShot.endLat, lng: editingShot.endLng });
+                    }
                     setEditOpen(false);
                     setPlaceMode('edit-to');
                   }}

@@ -57,11 +57,26 @@ export function confirmPlaceLabel(): 'Confirm shot' {
   return 'Confirm shot';
 }
 
-function along(from: LatLng, to: LatLng, t: number): LatLng {
-  return {
-    lat: from.lat + (to.lat - from.lat) * t,
-    lng: from.lng + (to.lng - from.lng) * t,
-  };
+export function confirmPlaceIsInTopBar(): false {
+  return false;
+}
+
+/** While the to pin is live, one finger moves the pin. The hole does not pan. */
+export function dragFreezesPan(): true {
+  return true;
+}
+
+export function dragKeepsPinchZoom(): true {
+  return true;
+}
+
+/** Same pan freeze when moving an earlier shot's landing pin. */
+export function editToFreezesPan(): true {
+  return true;
+}
+
+export function liveYardsSitAboveFinger(): true {
+  return true;
 }
 
 /**
@@ -115,15 +130,18 @@ export function formatDragPreviewYards(yards: number | null): string {
 export type PlaceToDragPreview = {
   shotYards: number | null;
   shotLabel: string;
+  /** Chip sits on the finger so yards read above it. */
   shotAt: LatLng;
   toGreenYards: number | null;
   toGreenLabel: string;
   toGreenAt: LatLng | null;
+  fingerAt: LatLng;
 };
 
 /**
- * Both live numbers for a to-pin drag. Mid-drag is a preview: no save, no
- * 20% filter, no 400-yard ask, no acceptFix, no quality band.
+ * Both live numbers for a to-pin drag. Labels sit above the finger. Mid-drag
+ * is a preview: no save, no 20% filter, no 400-yard ask, no acceptFix, no
+ * quality band.
  */
 export function planPlaceToDragPreview(args: {
   from: LatLng | null;
@@ -142,10 +160,11 @@ export function planPlaceToDragPreview(args: {
   return {
     shotYards,
     shotLabel: formatDragPreviewYards(shotYards),
-    shotAt: along(args.from, args.drag, 0.5),
+    shotAt: args.drag,
     toGreenYards,
     toGreenLabel: formatDragPreviewYards(toGreenYards),
-    toGreenAt: isValidLatLng(args.green) ? along(args.drag, args.green, 0.72) : null,
+    toGreenAt: isValidLatLng(args.green) ? args.drag : null,
+    fingerAt: args.drag,
   };
 }
 

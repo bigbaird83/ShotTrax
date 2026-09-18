@@ -13,7 +13,7 @@ test('Next is always allowed even if the hole is unfinished', () => {
   assert.equal(canAdvanceHole({ holeNumber: 18, holeCount: 18 }), false);
   assert.equal(nextBlockedByUnfinished(true), false);
   assert.equal(nextBlockedByUnfinished(false), false);
-  assert.equal(COPY.nextHole, 'Next');
+  assert.equal(COPY.nextHole, 'Next hole');
 });
 
 test('unfinished open shots get a chip — nothing invented', () => {

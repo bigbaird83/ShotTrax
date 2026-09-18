@@ -20,6 +20,7 @@ type Props = {
   placedFrom?: { lat: number; lng: number } | null;
   placedTo?: { lat: number; lng: number } | null;
   onPlaceToDrag?: (coord: { lat: number; lng: number }) => void;
+  freezePan?: boolean;
   placeHint?: string | null;
   fullBleed?: boolean;
   framePoints?: { latitude: number; longitude: number }[] | null;

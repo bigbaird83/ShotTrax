@@ -6,8 +6,12 @@ import { haversineYards, roundYards } from './haversine';
 import {
   cancelPlaceToDraft,
   confirmPlaceIsFatButton,
+  confirmPlaceIsInTopBar,
   confirmPlaceLabel,
   confirmPlaceToDraft,
+  dragFreezesPan,
+  dragKeepsPinchZoom,
+  editToFreezesPan,
   dragPreviewInventsGreen,
   dragPreviewRunsAcceptFix,
   dragPreviewUsesFixQuality,
@@ -22,6 +26,7 @@ import {
   placeToAskOn,
   placeToFilterOn,
   placeToStoresBeforeConfirm,
+  liveYardsSitAboveFinger,
   planPlaceToDragPreview,
   toPinFollowsFinger,
 } from './placeToDrag';
@@ -94,9 +99,12 @@ test('both preview numbers and the 600 dash move with the finger', () => {
   assert.notEqual(preview.toGreenYards, roundYards(haversineYards(phone, green)));
   assert.equal(preview.shotLabel, `${preview.shotYards} yd`);
   assert.equal(preview.toGreenLabel, `${preview.toGreenYards} yd`);
-  assert.ok(Math.abs(preview.shotAt.lat - (from.lat + drag.lat) / 2) < 1e-12);
+  assert.equal(liveYardsSitAboveFinger(), true);
+  assert.equal(preview.fingerAt.lat, drag.lat);
+  assert.equal(preview.fingerAt.lng, drag.lng);
+  assert.equal(preview.shotAt.lat, drag.lat);
   assert.ok(preview.toGreenAt);
-  assert.ok(haversineYards(preview.toGreenAt, green) < haversineYards(preview.toGreenAt, drag));
+  assert.equal(preview.toGreenAt.lat, drag.lat);
   assert.notEqual(preview.shotAt.lat, phone.lat);
   assert.notEqual(preview.toGreenAt.lat, phone.lat);
   assert.equal(dragPreviewInventsGreen(), false);
@@ -125,8 +133,8 @@ test('both preview numbers and the 600 dash move with the finger', () => {
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   assert.match(map, /COPY\.shot/);
   assert.match(map, /COPY\.toGreen/);
-  assert.match(map, /dragPreview\.shotAt/);
-  assert.match(map, /dragPreview\.toGreenAt/);
+  assert.match(map, /dragPreview\.fingerAt/);
+  assert.match(map, /anchor=\{\{ x: 0\.5, y: 1 \}\}/);
 });
 
 test('finger preview has no GPS quality and does not run acceptFix', () => {
@@ -233,12 +241,33 @@ test('to pin follows the finger; live yards are this shot only; nothing stores b
   assert.doesNotMatch(live, /acceptFix\(|forceMark\(/);
 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
-  assert.match(map, /onPanDrag/);
-  assert.match(map, /scrollEnabled=\{!onPlaceToDrag\}/);
+  assert.equal(dragFreezesPan(), true);
+  assert.equal(dragKeepsPinchZoom(), true);
+  assert.equal(editToFreezesPan(), true);
+  assert.equal(confirmPlaceIsInTopBar(), false);
+  assert.match(map, /scrollEnabled=\{!panFrozen\}/);
+  assert.match(map, /zoomEnabled/);
+  assert.match(map, /to-pin-drag-layer/);
   assert.match(map, /onPlaceToDrag\(\{ lat: latitude, lng: longitude \}\)/);
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
-  assert.match(hole, /onPlaceToDrag=\{placeMode === 'to'/);
+  assert.match(hole, /freezePan=\{placeMode === 'to' \|\| placeMode === 'edit-to'\}/);
+  assert.match(hole, /placeMode === 'to' \|\| placeMode === 'edit-to'/);
   assert.match(hole, /setPlaceToDraft\(point\)/);
+  assert.match(hole, /styles\.confirmDock/);
+  assert.match(hole, /COPY\.prevHole/);
+  assert.match(hole, /COPY\.nextHole/);
+  assert.equal(COPY.prevHole, 'Prev hole');
+  assert.equal(COPY.nextHole, 'Next hole');
+  assert.doesNotMatch(
+    hole.slice(hole.indexOf('styles.catchUpBar'), hole.indexOf('placeHint ?')),
+    /COPY\.confirmPlace/,
+  );
+  const editToTap = hole.slice(
+    hole.indexOf("if (placeMode === 'edit-to')"),
+    hole.indexOf('onDropGreenEstimate'),
+  );
+  assert.match(editToTap, /setPlaceToDraft\(tap\)/);
+  assert.doesNotMatch(editToTap, /commitMovePin|addPlacedShot/);
   const dragCall = hole.slice(hole.indexOf('const dragPreview'), hole.indexOf('const holeCamera'));
   assert.match(dragCall, /from: placeFrom/);
   assert.doesNotMatch(dragCall, /previousFrom|lastClosed|phone:/);

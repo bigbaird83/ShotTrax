@@ -144,11 +144,16 @@ export function playInPlayShowsTwice(): false {
   return false;
 }
 
-/** Apple Maps Legal and compass stay. Header yards do not hide them. */
-export function playHidesMapsLegal(): false {
-  return false;
+/** Apple Maps Legal stays hidden until the player taps the map. */
+export function playHidesMapsLegal(): true {
+  return true;
 }
 
-export function playHidesMapsCompass(): false {
-  return false;
+export function playHidesMapsCompass(): true {
+  return true;
+}
+
+/** After a tap, Legal and the compass may show. They do not sit on the hole the whole time. */
+export function playMapsChromeUntilTap(): true {
+  return true;
 }

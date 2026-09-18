@@ -31,6 +31,7 @@ import {
   playInPlayShowsTwice,
   playHidesMapsLegal,
   playHidesMapsCompass,
+  playMapsChromeUntilTap,
 } from './playLayout';
 
 test('play map fills at least 60% down to a two-row dock; header is overlay', () => {
@@ -192,8 +193,9 @@ test('play header is one line; shot list is one overlay row with + and In play o
   assert.equal(playShotLineIsColumn(), false);
   assert.equal(playInsertPlusIsOwnBand(), false);
   assert.equal(playInPlayShowsTwice(), false);
-  assert.equal(playHidesMapsLegal(), false);
-  assert.equal(playHidesMapsCompass(), false);
+  assert.equal(playHidesMapsLegal(), true);
+  assert.equal(playHidesMapsCompass(), true);
+  assert.equal(playMapsChromeUntilTap(), true);
   assert.equal(playHeaderEatsMap(), false);
   assert.ok(playMapMinRatio() >= 0.6);
   assert.equal(playDockRowCount(), 2);
@@ -215,6 +217,7 @@ test('play header is one line; shot list is one overlay row with + and In play o
   assert.match(overlayShots, /styles\.shotLinePlus/);
 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
-  assert.doesNotMatch(map, /showsCompass=\{false\}/);
-  assert.doesNotMatch(map, /legalLabelInsets/);
+  assert.match(map, /showsCompass=\{mapsChrome\}/);
+  assert.match(map, /legalLabelInsets/);
+  assert.match(map, /revealMapsChrome/);
 });
