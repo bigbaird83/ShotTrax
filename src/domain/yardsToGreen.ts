@@ -6,7 +6,7 @@ export type GreenPinSource = 'user_estimate' | 'course_centroid';
 
 export type GreenPin = LatLng & { source: GreenPinSource };
 
-/** Live to-green may read up to this. Over it, keep the course tee yardage or —. */
+/** Phone-fix cutoff: a house-scale fix must not replace the card. Not a yards cap. */
 export const TO_GREEN_LIVE_MAX_YD = 600;
 /** After a mark, use mark-to-green only when it differs from the card by more than this. */
 export const TO_GREEN_COURSE_SWITCH_YD = 50;
@@ -188,11 +188,21 @@ export function phoneFixIsOnCourse(args: {
   );
 }
 
+/** 600 only rejects a bad phone fix. A 620-yard card still reads 620. */
+export function toGreenSixHundredCapsTheNumber(): false {
+  return false;
+}
+
+export function toGreenSixHundredIsPhoneFixCutoff(): true {
+  return true;
+}
+
 /**
- * Phone and Watch share this number. Before a shot: the card.
- * After a shot: landing to green center, never the house.
- * Over 600, or no green → —. Never a fake 0. Never Watch GPS.
- * A phone fix off the course must not read 14,000.
+ * Phone and Watch share this number. 600 is the cutoff for using the phone
+ * fix, not a cap on the yards. A 620-yard card still reads 620.
+ * Before a shot: the card. After a shot: landing to green center only when
+ * the phone fix is within 600 of the course. Otherwise keep the card.
+ * Never the house (14,000). Never a fake 0. Never Watch GPS.
  */
 export function planPlayHeaderYards(args: {
   phone: LatLng | null | undefined;
@@ -201,22 +211,14 @@ export function planPlayHeaderYards(args: {
   courseYards: number | null;
   shots?: ClubLandingShot[];
 }): ToGreenDisplay {
-  void args.phone;
-  void args.tee;
   const course = courseTeeYards(args.courseYards);
+  const onCourse = phoneFixIsOnCourse(args);
   const shots = args.shots ?? [];
 
-  if (!isValidLatLng(args.green)) {
-    return { yards: null, source: 'none', quality: 'none' };
-  }
-
-  if (shots.length > 0) {
+  if (shots.length > 0 && onCourse && isValidLatLng(args.green)) {
     const landing = lastLandingMark(shots);
     const live = markToGreen(landing, args.green);
     if (live.yards != null && Number.isFinite(live.yards) && live.yards > 0) {
-      if (live.yards > TO_GREEN_LIVE_MAX_YD) {
-        return { yards: null, source: 'none', quality: 'none' };
-      }
       return { yards: live.yards, source: 'live', quality: 'good' };
     }
   }

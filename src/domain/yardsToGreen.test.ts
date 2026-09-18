@@ -9,6 +9,8 @@ import {
   markToGreen,
   planPlayHeaderYards,
   planToGreenDisplay,
+  toGreenSixHundredCapsTheNumber,
+  toGreenSixHundredIsPhoneFixCutoff,
   resolveGreenPin,
   toGreenDisplayFromHole,
   yardsToGreenLabel,
@@ -238,6 +240,8 @@ test('lastClubMark is the latest shot start, never invented', () => {
 });
 
 test('play header yards use the 600-yard check: couch is course, never 14,000', () => {
+  assert.equal(toGreenSixHundredCapsTheNumber(), false);
+  assert.equal(toGreenSixHundredIsPhoneFixCutoff(), true);
   const tee = from;
   const holeGreen = northOf(from, 371);
   const couch = northOf(from, 14_000);
@@ -272,6 +276,30 @@ test('play header yards use the 600-yard check: couch is course, never 14,000', 
   });
   assert.equal(card620.yards, 620);
   assert.equal(card620.source, 'course');
+
+  const longHoleGreen = northOf(from, 800);
+  const longLanding = northOf(from, 100);
+  const liveOver600 = markToGreen(longLanding, longHoleGreen);
+  assert.ok((liveOver600.yards ?? 0) > 600);
+  const afterShotLongCard = planPlayHeaderYards({
+    phone: tee,
+    green: longHoleGreen,
+    tee,
+    courseYards: 800,
+    shots: [
+      {
+        seq: 1,
+        endLat: longLanding.lat,
+        endLng: longLanding.lng,
+        endedAt: '2026-09-18T11:00:00.000Z',
+        source: 'gps',
+        fixQuality: 'good',
+      },
+    ],
+  });
+  assert.equal(afterShotLongCard.source, 'live');
+  assert.equal(afterShotLongCard.yards, liveOver600.yards);
+  assert.notEqual(afterShotLongCard.yards, 0);
 
   const afterShotOnCourse = planPlayHeaderYards({
     phone: landing,
@@ -309,13 +337,13 @@ test('play header yards use the 600-yard check: couch is course, never 14,000', 
       },
     ],
   });
-  assert.equal(afterShotAtHouse.source, 'live');
-  assert.equal(afterShotAtHouse.yards, markToGreen(landing, holeGreen).yards);
+  assert.equal(afterShotAtHouse.source, 'course');
+  assert.equal(afterShotAtHouse.yards, 371);
   assert.notEqual(afterShotAtHouse.yards, Math.round(haversineYards(couch, holeGreen)));
   assert.notEqual(afterShotAtHouse.yards, 0);
 
   const farLanding = northOf(from, 14_000);
-  const overCap = planPlayHeaderYards({
+  const houseFixKeepsCard = planPlayHeaderYards({
     phone: farLanding,
     green: holeGreen,
     tee,
@@ -331,7 +359,9 @@ test('play header yards use the 600-yard check: couch is course, never 14,000', 
       },
     ],
   });
-  assert.deepEqual(overCap, { yards: null, source: 'none', quality: 'none' });
+  assert.equal(houseFixKeepsCard.source, 'course');
+  assert.equal(houseFixKeepsCard.yards, 371);
+  assert.notEqual(houseFixKeepsCard.yards, Math.round(haversineYards(farLanding, holeGreen)));
 
   assert.deepEqual(
     planPlayHeaderYards({
@@ -349,7 +379,7 @@ test('play header yards use the 600-yard check: couch is course, never 14,000', 
       tee,
       courseYards: 371,
     }),
-    { yards: null, source: 'none', quality: 'none' },
+    { yards: 371, source: 'course', quality: 'good' },
   );
 });
 
