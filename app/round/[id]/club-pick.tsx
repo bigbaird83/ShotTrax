@@ -6,13 +6,13 @@ import { getHole, listClubAverages, listClubs, listShotsForHole } from '@/src/db
 import { COPY, formatPickerLeftYards, formatSuggestedClubChip } from '@/src/domain/playerCopy';
 import { clubPickLeaveHref, clubPickLeaveRunsAcceptFix, planClubPickLeave } from '@/src/domain/clubPickNav';
 import { putterOpensPuttSheet } from '@/src/domain/putts';
-import { clubToRankInput, lastClosedShotYards, rankDistanceYards, rankTopClubs, resolveDistanceTarget } from '@/src/domain/rankClubs';
+import { clubToRankInput, lastClosedShotYards, rankDistanceYards, rankTopClubs, resolveNextShotDistanceTarget } from '@/src/domain/rankClubs';
 import { parseTypedYards } from '@/src/domain/shotSource';
 import { selectClubForMark } from '@/src/domain/stickyClub';
 import { matchSpokenClub, speechContextualStrings } from '@/src/domain/voiceClub';
 import { emptyWalkAway, stepWalkAway, walkAwayEligible } from '@/src/domain/walkAway';
 import type { Club, GpsFix } from '@/src/domain/types';
-import { toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
+import { lastLandingMark, markToGreen, toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
 import { startClubSpeech, type ClubSpeechSession } from '@/src/services/speechClub';
 import { addNoGpsShot, changeShotClub, markShotWithClub, promptForPlan } from '@/src/services/shotActions';
 import { useLiveFix } from '@/src/services/useLiveFix';
@@ -125,8 +125,9 @@ export default function ClubPickScreen() {
     green,
     shots,
   });
-  const target = resolveDistanceTarget({
-    toGreen,
+  const target = resolveNextShotDistanceTarget({
+    landingToGreen: markToGreen(lastLandingMark(shots), green),
+    courseToGreen: toGreen,
     lastClosedYards: lastClosedShotYards(shots),
   });
   const ranked = rankTopClubs(

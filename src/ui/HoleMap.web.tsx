@@ -26,7 +26,9 @@ type Props = {
   lockFrame?: boolean;
   heading?: number | null;
   frameEpoch?: string;
+  hideYardsOverlay?: boolean;
   onFrameReady?: (ready: boolean) => void;
+  style?: object;
 };
 
 export function HoleMap({ holeNumber, userFix, green, yardsToGreen, placeHint }: Props) {

@@ -5,6 +5,7 @@ import { haversineYards, roundYards } from './haversine';
 import { isValidLatLng } from './latLng';
 import {
   lastClubMark,
+  lastLandingMark,
   markToGreen,
   planToGreenDisplay,
   resolveGreenPin,
@@ -232,5 +233,27 @@ test('lastClubMark is the latest shot start, never invented', () => {
       { seq: 2, startLat: 37.1, startLng: -122.1 },
     ]),
     { lat: 37.1, lng: -122.1 },
+  );
+});
+
+test('lastLandingMark is the latest closed end pin, never the tee or phone', () => {
+  const landing = { lat: 37.002, lng: -122.0 };
+  assert.equal(lastLandingMark([]), null);
+  assert.equal(
+    lastLandingMark([{ seq: 1, endLat: landing.lat, endLng: landing.lng, endedAt: null }]),
+    null,
+  );
+  assert.equal(
+    lastLandingMark([
+      { seq: 1, endLat: landing.lat, endLng: landing.lng, endedAt: 'a', source: 'no_gps' },
+    ]),
+    null,
+  );
+  assert.deepEqual(
+    lastLandingMark([
+      { seq: 1, endLat: 37.001, endLng: -122.0, endedAt: 'a', source: 'gps', fixQuality: 'good' },
+      { seq: 2, endLat: landing.lat, endLng: landing.lng, endedAt: 'b', source: 'placed', fixQuality: null },
+    ]),
+    landing,
   );
 });

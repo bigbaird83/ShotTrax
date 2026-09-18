@@ -32,7 +32,7 @@ import { COPY, finishPuttsChip, finishShotChip, formatHoleHeader, formatSuggeste
 import { canAdvanceHole, holesNeedingOpenShots } from '@/src/domain/holeAdvance';
 import { isPutterClubId } from '@/src/domain/defaultBag';
 import { catchUpPinFromTap, planCancelCatchUp, planCatchUpSheet } from '@/src/domain/catchUpMap';
-import { lockHoleCamera, resolveHoleTee } from '@/src/domain/holeCamera';
+import { lockHoleCamera, resolveHoleTee, shotPinsForHoleCamera } from '@/src/domain/holeCamera';
 import { deleteShotPrompt } from '@/src/domain/deleteShot';
 import { planInsertSlots } from '@/src/domain/insertShot';
 import { confirmUndoIsLive, planConfirmUndo, type ConfirmUndoWindow } from '@/src/domain/confirmUndo';
@@ -57,13 +57,13 @@ import {
   type PuttLengthId,
 } from '@/src/domain/putts';
 import { canMoveFromPin, canMoveToPin, type ShotEditSnapshot } from '@/src/domain/shotEdit';
-import { clubToRankInput, lastClosedShotYards, rankCatchUpClubs, rankDistanceYards, rankTopClubs, resolveDistanceTarget } from '@/src/domain/rankClubs';
+import { clubToRankInput, lastClosedShotYards, rankCatchUpClubs, rankDistanceYards, rankTopClubs, resolveNextShotDistanceTarget } from '@/src/domain/rankClubs';
 import { planScorecardDismiss } from '@/src/domain/scorecard';
 import { reconcileHoleScore, scoreMismatchMessage } from '@/src/domain/scoreReconcile';
 import { resolveStickyClub, selectClubForMark } from '@/src/domain/stickyClub';
 import type { Club, PenaltyReason } from '@/src/domain/types';
 import { matchSpokenClub, speechContextualStrings } from '@/src/domain/voiceClub';
-import { toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
+import { lastLandingMark, markToGreen, toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
 import { describeGpsSource } from '@/src/services/location';
 import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, undoShotEdit, deleteHoleShot } from '@/src/services/shotActions';
 import { startClubSpeech, type ClubSpeechSession } from '@/src/services/speechClub';
@@ -273,12 +273,15 @@ export default function HoleScreen() {
     const tick = () => {
       const now = Date.now();
       setNowMs(now);
-      if (!confirmUndoIsLive(confirmUndo, now)) setConfirmUndo(null);
+      if (!confirmUndoIsLive(confirmUndo, now)) {
+        setConfirmUndo(null);
+        bump();
+      }
     };
     tick();
     const id = setInterval(tick, 250);
     return () => clearInterval(id);
-  }, [confirmUndo]);
+  }, [confirmUndo, bump]);
 
   useEffect(() => {
     const location =
@@ -368,8 +371,9 @@ export default function HoleScreen() {
   };
   const fmb = hasApiFmb(pins) ? formatFmbRow(yardsToGreenDepth(fix, pins)) : null;
   const toGreen = yardsToGreenResult;
-  const target = resolveDistanceTarget({
-    toGreen,
+  const target = resolveNextShotDistanceTarget({
+    landingToGreen: markToGreen(lastLandingMark(shots), green),
+    courseToGreen: toGreen,
     lastClosedYards: lastClosedShotYards(shots),
   });
   const ranked = rankTopClubs(
@@ -387,16 +391,7 @@ export default function HoleScreen() {
       osmTee: teePointForHole(osmOverlay, holeNumber),
     }),
     green,
-    shotPins: shots.flatMap((shot) => {
-      const pins: { lat: number; lng: number }[] = [];
-      if (shot.startLat != null && shot.startLng != null) {
-        pins.push({ lat: shot.startLat, lng: shot.startLng });
-      }
-      if (shot.endLat != null && shot.endLng != null) {
-        pins.push({ lat: shot.endLat, lng: shot.endLng });
-      }
-      return pins;
-    }),
+    shotPins: shotPinsForHoleCamera(shots),
     phone: fix ? { lat: fix.lat, lng: fix.lng } : null,
   });
   const insertSlots = planInsertSlots(shots);
@@ -1386,53 +1381,75 @@ export default function HoleScreen() {
             : COPY.editShot
         }
         onClose={closeEdit}>
-        <ScrollView contentContainerStyle={styles.sheetPad}>
-          {editingShot ? (
-            <>
-              <QualityBadge
-                quality={editingShot.fixQuality}
-                open={editingShot.endedAt == null && editingShot.source !== 'no_gps'}
-                source={editingShot.source}
-              />
-              <BigButton
-                label={COPY.moveFrom}
-                variant="secondary"
-                disabled={readOnly || !canMoveFromPin(editingShot)}
-                onPress={() => {
-                  setEditOpen(false);
-                  setPlaceMode('edit-from');
-                }}
-              />
-              <BigButton
-                label={COPY.moveTo}
-                variant="secondary"
-                disabled={readOnly || !canMoveToPin(editingShot)}
-                onPress={() => {
-                  setEditOpen(false);
-                  setPlaceMode('edit-to');
-                }}
-              />
-              <BigButton
-                label={COPY.changeClub}
-                disabled={readOnly}
-                onPress={() => {
-                  setShowAllClubs(false);
-                  setEditClubOpen(true);
-                }}
-              />
-              {editUndo?.id === editingShot.id ? (
-                <BigButton label={COPY.undoEdit} variant="ghost" onPress={onUndoEdit} />
-              ) : null}
-              <BigButton
-                label={COPY.deleteShot}
-                variant="danger"
-                onPress={() => onDeleteShot(editingShot.id)}
-              />
-            </>
-          ) : (
-            <Text style={styles.muted}>{COPY.noShots}</Text>
-          )}
-        </ScrollView>
+        <View style={styles.editSheetBody}>
+          <HoleMap
+            holeNumber={hole.number}
+            shots={shots}
+            userFix={fix}
+            green={green}
+            yardsToGreen={yardsToGreenResult}
+            osmOverlay={osmOverlay}
+            lockFrame
+            hideYardsOverlay
+            frameEpoch={`edit-${hole.number}-${editingShot?.id ?? 'none'}`}
+            heading={holeCamera?.heading ?? null}
+            framePoints={
+              holeCamera
+                ? holeCamera.points.map((point) => ({
+                    latitude: point.lat,
+                    longitude: point.lng,
+                  }))
+                : undefined
+            }
+          />
+          <ScrollView contentContainerStyle={styles.sheetPad}>
+            {editingShot ? (
+              <>
+                <QualityBadge
+                  quality={editingShot.fixQuality}
+                  open={editingShot.endedAt == null && editingShot.source !== 'no_gps'}
+                  source={editingShot.source}
+                />
+                <BigButton
+                  label={COPY.moveFrom}
+                  variant="secondary"
+                  disabled={readOnly || !canMoveFromPin(editingShot)}
+                  onPress={() => {
+                    setEditOpen(false);
+                    setPlaceMode('edit-from');
+                  }}
+                />
+                <BigButton
+                  label={COPY.moveTo}
+                  variant="secondary"
+                  disabled={readOnly || !canMoveToPin(editingShot)}
+                  onPress={() => {
+                    setEditOpen(false);
+                    setPlaceMode('edit-to');
+                  }}
+                />
+                <BigButton
+                  label={COPY.changeClub}
+                  disabled={readOnly}
+                  onPress={() => {
+                    setShowAllClubs(false);
+                    setEditClubOpen(true);
+                  }}
+                />
+                {editUndo?.id === editingShot.id ? (
+                  <BigButton label={COPY.undoEdit} variant="ghost" onPress={onUndoEdit} />
+                ) : null}
+                <BigButton
+                  label={COPY.deleteShot}
+                  variant="danger"
+                  onPress={() => onDeleteShot(editingShot.id)}
+                />
+              </>
+            ) : (
+              <Text style={styles.muted}>{COPY.noShots}</Text>
+            )}
+          </ScrollView>
+        </View>
       </FullSheet>
 
       <FullSheet visible={scoreOpen} title={`Hole ${hole.number}`} onClose={() => setScoreOpen(false)}>
@@ -1808,6 +1825,7 @@ const styles = StyleSheet.create({
   meta: { color: colors.muted, fontSize: type.meta },
   label: { color: colors.cream, fontSize: type.meta, fontWeight: '800', letterSpacing: 0.6 },
   sheetPad: { padding: 16, gap: 12, paddingBottom: 40 },
+  editSheetBody: { flex: 1 },
   placeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   placeTop3: { flexDirection: 'row', gap: 8 },
   chip: {

@@ -1,25 +1,35 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { getCourseDataClient } from '@/src/course/client';
 import { formatParLabel, formatSiLabel, formatTeeMeta } from '@/src/course/layout';
+import { teePointForHole, teePointFromHoleFeature } from '@/src/course/osmOverlay';
+import type { OsmOverlay } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
 import { getRound, listClubAverages, listHoles, listPenaltiesForHole, listShotsForHole } from '@/src/db/repo';
+import { lockHoleCamera, resolveHoleTee, shotPinsForHoleCamera } from '@/src/domain/holeCamera';
 import { planNerdOut } from '@/src/domain/nerdOut';
 import { formatPenaltyRow, totalPenaltyStrokes } from '@/src/domain/penalty';
 import { COPY } from '@/src/domain/playerCopy';
 import { reconcileHoleScore } from '@/src/domain/scoreReconcile';
+import { useLiveFix } from '@/src/services/useLiveFix';
 import { BigButton } from '@/src/ui/BigButton';
+import { HoleMap } from '@/src/ui/HoleMap';
 import { Screen } from '@/src/ui/Screen';
 import { FullSheet } from '@/src/ui/Sheet';
 import { colors } from '@/src/ui/theme';
+
+const NERD_TRAIL_TO_GREEN = { yards: null, quality: 'none' as const };
 
 export default function RoundSummaryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { db, revision } = useDb();
   const [nerdOpen, setNerdOpen] = useState(false);
+  const [osmOverlay, setOsmOverlay] = useState<OsmOverlay | null>(null);
   const round = useMemo(() => getRound(db, id), [db, id, revision]);
   const holes = useMemo(() => (round ? listHoles(db, round.id) : []), [db, round, revision]);
   const averages = useMemo(() => listClubAverages(db), [db, revision]);
+  const fix = useLiveFix(nerdOpen);
   const nerd = useMemo(
     () =>
       planNerdOut({
@@ -37,6 +47,36 @@ export default function RoundSummaryScreen() {
       }),
     [holes, averages],
   );
+
+  useEffect(() => {
+    if (!nerdOpen || !round) {
+      setOsmOverlay(null);
+      return;
+    }
+    const location =
+      round.courseLat != null && round.courseLng != null
+        ? { lat: round.courseLat, lng: round.courseLng }
+        : null;
+    if (!location) {
+      setOsmOverlay(null);
+      return;
+    }
+    let live = true;
+    void getCourseDataClient()
+      .fetchOsmOverlay({
+        courseId: round.courseApiId,
+        location,
+      })
+      .then((overlay) => {
+        if (live) setOsmOverlay(overlay);
+      })
+      .catch(() => {
+        if (live) setOsmOverlay(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [nerdOpen, round]);
 
   if (!round) {
     return (
@@ -132,6 +172,46 @@ export default function RoundSummaryScreen() {
           <Text style={styles.nerdValue}>{nerd.score ?? '—'}</Text>
           <Text style={styles.nerdLabel}>{COPY.putts}</Text>
           <Text style={styles.nerdValue}>{nerd.putts}</Text>
+          {holes.map((hole) => {
+            const shots = listShotsForHole(db, hole.id);
+            const green =
+              hole.greenLat != null && hole.greenLng != null
+                ? { lat: hole.greenLat, lng: hole.greenLng }
+                : null;
+            const camera = lockHoleCamera({
+              tee: resolveHoleTee({
+                holeTee: teePointFromHoleFeature(osmOverlay, hole.number, green),
+                osmTee: teePointForHole(osmOverlay, hole.number),
+              }),
+              green,
+              shotPins: shotPinsForHoleCamera(shots),
+              phone: fix ? { lat: fix.lat, lng: fix.lng } : null,
+            });
+            if (!camera) return null;
+            return (
+              <View key={`trail-${hole.id}`} style={styles.nerdTrail}>
+                <Text style={styles.nerdLabel}>
+                  {formatParLabel(hole.par)} · Hole {hole.number}
+                </Text>
+                <HoleMap
+                  holeNumber={hole.number}
+                  shots={shots}
+                  userFix={fix}
+                  green={green}
+                  yardsToGreen={NERD_TRAIL_TO_GREEN}
+                  osmOverlay={osmOverlay}
+                  lockFrame
+                  hideYardsOverlay
+                  frameEpoch={`nerd-${hole.number}`}
+                  heading={camera.heading}
+                  framePoints={camera.points.map((point) => ({
+                    latitude: point.lat,
+                    longitude: point.lng,
+                  }))}
+                />
+              </View>
+            );
+          })}
           {nerd.clubs.map((row) => (
             <View key={row.id} style={styles.nerdRow}>
               <View style={{ flex: 1 }}>
@@ -178,6 +258,7 @@ const styles = StyleSheet.create({
   nerdPad: { padding: 16, gap: 10, paddingBottom: 40 },
   nerdLabel: { color: colors.muted, fontSize: 14, fontWeight: '800' },
   nerdValue: { color: colors.cream, fontSize: 36, fontWeight: '900' },
+  nerdTrail: { gap: 8 },
   nerdRow: {
     flexDirection: 'row',
     alignItems: 'center',

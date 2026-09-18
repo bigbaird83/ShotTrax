@@ -18,6 +18,10 @@ import { isValidLatLng } from '../domain/latLng';
 import { clampPenaltyStrokes, scoreAfterPenalty } from '../domain/penalty';
 import { clampPutts, planMadeIt, parsePuttLengths, serializePuttLengths, type PuttLengthId } from '../domain/putts';
 import type { ShotEditSnapshot } from '../domain/shotEdit';
+import {
+  confirmUndoAverageEligibleAt,
+  confirmUndoShotEntersAverage,
+} from '../domain/confirmUndo';
 import { includeInDistanceAverages, planNoGpsShot, planPlacedShot } from '../domain/shotSource';
 import { planUndoLastShot } from '../domain/undoLastShot';
 import { planDeleteShot } from '../domain/deleteShot';
@@ -109,6 +113,7 @@ type ShotRow = {
   ended_at: string | null;
   source: string | null;
   suggested: number | null;
+  average_eligible_at: string | null;
 };
 
 type PenaltyRow = {
@@ -223,6 +228,7 @@ function mapShot(row: ShotRow): Shot {
     endedAt: row.ended_at,
     source,
     suggested: row.suggested === 1,
+    averageEligibleAt: row.average_eligible_at ?? null,
   };
 }
 
@@ -906,14 +912,16 @@ export function insertPlacedShot(
   const plan = planPlacedShot(args.from, args.to);
   if (!plan.ok) return null;
   const id = newId();
-  const now = new Date().toISOString();
+  const nowMs = Date.now();
+  const now = new Date(nowMs).toISOString();
   db.runSync(
     `INSERT INTO shots (
       id, hole_id, club_id, seq,
       start_lat, start_lng, start_accuracy_m, start_fix_quality,
       end_lat, end_lng, end_accuracy_m, end_fix_quality,
-      distance_yards, typed_yards, fix_quality, impossible_jump, started_at, ended_at, source
-    ) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, NULL, NULL, ?, NULL, NULL, ?, ?, ?, ?)`,
+      distance_yards, typed_yards, fix_quality, impossible_jump, started_at, ended_at, source,
+      average_eligible_at
+    ) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, NULL, NULL, ?, NULL, NULL, ?, ?, ?, ?, ?)`,
     [
       id,
       args.holeId,
@@ -928,6 +936,7 @@ export function insertPlacedShot(
       now,
       now,
       plan.source,
+      confirmUndoAverageEligibleAt(nowMs),
     ],
   );
   return id;
@@ -1035,13 +1044,15 @@ export type ClubAverageRow = ClubAverage & {
 export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
   const clubs = listClubs(db, false).filter((club) => !isPutterClubId(club.id));
   const filled = fillEstimatedCarries(clubs);
+  const nowMs = Date.now();
   const shots = db.getAllSync<{
     club_id: string;
     distance_yards: number;
     fix_quality: string;
     source: string | null;
+    average_eligible_at: string | null;
   }>(
-    `SELECT club_id, distance_yards, fix_quality, source
+    `SELECT club_id, distance_yards, fix_quality, source, average_eligible_at
      FROM shots
      WHERE distance_yards IS NOT NULL AND club_id IS NOT NULL
        AND (
@@ -1068,7 +1079,8 @@ export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
                   : s.fix_quality === 'soft' || s.fix_quality === 'forced' || s.fix_quality === 'good'
                     ? s.fix_quality
                     : 'good',
-          }),
+          }) &&
+          confirmUndoShotEntersAverage(s.average_eligible_at, nowMs),
       )
       .map((s) => {
         const quality: FixQuality | null =

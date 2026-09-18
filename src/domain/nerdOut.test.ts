@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { clubBookCarry, nerdOutShowsGir, nerdOutShowsStrokesGained, planNerdOut } from './nerdOut';
+import { readFileSync } from 'node:fs';
+import { clubBookCarry, nerdOutShowsGir, nerdOutShowsStrokesGained, nerdOutShowsTrail, nerdOutTrailUsesHoleCamera, planNerdOut } from './nerdOut';
 import { PUTTER_CLUB_ID } from './defaultBag';
 
 test('nerd out uses stored score and putts only', () => {
@@ -120,4 +121,16 @@ test('nerd out club carries are the same club-book numbers', () => {
   assert.equal(out.clubs[0]?.yards, 148);
   assert.equal(out.clubs[1]?.kind, 'estimated');
   assert.equal(out.clubs[1]?.yards, 175);
+});
+
+test('nerd out trail uses the tee-to-green lock, even from home', () => {
+  assert.equal(nerdOutShowsTrail(), true);
+  assert.equal(nerdOutTrailUsesHoleCamera(), true);
+  const summary = readFileSync(new URL('../../app/round/[id]/summary.tsx', import.meta.url), 'utf8');
+  assert.match(summary, /lockHoleCamera/);
+  assert.match(summary, /lockFrame/);
+  assert.match(summary, /shotPinsForHoleCamera/);
+  assert.match(summary, /resolveHoleTee/);
+  assert.match(summary, /phone: fix/);
+  assert.doesNotMatch(summary, /lockFrame=\{false\}/);
 });

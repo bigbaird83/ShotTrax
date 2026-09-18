@@ -113,6 +113,7 @@ test('suggested chips show that club’s carry, not yards-to-green', () => {
   assert.equal(formatSuggestedClubChip('7i', 155), '7i · 155');
   assert.equal(formatSuggestedClubChip('7i', null), '7i · —');
   assert.equal(formatSuggestedClubChip('7i', undefined), '7i · —');
+  assert.equal('chipYardsDuringUndo' in COPY, false);
 });
 
 test('picker remaining yards are 148 left only when quality is good or soft', () => {

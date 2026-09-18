@@ -114,11 +114,16 @@ test('All clubs and Say a club are chips in row 1; edit is tap a shot, not a doc
   assert.match(hole, /label=\{COPY\.moveFrom\}/);
   assert.match(hole, /label=\{COPY\.moveTo\}/);
   assert.match(hole, /toGreenDisplayFromHole/);
+  assert.match(hole, /lastLandingMark/);
+  assert.match(hole, /resolveNextShotDistanceTarget/);
   assert.match(hole, /yardsToGreenPlayerLabel/);
   assert.doesNotMatch(dock, /COPY\.deleteShot/);
   const editSheet = hole.slice(hole.indexOf('visible={editOpen && !editClubOpen}'), hole.indexOf('visible={scoreOpen}'));
   assert.match(editSheet, /COPY\.deleteShot/);
   assert.match(editSheet, /onDeleteShot\(editingShot\.id\)/);
+  assert.match(editSheet, /<HoleMap/);
+  assert.match(editSheet, /lockFrame/);
+  assert.match(editSheet, /frameEpoch=\{`edit-/);
 });
 
 test('opening, Prev/Next, and Scorecard or Menu return reframe before the dock comes back', () => {
@@ -145,6 +150,8 @@ test('after a shot lands the next suggested club is already the primary chip', (
   assert.match(hole, /ranked\.map\(\(club, index\) => \(/);
   assert.match(hole, /index === 0 && styles\.dockChipPrimary/);
   assert.match(hole, /void markClub\(full\)/);
+  assert.match(hole, /resolveNextShotDistanceTarget/);
+  assert.match(hole, /lastLandingMark/);
   assert.doesNotMatch(hole, /nextClub|Next club|suggestedButton/);
 });
 

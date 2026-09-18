@@ -89,7 +89,7 @@ export type HoleMapRegion = {
 };
 
 /**
- * Frame + heading for the play map and the Add shot map.
+ * Frame + heading for every hole map: play, Add shot, edit-shot, Nerd out trail.
  * Tee + green → fit those points and rotate hole-up.
  * Missing tee or green → existing shot pins, else the green, and do not rotate.
  * `phone` is ignored — never a frame point, center, span, or heading.
@@ -114,10 +114,10 @@ export function planHoleCamera(args: {
 }
 
 /**
- * Locked play / Add shot camera. Center, span, and heading come from the hole
- * only (tee + green, else shot pins, else the green). A home-scale phone fix
- * or an on-course fix must not change any of those. Never invents a point
- * from the phone. The play map uses this before Add shot opens.
+ * Locked camera for every hole map. Center, span, and heading come from the
+ * hole only (tee + green, else shot pins, else the green). A home-scale phone
+ * fix or an on-course fix must not change any of those. Never invents a point
+ * from the phone. Tee at the bottom, green at the top, even from home.
  */
 export function lockHoleCamera(args: {
   tee: LatLng | null;
@@ -232,9 +232,46 @@ export function holeMapRevealsBeforeHoleFrame(): false {
   return false;
 }
 
-/** Play / Add shot never let Apple/Google follow the phone into the frame. */
+/** Every hole map never lets Apple/Google follow the phone into the frame. */
 export function holeMapShowsUserLocation(lockFrame: boolean): boolean {
   return !lockFrame;
+}
+
+/** Play, Add shot, edit-shot, and the Nerd out trail all lock tee-to-green. */
+export function everyHoleMapUsesLockFrame(): true {
+  return true;
+}
+
+export function editShotMapUsesLockFrame(): true {
+  return true;
+}
+
+export function nerdOutTrailUsesLockFrame(): true {
+  return true;
+}
+
+/** Do not invent a phone coordinate to seed the camera. */
+export function holeMapInventPhonePoint(): false {
+  return false;
+}
+
+/** Start and landing pins only. Never a fabricated phone point. */
+export function shotPinsForHoleCamera(
+  shots: {
+    startLat: number | null;
+    startLng: number | null;
+    endLat: number | null;
+    endLng: number | null;
+  }[],
+): LatLng[] {
+  const pins: LatLng[] = [];
+  for (const shot of shots) {
+    const start = { lat: shot.startLat ?? Number.NaN, lng: shot.startLng ?? Number.NaN };
+    if (isValidLatLng(start)) pins.push(start);
+    const end = { lat: shot.endLat ?? Number.NaN, lng: shot.endLng ?? Number.NaN };
+    if (isValidLatLng(end)) pins.push(end);
+  }
+  return pins;
 }
 
 /** fitToCoordinates would pull the user dot in. The lock uses setCamera only. */

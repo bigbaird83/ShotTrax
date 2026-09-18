@@ -1,6 +1,6 @@
 import { haversineYards, roundYards } from './haversine';
 import { isValidLatLng, type LatLng } from './latLng';
-import type { ShotFixQuality } from './types';
+import type { ShotFixQuality, ShotSource } from './types';
 
 export type GreenPinSource = 'user_estimate' | 'course_centroid';
 
@@ -69,6 +69,33 @@ export function lastClubMark(shots: ClubStartShot[]): LatLng | null {
 export function lastClubStartQuality(shots: ClubStartShot[]): ShotFixQuality {
   const last = [...shots].sort((a, b) => a.seq - b.seq).at(-1);
   return last?.fixQuality === 'none' ? 'none' : last?.fixQuality === 'soft' ? 'soft' : 'good';
+}
+
+export type ClubLandingShot = {
+  seq: number;
+  endLat: number | null;
+  endLng: number | null;
+  endedAt?: string | null;
+  source?: ShotSource;
+  fixQuality?: ShotFixQuality | null;
+};
+
+/**
+ * Latest closed landing (where the ball finished). Never the tee, never the
+ * phone, never invented. `no_gps` / quality none / open shots do not count.
+ */
+export function lastLandingMark(shots: ClubLandingShot[]): LatLng | null {
+  const last = [...shots]
+    .filter((shot) => {
+      if (shot.endedAt === null) return false;
+      if (shot.source === 'no_gps' || shot.fixQuality === 'none') return false;
+      return true;
+    })
+    .sort((a, b) => a.seq - b.seq)
+    .at(-1);
+  if (!last) return null;
+  const mark = { lat: last.endLat ?? Number.NaN, lng: last.endLng ?? Number.NaN };
+  return isValidLatLng(mark) ? mark : null;
 }
 
 export function markToGreen(

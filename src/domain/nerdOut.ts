@@ -84,3 +84,13 @@ export function nerdOutShowsGir(): false {
 export function nerdOutShowsStrokesGained(): false {
   return false;
 }
+
+/** End-of-round Nerd out includes the hole trail maps. */
+export function nerdOutShowsTrail(): true {
+  return true;
+}
+
+/** Those trails use the same tee-to-green lock as play / Add shot / edit. */
+export function nerdOutTrailUsesHoleCamera(): true {
+  return true;
+}
