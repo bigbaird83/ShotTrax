@@ -41,7 +41,7 @@ struct NearbyTee: Identifiable, Equatable {
 }
 
 struct NearbyState {
-  var active: Bool = true
+  var active: Bool = false
   var openPhone: Bool = true
   var line: String = "open the phone"
   var courses: [NearbyCourse] = []
@@ -74,6 +74,16 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   @Published var nearby = NearbyState()
   @Published var feedback: String = ""
   @Published var sending = false
+  @Published var nearbyFromHome = false
+  private var receivedClubList = false
+
+  var hasLiveHole: Bool {
+    receivedClubList || !list.bag.isEmpty
+  }
+
+  var showsNearby: Bool {
+    nearby.active && (!hasLiveHole || nearbyFromHome)
+  }
 
   private var pendingPick: [String: Any]?
   private let pendingKey = "pendingClubPick"
@@ -199,11 +209,22 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   func leave(_ action: String) {
     sending = true
     feedback = ""
+    if action == "home", hasLiveHole {
+      nearbyFromHome = true
+      nearby.active = true
+      requestNearby()
+    }
     sendPick([
       "type": "clubNav",
       "action": action,
       "at": isoNow(),
     ], keepPending: false)
+  }
+
+  func dismissNearbyToHole() {
+    nearbyFromHome = false
+    nearby.active = false
+    feedback = ""
   }
 
   private func isoNow() -> String {
@@ -222,7 +243,11 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       session.sendMessage(payload, replyHandler: { [weak self] reply in
         DispatchQueue.main.async {
           self?.clearPending()
-          self?.handleReply(reply, fallbackClubId: payload["clubId"] as? String)
+          self?.handleReply(
+            reply,
+            fallbackClubId: payload["clubId"] as? String,
+            type: payload["type"] as? String
+          )
         }
       }, errorHandler: { [weak self] _ in
         DispatchQueue.main.async {
@@ -234,7 +259,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
   }
 
-  private func handleReply(_ reply: [String: Any], fallbackClubId: String?) {
+  private func handleReply(_ reply: [String: Any], fallbackClubId: String?, type: String? = nil) {
     sending = false
     let ok = reply["ok"] as? Bool ?? false
     let text: String
@@ -245,6 +270,10 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
     feedback = text
     haptic(ok ? .success : .failure)
+    if ok, type == "startRound" || text.hasPrefix("Started") {
+      nearbyFromHome = false
+      nearby.active = false
+    }
     if ok, let clubId = fallbackClubId, clubId != "club_putter" {
       list.lastClubId = clubId
       UserDefaults.standard.set(clubId, forKey: "lastClubId")
@@ -290,6 +319,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   private func applyNearbyCourses(_ message: [String: Any]) {
+    if hasLiveHole && !nearbyFromHome { return }
     var next = NearbyState()
     next.active = true
     let status = message["status"] as? String ?? "open_phone"
@@ -313,6 +343,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   private func applyNearbyTees(_ message: [String: Any]) {
+    if hasLiveHole && !nearbyFromHome { return }
     var next = nearby
     next.active = true
     next.openPhone = false
@@ -353,7 +384,10 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       return
     }
     guard type == "clubList" else { return }
-    nearby.active = false
+    receivedClubList = true
+    if !nearbyFromHome {
+      nearby.active = false
+    }
     var next = ClubListState()
     next.top3 = message["top3"] as? [String] ?? []
     next.bag = message["bag"] as? [String] ?? []
@@ -420,6 +454,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     next.lastClubId = defaults?.string(forKey: "lastClubId")
     if hole > 0 {
       list = next
+      receivedClubList = true
     }
   }
 
@@ -435,10 +470,13 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     applyClubList(session.receivedApplicationContext)
     if activationState == .activated {
       flushPending()
-      if nearby.active {
-        DispatchQueue.main.async {
-          self.requestNearby()
+      DispatchQueue.main.async {
+        if self.hasLiveHole && !self.nearbyFromHome {
+          self.nearby.active = false
+          return
         }
+        self.nearby.active = true
+        self.requestNearby()
       }
     }
   }

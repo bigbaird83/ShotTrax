@@ -51,6 +51,15 @@ import {
   watchStripOnlyTapMarks,
   watchStripCappedAtThree,
   watchStripUsesFullBag,
+  watchStripIsWheel,
+  watchStripWraps,
+  watchStripSortedByIronNumber,
+  watchStripAllowsDashPill,
+  watchStripInventZero,
+  watchOneHomeOnly,
+  watchSameClubSharesRowWithAllClubs,
+  watchBackHomeAreTinyText,
+  wrapWatchClubStripIndex,
 } from './watchClubPick';
 import { HOME_CLUB_TAP_MAX_YD, homeClubTapPaths } from './homeClubTap';
 import { formatPickerLeftYards, formatSuggestedClubChip } from './playerCopy';
@@ -93,20 +102,28 @@ test('Watch opens on the same top 3 as the phone; no scroll to hit one', () => {
   assert.match(pick, /\.buttonStyle\(\.plain\)/);
   assert.match(pick, /session\.list\.statusLine/);
   assert.match(pick, /ScrollView\(\.horizontal/);
-  assert.match(pick, /stripClubs/);
+  assert.match(pick, /wheelClubs|stripClubs/);
   assert.match(pick, /session\.list\.label\(for: club\.id\)/);
   assert.match(pick, /pickSameClub/);
   assert.match(pick, /sameClubTitle/);
   assert.match(pick, /Text\("All clubs"\)/);
   const headerAt = pick.indexOf('session.list.statusLine');
+  const backHomeAt = pick.indexOf('session.leave("back")');
   const stripAt = pick.indexOf('ScrollView(.horizontal');
   const sameAt = pick.indexOf('pickSameClub');
   const allClubsAt = pick.indexOf('Text("All clubs")');
-  assert.ok(headerAt >= 0 && stripAt > headerAt && sameAt > stripAt && allClubsAt > sameAt);
+  assert.ok(headerAt >= 0 && backHomeAt > headerAt && stripAt > backHomeAt && sameAt > stripAt && allClubsAt > sameAt);
+  assert.equal(watchOneHomeOnly(), true);
+  assert.equal(watchSameClubSharesRowWithAllClubs(), true);
+  assert.equal(watchBackHomeAreTinyText(), false);
+  assert.equal((pick.match(/Text\("Home"\)/g) ?? []).length, 1);
+  assert.match(pick, /minHeight: 32/);
   assert.doesNotMatch(pick, /top3\.enumerated\(\)|TabView|tabViewStyle/);
   const sameClub = pick.slice(sameAt, allClubsAt);
   assert.match(sameClub, /Color\("cream"\)/);
   assert.doesNotMatch(sameClub, /Color\.black|borderedProminent/);
+  assert.match(pick.slice(pick.indexOf('HStack(spacing: 6)'), pick.indexOf('if showAllClubs')), /pickSameClub/);
+  assert.match(pick.slice(pick.indexOf('HStack(spacing: 6)'), pick.indexOf('if showAllClubs')), /Text\("All clubs"\)/);
   assert.match(watchUi, /"Same club · \\\(name\)"/);
   assert.match(pick, /moreClubs/);
   assert.match(watchUi, /session\.list\.bag/);
@@ -229,9 +246,16 @@ test('Watch suggested strip shows carry, opens on the pick, and is not stacked r
   const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
   const stripUi = watchUi.slice(watchUi.indexOf('ScrollView(.horizontal'), watchUi.indexOf('pickSameClub'));
   assert.match(stripUi, /onTapGesture/);
-  assert.match(stripUi, /scrollTo\(stripPickId/);
+  assert.match(stripUi, /scrollTo\(stripPickToken/);
   assert.match(stripUi, /anchor: \.center/);
   assert.match(stripUi, /stripPickId/);
+  assert.match(watchUi, /wheelClubs/);
+  assert.equal(watchStripIsWheel(), true);
+  assert.equal(watchStripWraps(), true);
+  assert.equal(watchStripSortedByIronNumber(), false);
+  assert.equal(watchStripAllowsDashPill(), false);
+  assert.equal(watchStripInventZero(), false);
+  assert.equal(wrapWatchClubStripIndex(3, 3), 0);
   assert.match(stripUi, /session\.pick\(clubId: club\.id\)/);
   assert.match(stripUi, /session\.list\.label\(for: club\.id\)/);
   assert.doesNotMatch(stripUi, /top3\.enumerated\(\)|minHeight: index == 0|TabView/);

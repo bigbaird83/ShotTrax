@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getCourseDataClient } from '@/src/course/client';
 import { layoutFromTee, roundHoleCountFromCourse } from '@/src/course/layout';
-import { getActiveRound, startRound } from '@/src/db/repo';
+import { startRound } from '@/src/db/repo';
 import type { GpsFix } from '@/src/domain/types';
 import {
   nearbyCoursesPayload,
@@ -75,14 +75,20 @@ async function resolvePhoneFix(ctx: WatchNearbyContext): Promise<GpsFix | null> 
   return live;
 }
 
-export async function pushWatchNearbyCourses(): Promise<NearbyCoursesMessage> {
+export async function pushWatchNearbyCourses(opts?: {
+  allowDuringRound?: boolean;
+}): Promise<NearbyCoursesMessage> {
   const ctx = context;
   const nowMs = ctx?.nowMs?.() ?? Date.now();
-  if (!ctx || ctx.hasActiveRound()) {
+  if (!ctx) {
     const plan = planNearbyCourses({ phoneFix: null, courses: [], nowMs });
     const msg = nearbyCoursesPayload(plan);
-    if (!ctx?.hasActiveRound()) await pushNearbyJson(msg);
+    await pushNearbyJson(msg);
     return msg;
+  }
+  if (ctx.hasActiveRound() && !opts?.allowDuringRound) {
+    const plan = planNearbyCourses({ phoneFix: null, courses: [], nowMs });
+    return nearbyCoursesPayload(plan);
   }
   const phoneFix = await resolvePhoneFix(ctx);
   const chosen = phoneFixForNearbyCourses({ phoneFix, nowMs: ctx.nowMs?.() ?? Date.now() });
@@ -115,14 +121,12 @@ export async function handleWatchNearbyJson(json: string): Promise<{ ok: boolean
   if (!ctx) return { ok: false, feedback: PHONE_UNAVAILABLE };
 
   if (parseNearbyRequest(raw)) {
-    if (ctx.hasActiveRound()) return { ok: true, feedback: 'Round in progress' };
-    await pushWatchNearbyCourses();
-    return { ok: true, feedback: 'Courses' };
+    await pushWatchNearbyCourses({ allowDuringRound: true });
+    return { ok: true, feedback: ctx.hasActiveRound() ? 'Round in progress' : 'Courses' };
   }
 
   const pick = parseNearbyCoursePick(raw);
   if (pick) {
-    if (ctx.hasActiveRound()) return { ok: false, feedback: PHONE_UNAVAILABLE };
     try {
       const detail = await getCourseDataClient().getCourse(pick.courseId);
       if (!detail) {
@@ -136,7 +140,7 @@ export async function handleWatchNearbyJson(json: string): Promise<{ ok: boolean
         const round = startRound(ctx.db, holeCount, detail.name, layout);
         ctx.bump();
         router.push(`/round/${round.id}/hole/1`);
-        return { ok: true, feedback: detail.name };
+        return { ok: true, feedback: `Started · ${detail.name}` };
       }
       await pushNearbyJson(
         nearbyTeesPayload({
@@ -153,11 +157,6 @@ export async function handleWatchNearbyJson(json: string): Promise<{ ok: boolean
 
   const start = parseStartRound(raw);
   if (start) {
-    if (ctx.hasActiveRound()) {
-      const active = getActiveRound(ctx.db);
-      if (active) router.push(`/round/${active.id}/hole/1`);
-      return { ok: false, feedback: PHONE_UNAVAILABLE };
-    }
     try {
       const detail = await getCourseDataClient().getCourse(start.courseId);
       if (!detail) return { ok: false, feedback: 'open the phone' };

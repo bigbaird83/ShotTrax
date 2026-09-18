@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { NativeSyntheticEvent, NativeScrollEvent, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { wrapClubStripIndex } from '../domain/clubStrip';
 import { colors, type } from './theme';
 
 export type ClubStripItem = {
@@ -17,24 +18,49 @@ type Props = {
 
 const PILL_RATIO = 0.62;
 const GAP = 8;
+const LOOP_COPIES = 3;
 
-/** Sideways carry strip. Peek shorter left / longer right. Tap marks; swipe does not. */
+/** Sideways carry wheel. Peek shorter left / longer right. Tap marks; swipe does not. */
 export function ClubStrip({ items, pickId, onPick, disabled, compact }: Props) {
   const scrollRef = useRef<ScrollView>(null);
   const [width, setWidth] = useState(0);
   const pillWidth = Math.max(compact ? 72 : 96, width * PILL_RATIO);
+  const step = pillWidth + GAP;
+  const loops = items.length > 1 ? LOOP_COPIES : 1;
+  const origin = items.length > 1 ? items.length : 0;
   const openIndex = Math.max(
     0,
     items.findIndex((item) => item.id === pickId),
   );
+  const looped = Array.from({ length: loops }, (_, copy) =>
+    items.map((item) => ({ ...item, token: `${item.id}#${copy}` })),
+  ).flat();
+
+  const scrollToIndex = (index: number, animated: boolean) => {
+    scrollRef.current?.scrollTo({
+      x: index * step,
+      animated,
+    });
+  };
 
   useEffect(() => {
     if (width <= 0 || items.length === 0) return;
-    scrollRef.current?.scrollTo({
-      x: openIndex * (pillWidth + GAP),
-      animated: false,
-    });
-  }, [items, openIndex, pickId, pillWidth, width]);
+    scrollToIndex(origin + openIndex, false);
+  }, [items, openIndex, origin, pickId, step, width]);
+
+  const settleWrap = (x: number) => {
+    if (items.length <= 1 || width <= 0) return;
+    const raw = Math.round(x / step);
+    const wrapped = wrapClubStripIndex(raw, items.length);
+    const target = origin + wrapped;
+    if (raw < items.length || raw >= items.length * 2) {
+      scrollToIndex(target, false);
+    }
+  };
+
+  const onWrapSettle = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    settleWrap(event.nativeEvent.contentOffset.x);
+  };
 
   return (
     <View
@@ -47,16 +73,18 @@ export function ClubStrip({ items, pickId, onPick, disabled, compact }: Props) {
           nestedScrollEnabled
           showsHorizontalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          onMomentumScrollEnd={onWrapSettle}
+          onScrollEndDrag={onWrapSettle}
           contentContainerStyle={{
             paddingHorizontal: Math.max(0, (width - pillWidth) / 2),
             gap: GAP,
             alignItems: 'center',
           }}>
-          {items.map((item) => {
+          {looped.map((item) => {
             const pick = item.id === pickId;
             return (
               <Pressable
-                key={item.id}
+                key={item.token}
                 accessibilityRole="button"
                 disabled={disabled}
                 onPress={() => onPick(item.id)}

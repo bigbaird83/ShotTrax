@@ -1,11 +1,15 @@
 import { isPutterClubId } from './defaultBag';
 
-/** Phone and Watch share this strip. Sorted by carry, not name. */
+/** Phone and Watch share this strip. Sorted by carry, not name or iron number. */
 export function clubStripSortedByCarry(): true {
   return true;
 }
 
 export function clubStripSortedByName(): false {
+  return false;
+}
+
+export function clubStripSortedByIronNumber(): false {
   return false;
 }
 
@@ -78,11 +82,47 @@ export function clubStripUsesFullBag(): true {
   return true;
 }
 
+/** Sideways wheel, not a gapped list. Past the longest wraps to the shortest. */
+export function clubStripIsWheel(): true {
+  return true;
+}
+
+export function clubStripIsGappedList(): false {
+  return false;
+}
+
+export function clubStripWraps(): true {
+  return true;
+}
+
+export function clubStripAllowsDashPill(): false {
+  return false;
+}
+
+export function clubStripInventZero(): false {
+  return false;
+}
+
+export function clubStripHasEmptySlot(): false {
+  return false;
+}
+
 export function carryFromClubLabel(label: string): number | null {
   const raw = label.split(' · ')[1]?.trim();
-  if (!raw || raw === '—') return null;
+  if (!raw || raw === '—' || raw === '-') return null;
   const yards = Number(raw);
-  return Number.isFinite(yards) ? yards : null;
+  if (!Number.isFinite(yards) || yards <= 0) return null;
+  return yards;
+}
+
+/** A dash, empty, 0, or missing number is blank. Do not invent 0. */
+export function clubHasWheelCarry(carry: number | null | undefined): boolean {
+  return carry != null && Number.isFinite(carry) && carry > 0;
+}
+
+export function wrapClubStripIndex(index: number, count: number): number {
+  if (count <= 0) return 0;
+  return ((index % count) + count) % count;
 }
 
 export type ClubStripClub = {
@@ -97,32 +137,24 @@ export type ClubStripPlan = {
 };
 
 /**
- * Full-bag strip (putter out). Short carry on the left, long on the right.
- * Opens on the club whose carry is closest to yards left.
+ * Full-bag wheel (putter out, blank/dash carries out). Short carry on the
+ * left, long on the right. Opens on the club whose carry is closest to
+ * yards left. No empty slots. Scrolling past the longest wraps to the shortest.
  */
 export function planClubStrip(args: {
   clubs: ClubStripClub[];
   yardsLeft?: number | null;
 }): ClubStripPlan {
   const ordered = args.clubs
-    .filter((club) => !isPutterClubId(club.id))
-    .map((club) => ({
-      id: club.id,
-      carry: club.carry != null && Number.isFinite(club.carry) ? club.carry : null,
-    }))
-    .sort((a, b) => {
-      const ac = a.carry ?? Number.POSITIVE_INFINITY;
-      const bc = b.carry ?? Number.POSITIVE_INFINITY;
-      if (ac !== bc) return ac - bc;
-      return 0;
-    });
+    .filter((club) => !isPutterClubId(club.id) && clubHasWheelCarry(club.carry))
+    .map((club) => ({ id: club.id, carry: club.carry as number }))
+    .sort((a, b) => a.carry - b.carry);
 
   const yards = args.yardsLeft;
   let pick: string | null = null;
   if (yards != null && Number.isFinite(yards)) {
     let bestDelta = Number.POSITIVE_INFINITY;
     for (const club of ordered) {
-      if (club.carry == null) continue;
       const delta = Math.abs(club.carry - yards);
       if (delta < bestDelta) {
         bestDelta = delta;

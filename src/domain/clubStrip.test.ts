@@ -6,9 +6,15 @@ import { HOME_CLUB_TAP_MAX_YD } from './homeClubTap';
 import { formatSuggestedClubChip } from './playerCopy';
 import {
   carryFromClubLabel,
+  clubHasWheelCarry,
+  clubStripAllowsDashPill,
   clubStripCappedAtThree,
   clubStripCenterIsClosestCarry,
   clubStripCenterIsTeeClub,
+  clubStripHasEmptySlot,
+  clubStripInventZero,
+  clubStripIsGappedList,
+  clubStripIsWheel,
   clubStripLongerPeeksRight,
   clubStripOnlyTapMarks,
   clubStripPhoneMatchesWatch,
@@ -16,6 +22,7 @@ import {
   clubStripScrollMarksShot,
   clubStripShorterPeeksLeft,
   clubStripSortedByCarry,
+  clubStripSortedByIronNumber,
   clubStripSortedByName,
   clubStripSwipeMarksShot,
   clubStripTapMarksLikeChip,
@@ -24,13 +31,22 @@ import {
   clubStripCenterUsesYardsLeft,
   clubStripUsesFullBag,
   clubStripUsesRankedTop3,
+  clubStripWraps,
   planClubStrip,
+  wrapClubStripIndex,
 } from './clubStrip';
 import { planClubTapStart } from './homeClubTap';
 
 test('strip is carry-sorted, full bag, putter off, center is closest to yards left', () => {
   assert.equal(clubStripSortedByCarry(), true);
   assert.equal(clubStripSortedByName(), false);
+  assert.equal(clubStripSortedByIronNumber(), false);
+  assert.equal(clubStripIsWheel(), true);
+  assert.equal(clubStripIsGappedList(), false);
+  assert.equal(clubStripWraps(), true);
+  assert.equal(clubStripAllowsDashPill(), false);
+  assert.equal(clubStripInventZero(), false);
+  assert.equal(clubStripHasEmptySlot(), false);
   assert.equal(clubStripCappedAtThree(), false);
   assert.equal(clubStripShorterPeeksLeft(), true);
   assert.equal(clubStripLongerPeeksRight(), true);
@@ -49,6 +65,12 @@ test('strip is carry-sorted, full bag, putter off, center is closest to yards le
   assert.equal(clubStripUsesRankedTop3(), false);
   assert.equal(carryFromClubLabel('6i · 185'), 185);
   assert.equal(carryFromClubLabel('6i · —'), null);
+  assert.equal(carryFromClubLabel('3W · —'), null);
+  assert.equal(carryFromClubLabel('4i · —'), null);
+  assert.equal(carryFromClubLabel('7i · —'), null);
+  assert.equal(clubHasWheelCarry(null), false);
+  assert.equal(clubHasWheelCarry(0), false);
+  assert.equal(clubHasWheelCarry(185), true);
   assert.equal(formatSuggestedClubChip('6i', 185), '6i · 185');
 
   const strip = planClubStrip({
@@ -136,7 +158,10 @@ test('after a shot lands the middle pill is closest to yards left, and the strip
   const stripClubs = watch.slice(watch.indexOf('private var stripClubs'), watch.indexOf('private func carryFromLabel'));
   assert.match(stripClubs, /session\.list\.bag/);
   assert.match(stripClubs, /sorted \{ \$0\.carry < \$1\.carry \}/);
+  assert.match(stripClubs, /compactMap/);
+  assert.match(stripClubs, /wheelClubs/);
   assert.doesNotMatch(stripClubs, /top3|localeCompare|name/);
+  assert.doesNotMatch(stripClubs, /10_000/);
   assert.match(watch, /session\.list\.yardsToGreen/);
   assert.match(watch, /Text\("All clubs"\)/);
   const more = watch.slice(watch.indexOf('private var moreClubs'), watch.indexOf('private var stripScrollKey'));
@@ -199,7 +224,12 @@ test('phone and Watch strip UIs peek neighbors and mark only on tap', () => {
   assert.match(phone, /onPress=\{\(\) => onPick\(item\.id\)\}/);
   assert.match(phone, /scrollTo/);
   assert.match(phone, /paddingHorizontal: Math.max\(0, \(width - pillWidth\) \/ 2\)/);
-  assert.doesNotMatch(phone, /onMomentumScrollEnd|onScrollEndDrag|onScroll=\{/);
+  assert.match(phone, /onMomentumScrollEnd=\{onWrapSettle\}/);
+  assert.match(phone, /onScrollEndDrag=\{onWrapSettle\}/);
+  assert.match(phone, /wrapClubStripIndex/);
+  assert.doesNotMatch(phone, /onScroll=\{/);
+  const wrapFn = phone.slice(phone.indexOf('const onWrapSettle'), phone.indexOf('return ('));
+  assert.doesNotMatch(wrapFn, /onPick/);
   assert.doesNotMatch(phone, /PUTTER_CLUB_ID|club_putter/);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
@@ -225,10 +255,102 @@ test('phone and Watch strip UIs peek neighbors and mark only on tap', () => {
   const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
   assert.match(watch, /ScrollView\(\.horizontal/);
   assert.match(watch, /onTapGesture/);
-  assert.match(watch, /scrollTo\(stripPickId/);
+  assert.match(watch, /scrollTo\(stripPickToken/);
   assert.match(watch, /anchor: \.center/);
   assert.match(watch, /sorted \{ \$0\.carry < \$1\.carry \}/);
   assert.match(watch, /session\.list\.bag/);
+  assert.match(watch, /compactMap/);
+  assert.match(watch, /wheelClubs/);
   assert.doesNotMatch(watch, /TabView|tabViewStyle|stripPage/);
   assert.doesNotMatch(watch, /sorted \{ \$0\.carry > \$1\.carry \}/);
+  assert.doesNotMatch(watch, /return 10_000|return 0/);
+});
+
+test('wheel order is carry not iron number; dash clubs are out with no empty slot', () => {
+  assert.equal(clubStripSortedByCarry(), true);
+  assert.equal(clubStripSortedByIronNumber(), false);
+  assert.equal(clubStripAllowsDashPill(), false);
+  assert.equal(clubStripInventZero(), false);
+  assert.equal(clubStripHasEmptySlot(), false);
+  assert.equal(clubStripIsWheel(), true);
+  assert.equal(clubStripWraps(), true);
+
+  const mixed = planClubStrip({
+    clubs: [
+      { id: 'club_4i', carry: 200 },
+      { id: 'club_7i', carry: 165 },
+      { id: 'club_3i', carry: 190 },
+      { id: 'club_5i', carry: 175 },
+      { id: 'club_2i', carry: 210 },
+    ],
+    yardsLeft: 188,
+  });
+  assert.deepEqual(mixed.ids, ['club_7i', 'club_5i', 'club_3i', 'club_4i', 'club_2i']);
+  assert.notDeepEqual(mixed.ids, ['club_2i', 'club_3i', 'club_4i', 'club_5i', 'club_7i']);
+  assert.equal(mixed.pickId, 'club_3i');
+
+  const withDash = planClubStrip({
+    clubs: [
+      { id: 'club_3w', carry: null },
+      { id: 'club_4i', carry: null },
+      { id: 'club_7i', carry: null },
+      { id: 'club_6i', carry: 185 },
+      { id: 'club_driver', carry: 280 },
+      { id: 'club_pw', carry: 130 },
+      { id: PUTTER_CLUB_ID, carry: 8 },
+    ],
+    yardsLeft: 282,
+  });
+  assert.deepEqual(withDash.ids, ['club_pw', 'club_6i', 'club_driver']);
+  assert.ok(!withDash.ids.includes('club_3w'));
+  assert.ok(!withDash.ids.includes('club_4i'));
+  assert.ok(!withDash.ids.includes('club_7i'));
+  assert.equal(withDash.ids.length, 3);
+  assert.equal(withDash.pickId, 'club_driver');
+  assert.notEqual(withDash.pickId, 'club_3w');
+  assert.equal(carryFromClubLabel('3W · —'), null);
+  assert.equal(carryFromClubLabel('4i · —'), null);
+  assert.equal(carryFromClubLabel('7i · —'), null);
+  assert.equal(clubHasWheelCarry(0), false);
+  assert.equal(clubHasWheelCarry(undefined), false);
+
+  const estimated = planClubStrip({
+    clubs: [
+      { id: 'club_3w', carry: 230 },
+      { id: 'club_7i', carry: null },
+      { id: 'club_6i', carry: 185 },
+    ],
+    yardsLeft: 220,
+  });
+  assert.deepEqual(estimated.ids, ['club_6i', 'club_3w']);
+  assert.ok(!estimated.ids.includes('club_7i'));
+  assert.equal(estimated.ids.length, 2);
+});
+
+test('scrolling past the longest wraps to the shortest', () => {
+  assert.equal(clubStripWraps(), true);
+  assert.equal(clubStripIsWheel(), true);
+  const strip = planClubStrip({
+    clubs: [
+      { id: 'club_driver', carry: 280 },
+      { id: 'club_5i', carry: 205 },
+      { id: 'club_pw', carry: 130 },
+    ],
+    yardsLeft: 280,
+  });
+  assert.deepEqual(strip.ids, ['club_pw', 'club_5i', 'club_driver']);
+  assert.equal(strip.ids[strip.ids.length - 1], 'club_driver');
+  assert.equal(strip.ids[0], 'club_pw');
+  assert.equal(wrapClubStripIndex(strip.ids.length, strip.ids.length), 0);
+  assert.equal(strip.ids[wrapClubStripIndex(strip.ids.length, strip.ids.length)], 'club_pw');
+  assert.equal(wrapClubStripIndex(-1, strip.ids.length), strip.ids.length - 1);
+  assert.equal(strip.ids[wrapClubStripIndex(-1, strip.ids.length)], 'club_driver');
+  assert.equal(wrapClubStripIndex(0, 0), 0);
+
+  const phone = readFileSync(new URL('../ui/ClubStrip.tsx', import.meta.url), 'utf8');
+  assert.match(phone, /LOOP_COPIES = 3/);
+  assert.match(phone, /wrapClubStripIndex/);
+  const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  assert.match(watch, /wheelClubs/);
+  assert.match(watch, /0\.\.<3/);
 });

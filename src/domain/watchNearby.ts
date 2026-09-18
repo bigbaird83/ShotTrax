@@ -44,6 +44,29 @@ export function watchShowsScoring(): false {
   return false;
 }
 
+export function liveRoundOpensThatHole(): true {
+  return true;
+}
+
+export function watchOpenCoversLiveHoleWithCourses(): false {
+  return false;
+}
+
+export function startDifferentRoundLivesUnderHome(): true {
+  return true;
+}
+
+export type WatchOpenFace = 'hole' | 'nearby';
+
+/** A live round opens that hole. Nearby / a different round lives under Home. */
+export function planWatchOpenFace(args: {
+  hasLiveRound: boolean;
+  openedFromHome?: boolean;
+}): WatchOpenFace {
+  if (args.hasLiveRound && !args.openedFromHome) return 'hole';
+  return 'nearby';
+}
+
 export function nearbyCourseFixMaxAgeMs(): typeof NEARBY_COURSE_FIX_MAX_AGE_MS {
   return NEARBY_COURSE_FIX_MAX_AGE_MS;
 }
