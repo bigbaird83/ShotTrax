@@ -23,12 +23,15 @@ import {
   playUsesCourseCardCamera,
   roundStartShowsUserLocation,
 } from './playLayout';
+import { MAGNOLIA_CC, courseCardHoleHasTeeAndGreen, magnoliaHole1Card } from './reproCourseCard';
 
-const tee = { lat: 34.11, lng: -85.64 };
-const green = { lat: 34.1124, lng: -85.64 };
+const tee = MAGNOLIA_CC.hole1.tee;
+const green = MAGNOLIA_CC.hole1.green;
 const house = { lat: 40.7128, lng: -74.006 };
 
 test('shared camera region is course tee + green only, never the phone or the house', () => {
+  assert.equal(MAGNOLIA_CC.name, 'Magnolia Country Club');
+  assert.equal(courseCardHoleHasTeeAndGreen(magnoliaHole1Card()), true);
   assert.equal(courseCardCameraRegionUsesPhone(), false);
   assert.equal(courseCardCameraRegionUsesHouse(), false);
 
