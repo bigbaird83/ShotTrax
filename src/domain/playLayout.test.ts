@@ -751,6 +751,8 @@ test('P0: full-bleed MapView has real height under the glass dock; Add shot keep
   assert.equal(signalLabCypressBlankMap().magnoliaStillPaints, true);
   assert.equal(signalLabCypressBlankMap().camdenStillPaints, true);
   assert.equal(signalLabCypressBlankMap().cypressSpecific, false);
+  assert.equal(signalLabCypressBlankMap().cabotPocket, true);
+  assert.equal(signalLabCypressBlankMap().checksCypressAndGreystoneTogether, true);
   assert.equal(signalLabCypressBlankMap().sideBySideMagnoliaCamdenCypress, true);
   assert.equal(signalLabCypressBlankMap().missWhenSamePoint, true);
   assert.equal(signalLabCypressBlankMap().missWhenAbsurdSpan, true);

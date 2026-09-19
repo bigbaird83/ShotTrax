@@ -12,10 +12,11 @@ import {
 import { isCourseCardLatLng, isNearZeroLatLng, type LatLng } from './latLng';
 import { holeMapRegionIsPaintable } from './mapPaint';
 import {
-  BLANKS_LIVE_CARDS,
+  CABOT_POCKET_LIVE_CARDS,
   CAMDEN_CC,
   CYPRESS_CREEK_CABOT,
   DOC_BLANK_COURSE_NAMES,
+  DOC_CABOT_POCKET_NAMES,
   DOC_PAINT_COURSE_NAMES,
   GREYSTONE_CABOT,
   MAGNOLIA_CC,
@@ -78,10 +79,20 @@ export type Hole1PayloadDump = {
   rows: Hole1PayloadRow[];
   /** Magnolia + Camden paint; a blank in the known fail set → thin API, not paint. */
   thinApiPattern: boolean;
+  /** Cypress and Greystone both miss — Cabot pocket, not one card. */
+  cabotPocket: boolean;
   /** Holes / cards that must show the miss card (do not mount MapView). */
   failCount: number;
   paintCount: number;
   tally: CourseCardTally;
+  failList: CourseCardFailFlag[];
+};
+
+export type CabotPocketScan = {
+  cypress: Hole1PayloadRow;
+  greystone: Hole1PayloadRow;
+  bothBlank: boolean;
+  failCount: number;
   failList: CourseCardFailFlag[];
 };
 
@@ -325,14 +336,14 @@ export function dumpHole1PayloadsSideBySide(args: {
   const cypress = hole1PayloadRow({
     course: CYPRESS_CREEK_CABOT.name,
     city: CYPRESS_CREEK_CABOT.city,
-    tee: args.cypress?.tee ?? BLANKS_LIVE_CARDS[0].hole1.tee,
-    green: args.cypress?.green ?? BLANKS_LIVE_CARDS[0].hole1.green,
+    tee: args.cypress?.tee ?? CABOT_POCKET_LIVE_CARDS[0].hole1.tee,
+    green: args.cypress?.green ?? CABOT_POCKET_LIVE_CARDS[0].hole1.green,
   });
   const greystone = hole1PayloadRow({
     course: GREYSTONE_CABOT.name,
     city: GREYSTONE_CABOT.city,
-    tee: args.greystone?.tee ?? BLANKS_LIVE_CARDS[1].hole1.tee,
-    green: args.greystone?.green ?? BLANKS_LIVE_CARDS[1].hole1.green,
+    tee: args.greystone?.tee ?? CABOT_POCKET_LIVE_CARDS[1].hole1.tee,
+    green: args.greystone?.green ?? CABOT_POCKET_LIVE_CARDS[1].hole1.green,
   });
   const pleasantValley = hole1PayloadRow({
     course: PLEASANT_VALLEY_LITTLE_ROCK.name,
@@ -347,11 +358,51 @@ export function dumpHole1PayloadsSideBySide(args: {
   return {
     rows,
     thinApiPattern: paintsOk && blankMiss,
+    cabotPocket: !cypress.mount && !greystone.mount,
     failCount: tally.fail,
     paintCount: tally.paint,
     tally,
     failList: flagCourseCardFails(rows),
   };
+}
+
+/** Cabot pocket: Cypress Creek and Greystone, checked together. */
+export function scanCabotPocket(args?: {
+  cypress?: { tee: LatLng | null; green: LatLng | null };
+  greystone?: { tee: LatLng | null; green: LatLng | null };
+}): CabotPocketScan {
+  const cypress = hole1PayloadRow({
+    course: CYPRESS_CREEK_CABOT.name,
+    city: CYPRESS_CREEK_CABOT.city,
+    tee: args?.cypress?.tee ?? CABOT_POCKET_LIVE_CARDS[0].hole1.tee,
+    green: args?.cypress?.green ?? CABOT_POCKET_LIVE_CARDS[0].hole1.green,
+  });
+  const greystone = hole1PayloadRow({
+    course: GREYSTONE_CABOT.name,
+    city: GREYSTONE_CABOT.city,
+    tee: args?.greystone?.tee ?? CABOT_POCKET_LIVE_CARDS[1].hole1.tee,
+    green: args?.greystone?.green ?? CABOT_POCKET_LIVE_CARDS[1].hole1.green,
+  });
+  return {
+    cypress,
+    greystone,
+    bothBlank: !cypress.mount && !greystone.mount,
+    failCount: [cypress, greystone].filter((row) => !row.mount).length,
+    failList: flagCourseCardFails([cypress, greystone]),
+  };
+}
+
+export function logCabotPocket(scan: CabotPocketScan): CabotPocketScan {
+  console.log('[Signal Lab] cabot-pocket', {
+    paints: [...DOC_PAINT_COURSE_NAMES],
+    blanks: [...DOC_CABOT_POCKET_NAMES],
+    cypressCreek: scan.cypress,
+    greystone: scan.greystone,
+    bothBlank: scan.bothBlank,
+    failCount: scan.failCount,
+    failList: formatCourseCardFailList(scan.failList),
+  });
+  return scan;
 }
 
 /** Pull the known AR fail set in one pass — no Doc smoke list. */
@@ -418,7 +469,9 @@ export function logHole1PayloadsSideBySide(dump: Hole1PayloadDump): Hole1Payload
     greystoneCabot: dump.rows[3],
     pleasantValleyLittleRock: dump.rows[4],
     paints: [...DOC_PAINT_COURSE_NAMES],
+    cabotPocket: [...DOC_CABOT_POCKET_NAMES],
     blanks: [...DOC_BLANK_COURSE_NAMES],
+    cabotPocketBothBlank: dump.cabotPocket,
     thinApiPattern: dump.thinApiPattern,
     paintCount: dump.paintCount,
     failCount: dump.failCount,

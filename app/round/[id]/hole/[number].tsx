@@ -54,8 +54,10 @@ import { catchUpPinFromTap, planCancelCatchUp, planCatchUpSheet } from '@/src/do
 import {
   decideCourseCardPaint,
   dumpHole1PayloadsSideBySide,
+  logCabotPocket,
   logCourseCardPaint,
   logHole1PayloadsSideBySide,
+  scanCabotPocket,
   showPlayDockForCourseCard,
 } from '@/src/domain/courseCardPaint';
 import {
@@ -496,6 +498,12 @@ export default function HoleScreen() {
           cypress: /cypress/i.test(name) ? live : { tee: null, green: null },
           greystone: /greystone/i.test(name) ? live : { tee: null, green: null },
           pleasantValley: /pleasant valley/i.test(name) ? live : { tee: null, green: null },
+        }),
+      );
+      logCabotPocket(
+        scanCabotPocket({
+          cypress: /cypress/i.test(name) ? live : { tee: null, green: null },
+          greystone: /greystone/i.test(name) ? live : { tee: null, green: null },
         }),
       );
     }

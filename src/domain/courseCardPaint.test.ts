@@ -13,6 +13,8 @@ import {
   courseCardShouldMountMapView,
   courseCardZeroCoordMountsMapView,
   formatCourseCardFailList,
+  logCabotPocket,
+  scanCabotPocket,
   scanCourseCardDetails,
   scanKnownArCourseCards,
   tallyCourseCardPaint,
@@ -33,9 +35,11 @@ import { isCourseCardLatLng, isNearZeroLatLng } from './latLng';
 import { signalLabCypressBlankMap } from './playLayout';
 import {
   BLANKS_LIVE_CARDS,
+  CABOT_POCKET_LIVE_CARDS,
   CAMDEN_CC,
   CYPRESS_CREEK_CABOT,
   DOC_BLANK_COURSE_NAMES,
+  DOC_CABOT_POCKET_NAMES,
   DOC_PAINT_COURSE_NAMES,
   GREYSTONE_CABOT,
   MAGNOLIA_CC,
@@ -215,6 +219,8 @@ test('Signal Lab logs Cypress hole 1 tee+green and does not mount MapView on mis
   assert.equal(gate.logsHole1TeeGreen, true);
   assert.equal(gate.sideBySideMagnoliaCamdenCypress, true);
   assert.equal(gate.cypressSpecific, false);
+  assert.equal(gate.cabotPocket, true);
+  assert.equal(gate.checksCypressAndGreystoneTogether, true);
   assert.equal(gate.thinApiShowsMissAndFailCount, true);
   assert.equal(gate.blanksCypressGreystonePleasantValley, true);
   assert.equal(gate.logsFailList, true);
@@ -237,6 +243,8 @@ test('Signal Lab logs Cypress hole 1 tee+green and does not mount MapView on mis
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   assert.match(hole, /logCourseCardPaint\(/);
   assert.match(hole, /logHole1PayloadsSideBySide\(/);
+  assert.match(hole, /logCabotPocket\(/);
+  assert.match(hole, /scanCabotPocket\(/);
   assert.match(hole, /dumpHole1PayloadsSideBySide\(/);
   assert.match(hole, /decideCourseCardPaint\(/);
   assert.match(hole, /showPlayDockForCourseCard\(/);
@@ -287,6 +295,7 @@ test('Signal Lab side-by-side: thin API vs Magnolia + Camden paint', () => {
   assert.equal(dump.rows[4].city, 'Little Rock');
   assert.equal(dump.rows[4].mount, false);
   assert.equal(dump.thinApiPattern, true);
+  assert.equal(dump.cabotPocket, true);
   assert.equal(dump.failCount, 3);
   assert.equal(dump.paintCount, 2);
   assert.equal(dump.tally.paint, 2);
@@ -311,11 +320,13 @@ test('Signal Lab side-by-side: thin API vs Magnolia + Camden paint', () => {
     3,
   );
   const line = logs.find((row) => Array.isArray(row) && row[0] === '[Signal Lab] hole-1 side-by-side') as
-    | [string, { paints: string[]; blanks: string[] }]
+    | [string, { paints: string[]; blanks: string[]; cabotPocket: string[]; cabotPocketBothBlank: boolean }]
     | undefined;
   assert.ok(line);
   assert.deepEqual(line[1].paints, [...DOC_PAINT_COURSE_NAMES]);
+  assert.deepEqual(line[1].cabotPocket, [...DOC_CABOT_POCKET_NAMES]);
   assert.deepEqual(line[1].blanks, [...DOC_BLANK_COURSE_NAMES]);
+  assert.equal(line[1].cabotPocketBothBlank, true);
 
   const known = dumpHole1PayloadsSideBySide({
     cypress: CYPRESS_CREEK_CABOT.hole1,
@@ -323,6 +334,7 @@ test('Signal Lab side-by-side: thin API vs Magnolia + Camden paint', () => {
     pleasantValley: PLEASANT_VALLEY_LITTLE_ROCK.hole1,
   });
   assert.equal(known.thinApiPattern, true);
+  assert.equal(known.cabotPocket, false);
   assert.equal(known.failCount, 1);
   assert.equal(known.paintCount, 4);
   assert.equal(known.tally.oneOff, true);
@@ -366,6 +378,21 @@ test('Signal Lab side-by-side: thin API vs Magnolia + Camden paint', () => {
   assert.equal(scanned.failCount, 3);
   assert.equal(scanned.paintCount, 2);
   assert.equal(scanned.tally.thinTier, true);
+  assert.equal(scanned.cabotPocket, true);
+  const pocket = logCabotPocket(scanCabotPocket());
+  assert.equal(pocket.bothBlank, true);
+  assert.equal(pocket.failCount, 2);
+  assert.deepEqual(
+    CABOT_POCKET_LIVE_CARDS.map((course) => course.name),
+    [...DOC_CABOT_POCKET_NAMES],
+  );
+  assert.deepEqual(formatCourseCardFailList(pocket.failList), [
+    'Cypress Creek (Cabot) — null tee+green',
+    'Greystone Country Club (Cabot) — null tee+green',
+  ]);
+  const oneCabot = scanCabotPocket({ cypress: CYPRESS_CREEK_CABOT.hole1 });
+  assert.equal(oneCabot.bothBlank, false);
+  assert.equal(oneCabot.failCount, 1);
   assert.equal(courseCardFailWhy('missing_both'), 'null tee+green');
   assert.equal(courseCardFailWhy('zero_coord'), '~0,0 placeholder');
   assert.equal(courseCardFailWhy('same_point'), 'tee and green are the same point');

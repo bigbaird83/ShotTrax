@@ -22,6 +22,7 @@ import {
 import {
   CAMDEN_CC,
   CYPRESS_CREEK_CABOT,
+  CABOT_POCKET_LIVE_CARDS,
   GREYSTONE_CABOT,
   MAGNOLIA_CC,
   MYSTIC_CREEK_EL_DORADO,
@@ -126,6 +127,11 @@ test('repro cards are Magnolia plus Cypress Creek; missing tee or green never wa
   );
   assert.equal(GREYSTONE_CABOT.name, 'Greystone Country Club');
   assert.equal(GREYSTONE_CABOT.city, 'Cabot');
+  assert.deepEqual(
+    CABOT_POCKET_LIVE_CARDS.map((course) => `${course.name}:${course.city}`),
+    ['Cypress Creek:Cabot', 'Greystone Country Club:Cabot'],
+  );
+  assert.equal(CABOT_POCKET_LIVE_CARDS.every((course) => course.hole1.tee == null && course.hole1.green == null), true);
   assert.deepEqual(greystoneHole1Card(), {
     tee: GREYSTONE_CABOT.hole1.tee,
     green: GREYSTONE_CABOT.hole1.green,

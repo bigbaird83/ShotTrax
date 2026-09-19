@@ -47,7 +47,7 @@ export const CAMDEN_CC: ReproCourseCard = {
   },
 };
 
-/** Doc TF blank — Cypress-specific. Cabot, AR. Missing live tee/green → miss card. */
+/** Doc TF blank — Cabot pocket with Greystone. Missing live tee/green → miss card. */
 export const CYPRESS_CREEK_CABOT: ReproCourseCard = {
   name: 'Cypress Creek',
   city: 'Cabot',
@@ -61,8 +61,8 @@ export const CYPRESS_CREEK_CABOT: ReproCourseCard = {
 };
 
 /**
- * Cabot neighbor of Cypress Creek. Same thin-API class when hole 1
- * tee/green are null or ~0,0 — never invent a green from the clubhouse.
+ * Cabot pocket neighbor of Cypress Creek. Check these two cards together.
+ * Same thin-API class when hole 1 tee/green are null or ~0,0.
  */
 export const GREYSTONE_CABOT: ReproCourseCard = {
   name: 'Greystone Country Club',
@@ -106,29 +106,32 @@ export const PLEASANT_VALLEY_LITTLE_ROCK = {
   hole1: { tee: null, green: null } as { tee: LatLng | null; green: LatLng | null },
 };
 
+const CYPRESS_LIVE_BLANK = {
+  name: CYPRESS_CREEK_CABOT.name,
+  city: CYPRESS_CREEK_CABOT.city,
+  state: 'AR' as const,
+  location: CYPRESS_CREEK_CABOT.location,
+  hole1: { tee: null, green: null } as { tee: LatLng | null; green: LatLng | null },
+};
+
+const GREYSTONE_LIVE_BLANK = {
+  name: GREYSTONE_CABOT.name,
+  city: GREYSTONE_CABOT.city,
+  state: 'AR' as const,
+  location: GREYSTONE_CABOT.location,
+  hole1: { tee: null, green: null } as { tee: LatLng | null; green: LatLng | null },
+};
+
+/** Cabot pocket — Cypress Creek and Greystone, checked together. */
+export const CABOT_POCKET_LIVE_CARDS = [CYPRESS_LIVE_BLANK, GREYSTONE_LIVE_BLANK] as const;
+
 /** Live course-card payloads Doc reported blank. Nulls are the API miss. */
-export const BLANKS_LIVE_CARDS = [
-  {
-    name: CYPRESS_CREEK_CABOT.name,
-    city: CYPRESS_CREEK_CABOT.city,
-    state: 'AR' as const,
-    location: CYPRESS_CREEK_CABOT.location,
-    hole1: { tee: null, green: null } as { tee: LatLng | null; green: LatLng | null },
-  },
-  {
-    name: GREYSTONE_CABOT.name,
-    city: GREYSTONE_CABOT.city,
-    state: 'AR' as const,
-    location: GREYSTONE_CABOT.location,
-    hole1: { tee: null, green: null } as { tee: LatLng | null; green: LatLng | null },
-  },
-  PLEASANT_VALLEY_LITTLE_ROCK,
-] as const;
+export const BLANKS_LIVE_CARDS = [...CABOT_POCKET_LIVE_CARDS, PLEASANT_VALLEY_LITTLE_ROCK] as const;
 
 export const DOC_PAINT_COURSE_NAMES = ['Magnolia Country Club', 'Camden Country Club'] as const;
+export const DOC_CABOT_POCKET_NAMES = ['Cypress Creek', 'Greystone Country Club'] as const;
 export const DOC_BLANK_COURSE_NAMES = [
-  'Cypress Creek',
-  'Greystone Country Club',
+  ...DOC_CABOT_POCKET_NAMES,
   'Pleasant Valley Country Club',
 ] as const;
 
