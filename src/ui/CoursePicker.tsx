@@ -4,9 +4,10 @@ import { isGolfCoursesApiConfigured } from '@/src/course/config';
 import { getCourseDataClient } from '@/src/course/client';
 import { formatTeeHoleYards, formatTeeMeta } from '@/src/course/layout';
 import type { CourseDetail, CourseSummary, TeeSet } from '@/src/course/types';
+import type { GpsFix } from '@/src/domain/types';
 import { COPY } from '@/src/domain/playerCopy';
 import { planCourseCard } from '@/src/domain/courseCard';
-import { planCourseList, planCourseSearchParams } from '@/src/domain/coursePick';
+import { planCourseList, planCourseSearchParams, planNearbyCourseSearch } from '@/src/domain/coursePick';
 import { type CourseDistanceUnit } from '@/src/domain/courseDistance';
 import { getCurrentFix } from '@/src/services/location';
 import { BigButton } from './BigButton';
@@ -55,6 +56,8 @@ export function CoursePicker({
   const [teeBusy, setTeeBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<CourseSummary[] | null>(null);
+  const [listPhoneFix, setListPhoneFix] = useState<GpsFix | null>(null);
+  const [listNowMs, setListNowMs] = useState<number | null>(null);
   const [tees, setTees] = useState<TeeSet[] | null>(null);
   const [detail, setDetail] = useState<CourseDetail | null>(null);
 
@@ -63,11 +66,26 @@ export function CoursePicker({
     setBusy(true);
     setError(null);
     try {
-      const params = planCourseSearchParams(query);
-      const found = params
-        ? await getCourseDataClient().searchCourses(params.q)
-        : await getCourseDataClient().nearbyCourses(await getCurrentFix());
-      const listed = planCourseList({ courses: found, lastPlayedAtByCourse });
+      const rawFix = await getCurrentFix().catch(() => null);
+      const nowMs = Date.now();
+      const plan = planNearbyCourseSearch({ query, phoneFix: rawFix, nowMs });
+      setListPhoneFix(rawFix);
+      setListNowMs(nowMs);
+      if (plan.mode === 'needs_location') {
+        setResults([]);
+        setError(COPY.nearbyNeedsLocation);
+        return;
+      }
+      const found =
+        plan.mode === 'search'
+          ? await getCourseDataClient().searchCourses(plan.q)
+          : await getCourseDataClient().nearbyCourses(plan.from);
+      const listed = planCourseList({
+        courses: found,
+        lastPlayedAtByCourse,
+        phoneFix: rawFix,
+        nowMs,
+      });
       setResults(listed);
       if (listed.length === 0) {
         setError(COPY.nearbyEmpty);
@@ -117,7 +135,13 @@ export function CoursePicker({
   };
 
   const emptyNearby = configured && results != null && results.length === 0 && !busy;
-  const listed = planCourseList({ courses: results ?? [], lastPlayedAtByCourse });
+  const needsLocation = error === COPY.nearbyNeedsLocation;
+  const listed = planCourseList({
+    courses: results ?? [],
+    lastPlayedAtByCourse,
+    phoneFix: listPhoneFix,
+    nowMs: listNowMs ?? undefined,
+  });
 
   return (
     <View style={styles.box}>
@@ -130,11 +154,23 @@ export function CoursePicker({
         autoCorrect={false}
         style={styles.search}
       />
+      {query.trim() ? (
+        <BigButton
+          label={COPY.clearSearch}
+          variant="ghost"
+          onPress={() => onQueryChange?.('')}
+        />
+      ) : null}
       <Text style={styles.label}>{COPY.nearbyHint}</Text>
       {!configured ? <Text style={styles.meta}>{COPY.nearbyUnavailable}</Text> : null}
       {error && !emptyNearby ? <Text style={styles.warn}>{error}</Text> : null}
       {busy ? <Text style={styles.meta}>{COPY.nearbyBusy}</Text> : null}
-      {emptyNearby ? <EmptyPanel title={COPY.nearbyEmpty} hint={COPY.nearbyEmptyHint} /> : null}
+      {emptyNearby ? (
+        <EmptyPanel
+          title={needsLocation ? COPY.nearbyNeedsLocation : COPY.nearbyEmpty}
+          hint={COPY.nearbyEmptyHint}
+        />
+      ) : null}
       {selected ? (
         <View style={styles.selected}>
           <Text style={styles.selectedName}>{selected.name}</Text>

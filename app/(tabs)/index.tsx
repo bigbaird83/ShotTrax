@@ -137,7 +137,7 @@ export default function HomeScreen() {
     setPicked(pick.course);
     setPickedTee(pick.tee);
     setPickedDetail(pick.detail);
-    setSearchQuery(pick.course.name);
+    setSearchQuery('');
     if (needsTee) return;
     setSheetOpen(false);
     if (active) {

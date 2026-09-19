@@ -7,8 +7,12 @@ import {
   canStartRound,
   canStartWithoutCourse,
   canStartWithoutTeeWhenCourseHasTees,
+  courseListDistanceSortUsesPhoneFix,
+  courseListDistanceSortUsesWatchFix,
+  courseListInventDistanceOrder,
   courseListPutsPlayedOnTop,
   courseNameIsOptional,
+  courseSearchClearsOnFind,
   courseSearchPlaceholder,
   courseSearchQueryParam,
   courseSearchSharesNearbyList,
@@ -16,10 +20,15 @@ import {
   courseSearchUsesPhoneFix,
   courseSearchUsesWatchGps,
   freeTextCourseStartAllowed,
+  nearbyNeedsLocationWhenFixMissing,
   parseCourseSearchQuery,
   planCourseList,
+  planCourseListSort,
   planCourseSearchParams,
+  planNearbyCourseSearch,
 } from './coursePick';
+import { inventGreenFromCenterPlusYards, inventGreenFromCourseCenter } from './courseCardPaint';
+import { NEARBY_COURSE_FIX_MAX_AGE_MS } from './watchNearby';
 import {
   nearbyCoursesHasSearchBox,
   nearbyCoursesUsesMarkGates,
@@ -97,11 +106,15 @@ test('home cannot start without a pick and has no free-text course start', () =>
   const picker = readFileSync(new URL('../ui/CoursePicker.tsx', import.meta.url), 'utf8');
   assert.match(picker, /searchCourses/);
   assert.match(picker, /planCourseList/);
-  assert.match(picker, /planCourseSearchParams/);
+  assert.match(picker, /planNearbyCourseSearch/);
   assert.match(picker, /COPY\.courseNamePlaceholder/);
+  assert.match(home, /setSearchQuery\(''\)/);
   const findFn = picker.slice(picker.indexOf('const onFind'), picker.indexOf('useEffect(() => {\n    onRefreshReady'));
-  assert.match(findFn, /searchCourses\(params\.q\)/);
-  assert.match(findFn, /nearbyCourses\(await getCurrentFix\(\)\)/);
+  assert.match(findFn, /planNearbyCourseSearch/);
+  assert.match(findFn, /searchCourses\(plan\.q\)/);
+  assert.match(findFn, /nearbyCourses\(plan\.from\)/);
+  assert.match(findFn, /COPY\.nearbyNeedsLocation/);
+  assert.doesNotMatch(findFn, /nearbyCourses\(await getCurrentFix\(\)\)/);
   assert.doesNotMatch(findFn, /watchFix|Watch GPS|acceptFix/);
 
   const client = readFileSync(new URL('../course/client.ts', import.meta.url), 'utf8');
@@ -131,8 +144,11 @@ test('nearby is a phone fix; search is text/geocode and never Watch GPS or mark 
 
   const picker = readFileSync(new URL('../ui/CoursePicker.tsx', import.meta.url), 'utf8');
   const findFn = picker.slice(picker.indexOf('const onFind'), picker.indexOf('useEffect(() => {\n    onRefreshReady'));
-  assert.match(findFn, /nearbyCourses\(await getCurrentFix\(\)\)/);
+  assert.match(findFn, /planNearbyCourseSearch/);
+  assert.match(findFn, /nearbyCourses\(plan\.from\)/);
   assert.doesNotMatch(findFn, /watchFix|preferWatchFix|acceptFix|forceMark|classifyAccuracyM/);
+  assert.match(picker, /COPY\.nearbyNeedsLocation/);
+  assert.match(picker, /COPY\.clearSearch/);
 
   const client = readFileSync(new URL('../course/client.ts', import.meta.url), 'utf8');
   const searchFn = client.slice(client.indexOf('async searchCourses'), client.indexOf('async getCourse'));
@@ -142,4 +158,63 @@ test('nearby is a phone fix; search is text/geocode and never Watch GPS or mark 
   const watch = readFileSync(new URL('./watchNearby.ts', import.meta.url), 'utf8');
   assert.match(watch, /phoneFixForNearbyCourses/);
   assert.match(watch, /void args\.watchFix/);
+});
+
+test('distance sort uses a fresh phone fix; missing or stale falls back to name', () => {
+  assert.equal(courseListDistanceSortUsesPhoneFix(), true);
+  assert.equal(courseListDistanceSortUsesWatchFix(), false);
+  assert.equal(courseListInventDistanceOrder(), false);
+  assert.equal(nearbyNeedsLocationWhenFixMissing(), true);
+  assert.equal(courseSearchClearsOnFind(), true);
+  assert.equal(courseSearchUsesPhoneFix(), false);
+  assert.equal(inventGreenFromCourseCenter(), false);
+  assert.equal(inventGreenFromCenterPlusYards(), false);
+
+  const nowMs = 1_000_000;
+  const phone = {
+    lat: 35.02,
+    lng: -92.06,
+    accuracyM: 8,
+    mocked: false,
+    isSimulator: false,
+    timestamp: nowMs,
+  };
+  const watch = { ...phone, lat: 33.27, lng: -93.24, timestamp: nowMs };
+  const stale = { ...phone, timestamp: nowMs - NEARBY_COURSE_FIX_MAX_AGE_MS - 1 };
+  const courses = [
+    { id: 'zebra', name: 'Zebra CC', location: { lat: 35.021, lng: -92.061 } },
+    { id: 'alpha', name: 'Alpha CC', location: { lat: 33.27, lng: -93.24 } },
+    { id: 'middle', name: 'Middle CC', location: { lat: 34.5, lng: -92.3 } },
+  ];
+
+  assert.equal(planCourseListSort({ nowMs }), 'name');
+  assert.equal(planCourseListSort({ phoneFix: stale, nowMs }), 'name');
+  assert.equal(planCourseListSort({ phoneFix: phone, watchFix: watch, nowMs }), 'distance');
+  assert.deepEqual(
+    planCourseList({ courses, nowMs }).map((row) => row.id),
+    ['alpha', 'middle', 'zebra'],
+  );
+  assert.deepEqual(
+    planCourseList({ courses, phoneFix: stale, nowMs }).map((row) => row.id),
+    ['alpha', 'middle', 'zebra'],
+  );
+  assert.deepEqual(
+    planCourseList({ courses, phoneFix: phone, watchFix: watch, nowMs }).map((row) => row.id),
+    ['zebra', 'middle', 'alpha'],
+  );
+
+  assert.deepEqual(planNearbyCourseSearch({ query: '  magnolia  ', phoneFix: null, nowMs }), {
+    mode: 'search',
+    q: 'magnolia',
+  });
+  assert.deepEqual(planNearbyCourseSearch({ query: '', phoneFix: null, nowMs }), {
+    mode: 'needs_location',
+  });
+  assert.deepEqual(planNearbyCourseSearch({ query: '', phoneFix: stale, watchFix: watch, nowMs }), {
+    mode: 'needs_location',
+  });
+  assert.deepEqual(planNearbyCourseSearch({ query: '', phoneFix: phone, nowMs }), {
+    mode: 'nearby',
+    from: { lat: phone.lat, lng: phone.lng },
+  });
 });
