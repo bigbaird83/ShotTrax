@@ -1,10 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { NativeSyntheticEvent, NativeScrollEvent, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Animated,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
+  PanResponder,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import {
   CLUB_STRIP_GAP,
+  CLUB_STRIP_PICK_LIFT_Y,
+  CLUB_STRIP_PICK_SCALE,
   CLUB_STRIP_SEAM_GAP,
   CLUB_STRIP_VISIBLE_PILLS,
   PHONE_WHEEL_PILL_HEIGHT,
+  PHONE_WHEEL_STRIP_HEIGHT,
+  clubStripSlideUpConfirmed,
   clubStripWindowKey,
   clubStripWindowStartClamped,
   wrapClubStripIndex,
@@ -23,6 +37,8 @@ type Props = {
   /** First fully visible club in the opening window. Not a wrap/seam. */
   windowStart?: number;
   onPick: (id: string) => void;
+  /** Slide the lifted center club up to mark. Swipe / scroll never marks. */
+  onConfirm?: (id: string) => void;
   disabled?: boolean;
   compact?: boolean;
 };
@@ -38,8 +54,79 @@ function pillWidthForStrip(width: number, count: number, _compact?: boolean): nu
   return raw > 0 ? raw : 0;
 }
 
+type PillProps = {
+  item: ClubStripItem & { token: string; seamAfter: boolean };
+  pick: boolean;
+  disabled?: boolean;
+  compact?: boolean;
+  pillWidth: number;
+  styles: ReturnType<typeof makeStyles>;
+  onPick: (id: string) => void;
+  onConfirm?: (id: string) => void;
+};
+
+/** Selected / center club lifts. Slide-up on that club confirms; tap only selects. */
+function ClubPill({ item, pick, disabled, compact, pillWidth, styles, onPick, onConfirm }: PillProps) {
+  const extraLift = useRef(new Animated.Value(0)).current;
+  const confirmRef = useRef(onConfirm);
+  confirmRef.current = onConfirm;
+  const responder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gesture) => {
+          if (disabled || !confirmRef.current || !pick) return false;
+          return gesture.dy < -8 && Math.abs(gesture.dy) > Math.abs(gesture.dx);
+        },
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderMove: (_, gesture) => {
+          extraLift.setValue(gesture.dy < 0 ? Math.max(gesture.dy, -56) : 0);
+        },
+        onPanResponderRelease: (_, gesture) => {
+          Animated.spring(extraLift, { toValue: 0, useNativeDriver: true, friction: 7 }).start();
+          if (clubStripSlideUpConfirmed(gesture.dx, gesture.dy)) confirmRef.current?.(item.id);
+        },
+        onPanResponderTerminate: () => {
+          Animated.spring(extraLift, { toValue: 0, useNativeDriver: true, friction: 7 }).start();
+        },
+      }),
+    [disabled, extraLift, item.id, pick],
+  );
+
+  return (
+    <Animated.View
+      {...responder.panHandlers}
+      style={[
+        pick && styles.pillLift,
+        {
+          transform: [{ translateY: extraLift }, { scale: pick ? CLUB_STRIP_PICK_SCALE : 1 }],
+          zIndex: pick ? 4 : 0,
+        },
+      ]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityHint={onConfirm && pick ? 'Slide up to mark this club' : undefined}
+        disabled={disabled}
+        onPress={() => onPick(item.id)}
+        style={[
+          styles.pill,
+          compact && styles.pillCompact,
+          { width: pillWidth, marginRight: item.seamAfter ? CLUB_STRIP_SEAM_GAP : CLUB_STRIP_GAP },
+          pick && styles.pillPick,
+        ]}>
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.7}
+          style={[styles.label, compact && styles.labelCompact, pick && styles.labelPick]}>
+          {item.label}
+        </Text>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 /** Sideways carry wheel. Three full pills. Tap selects; swipe does not mark. */
-export function ClubStrip({ items, pickId, windowStart = 0, onPick, disabled, compact }: Props) {
+export function ClubStrip({ items, pickId, windowStart = 0, onPick, onConfirm, disabled, compact }: Props) {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const scrollRef = useRef<ScrollView>(null);
@@ -125,32 +212,23 @@ export function ClubStrip({ items, pickId, windowStart = 0, onPick, disabled, co
           onScrollEndDrag={onWrapSettle}
           contentContainerStyle={{
             paddingHorizontal: 0,
-            alignItems: 'center',
+            alignItems: 'flex-end',
+            paddingTop: compact ? 0 : 16,
+            minHeight: compact ? 40 : PHONE_WHEEL_STRIP_HEIGHT,
           }}>
-          {looped.map((item) => {
-            const pick = item.id === pickId;
-            return (
-              <Pressable
-                key={item.token}
-                accessibilityRole="button"
-                disabled={disabled}
-                onPress={() => onPick(item.id)}
-                style={[
-                  styles.pill,
-                  compact && styles.pillCompact,
-                  { width: pillWidth, marginRight: item.seamAfter ? CLUB_STRIP_SEAM_GAP : CLUB_STRIP_GAP },
-                  pick && styles.pillPick,
-                ]}>
-                <Text
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.7}
-                  style={[styles.label, compact && styles.labelCompact, pick && styles.labelPick]}>
-                  {item.label}
-                </Text>
-              </Pressable>
-            );
-          })}
+          {looped.map((item) => (
+            <ClubPill
+              key={item.token}
+              item={item}
+              pick={item.id === pickId}
+              disabled={disabled}
+              compact={compact}
+              pillWidth={pillWidth}
+              styles={styles}
+              onPick={onPick}
+              onConfirm={onConfirm}
+            />
+          ))}
         </ScrollView>
       ) : null}
     </View>
@@ -159,8 +237,9 @@ export function ClubStrip({ items, pickId, windowStart = 0, onPick, disabled, co
 
 function makeStyles(colors: ColorPalette) {
   return StyleSheet.create({
-    wrap: { width: '100%', height: PHONE_WHEEL_PILL_HEIGHT + 8 },
+    wrap: { width: '100%', height: PHONE_WHEEL_STRIP_HEIGHT, overflow: 'visible' },
     wrapCompact: { height: 40 },
+    pillLift: { marginTop: CLUB_STRIP_PICK_LIFT_Y },
     pill: {
       height: PHONE_WHEEL_PILL_HEIGHT,
       borderRadius: 12,
@@ -176,7 +255,6 @@ function makeStyles(colors: ColorPalette) {
       borderColor: colors.lime,
       borderWidth: 3,
       backgroundColor: colors.accentWash,
-      transform: [{ scale: 1.04 }],
     },
     label: { color: colors.cream, fontWeight: '800', fontSize: type.chip },
     labelCompact: { fontSize: type.tiny },

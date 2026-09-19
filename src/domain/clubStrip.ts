@@ -6,8 +6,19 @@ import { MIN_CLOSED_SHOTS_FOR_RANK } from './rankClubs';
 export const BUILD_31_CLUB_PILL_HEIGHT = 52;
 /** Phone wheel is slightly taller than the build 31 pills. */
 export const PHONE_WHEEL_PILL_HEIGHT = 58;
+/** Extra vertical room so the lifted center club can float above neighbors. */
+export const PHONE_WHEEL_LIFT_EXTRA = 18;
+/** Full phone strip height: pill + dock pad + lift room. */
+export const PHONE_WHEEL_STRIP_HEIGHT = PHONE_WHEEL_PILL_HEIGHT + 8 + PHONE_WHEEL_LIFT_EXTRA;
 /** Watch pills sit in the 40% control band and must fit three full labels. */
 export const WATCH_WHEEL_PILL_HEIGHT = 44;
+/** Watch strip frame is taller than the pill so the center club can lift. */
+export const WATCH_WHEEL_STRIP_HEIGHT = WATCH_WHEEL_PILL_HEIGHT + 20;
+/** Upward drag (points) that confirms the lifted center club. */
+export const CLUB_STRIP_SLIDE_UP_MIN_DY = 28;
+/** Selected club sits above the neighbors. */
+export const CLUB_STRIP_PICK_LIFT_Y = -12;
+export const CLUB_STRIP_PICK_SCALE = 1.18;
 
 export function phoneWheelLargerThanBuild31(): true {
   return true;
@@ -49,6 +60,25 @@ export function clubStripSwipeMarksShot(): false {
 
 export function clubStripScrollMarksShot(): false {
   return false;
+}
+
+/** Slide the lifted center club up to mark. Same path as today's mark tap. */
+export function clubStripSlideUpMarksShot(): true {
+  return true;
+}
+
+export function clubStripCenterLiftsAboveNeighbors(): true {
+  return true;
+}
+
+export function clubStripSlideUpMinDy(): number {
+  return CLUB_STRIP_SLIDE_UP_MIN_DY;
+}
+
+/** Vertical-up drag past the threshold, not a sideways browse. */
+export function clubStripSlideUpConfirmed(dx: number, dy: number): boolean {
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return false;
+  return dy <= -CLUB_STRIP_SLIDE_UP_MIN_DY && Math.abs(dy) > Math.abs(dx);
 }
 
 export function clubStripOnlyTapMarks(): false {

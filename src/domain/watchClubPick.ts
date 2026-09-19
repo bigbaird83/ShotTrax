@@ -136,6 +136,14 @@ export function watchStripScrollMarksShot(): false {
   return false;
 }
 
+export function watchStripSlideUpMarksShot(): true {
+  return true;
+}
+
+export function watchStripSlideUpUsesHomeClubTap(): true {
+  return true;
+}
+
 export function watchStripOnlyTapMarks(): false {
   return clubStripOnlyTapMarks();
 }

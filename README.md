@@ -4,7 +4,7 @@ Phone GPS golf shot tracker (no club sensors). **This branch is P5.x** on P1–P
 
 P5.x is the on-course hero: **pick a club to mark GPS**, sticky **Same club** one-tap, voice applies immediately (no confirm), Drop vs Penalty, delete round, haptics, and a thumb-zone layout. **Player voice only** on screen — no API/OSM/GPS-meter footnotes. F/M/B distances show only when course data includes front and back pins (never invented from a single green). Rating and slope sit on the tee. An Apple Watch companion picks clubs (top-3 + bag + Same club) and finishes the hole with the same Putter → buckets → **Made it** flow. StoreKit and Photos stay out of scope.
 
-User-facing name is **ShotTraxx** (`app.json` `expo.name`, iOS `CFBundleDisplayName`, Android `label` / home screen). Bundle ID `com.shottrax.app` and Expo slug `shottrax` stay unchanged (App Store ID). Home-screen icon is the Doc + Lead locked mark at `assets/images/icon.png` (see `assets/images/README.md`).
+User-facing name is **ShotTraxx** (`app.json` `expo.name`, iOS `CFBundleDisplayName`, Android `label` / home screen). Bundle ID `com.shottrax.app` and Expo slug `shottrax` stay unchanged (App Store ID). Home-screen icon is the locked A5 mark at `assets/images/icon.png` (see `assets/images/README.md`). Splash / launch still shows the full wordmark **ShotTraxx**.
 
 ## Run (iOS first)
 

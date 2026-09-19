@@ -253,22 +253,35 @@ struct ContentView: View {
               ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                   ForEach(wheelClubs, id: \.token) { club in
+                    let picked = club.id == stripSelectedId
                     Text(session.list.label(for: club.id))
                       .font(.system(size: 16, weight: .black))
-                      .foregroundStyle(club.id == stripSelectedId ? Color("accent") : Color("cream"))
+                      .foregroundStyle(picked ? Color("accent") : Color("cream"))
                       .lineLimit(1)
                       .minimumScaleFactor(0.65)
                       .frame(width: pillWidth, height: 44)
                       .background(Color("bg"))
                       .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                          .stroke(club.id == stripSelectedId ? Color("accent") : Color("cream"), lineWidth: 1)
+                          .stroke(picked ? Color("accent") : Color("cream"), lineWidth: picked ? 3 : 1)
                       )
+                      .scaleEffect(picked ? 1.18 : 1)
+                      .offset(y: picked ? -8 : 0)
+                      .zIndex(picked ? 2 : 0)
                       .padding(.trailing, club.seamAfter ? 24 : 0)
                       .id(club.token)
                       .onTapGesture {
                         if !session.sending { session.select(club.id) }
                       }
+                      .simultaneousGesture(
+                        DragGesture(minimumDistance: 12)
+                          .onEnded { value in
+                            guard picked, !session.sending else { return }
+                            if clubStripSlideUpConfirmed(dx: value.translation.width, dy: value.translation.height) {
+                              session.pick(clubId: club.id)
+                            }
+                          }
+                      )
                   }
                 }
                 .padding(.horizontal, 0)
@@ -279,7 +292,7 @@ struct ContentView: View {
               }
             }
           }
-          .frame(height: 52)
+          .frame(height: 64)
 
           HStack(spacing: 8) {
             if session.list.lastClubId != nil {
@@ -411,6 +424,11 @@ struct ContentView: View {
         )
       }
     }
+  }
+
+  /// Same threshold as `clubStripSlideUpConfirmed` on the phone.
+  private func clubStripSlideUpConfirmed(dx: CGFloat, dy: CGFloat) -> Bool {
+    dy <= -28 && abs(dy) > abs(dx)
   }
 
   private func carryFromLabel(_ label: String) -> Int? {
