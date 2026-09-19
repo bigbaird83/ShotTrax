@@ -28,7 +28,7 @@ function makeStyles(colors: ColorPalette) {
       borderTopColor: colors.line,
     },
     frost: {
-      ...StyleSheet.absoluteFillObject,
+      ...StyleSheet.absoluteFill,
       backgroundColor: colors.glass,
     },
   });
