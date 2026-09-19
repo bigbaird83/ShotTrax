@@ -177,7 +177,7 @@ async function handlePick(token: string, json: string): Promise<void> {
   const watchFix = watchFixFromPick(pick);
   try {
     // Top-3 and bag taps share this mark. Same 600-yard tee check.
-    // Watch GPS when fresh; phone fallback if missing/stale. Back / Home never mark.
+    // Watch GPS when fresh and within 15/25 m; phone fallback otherwise.
     const { plan } = await markShotWithClub(ctx.db, {
       roundId: ctx.roundId,
       holeNumber: ctx.holeNumber,

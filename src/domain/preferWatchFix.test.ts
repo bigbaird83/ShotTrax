@@ -80,7 +80,7 @@ test('no Watch and no phone → markFix is null (never invent)', () => {
   assert.equal(result.fix, null);
 });
 
-test('preferred Watch fix still uses acceptFix bands — soft auto-accepts, poor needs force', () => {
+test('soft Watch (15–25 m) is used; poor Watch (>25 m) falls back to phone', () => {
   const softWatch = fix({ lat: 1, lng: 2, accuracyM: SOFT_GPS_MIN_M, timestamp: 1_000_000 });
   const worsePhone = fix({ lat: 3, lng: 4, accuracyM: SOFT_GPS_MAX_M, timestamp: 1_000_000 });
   const soft = preferWatchFix({ watchFix: softWatch, phoneFix: worsePhone, nowMs: 1_001_000 });
@@ -89,13 +89,19 @@ test('preferred Watch fix still uses acceptFix bands — soft auto-accepts, poor
   assert.equal(softAccept.ok, true);
   if (softAccept.ok) assert.equal(softAccept.fixQuality, 'soft');
 
+  const atSoftMax = preferWatchFix({
+    watchFix: fix({ lat: 1, lng: 2, accuracyM: SOFT_GPS_MAX_M, timestamp: 1_000_000 }),
+    phoneFix: worsePhone,
+    nowMs: 1_001_000,
+  });
+  assert.equal(atSoftMax.usedWatch, true);
+  assert.equal(SOFT_GPS_MAX_M, 25);
+
   const poorWatch = fix({ lat: 1, lng: 2, accuracyM: SOFT_GPS_MAX_M + 1, timestamp: 1_000_000 });
-  const poorerPhone = fix({ lat: 3, lng: 4, accuracyM: 80, timestamp: 1_000_000 });
-  const poor = preferWatchFix({ watchFix: poorWatch, phoneFix: poorerPhone, nowMs: 1_001_000 });
-  assert.equal(poor.usedWatch, true);
-  const poorAccept = acceptFix(poor.fix!);
-  assert.equal(poorAccept.ok, false);
-  if (!poorAccept.ok) assert.equal(poorAccept.reason, 'poor_gps');
+  const goodPhone = fix({ lat: 3, lng: 4, accuracyM: 8, timestamp: 1_000_000 });
+  const poor = preferWatchFix({ watchFix: poorWatch, phoneFix: goodPhone, nowMs: 1_001_000 });
+  assert.equal(poor.usedWatch, false);
+  assert.equal(poor.fix, goodPhone);
 });
 
 test('watchFixFromPick requires lat/lng — never invents a coordinate', () => {
