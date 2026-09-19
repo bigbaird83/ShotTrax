@@ -289,7 +289,7 @@ test('fewer than 3 eligible clubs still surfaces those that qualify', () => {
   );
 });
 
-test('skip / no typed seed means no fake average — top-3 stays empty until live shots', () => {
+test('no typed seed still ranks Suggested from STOCK_AVG_CARRY', () => {
   const ranked = rankTopClubs(
     [
       club({ id: 'club_7i', loftRank: 9, avgYards: 0, count: 0 }),
@@ -297,7 +297,11 @@ test('skip / no typed seed means no fake average — top-3 stays empty until liv
     ],
     { source: 'yards_to_green', dYards: 150 },
   );
-  assert.deepEqual(ranked, []);
+  assert.deepEqual(
+    ranked.map((row) => row.id),
+    ['club_7i', 'club_8i'],
+  );
+  assert.equal(ranked[0].deltaYards, 0);
 });
 
 test('no eligible clubs (all <5 shots) → empty ranking so UI shows full bag', () => {
