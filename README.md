@@ -116,8 +116,8 @@ eas submit -p ios
 
 | Permission | When |
 | --- | --- |
-| **Location When In Use** | Picking a club marks where you hit from. The next club pick closes the prior shot. Green estimate can reuse the current GPS. ShotTraxx does not invent coordinates. Watch location is the same purpose, used only when Watch GPS is more accurate than the phone. |
-| **Photo Library** (iOS) | Not used. `NSPhotoLibraryUsageDescription` is in the plist so App Store review (ITMS-90683) can ship. Photos prompts stay out of scope. No add/save key — we do not write to the library. |
+| **Location When In Use** | Nearby courses, yards to green, and club-pick shot marks while the app is open. ShotTraxx does not invent coordinates. Watch location is the same purpose, used only when Watch GPS is more accurate than the phone. The `expo-location` plugin sets Always / background / motion purpose keys to `false` so prebuild does not inject them. |
+| **Photo Library** (iOS) | Not used. `NSPhotoLibraryUsageDescription` and `NSPhotoLibraryAddUsageDescription` are in the plist so App Store review (ITMS-90683) can ship. Photos prompts stay out of scope. |
 | **Microphone** | Only after **Say a club**. Used to capture the utterance. Not on Watch. |
 | **Speech Recognition** (iOS) | Maps the utterance to a bag club and applies it immediately. |
 
