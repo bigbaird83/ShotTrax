@@ -61,3 +61,7 @@ export function courseCardHoleHasTeeAndGreen(hole: {
 export function magnoliaHole1Card(): { tee: LatLng; green: LatLng } {
   return { tee: MAGNOLIA_CC.hole1.tee, green: MAGNOLIA_CC.hole1.green };
 }
+
+export function cypressCreekHole1Card(): { tee: LatLng; green: LatLng } {
+  return { tee: CYPRESS_CREEK_CABOT.hole1.tee, green: CYPRESS_CREEK_CABOT.hole1.green };
+}

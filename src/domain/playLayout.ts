@@ -359,6 +359,11 @@ export function addShotKeepsPlayMapHeight(): true {
   return true;
 }
 
+/** Blank-map hotfix is layout + first-frame camera for every course, not one card. */
+export function playBlankMapFixIsCourseAgnostic(): true {
+  return true;
+}
+
 /**
  * Signal Lab build 36 — Add shot gesture lock.
  * 1. First frame is course tee + green center only.

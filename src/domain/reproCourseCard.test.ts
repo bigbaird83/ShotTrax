@@ -15,6 +15,7 @@ import {
   addShotKeepsPlayMapHeight,
   addShotOpensOnPlayFrame,
   holeMapViewUsesAbsoluteFill,
+  playBlankMapFixIsCourseAgnostic,
   playGlassDockZeroesMapHeight,
   playMapHostUsesAbsoluteFill,
 } from './playLayout';
@@ -23,6 +24,7 @@ import {
   MAGNOLIA_CC,
   REPRO_COURSE_CARDS,
   courseCardHoleHasTeeAndGreen,
+  cypressCreekHole1Card,
   magnoliaHole1Card,
 } from './reproCourseCard';
 
@@ -88,6 +90,7 @@ test('Magnolia CC hole 1 is the known Doc tee+green set for camera and layout', 
   assert.equal(courseCardMissingCameraWaitsForPhone(), false);
   assert.equal(holeMapUserLocationVisible({ lockFrame: true, showPhonePin: false, allowMapsChrome: false }), false);
 
+  assert.equal(playBlankMapFixIsCourseAgnostic(), true);
   assert.equal(playGlassDockZeroesMapHeight(), false);
   assert.equal(playMapHostUsesAbsoluteFill(), true);
   assert.equal(holeMapViewUsesAbsoluteFill(), true);
@@ -102,6 +105,11 @@ test('repro cards are Magnolia plus Cypress Creek; missing tee or green never wa
   );
   assert.equal(CYPRESS_CREEK_CABOT.city, 'Cabot');
   assert.equal(CYPRESS_CREEK_CABOT.state, 'AR');
+  assert.deepEqual(cypressCreekHole1Card(), {
+    tee: CYPRESS_CREEK_CABOT.hole1.tee,
+    green: CYPRESS_CREEK_CABOT.hole1.green,
+  });
+  assert.equal(playBlankMapFixIsCourseAgnostic(), true);
 
   for (const course of REPRO_COURSE_CARDS) {
     assert.equal(courseCardHoleHasTeeAndGreen(course.hole1), true);

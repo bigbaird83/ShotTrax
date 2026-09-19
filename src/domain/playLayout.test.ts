@@ -82,6 +82,7 @@ import {
   addShotOpensOnPlayFrame,
   addShotKeepsPlayMapHeight,
   holeMapViewUsesAbsoluteFill,
+  playBlankMapFixIsCourseAgnostic,
   playGlassDockZeroesMapHeight,
   playMapHostUsesAbsoluteFill,
   signalLabAddShotGestureLock,
@@ -96,7 +97,14 @@ import {
   playAndAddShotShareCourseCardCamera,
 } from './playLayout';
 import { PHONE_WHEEL_PILL_HEIGHT } from './clubStrip';
-import { MAGNOLIA_CC, courseCardHoleHasTeeAndGreen, magnoliaHole1Card } from './reproCourseCard';
+import {
+  CYPRESS_CREEK_CABOT,
+  MAGNOLIA_CC,
+  REPRO_COURSE_CARDS,
+  courseCardHoleHasTeeAndGreen,
+  cypressCreekHole1Card,
+  magnoliaHole1Card,
+} from './reproCourseCard';
 
 test('play map fills at least 60% down to a two-row dock; header is overlay', () => {
   const layout = planPlayLayout();
@@ -662,15 +670,25 @@ test('Signal Lab: trail chip is logged yards, soft/forced keep a badge, glass do
 });
 
 test('P0: full-bleed MapView has real height under the glass dock; Add shot keeps it', () => {
-  const magnolia = magnoliaHole1Card();
+  assert.equal(playBlankMapFixIsCourseAgnostic(), true);
+  assert.equal(playGlassDockZeroesMapHeight(), false);
+  assert.equal(CYPRESS_CREEK_CABOT.city, 'Cabot');
+  assert.deepEqual(
+    REPRO_COURSE_CARDS.map((course) => course.name),
+    ['Magnolia Country Club', 'Cypress Creek'],
+  );
+
+  for (const card of [magnoliaHole1Card(), cypressCreekHole1Card()]) {
+    assert.equal(courseCardHoleHasTeeAndGreen(card), true);
+    const start = planCourseCardCamera({ tee: card.tee, green: card.green, phone: null });
+    const addShot = planCourseCardCamera({ tee: card.tee, green: card.green, phone: null });
+    assert.ok(start);
+    assert.deepEqual(start, addShot);
+    assert.deepEqual(start.points, [card.tee, card.green]);
+    assert.equal(planCourseCardCamera({ tee: null, green: card.green, phone: null }), null);
+    assert.equal(planCourseCardCamera({ tee: card.tee, green: null, phone: { lat: 40.71, lng: -74.0 } }), null);
+  }
   assert.equal(MAGNOLIA_CC.name, 'Magnolia Country Club');
-  assert.equal(courseCardHoleHasTeeAndGreen(magnolia), true);
-  const magnoliaStart = planCourseCardCamera({ tee: magnolia.tee, green: magnolia.green, phone: null });
-  const magnoliaAdd = planCourseCardCamera({ tee: magnolia.tee, green: magnolia.green, phone: null });
-  assert.ok(magnoliaStart);
-  assert.deepEqual(magnoliaStart, magnoliaAdd);
-  assert.deepEqual(magnoliaStart.points, [magnolia.tee, magnolia.green]);
-  assert.equal(planCourseCardCamera({ tee: null, green: magnolia.green, phone: null }), null);
 
   assert.equal(playGlassDockZeroesMapHeight(), false);
   assert.equal(playMapHostUsesAbsoluteFill(), true);
