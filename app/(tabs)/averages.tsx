@@ -4,6 +4,7 @@ import { useDb } from '@/src/db/DbProvider';
 import { listClubAverages } from '@/src/db/repo';
 import { clubBookCarry } from '@/src/domain/nerdOut';
 import { COPY } from '@/src/domain/playerCopy';
+import { EmptyPanel } from '@/src/ui/EmptyPanel';
 import { useColors } from '@/src/ui/ColorThemeProvider';
 import { Screen } from '@/src/ui/Screen';
 import { tapTarget, type, type ColorPalette } from '@/src/ui/theme';
@@ -18,7 +19,7 @@ export default function AveragesScreen() {
   return (
     <Screen>
       <Text style={styles.lede}>{COPY.averagesLede}</Text>
-      {!hasLive ? <Text style={styles.empty}>{COPY.noClosedShots}</Text> : null}
+      {!hasLive ? <EmptyPanel title={COPY.noClosedShots} hint={COPY.firstRoundHint} /> : null}
       {rows.map((row) => {
         const book = clubBookCarry({
           count: row.count,

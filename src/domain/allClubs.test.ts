@@ -51,7 +51,7 @@ test('phone wheel pill is taller than the Watch pill; map stays at least 60%', (
   assert.match(watch, /height: 44/);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
-  const dock = hole.slice(hole.indexOf('<View style={[styles.dock'), hole.indexOf('<FullSheet'));
+  const dock = hole.slice(hole.indexOf('style={[styles.dock'), hole.indexOf('<FullSheet'));
   const strip = dock.slice(dock.indexOf('<ClubStrip'), dock.indexOf('COPY.stickyClub'));
   assert.doesNotMatch(strip, /compact/);
   assert.match(hole, /minHeight: '60%'/);

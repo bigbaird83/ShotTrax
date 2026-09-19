@@ -70,6 +70,14 @@ import {
   playMenuIsButton,
   homeMenuIsButton,
   homeMenuOpensSettings,
+  playDockIsGlass,
+  playDockOverlaysMap,
+  playLimeOnlyOnSelectedAndCta,
+  playHeaderSecondaryIsMuted,
+  playHapticsOnShotLock,
+  playHapticsOnHoleChange,
+  playDockPassesTwoFingerPan,
+  PLAY_GLASS_DOCK_LIFT,
   playScorecardWraps,
   playSameClubHiddenUntilShot,
   playMapMountsWhenYardsShown,
@@ -491,7 +499,7 @@ test('build 32 cook-gate: Menu is a button, All clubs floats, dock matches 31 pi
     /styles\.back[^A-Za-z]/,
   );
 
-  const dock = hole.slice(hole.indexOf('<View style={[styles.dock'), hole.indexOf('<FullSheet'));
+  const dock = hole.slice(hole.indexOf('style={[styles.dock'), hole.indexOf('<FullSheet'));
   assert.doesNotMatch(dock, /COPY\.allClubs/);
   assert.doesNotMatch(dock, /COPY\.sayClub/);
   assert.match(dock, /COPY\.stickyClub/);
@@ -535,12 +543,49 @@ test('build 33 cook-gate: play stays on hole, three themes, history row fields',
   assert.equal(playHidesMapsCompass(), true);
 });
 
-test('build 35 cook-gate: one press marks, scroll never marks, no slide-up', () => {
+test('build 35 cook-gate: glass dock, one accent, trails, type, cards, empty, haptics, scorecard, one-press', () => {
+  assert.equal(playDockIsGlass(), true);
+  assert.equal(playDockOverlaysMap(), true);
+  assert.equal(playLimeOnlyOnSelectedAndCta(), true);
+  assert.equal(playHeaderSecondaryIsMuted(), true);
+  assert.equal(playHapticsOnShotLock(), true);
+  assert.equal(playHapticsOnHoleChange(), true);
+  assert.equal(playDockPassesTwoFingerPan(), true);
+  assert.ok(PLAY_GLASS_DOCK_LIFT > PLAY_DOCK_ACTION_MIN_HEIGHT);
+
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const phone = readFileSync(new URL('../ui/ClubStrip.tsx', import.meta.url), 'utf8');
   const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
+  const home = readFileSync(new URL('../../app/(tabs)/index.tsx', import.meta.url), 'utf8');
+  const score = readFileSync(new URL('../ui/ScorecardBody.tsx', import.meta.url), 'utf8');
+  const icon = readFileSync(new URL('./appIcon.test.ts', import.meta.url), 'utf8');
   const strip = hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.stickyClub'));
   const mark = hole.slice(hole.indexOf('const markClub'), hole.indexOf('const onMark'));
+
+  assert.match(hole, /colors\.glass/);
+  assert.match(hole, /pointerEvents="box-none"/);
+  assert.match(hole, /position: 'absolute'/);
+  assert.match(hole, /PLAY_GLASS_DOCK_LIFT/);
+  assert.match(hole, /formatPlayHeaderPrimary/);
+  assert.match(hole, /formatPlayHeaderSecondary/);
+  assert.match(hole, /styles\.holeMeta/);
+  assert.match(mark, /hapticMark/);
+  assert.match(mark, /hapticLight/);
+  assert.match(hole, /hapticLight\(\);\s*\n\s*router\.replace\(playHrefAfterHoleChange/);
+
+  assert.match(map, /planShotTrail/);
+  assert.match(map, /lineDashPattern/);
+  assert.doesNotMatch(map, /colors\.lime/);
+
+  assert.match(home, /EmptyPanel/);
+  assert.match(home, /lastPlayedAtByCourse/);
+  assert.match(home, /planCourseCard|formatLastPlayedChip/);
+
+  assert.match(score, /styles\.card/);
+  assert.match(score, /scorecardDiffLabel/);
+  assert.match(score, /colors\.good/);
+  assert.match(score, /colors\.red/);
 
   assert.match(strip, /void markClub\(full\)/);
   assert.match(strip, /applyWheelSelection/);
@@ -552,4 +597,5 @@ test('build 35 cook-gate: one press marks, scroll never marks, no slide-up', () 
   assert.doesNotMatch(phone, /onScroll=\{/);
   assert.match(watch, /session\.pick\(clubId: club.id\)/);
   assert.doesNotMatch(watch, /DragGesture|clubStripSlideUpConfirmed|session\.select\(club.id\)/);
+  assert.match(icon, /locked A5/);
 });

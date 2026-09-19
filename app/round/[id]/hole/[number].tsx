@@ -35,7 +35,16 @@ import {
 } from '@/src/db/repo';
 import { pinOrNull, formatFmbRow, hasApiFmb, yardsToGreenDepth } from '@/src/domain/greenDepth';
 import { clubPickLeaveRunsAcceptFix, planClubPickLeave } from '@/src/domain/clubPickNav';
-import { COPY, finishPuttsChip, finishShotChip, formatPlayHeader, formatSuggestedClubChip, markedSuggestedMessage } from '@/src/domain/playerCopy';
+import {
+  COPY,
+  finishPuttsChip,
+  finishShotChip,
+  formatPlayHeader,
+  formatPlayHeaderPrimary,
+  formatPlayHeaderSecondary,
+  formatSuggestedClubChip,
+  markedSuggestedMessage,
+} from '@/src/domain/playerCopy';
 import { allClubsHref, playHrefAfterHoleChange } from '@/src/domain/playNav';
 import { canAdvanceHole, holesNeedingOpenShots } from '@/src/domain/holeAdvance';
 import { isPutterClubId } from '@/src/domain/defaultBag';
@@ -47,7 +56,7 @@ import { confirmUndoIsLive, planConfirmUndo, type ConfirmUndoWindow } from '@/sr
 import { confirmPlaceToDraft, courseGreenCenterForLine, resolveAddShotFromPin } from '@/src/domain/placeToDrag';
 import { applyWheelSelection } from '@/src/domain/clubSelect';
 import { PHONE_WHEEL_PILL_HEIGHT, PHONE_WHEEL_STRIP_HEIGHT, planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
-import { PLAY_DOCK_ACTION_MIN_HEIGHT, planPlayLayout } from '@/src/domain/playLayout';
+import { PLAY_DOCK_ACTION_MIN_HEIGHT, PLAY_GLASS_DOCK_LIFT, planPlayLayout } from '@/src/domain/playLayout';
 import { planPlacedShot } from '@/src/domain/shotSource';
 import { planUndoPlacePins } from '@/src/domain/undoLastShot';
 import type { LatLng } from '@/src/domain/latLng';
@@ -623,6 +632,7 @@ export default function HoleScreen() {
       if (!waiting && plan.status === 'commit') {
         hapticMark();
         if (plan.closePrior) {
+          hapticLight();
           const closed = shots.find((shot) => shot.id === plan.closePrior?.shotId);
           const closedName = closed?.clubId ? clubMap[closed.clubId]?.shortName ?? 'club' : 'club';
           const chip = formatShotLockChip({
@@ -685,6 +695,7 @@ export default function HoleScreen() {
         void onEndShot(true);
       });
       if (!waiting && plan.status === 'commit' && plan.closePrior) {
+        hapticLight();
         const closed = shots.find((shot) => shot.id === plan.closePrior?.shotId);
         const closedName = closed?.clubId ? clubMap[closed.clubId]?.shortName ?? 'club' : 'club';
         const chip = formatShotLockChip({
@@ -1001,9 +1012,9 @@ export default function HoleScreen() {
                     style={styles.holeTitle}
                     numberOfLines={1}
                     accessibilityLabel={formatPlayHeader(hole.number, hole.par, playHeaderYards.yards)}>
-                    {`Hole ${hole.number}`}
+                    {formatPlayHeaderPrimary(hole.number)}
                     <Text style={styles.holeMeta}>
-                      {` · ${formatParLabel(hole.par)}${round.teeName ? ` · ${round.teeName}` : ''}`}
+                      {` · ${formatPlayHeaderSecondary(hole.par, round.teeName)}`}
                     </Text>
                   </Text>
                 </View>
@@ -1021,9 +1032,9 @@ export default function HoleScreen() {
                     style={styles.holeTitle}
                     numberOfLines={1}
                     accessibilityLabel={formatPlayHeader(hole.number, hole.par, playHeaderYards.yards)}>
-                    {`Hole ${hole.number}`}
+                    {formatPlayHeaderPrimary(hole.number)}
                     <Text style={styles.holeMeta}>
-                      {` · ${formatParLabel(hole.par)}${round.teeName ? ` · ${round.teeName}` : ''}`}
+                      {` · ${formatPlayHeaderSecondary(hole.par, round.teeName)}`}
                     </Text>
                   </Text>
                 </View>
@@ -1139,7 +1150,9 @@ export default function HoleScreen() {
         {!catchUpFullScreen &&
         !hideHoleButtons &&
         (!courseCamera || mapFramed) ? (
-          <View pointerEvents="box-none" style={styles.allClubsFloat}>
+          <View
+            pointerEvents="box-none"
+            style={[styles.allClubsFloat, { bottom: PLAY_GLASS_DOCK_LIFT + Math.max(insets.bottom, 8) }]}>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={COPY.allClubs}
@@ -1152,10 +1165,11 @@ export default function HoleScreen() {
             </Pressable>
           </View>
         ) : null}
-      </View>
 
       {!hideHoleButtons && (catchUpFullScreen || !courseCamera || mapFramed) ? (
-        <View style={[styles.dock, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+        <View
+          pointerEvents="box-none"
+          style={[styles.dock, { paddingBottom: Math.max(insets.bottom, 8) }]}>
           <View style={styles.dockRow}>
             <View style={styles.dockStrip}>
               <ClubStrip
@@ -1225,6 +1239,7 @@ export default function HoleScreen() {
           </View>
         </View>
       ) : null}
+      </View>
 
       <FullSheet
         visible={menuOpen}
@@ -1749,7 +1764,7 @@ function makeStyles(colors: ColorPalette) {
     position: 'absolute',
     left: 12,
     right: 12,
-    bottom: 8,
+    bottom: PLAY_GLASS_DOCK_LIFT,
     alignItems: 'center',
   },
   allClubsPill: {
@@ -1764,8 +1779,8 @@ function makeStyles(colors: ColorPalette) {
     justifyContent: 'center',
   },
   allClubsPillText: { color: colors.cream, fontWeight: '800', fontSize: type.chip },
-  holeTitle: { color: colors.cream, fontSize: type.body, fontWeight: '900' },
-  holeMeta: { color: colors.muted, fontSize: type.tiny, fontWeight: '700' },
+  holeTitle: { color: colors.cream, fontSize: type.hole, fontWeight: '900' },
+  holeMeta: { color: colors.muted, fontSize: type.kicker, fontWeight: '600' },
   shotLine: { marginTop: 6, maxHeight: 36, flexGrow: 0 },
   shotLineInner: { alignItems: 'center', gap: 6, paddingRight: 8 },
   shotLineItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -1816,9 +1831,13 @@ function makeStyles(colors: ColorPalette) {
     paddingVertical: 6,
   },
   dock: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     flexGrow: 0,
     flexShrink: 0,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.glass,
     borderTopWidth: 1,
     borderTopColor: colors.line,
     paddingHorizontal: 10,
@@ -1850,9 +1869,9 @@ function makeStyles(colors: ColorPalette) {
     backgroundColor: colors.bgElevated,
     paddingHorizontal: 8,
   },
-  dockChipPrimary: { borderColor: colors.lime, borderWidth: 2, backgroundColor: colors.accentWash },
+  dockChipPrimary: { borderColor: colors.cream, borderWidth: 2, backgroundColor: colors.accentWash },
   dockChipText: { color: colors.cream, fontWeight: '800', fontSize: type.tiny },
-  dockChipPrimaryText: { color: colors.lime, fontWeight: '900' },
+  dockChipPrimaryText: { color: colors.cream, fontWeight: '900' },
   dockAction: {
     flex: 1,
     minHeight: PLAY_DOCK_ACTION_MIN_HEIGHT,
@@ -1886,12 +1905,12 @@ function makeStyles(colors: ColorPalette) {
   top3Primary: {
     flex: 2.2,
     minHeight: tapTarget,
-    borderColor: colors.lime,
+    borderColor: colors.cream,
     borderWidth: 2,
     backgroundColor: colors.accentWash,
   },
   top3Text: { color: colors.cream, fontWeight: '800', fontSize: type.chip },
-  top3PrimaryText: { color: colors.lime, fontSize: type.button, fontWeight: '900' },
+  top3PrimaryText: { color: colors.cream, fontSize: type.button, fontWeight: '900' },
   suggest: { color: colors.muted, fontSize: type.tiny, fontWeight: '800' },
   row: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   warn: { color: colors.orange, fontSize: type.meta, fontWeight: '700' },
@@ -1912,7 +1931,7 @@ function makeStyles(colors: ColorPalette) {
     justifyContent: 'center',
     backgroundColor: colors.bgElevated,
   },
-  chipOn: { borderColor: colors.lime, backgroundColor: colors.accentWash },
+  chipOn: { borderColor: colors.cream, backgroundColor: colors.accentWash },
   chipText: { color: colors.cream, fontSize: 22, fontWeight: '800' },
   step: {
     minHeight: 64,

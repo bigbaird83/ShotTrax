@@ -1,13 +1,20 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
 import {
   planScorecard,
   planScorecardDismiss,
   scorecardClosesShot,
+  scorecardDiff,
+  scorecardDiffLabel,
+  scorecardDiffTone,
+  scorecardIsRoundedCard,
   scorecardMark,
   scorecardMarkGlyph,
   scorecardMarksShot,
+  scorecardParIsMuted,
   scorecardRunsAcceptFix,
+  scorecardScoreIsBold,
   scorecardShowsGir,
   scorecardShowsStrokesGained,
 } from './scorecard';
@@ -76,4 +83,27 @@ test('scorecard glyphs: eagle filled, birdie circle, par blank, bogey square, do
   assert.equal(scorecardMarkGlyph('bogey'), '□');
   assert.equal(scorecardMarkGlyph('double'), '□□');
   assert.equal(scorecardMarkGlyph(null), '');
+});
+
+test('scorecard is a rounded card with muted par, bold score, and +/- tone', () => {
+  assert.equal(scorecardIsRoundedCard(), true);
+  assert.equal(scorecardParIsMuted(), true);
+  assert.equal(scorecardScoreIsBold(), true);
+  assert.equal(scorecardDiff(3, 4), -1);
+  assert.equal(scorecardDiffLabel(-1), '-1');
+  assert.equal(scorecardDiffLabel(0), 'E');
+  assert.equal(scorecardDiffLabel(2), '+2');
+  assert.equal(scorecardDiffTone(-1), 'good');
+  assert.equal(scorecardDiffTone(1), 'bad');
+  assert.equal(scorecardDiffTone(0), 'even');
+  assert.equal(scorecardDiff(4, null), null);
+
+  const body = readFileSync(new URL('../ui/ScorecardBody.tsx', import.meta.url), 'utf8');
+  assert.match(body, /styles\.card/);
+  assert.match(body, /styles\.par/);
+  assert.match(body, /styles\.score/);
+  assert.match(body, /scorecardDiffLabel/);
+  assert.match(body, /diffGood/);
+  assert.match(body, /colors\.good/);
+  assert.match(body, /colors\.red/);
 });

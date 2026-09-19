@@ -1,7 +1,14 @@
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { COPY } from '@/src/domain/playerCopy';
-import { planScorecard, scorecardMarkGlyph, type ScorecardHole } from '@/src/domain/scorecard';
+import {
+  planScorecard,
+  scorecardDiff,
+  scorecardDiffLabel,
+  scorecardDiffTone,
+  scorecardMarkGlyph,
+  type ScorecardHole,
+} from '@/src/domain/scorecard';
 import { BigButton } from './BigButton';
 import { useColors } from './ColorThemeProvider';
 import { type, type ColorPalette } from './theme';
@@ -25,7 +32,7 @@ export function ScorecardBody({
   const rows: ScorecardHole[] = planScorecard(holes);
   return (
     <View style={styles.wrap}>
-      <View pointerEvents="none" style={styles.table}>
+      <View pointerEvents="none" style={styles.card}>
         <View style={styles.head}>
           <Text style={[styles.cell, styles.num]}>#</Text>
           <Text style={styles.cell}>{COPY.scorecardPar}</Text>
@@ -33,15 +40,28 @@ export function ScorecardBody({
           <Text style={styles.cell}>{COPY.putts}</Text>
           <Text style={[styles.cell, styles.mark]} />
         </View>
-        {rows.map((row) => (
-          <View key={row.number} style={styles.row}>
-            <Text style={[styles.val, styles.num]}>{row.number}</Text>
-            <Text style={styles.val}>{row.par ?? ''}</Text>
-            <Text style={styles.val}>{row.score ?? ''}</Text>
-            <Text style={styles.val}>{row.putts}</Text>
-            <Text style={[styles.val, styles.mark]}>{scorecardMarkGlyph(row.mark)}</Text>
-          </View>
-        ))}
+        {rows.map((row) => {
+          const diff = scorecardDiff(row.score, row.par);
+          const tone = scorecardDiffTone(diff);
+          const plus = scorecardDiffLabel(diff);
+          return (
+            <View key={row.number} style={styles.row}>
+              <Text style={[styles.val, styles.num]}>{row.number}</Text>
+              <Text style={[styles.val, styles.par]}>{row.par ?? ''}</Text>
+              <Text style={[styles.val, styles.score]}>{row.score ?? ''}</Text>
+              <Text style={styles.val}>{row.putts}</Text>
+              <Text
+                style={[
+                  styles.val,
+                  styles.mark,
+                  tone === 'good' && styles.diffGood,
+                  tone === 'bad' && styles.diffBad,
+                ]}>
+                {plus ?? scorecardMarkGlyph(row.mark)}
+              </Text>
+            </View>
+          );
+        })}
       </View>
       <BigButton label={COPY.back} variant="secondary" onPress={onBack} />
     </View>
@@ -51,19 +71,30 @@ export function ScorecardBody({
 function makeStyles(colors: ColorPalette) {
   return StyleSheet.create({
     wrap: { gap: 8 },
-    table: { gap: 8 },
+    card: {
+      gap: 8,
+      backgroundColor: colors.bgElevated,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.line,
+      padding: 12,
+    },
     head: { flexDirection: 'row', paddingHorizontal: 8 },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: colors.bgElevated,
+      backgroundColor: colors.bg,
       borderRadius: 12,
       minHeight: 48,
       paddingHorizontal: 8,
     },
     cell: { flex: 1, color: colors.muted, fontSize: type.tiny, fontWeight: '800' },
     val: { flex: 1, color: colors.cream, fontSize: type.body, fontWeight: '800' },
+    par: { color: colors.muted, fontWeight: '700' },
+    score: { color: colors.cream, fontWeight: '900', fontSize: type.button },
     num: { flex: 0.6 },
     mark: { flex: 0.7, textAlign: 'right', color: colors.cream },
+    diffGood: { color: colors.good, fontWeight: '900' },
+    diffBad: { color: colors.red, fontWeight: '900' },
   });
 }

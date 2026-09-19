@@ -82,7 +82,7 @@ export function BagCarryList({ db, clubs, onChange, onRename }: Props) {
                 setClubEnabled(db, club.id, value);
                 onChange();
               }}
-              trackColor={{ true: colors.lime, false: colors.line }}
+              trackColor={{ true: colors.cream, false: colors.line }}
               thumbColor={colors.cream}
             />
           </View>

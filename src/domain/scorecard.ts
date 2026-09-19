@@ -78,6 +78,39 @@ export function scorecardShowsStrokesGained(): false {
   return false;
 }
 
+export type ScorecardDiffTone = 'good' | 'bad' | 'even';
+
+/** Score − par. Missing or invalid par/score stays blank. */
+export function scorecardDiff(score: number | null, par: number | null): number | null {
+  if (scorecardMark(score, par) == null || score == null || par == null) return null;
+  return score - par;
+}
+
+export function scorecardDiffLabel(diff: number | null): string | null {
+  if (diff == null || !Number.isFinite(diff)) return null;
+  if (diff === 0) return 'E';
+  return diff > 0 ? `+${diff}` : `${diff}`;
+}
+
+export function scorecardDiffTone(diff: number | null): ScorecardDiffTone | null {
+  if (diff == null || !Number.isFinite(diff)) return null;
+  if (diff < 0) return 'good';
+  if (diff > 0) return 'bad';
+  return 'even';
+}
+
+export function scorecardIsRoundedCard(): true {
+  return true;
+}
+
+export function scorecardParIsMuted(): true {
+  return true;
+}
+
+export function scorecardScoreIsBold(): true {
+  return true;
+}
+
 export function scorecardMarkGlyph(mark: ScorecardMark): string {
   if (mark === 'eagle') return '●';
   if (mark === 'birdie') return '○';

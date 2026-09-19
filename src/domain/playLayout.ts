@@ -1,5 +1,7 @@
+import { PHONE_WHEEL_STRIP_HEIGHT } from './clubStrip';
+
 /**
- * Play screen: map fills the hole down to a short two-row dock.
+ * Play screen: map fills the hole. A frosted two-row dock sits over the map.
  * Header is a thin overlay. Add shot still takes the full screen.
  */
 
@@ -284,6 +286,39 @@ export const PLAY_DOCK_ACTION_MIN_HEIGHT = 52;
 
 export function playDockActionMinHeight(): number {
   return PLAY_DOCK_ACTION_MIN_HEIGHT;
+}
+
+/** Room above the glass dock so All clubs still floats over the map. */
+export const PLAY_GLASS_DOCK_LIFT = PHONE_WHEEL_STRIP_HEIGHT + PLAY_DOCK_ACTION_MIN_HEIGHT + 28;
+
+export function playDockIsGlass(): true {
+  return true;
+}
+
+export function playDockOverlaysMap(): true {
+  return true;
+}
+
+/** Lime is selected club + primary CTA only. Everything else stays muted. */
+export function playLimeOnlyOnSelectedAndCta(): true {
+  return true;
+}
+
+export function playHeaderSecondaryIsMuted(): true {
+  return true;
+}
+
+export function playHapticsOnShotLock(): true {
+  return true;
+}
+
+export function playHapticsOnHoleChange(): true {
+  return true;
+}
+
+/** Glass bar is box-none so two-finger pan/pinch still hits the map. */
+export function playDockPassesTwoFingerPan(): true {
+  return true;
 }
 
 /** Menu is a button, not lime text, on home and play. */

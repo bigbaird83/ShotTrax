@@ -33,7 +33,7 @@ export function QualityBadge({
       </View>
     );
   }
-  if (quality === 'soft') {
+  if (quality === 'soft' || quality === 'forced') {
     return (
       <View style={[styles.badge, styles.soft]}>
         <Text style={styles.text}>{COPY.approximate}</Text>

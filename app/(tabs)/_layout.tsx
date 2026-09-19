@@ -11,7 +11,7 @@ export default function TabLayout() {
         headerTintColor: colors.cream,
         headerTitleStyle: { fontWeight: '800' },
         tabBarStyle: { backgroundColor: colors.bg, borderTopColor: colors.line },
-        tabBarActiveTintColor: colors.lime,
+        tabBarActiveTintColor: colors.cream,
         tabBarInactiveTintColor: colors.muted,
       }}>
       <Tabs.Screen

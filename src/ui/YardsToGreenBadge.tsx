@@ -41,13 +41,13 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   heading: {
-    color: colors.lime,
+    color: colors.muted,
     fontSize: type.tiny,
     fontWeight: '800',
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
-  value: { color: colors.cream, fontSize: type.yards, fontWeight: '900', lineHeight: 48 },
-  valueCompact: { fontSize: 32, lineHeight: 36 },
+  value: { color: colors.cream, fontSize: type.yards, fontWeight: '900', lineHeight: 36 },
+  valueCompact: { fontSize: 28, lineHeight: 32 },
   detail: { color: colors.muted, fontSize: type.tiny, fontWeight: '600' },
 });

@@ -23,6 +23,8 @@ test('shot lock chip is club · logged from-to yards, not a modal or the card', 
   assert.match(hole, /formatShotLockChip/);
   assert.match(hole, /planPlacedShot\(placeFrom, placeTo\)/);
   assert.match(hole, /closePrior\.distanceYards/);
+  assert.match(hole.slice(hole.indexOf('const markClub'), hole.indexOf('const onMark')), /hapticLight/);
+  assert.match(hole, /hapticLight\(\);\s*\n\s*router\.replace\(playHrefAfterHoleChange/);
   assert.doesNotMatch(hole.slice(hole.indexOf('const commitPlaced'), hole.indexOf('const onConfirmUndo')), /Alert\.alert/);
   assert.doesNotMatch(hole.slice(hole.indexOf('formatShotLockChip'), hole.indexOf('formatShotLockChip') + 400), /hole\.yards|typicalCarry|avgYards/);
 });

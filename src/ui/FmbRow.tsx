@@ -29,6 +29,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     alignItems: 'center',
   },
-  kicker: { color: colors.lime, fontSize: type.tiny, fontWeight: '800' },
+  kicker: { color: colors.muted, fontSize: type.tiny, fontWeight: '800' },
   value: { color: colors.cream, fontSize: type.body, fontWeight: '900' },
 });

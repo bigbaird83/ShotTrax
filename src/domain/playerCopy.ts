@@ -21,6 +21,9 @@ export const COPY = {
   deleteShotConfirm: 'Delete this shot?',
   roundHistory: 'Round history',
   noRounds: 'Your first round will show up here.',
+  firstRoundHint: 'Pick a course nearby and start 9 or 18.',
+  nearbyEmptyHint: 'Pull to refresh, or type a course name to start.',
+  lastPlayedChip: 'Played',
   roundInProgress: 'Round in progress',
   clearCourse: 'Clear course',
   waitingOnGreen: 'Waiting on green location.',
@@ -171,6 +174,18 @@ export function formatSiLabel(handicap: number | null): string {
 
 export function formatHoleHeader(holeNumber: number, par: number | null): string {
   return `Hole ${holeNumber} · ${formatParLabel(par)}`;
+}
+
+export function formatPlayHeaderPrimary(holeNumber: number): string {
+  return `Hole ${holeNumber}`;
+}
+
+export function formatPlayHeaderSecondary(
+  par: number | null,
+  teeName?: string | null,
+): string {
+  const tee = teeName?.trim();
+  return tee ? `${formatParLabel(par)} · ${tee}` : formatParLabel(par);
 }
 
 /** Play header: Hole N · Par X plus the yards. No SI. No tee rating. */

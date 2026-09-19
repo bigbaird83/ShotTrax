@@ -29,6 +29,7 @@ import {
   startRound,
   type CourseLayoutSeed,
 } from '@/src/db/repo';
+import { formatLastPlayedChip, lastPlayedAtForCourse } from '@/src/domain/courseCard';
 import { COPY, formatTeeMeta } from '@/src/domain/playerCopy';
 import { playHrefAfterRoundStart } from '@/src/domain/playNav';
 import { formatHistoryRow } from '@/src/domain/roundHistory';
@@ -36,6 +37,7 @@ import { describeGpsSource } from '@/src/services/location';
 import { BagCarryList, BagCustomizeActions } from '@/src/ui/BagCarryList';
 import { BigButton } from '@/src/ui/BigButton';
 import { CoursePicker, type CoursePick } from '@/src/ui/CoursePicker';
+import { EmptyPanel } from '@/src/ui/EmptyPanel';
 import { GpsBanner } from '@/src/ui/GpsBanner';
 import { Screen } from '@/src/ui/Screen';
 import { FullSheet } from '@/src/ui/Sheet';
@@ -83,6 +85,14 @@ export default function HomeScreen() {
   const courseDistanceUnit = useMemo(() => getCourseDistanceUnit(db), [db, revision]);
   const clubs = useMemo(() => listClubs(db), [db, revision]);
   const bagPromptOpen = useMemo(() => !hasSeenBagCustomize(db), [db, revision]);
+  const lastPlayedAtByCourse = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const round of rounds) {
+      if (round.courseApiId && !map[round.courseApiId]) map[round.courseApiId] = round.startedAt;
+      if (round.courseName && !map[round.courseName]) map[round.courseName] = round.startedAt;
+    }
+    return map;
+  }, [rounds]);
 
   useEffect(() => {
     setWatchCoursePickedHandler((pick) => {
@@ -232,10 +242,17 @@ export default function HomeScreen() {
       />
       <Text style={styles.hint}>{COPY.nearbyHint}</Text>
       {picked ? (
-        <Text style={styles.meta}>
-          {picked.name}
-          {teeLabel ? ` · ${teeLabel}` : needsTee ? ` · ${COPY.pickTee}` : ''}
-        </Text>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{picked.name}</Text>
+          {teeLabel || needsTee ? (
+            <Text style={styles.cardMeta}>{teeLabel ? teeLabel : COPY.pickTee}</Text>
+          ) : null}
+          {formatLastPlayedChip(lastPlayedAtForCourse(rounds, { id: picked.id, name: picked.name })) ? (
+            <Text style={styles.chip}>
+              {formatLastPlayedChip(lastPlayedAtForCourse(rounds, { id: picked.id, name: picked.name }))}
+            </Text>
+          ) : null}
+        </View>
       ) : null}
 
       <FullSheet visible={sheetOpen} title="Courses near you" onClose={() => setSheetOpen(false)}>
@@ -245,6 +262,7 @@ export default function HomeScreen() {
           attachMode={Boolean(active)}
           courseDistanceUnit={courseDistanceUnit}
           onSelect={onSelectCourse}
+          lastPlayedAtByCourse={lastPlayedAtByCourse}
           onRefreshReady={(fn) => {
             refreshRef.current = fn;
           }}
@@ -306,7 +324,7 @@ export default function HomeScreen() {
 
       <Text style={styles.section}>{COPY.roundHistory}</Text>
       {rounds.length === 0 ? (
-        <Text style={styles.muted}>{COPY.noRounds}</Text>
+        <EmptyPanel title={COPY.noRounds} hint={COPY.firstRoundHint} />
       ) : (
         rounds.map((round) => {
           const holes = listHoles(db, round.id);
@@ -347,7 +365,7 @@ export default function HomeScreen() {
                 </Text>
               </View>
               <View style={styles.scoreCol}>
-                <Text style={styles.relative}>{row.relative}</Text>
+                <Text style={styles.chip}>{row.relative}</Text>
                 <Text style={styles.score}>{row.score}</Text>
               </View>
             </Pressable>
@@ -399,14 +417,25 @@ function makeStyles(colors: ColorPalette) {
     cardMeta: { color: colors.muted, fontSize: type.meta },
     section: { color: colors.cream, fontSize: 18, fontWeight: '800', marginTop: 8 },
     muted: { color: colors.muted, fontSize: type.body },
+    chip: {
+      alignSelf: 'flex-start',
+      color: colors.cream,
+      fontSize: type.tiny,
+      fontWeight: '800',
+      backgroundColor: colors.accentWash,
+      borderRadius: 999,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      overflow: 'hidden',
+    },
     row: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
       backgroundColor: colors.bgElevated,
-      padding: 14,
-      borderRadius: 14,
-      minHeight: tapTarget,
+      padding: 16,
+      borderRadius: 16,
+      minHeight: tapTarget + 8,
       gap: 8,
     },
     rowTitle: { color: colors.cream, fontSize: 18, fontWeight: '700' },
