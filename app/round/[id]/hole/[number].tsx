@@ -84,13 +84,16 @@ import { ClubButton } from '@/src/ui/ClubButton';
 import { ClubStrip } from '@/src/ui/ClubStrip';
 import { GpsBanner } from '@/src/ui/GpsBanner';
 import { hapticLight, hapticMark, hapticSelect, hapticTap, hapticWarn } from '@/src/ui/haptics';
-import { useColors } from '@/src/ui/ColorThemeProvider';
+import { useColorTheme } from '@/src/ui/ColorThemeProvider';
+import { useAmbientLight } from '@/src/ui/useAmbientLight';
+import { playThemeId } from '@/src/domain/playTheme';
+import { formatShotLockChip } from '@/src/domain/shotLock';
 import { HoleMap } from '@/src/ui/HoleMap';
 import { MarkCheck } from '@/src/ui/MarkCheck';
 import { FullSheet } from '@/src/ui/Sheet';
 import { PuttSheetBody } from '@/src/ui/PuttSheetBody';
 import { ScorecardBody } from '@/src/ui/ScorecardBody';
-import { tapTarget, type, type ColorPalette } from '@/src/ui/theme';
+import { COLOR_THEMES, tapTarget, type, type ColorPalette } from '@/src/ui/theme';
 
 export default function HoleScreen() {
   const { id, number, putts: puttsParam, menu: menuParam } = useLocalSearchParams<{
@@ -102,7 +105,9 @@ export default function HoleScreen() {
   const holeNumber = Number(number);
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const colors = useColors();
+  const { themeId: savedThemeId } = useColorTheme();
+  const ambient = useAmbientLight();
+  const colors = COLOR_THEMES[playThemeId({ saved: savedThemeId, ambient })];
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { db, revision, bump } = useDb();
   const fix = useLiveFix(true);
@@ -617,6 +622,15 @@ export default function HoleScreen() {
       });
       if (!waiting && plan.status === 'commit') {
         hapticMark();
+        if (plan.closePrior) {
+          const closed = shots.find((shot) => shot.id === plan.closePrior?.shotId);
+          const closedName = closed?.clubId ? clubMap[closed.clubId]?.shortName ?? 'club' : 'club';
+          const chip = formatShotLockChip({
+            shortName: closedName,
+            distanceYards: plan.closePrior.distanceYards,
+          });
+          if (chip) setToast(chip);
+        }
         setCheckNonce((n) => n + 1);
         bump();
       }
@@ -670,7 +684,18 @@ export default function HoleScreen() {
       const waiting = promptForPlan(plan, () => {
         void onEndShot(true);
       });
-      if (!waiting) bump();
+      if (!waiting && plan.status === 'commit' && plan.closePrior) {
+        const closed = shots.find((shot) => shot.id === plan.closePrior?.shotId);
+        const closedName = closed?.clubId ? clubMap[closed.clubId]?.shortName ?? 'club' : 'club';
+        const chip = formatShotLockChip({
+          shortName: closedName,
+          distanceYards: plan.closePrior.distanceYards,
+        });
+        if (chip) setToast(chip);
+        bump();
+      } else if (!waiting) {
+        bump();
+      }
     } catch (err) {
       Alert.alert('Couldn’t end shot', err instanceof Error ? err.message : 'Try again.');
     } finally {
@@ -774,6 +799,14 @@ export default function HoleScreen() {
       return;
     }
     hapticMark();
+    hapticLight();
+    const placed = planPlacedShot(placeFrom, placeTo);
+    const club = clubs.find((row) => row.id === clubId);
+    const chip = formatShotLockChip({
+      shortName: club?.shortName ?? '',
+      distanceYards: placed.ok ? placed.distanceYards : null,
+    });
+    if (chip) setToast(chip);
     setConfirmUndo(planConfirmUndo(result.id, Date.now()));
     resetPlace();
     bump();

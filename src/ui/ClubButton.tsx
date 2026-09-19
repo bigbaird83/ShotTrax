@@ -53,7 +53,7 @@ function makeStyles(colors: ColorPalette) {
       borderWidth: 2,
       minHeight: 80,
     },
-    selected: { borderColor: colors.lime, borderWidth: 2, backgroundColor: colors.accentWash },
+    selected: { borderColor: colors.lime, borderWidth: 3, backgroundColor: colors.accentWash },
     short: { color: colors.cream, fontSize: type.button, fontWeight: '900' },
     shortPick: { color: colors.lime },
     name: { color: colors.cream, fontSize: type.meta, marginTop: 2 },

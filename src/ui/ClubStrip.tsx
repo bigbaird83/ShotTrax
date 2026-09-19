@@ -172,7 +172,12 @@ function makeStyles(colors: ColorPalette) {
       paddingHorizontal: 6,
     },
     pillCompact: { height: 36, borderRadius: 10 },
-    pillPick: { borderColor: colors.lime, borderWidth: 2, backgroundColor: colors.accentWash },
+    pillPick: {
+      borderColor: colors.lime,
+      borderWidth: 3,
+      backgroundColor: colors.accentWash,
+      transform: [{ scale: 1.04 }],
+    },
     label: { color: colors.cream, fontWeight: '800', fontSize: type.chip },
     labelCompact: { fontSize: type.tiny },
     labelPick: { color: colors.lime, fontWeight: '900' },

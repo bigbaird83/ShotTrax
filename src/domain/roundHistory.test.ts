@@ -16,11 +16,33 @@ test('history row shows date, course, tees, score', () => {
     courseName: 'Pebble Beach',
     teeName: 'Blue',
     score: 82,
+    nowMs: Date.parse('2026-09-18T20:00:00.000Z'),
   });
   assert.equal(row.date, 'Sep 18, 2026');
   assert.equal(row.courseName, 'Pebble Beach');
   assert.equal(row.tees, 'Blue');
   assert.equal(row.score, '82');
+  assert.equal(row.relative, 'Today');
+  assert.equal(
+    formatHistoryRow({
+      startedAt: '2026-09-17T16:00:00.000Z',
+      courseName: 'Pebble Beach',
+      teeName: 'Blue',
+      score: 82,
+      nowMs: Date.parse('2026-09-18T20:00:00.000Z'),
+    }).relative,
+    'Yesterday',
+  );
+  assert.equal(
+    formatHistoryRow({
+      startedAt: '2026-09-14T16:00:00.000Z',
+      courseName: 'Pebble Beach',
+      teeName: 'Blue',
+      score: 82,
+      nowMs: Date.parse('2026-09-18T20:00:00.000Z'),
+    }).relative,
+    'Mon',
+  );
   assert.equal(formatHistoryDate('2026-09-18T16:00:00.000Z'), 'Sep 18, 2026');
   assert.equal(formatHistoryCourse(null), 'Round');
   assert.equal(formatHistoryTees(null), '—');
@@ -44,4 +66,5 @@ test('history row shows date, course, tees, score', () => {
   assert.match(home, /row\.courseName/);
   assert.match(home, /row\.tees/);
   assert.match(home, /row\.score/);
+  assert.match(home, /row\.relative/);
 });

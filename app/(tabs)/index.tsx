@@ -346,7 +346,10 @@ export default function HomeScreen() {
                   {open ? ' · in progress' : ''}
                 </Text>
               </View>
-              <Text style={styles.score}>{row.score}</Text>
+              <View style={styles.scoreCol}>
+                <Text style={styles.relative}>{row.relative}</Text>
+                <Text style={styles.score}>{row.score}</Text>
+              </View>
             </Pressable>
           );
         })
@@ -407,6 +410,8 @@ function makeStyles(colors: ColorPalette) {
       gap: 8,
     },
     rowTitle: { color: colors.cream, fontSize: 18, fontWeight: '700' },
+    scoreCol: { alignItems: 'flex-end', gap: 2 },
+    relative: { color: colors.muted, fontSize: type.tiny, fontWeight: '800' },
     score: { color: colors.cream, fontSize: 24, fontWeight: '900' },
   });
 }
