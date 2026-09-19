@@ -174,6 +174,7 @@ function NativeHoleMap({
   const pendingLocked = useRef(false);
   const dragLayerRef = useRef<View>(null);
   const [holeCameraReady, setHoleCameraReady] = useState(false);
+  const [mapBox, setMapBox] = useState<{ width: number; height: number } | null>(null);
   const [mapsChrome, setMapsChrome] = useState(false);
   const panStart = useRef<{ x: number; y: number } | null>(null);
   const toPinLive = Boolean(freezePan || onPlaceToDrag);
@@ -351,8 +352,13 @@ function NativeHoleMap({
   }, [coords, framePoints, lockFrame, heading, holeUpCamera, lockedRegion, frameEpoch]);
 
   const onMapLayout = (event: LayoutChangeEvent) => {
-    if (!lockFrame) return;
     const { width, height } = event.nativeEvent.layout;
+    if (width >= 80 && height >= 80) {
+      setMapBox((prev) =>
+        prev && prev.width === width && prev.height === height ? prev : { width, height },
+      );
+    }
+    if (!lockFrame) return;
     if (width < 80 || height < 80) return;
     if (framedOnce.current) return;
     markFramedIfLive(frameLockedMap());
@@ -377,13 +383,18 @@ function NativeHoleMap({
 
   if (!lockedRegion) {
     return (
-      <TrailFallback
-        holeNumber={holeNumber}
-        yardsToGreen={yardsToGreen}
-        hasFix={Boolean(userFix)}
-        hasGreen={Boolean(green)}
-        hideYardsOverlay={hideYardsOverlay}
-      />
+      <View
+        collapsable={false}
+        style={[fullBleed ? styles.bleed : styles.wrap, style]}
+        onLayout={onMapLayout}>
+        <TrailFallback
+          holeNumber={holeNumber}
+          yardsToGreen={yardsToGreen}
+          hasFix={Boolean(userFix)}
+          hasGreen={Boolean(green)}
+          hideYardsOverlay={hideYardsOverlay}
+        />
+      </View>
     );
   }
 
@@ -398,6 +409,7 @@ function NativeHoleMap({
 
   return (
     <View
+      collapsable={false}
       style={[fullBleed ? styles.bleed : styles.wrap, style]}
       onLayout={onMapLayout}
       pointerEvents={lockFrame && !holeCameraReady ? 'none' : 'auto'}
@@ -414,7 +426,7 @@ function NativeHoleMap({
       onTouchCancel={() => releaseMapGesture()}>
       <MapView
         ref={mapRef}
-        style={[styles.map, lockFrame && !holeCameraReady ? styles.mapHidden : null]}
+        style={[styles.map, mapBox, lockFrame && !holeCameraReady ? styles.mapHidden : null]}
         mapType="satellite"
         {...(lockFrame
           ? lockedCameraProps
@@ -736,11 +748,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgElevated,
   },
   bleed: {
+    ...StyleSheet.absoluteFill,
     flex: 1,
     overflow: 'hidden',
     backgroundColor: colors.bgElevated,
   },
-  map: { flex: 1 },
+  map: {
+    ...StyleSheet.absoluteFill,
+    flex: 1,
+  },
   mapHidden: { opacity: 0 },
   mapCover: {
     position: 'absolute',

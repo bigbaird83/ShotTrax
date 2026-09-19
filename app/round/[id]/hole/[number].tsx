@@ -964,7 +964,7 @@ export default function HoleScreen() {
 
   return (
     <View style={styles.fill}>
-      <View style={styles.mapFill}>
+      <View collapsable={false} style={styles.mapFill}>
         <HoleMap
           fullBleed
           holeNumber={hole.number}
@@ -1758,8 +1758,14 @@ export default function HoleScreen() {
 
 function makeStyles(colors: ColorPalette) {
   return StyleSheet.create({
-  fill: { flex: 1, backgroundColor: colors.bg },
-  mapFill: { flex: 1, minHeight: '60%', flexGrow: 1, flexBasis: '60%' },
+  fill: { flex: 1, height: '100%', backgroundColor: colors.bg },
+  mapFill: {
+    ...StyleSheet.absoluteFill,
+    flex: 1,
+    minHeight: '60%',
+    flexGrow: 1,
+    flexBasis: '60%',
+  },
   catchUpBar: {
     flexDirection: 'row',
     alignItems: 'center',

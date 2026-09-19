@@ -44,8 +44,12 @@ import {
 import {
   addShotFollowsUserLocation,
   addShotHidesUserLocation,
+  addShotKeepsPlayMapHeight,
   addShotOpensOnPlayFrame,
+  holeMapViewUsesAbsoluteFill,
   playDockFrostPointerEvents,
+  playGlassDockZeroesMapHeight,
+  playMapHostUsesAbsoluteFill,
   playDockGlassIgnoresTouches,
   playDockPassesTwoFingerPan,
   signalLabAddShotGestureLock,
@@ -92,6 +96,10 @@ test('Signal Lab: Add shot two-finger pan/pinch after frame leave the camera and
   assert.equal(addShotReframesAfterOpen(), false);
   assert.equal(playAndAddShotShareFrameEpoch(), true);
   assert.equal(addShotOpensOnPlayFrame(), true);
+  assert.equal(addShotKeepsPlayMapHeight(), true);
+  assert.equal(playMapHostUsesAbsoluteFill(), true);
+  assert.equal(holeMapViewUsesAbsoluteFill(), true);
+  assert.equal(playGlassDockZeroesMapHeight(), false);
   assert.equal(playMapFrameEpoch({ holeNumber: 1, nonce: 0 }), 'play-1-0');
   assert.equal(playMapFrameEpoch({ holeNumber: 1, nonce: 0 }), playMapFrameEpoch({ holeNumber: 1, nonce: 0 }));
   assert.notEqual(playMapFrameEpoch({ holeNumber: 1, nonce: 0 }), 'catchup');
@@ -211,7 +219,7 @@ test('Signal Lab: Add shot two-finger pan/pinch after frame leave the camera and
   assert.match(playMap, /lockFrame/);
   assert.match(playMap, /courseCamera\?\.points/);
   assert.match(playMap, /setPlaceToDraft\(point\)/);
-  assert.match(hole, /<View style=\{styles\.mapFill\}>/);
+  assert.match(hole, /style=\{styles\.mapFill\}/);
   assert.match(
     playMap,
     /frameEpoch=\{playMapFrameEpoch\(\{ holeNumber: hole\.number, nonce: playFrameNonce \}\)\}/,
@@ -264,6 +272,8 @@ test('Signal Lab: course-card first frame, then leave camera alone; scroll/zoom 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   assert.match(map, /scrollEnabled=\{framedForGestures\}/);
   assert.match(map, /zoomEnabled=\{framedForGestures\}/);
+  assert.match(map, /\.\.\.StyleSheet\.absoluteFill/);
+  assert.match(map, /style=\{\[styles\.map, mapBox,/);
   const settled = map.slice(map.indexOf('const onRegionSettled'), map.indexOf('if (!lockedRegion)'));
   const afterFrame = settled.slice(
     settled.indexOf('if (framedOnce.current)'),
@@ -273,6 +283,9 @@ test('Signal Lab: course-card first frame, then leave camera alone; scroll/zoom 
   assert.doesNotMatch(afterFrame, /applyLockedCamera|frameLockedMap|planCourseCardCamera/);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const mapFill = hole.slice(hole.indexOf('mapFill:'), hole.indexOf('catchUpBar:'));
+  assert.match(mapFill, /StyleSheet\.absoluteFill/);
+  assert.match(mapFill, /minHeight: '60%'/);
   assert.match(hole, /const courseCamera = planCourseCardCamera\(\{[\s\S]*?tee: holeTee,[\s\S]*?green,[\s\S]*?phone: null,/);
   assert.match(hole, /pointerEvents="none" style=\{styles\.dockGlass\}/);
   assert.doesNotMatch(hole, /pointerEvents=\{[^}]*styles\.dockGlass/);

@@ -80,6 +80,10 @@ import {
   playDockGlassIgnoresTouches,
   playDockFrostPointerEvents,
   addShotOpensOnPlayFrame,
+  addShotKeepsPlayMapHeight,
+  holeMapViewUsesAbsoluteFill,
+  playGlassDockZeroesMapHeight,
+  playMapHostUsesAbsoluteFill,
   signalLabAddShotGestureLock,
   PLAY_GLASS_DOCK_LIFT,
   playScorecardWraps,
@@ -141,6 +145,11 @@ test('play hole screen uses the fill layout and does not keep the empty middle',
   assert.match(hole, /styles\.mapFill/);
   assert.match(hole, /minHeight: '60%'/);
   assert.match(hole, /flexBasis: '60%'/);
+  assert.match(hole, /StyleSheet\.absoluteFill/);
+  assert.equal(playGlassDockZeroesMapHeight(), false);
+  assert.equal(playMapHostUsesAbsoluteFill(), true);
+  assert.equal(holeMapViewUsesAbsoluteFill(), true);
+  assert.equal(addShotKeepsPlayMapHeight(), true);
   assert.match(hole, /styles\.dock/);
   assert.match(hole, /styles\.shotLine/);
   assert.match(hole, /COPY\.allClubs/);
@@ -177,6 +186,8 @@ test('play hole screen uses the fill layout and does not keep the empty middle',
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   assert.match(map, /holeMapUserLocationVisible\(\{/);
   assert.match(map, /styles\.mapCover/);
+  assert.match(map, /map: \{\s*\n\s*\.\.\.StyleSheet\.absoluteFill,/);
+  assert.match(map, /bleed: \{\s*\n\s*\.\.\.StyleSheet\.absoluteFill,/);
   assert.match(map, /tee \+ green only/);
   assert.doesNotMatch(
     map.slice(map.indexOf('const lockedRegion'), map.indexOf('const dragLines')),
@@ -647,4 +658,34 @@ test('Signal Lab: trail chip is logged yards, soft/forced keep a badge, glass do
   assert.match(trailBlock, /QualityBadge/);
   assert.doesNotMatch(trailBlock, /playHeaderYards|hole\.yards|yardsToGreen/);
   assert.match(badge, /quality === 'soft' \|\| quality === 'forced'/);
+});
+
+test('P0: full-bleed MapView has real height under the glass dock; Add shot keeps it', () => {
+  assert.equal(playGlassDockZeroesMapHeight(), false);
+  assert.equal(playMapHostUsesAbsoluteFill(), true);
+  assert.equal(holeMapViewUsesAbsoluteFill(), true);
+  assert.equal(addShotKeepsPlayMapHeight(), true);
+  assert.equal(addShotOpensOnPlayFrame(), true);
+  assert.equal(playDockOverlaysMap(), true);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
+  const mapFill = hole.slice(hole.indexOf('mapFill:'), hole.indexOf('catchUpBar:'));
+  assert.match(mapFill, /StyleSheet\.absoluteFill/);
+  assert.match(mapFill, /minHeight: '60%'/);
+  assert.match(mapFill, /flexBasis: '60%'/);
+  assert.match(hole, /<View collapsable=\{false\} style=\{styles\.mapFill\}>/);
+  assert.doesNotMatch(hole, /catchUpFullScreen \? styles\.mapWrapFull/);
+  assert.equal((hole.match(/planCourseCardCamera\(/g) ?? []).length, 1);
+  assert.match(hole, /const courseCamera = planCourseCardCamera\(\{[\s\S]*?tee: holeTee,[\s\S]*?green,[\s\S]*?phone: null,/);
+
+  assert.match(map, /bleed: \{\s*\n\s*\.\.\.StyleSheet\.absoluteFill,/);
+  assert.match(map, /map: \{\s*\n\s*\.\.\.StyleSheet\.absoluteFill,/);
+  assert.match(map, /style=\{\[styles\.map, mapBox,/);
+  assert.match(map, /collapsable=\{false\}/);
+  const userLoc = map.slice(map.indexOf('showsUserLocation='), map.indexOf('showsMyLocationButton'));
+  assert.match(userLoc, /holeMapUserLocationVisible\(\{/);
+  assert.doesNotMatch(userLoc, /true/);
+  assert.match(map, /scrollEnabled=\{framedForGestures\}/);
+  assert.match(map, /zoomEnabled=\{framedForGestures\}/);
 });
