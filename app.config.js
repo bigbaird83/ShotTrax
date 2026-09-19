@@ -5,7 +5,8 @@
  * Display name is ShotTraxx (`expo.name`, iOS CFBundleDisplayName, Android
  * label). Bundle ID `com.shottrax.app` and slug `shottrax` stay unchanged.
  * Icon paths in app.json (`./assets/images/icon.png` and adaptive siblings)
- * are the locked A5 mark. `splash-icon.png` stays the full ShotTraxx wordmark.
+ * are the locked Build 35 neon-arc Shot/Traxx mark. `splash-icon.png` stays
+ * the full ShotTraxx wordmark.
  *
  * Secret name (EAS dashboard, production / preview / development):
  *   GOLF_COURSES_API_KEY

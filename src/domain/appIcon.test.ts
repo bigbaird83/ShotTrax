@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
-test('home-screen icon is the locked A5 art; splash still says ShotTraxx', () => {
+test('home-screen icon is the locked Build 35 neon-arc Shot/Traxx art; splash still says ShotTraxx', () => {
   const app = JSON.parse(readFileSync(new URL('../../app.json', import.meta.url), 'utf8')) as {
     expo: {
       icon: string;
@@ -31,4 +31,28 @@ test('home-screen icon is the locked A5 art; splash still says ShotTraxx', () =>
 
   const watch = readFileSync(new URL('../../targets/watch/expo-target.config.js', import.meta.url), 'utf8');
   assert.match(watch, /assets\/images\/icon\.png/);
+
+  const iosDir = new URL('../../assets/images/ios/', import.meta.url);
+  for (const name of [
+    'icon-20@2x.png',
+    'icon-20@3x.png',
+    'icon-29@2x.png',
+    'icon-29@3x.png',
+    'icon-40@2x.png',
+    'icon-40@3x.png',
+    'icon-60@2x.png',
+    'icon-60@3x.png',
+    'icon-76.png',
+    'icon-76@2x.png',
+    'icon-83.5@2x.png',
+    'icon-1024.png',
+  ]) {
+    const bytes = readFileSync(new URL(name, iosDir));
+    assert.ok(bytes.length > 0, name);
+  }
+
+  const readme = readFileSync(new URL('../../assets/images/README.md', import.meta.url), 'utf8');
+  assert.match(readme, /Build 35/);
+  assert.match(readme, /ShotTraxx/);
+  assert.doesNotMatch(readme, /ST-only|ST monogram/);
 });
