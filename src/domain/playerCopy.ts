@@ -29,6 +29,7 @@ export const COPY = {
   waitingOnGreen: 'Waiting on green location.',
   waitingOnLocation: 'Waiting on your location.',
   courseCardMissingFrame: 'Need the course tee and green for this hole.',
+  courseCardTilesMissing: 'Couldn’t load the hole map.',
   approximate: 'Approximate',
   longPressGreen: 'Long-press to set the green',
   toGreen: 'To green',
@@ -223,6 +224,11 @@ export function waitingOnLocationWhenYardsShown(): false {
 
 /** Lock-frame miss is a missing course tee/green. Never a GPS wait. */
 export function lockFrameEmptyStateWaitsForPhone(): false {
+  return false;
+}
+
+/** Tile timeout is a miss card. Never endless theme green. */
+export function holeMapTileMissWaitsOnPhone(): false {
   return false;
 }
 

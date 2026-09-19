@@ -173,7 +173,7 @@ test('Signal Lab: Add shot two-finger pan/pinch after frame leave the camera and
   assert.doesNotMatch(map, /showsUserLocation=\{true\}/);
   assert.doesNotMatch(map, /followsUserLocation=\{true\}/);
 
-  const settled = map.slice(map.indexOf('const onRegionSettled'), map.indexOf('if (!lockedRegion)'));
+  const settled = map.slice(map.indexOf('const onRegionSettled'), map.indexOf('if (tileMiss'));
   const afterFrame = settled.slice(
     settled.indexOf('if (framedOnce.current)'),
     settled.indexOf('if (regionIsHoleFrame'),
@@ -274,7 +274,8 @@ test('Signal Lab: course-card first frame, then leave camera alone; scroll/zoom 
   assert.match(map, /zoomEnabled=\{framedForGestures\}/);
   assert.match(map, /\.\.\.StyleSheet\.absoluteFill/);
   assert.match(map, /style=\{\[styles\.map, mapBox,/);
-  const settled = map.slice(map.indexOf('const onRegionSettled'), map.indexOf('if (!lockedRegion)'));
+  assert.match(map, /key=\{mapPaintKey\}/);
+  const settled = map.slice(map.indexOf('const onRegionSettled'), map.indexOf('if (tileMiss'));
   const afterFrame = settled.slice(
     settled.indexOf('if (framedOnce.current)'),
     settled.indexOf('if (regionIsHoleFrame'),

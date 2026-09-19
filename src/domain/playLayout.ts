@@ -365,6 +365,33 @@ export function playBlankMapFixIsCourseAgnostic(): true {
 }
 
 /**
+ * Height-only (#28) was not enough. A MapView that first mounts at 0 never
+ * paints tiles when later resized — remount once mapBox is real.
+ */
+export function holeMapRemountsWhenMapBoxSized(): true {
+  return true;
+}
+
+export function holeMapMountsBeforeMeasured(): false {
+  return false;
+}
+
+/** Location permission must not gate MapView. Course tee+green frame first. */
+export function holeMapRequiresLocationPermission(): false {
+  return false;
+}
+
+/** Green cover lifts when the host is sized. Missing tee+green is the miss card. */
+export function holeMapCoverLiftsWhenSized(): true {
+  return true;
+}
+
+/** Cover must not wait on onMapReady. */
+export function holeMapCoverWaitsOnMapReady(): false {
+  return false;
+}
+
+/**
  * Signal Lab build 36 — Add shot gesture lock.
  * 1. First frame is course tee + green center only.
  * 2. After that, do not reframe.
@@ -405,6 +432,49 @@ export function signalLabBlankMapBuild38(): {
     courseCardMissShowsExplicitUi: true,
     firstFramePhoneNull: true,
     showsUserLocationOnLockFrame: false,
+  };
+}
+
+/**
+ * Signal Lab build 39 — blank map third pass.
+ * 1. Mount MapView only with a real initialRegion from tee+green (not NaN/0,0).
+ * 2. Lift the green cover as soon as mapBox is sized — do not wait on onMapReady.
+ * 3. Tiles still missing after a few seconds → miss card, not endless green.
+ * 4. iOS uses Apple Maps. Never Google with no key.
+ * Remount once mapBox is real. Never gate on location. Phone:null first frame.
+ * Add shot keeps showsUserLocation off.
+ */
+export function signalLabBlankMapBuild39(): {
+  remountMapWhenSized: true;
+  remountKeyIsSizedNotPixels: true;
+  mountsOnlyWithValidInitialRegion: true;
+  coverLiftsWhenSized: true;
+  coverWaitsOnMapReady: false;
+  tileMissAfterSeconds: true;
+  iosUsesAppleMaps: true;
+  usesGoogleProvider: false;
+  gatesOnLocationPermission: false;
+  courseCardMissShowsExplicitUi: true;
+  firstFramePhoneNull: true;
+  showsUserLocationOnLockFrame: false;
+  alwaysPassesInitialRegion: true;
+  hidesWithOpacity: false;
+} {
+  return {
+    remountMapWhenSized: true,
+    remountKeyIsSizedNotPixels: true,
+    mountsOnlyWithValidInitialRegion: true,
+    coverLiftsWhenSized: true,
+    coverWaitsOnMapReady: false,
+    tileMissAfterSeconds: true,
+    iosUsesAppleMaps: true,
+    usesGoogleProvider: false,
+    gatesOnLocationPermission: false,
+    courseCardMissShowsExplicitUi: true,
+    firstFramePhoneNull: true,
+    showsUserLocationOnLockFrame: false,
+    alwaysPassesInitialRegion: true,
+    hidesWithOpacity: false,
   };
 }
 

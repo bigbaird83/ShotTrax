@@ -87,6 +87,12 @@ import {
   playMapHostUsesAbsoluteFill,
   signalLabAddShotGestureLock,
   signalLabBlankMapBuild38,
+  signalLabBlankMapBuild39,
+  holeMapCoverLiftsWhenSized,
+  holeMapCoverWaitsOnMapReady,
+  holeMapMountsBeforeMeasured,
+  holeMapRemountsWhenMapBoxSized,
+  holeMapRequiresLocationPermission,
   PLAY_GLASS_DOCK_LIFT,
   playScorecardWraps,
   playSameClubHiddenUntilShot,
@@ -101,10 +107,12 @@ import { PHONE_WHEEL_PILL_HEIGHT } from './clubStrip';
 import {
   CYPRESS_CREEK_CABOT,
   MAGNOLIA_CC,
+  MYSTIC_CREEK_EL_DORADO,
   REPRO_COURSE_CARDS,
   courseCardHoleHasTeeAndGreen,
   cypressCreekHole1Card,
   magnoliaHole1Card,
+  mysticCreekHole1Card,
 } from './reproCourseCard';
 
 test('play map fills at least 60% down to a two-row dock; header is overlay', () => {
@@ -276,14 +284,15 @@ test('Add shot, play, and edit open hole-up once; map chip stays, footer does no
   assert.match(editMap, /courseCamera\?\.points/);
 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
-  assert.match(map, /initialCamera: holeUpCamera/);
+  assert.match(map, /initialCamera: paintCamera/);
+  assert.match(map, /initialRegion: paintableRegion/);
   assert.doesNotMatch(map, /camera: holeUpCamera/);
-  assert.doesNotMatch(map, /region: lockedRegion/);
+  assert.doesNotMatch(map, /[^l]region: lockedRegion/);
   assert.doesNotMatch(map, /styles\.placeHint/);
   const ready = map.slice(map.indexOf('onMapReady'), map.indexOf('onRegionChangeComplete'));
   assert.match(ready, /if \(framedOnce\.current\) return;/);
   assert.doesNotMatch(ready, /applyLockedCamera/);
-  const settled = map.slice(map.indexOf('const onRegionSettled'), map.indexOf('if (!lockedRegion)'));
+  const settled = map.slice(map.indexOf('const onRegionSettled'), map.indexOf('if (tileMiss'));
   assert.match(settled, /if \(framedOnce\.current\) return;/);
   assert.doesNotMatch(settled, /framedOnce\.current = false/);
   assert.doesNotMatch(
@@ -676,10 +685,11 @@ test('P0: full-bleed MapView has real height under the glass dock; Add shot keep
   assert.equal(CYPRESS_CREEK_CABOT.city, 'Cabot');
   assert.deepEqual(
     REPRO_COURSE_CARDS.map((course) => course.name),
-    ['Magnolia Country Club', 'Cypress Creek'],
+    ['Magnolia Country Club', 'Cypress Creek', 'Mystic Creek'],
   );
+  assert.equal(MYSTIC_CREEK_EL_DORADO.city, 'El Dorado');
 
-  for (const card of [magnoliaHole1Card(), cypressCreekHole1Card()]) {
+  for (const card of [magnoliaHole1Card(), cypressCreekHole1Card(), mysticCreekHole1Card()]) {
     assert.equal(courseCardHoleHasTeeAndGreen(card), true);
     const start = planCourseCardCamera({ tee: card.tee, green: card.green, phone: null });
     const addShot = planCourseCardCamera({ tee: card.tee, green: card.green, phone: null });
@@ -694,6 +704,11 @@ test('P0: full-bleed MapView has real height under the glass dock; Add shot keep
   assert.equal(playGlassDockZeroesMapHeight(), false);
   assert.equal(playMapHostUsesAbsoluteFill(), true);
   assert.equal(holeMapViewUsesAbsoluteFill(), true);
+  assert.equal(holeMapRemountsWhenMapBoxSized(), true);
+  assert.equal(holeMapMountsBeforeMeasured(), false);
+  assert.equal(holeMapCoverLiftsWhenSized(), true);
+  assert.equal(holeMapCoverWaitsOnMapReady(), false);
+  assert.equal(holeMapRequiresLocationPermission(), false);
   assert.equal(addShotKeepsPlayMapHeight(), true);
   assert.equal(addShotOpensOnPlayFrame(), true);
   assert.equal(playDockOverlaysMap(), true);
@@ -714,15 +729,27 @@ test('P0: full-bleed MapView has real height under the glass dock; Add shot keep
   assert.match(map, /bleed: \{\s*\n\s*\.\.\.StyleSheet\.absoluteFill,/);
   assert.match(map, /map: \{\s*\n\s*\.\.\.StyleSheet\.absoluteFill,/);
   assert.match(map, /style=\{\[styles\.map, mapBox,/);
-  assert.match(map, /holeMapShouldMountMapView\(mapBox\)/);
-  assert.match(map, /key=\{`hole-map-\$\{mapBox!\.width\}x\$\{mapBox!\.height\}`\}/);
-  assert.match(map, /holeMapRevealWhenCourseFramePlanned/);
-  assert.match(map, /revealCourseFrameIfPlanned/);
+  assert.match(map, /key=\{mapPaintKey\}/);
+  assert.match(map, /mapCanPaint \? \(/);
+  assert.match(map, /showMapCover \? \(/);
+  assert.match(map, /holeMapShouldMountMap\(\{/);
+  assert.match(map, /initialRegion: paintableRegion/);
+  assert.match(map, /onMapLoaded/);
+  assert.match(map, /holeMapTileMissAfterMs/);
+  assert.match(map, /provider=\{holeMapNativeProvider\(\)\}/);
+  assert.doesNotMatch(map, /PROVIDER_GOOGLE/);
+  assert.doesNotMatch(map, /styles\.mapHidden/);
+  assert.doesNotMatch(map, /opacity: 0/);
   assert.equal(signalLabBlankMapBuild38().remountMapWhenSized, true);
   assert.equal(signalLabBlankMapBuild38().gatesOnLocationPermission, false);
   assert.equal(signalLabBlankMapBuild38().courseCardMissShowsExplicitUi, true);
   assert.equal(signalLabBlankMapBuild38().firstFramePhoneNull, true);
   assert.equal(signalLabBlankMapBuild38().showsUserLocationOnLockFrame, false);
+  assert.equal(signalLabBlankMapBuild39().mountsOnlyWithValidInitialRegion, true);
+  assert.equal(signalLabBlankMapBuild39().coverWaitsOnMapReady, false);
+  assert.equal(signalLabBlankMapBuild39().tileMissAfterSeconds, true);
+  assert.equal(signalLabBlankMapBuild39().iosUsesAppleMaps, true);
+  assert.equal(signalLabBlankMapBuild39().usesGoogleProvider, false);
   assert.match(map, /collapsable=\{false\}/);
   const userLoc = map.slice(map.indexOf('showsUserLocation='), map.indexOf('showsMyLocationButton'));
   assert.match(userLoc, /holeMapUserLocationVisible\(\{/);
@@ -731,7 +758,9 @@ test('P0: full-bleed MapView has real height under the glass dock; Add shot keep
   assert.match(map, /zoomEnabled=\{framedForGestures\}/);
   const fallback = map.slice(map.indexOf('function TrailFallback'), map.indexOf('function NativeHoleMap'));
   assert.match(fallback, /frameMiss/);
+  assert.match(fallback, /tileMiss/);
   assert.match(fallback, /COPY\.courseCardMissingFrame/);
+  assert.match(fallback, /COPY\.courseCardTilesMissing/);
   assert.doesNotMatch(
     fallback.slice(fallback.indexOf('frameMiss'), fallback.indexOf('YardsToGreenBadge')),
     /COPY\.waitingOnLocation/,
