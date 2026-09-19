@@ -128,7 +128,7 @@ test('play map fills at least 60% down to a two-row dock; header is overlay', ()
   assert.deepEqual(layout.dockRows, ['chips', 'actions']);
   assert.equal(playDockRowCount(), 2);
   assert.deepEqual(layout.dockActions, PLAY_DOCK_ACTIONS);
-  assert.deepEqual([...layout.dockActions], ['same_club', 'add_shot', 'scorecard', 'prev', 'next']);
+  assert.deepEqual([...layout.dockActions], ['same_club', 'finish_hole', 'add_shot', 'scorecard', 'prev', 'next']);
   assert.equal(layout.emptyMiddle, false);
   assert.equal(playEmptyMiddle(), false);
   assert.equal(playHeaderEatsMap(), false);
@@ -542,6 +542,7 @@ test('build 32 cook-gate: Menu is a button, All clubs floats, dock matches 31 pi
   assert.doesNotMatch(dock, /COPY\.allClubs/);
   assert.doesNotMatch(dock, /COPY\.sayClub/);
   assert.match(dock, /COPY\.stickyClub/);
+  assert.match(dock, /COPY\.finishHole/);
   assert.match(dock, /COPY\.addShot/);
   assert.match(dock, /COPY\.scorecard/);
   assert.match(dock, /COPY\.prevHole/);

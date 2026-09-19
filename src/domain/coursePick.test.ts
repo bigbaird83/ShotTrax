@@ -113,6 +113,8 @@ test('home cannot start without a pick and has no free-text course start', () =>
   assert.match(findFn, /planNearbyCourseSearch/);
   assert.match(findFn, /searchCourses\(plan\.q\)/);
   assert.match(findFn, /nearbyCourses\(plan\.from\)/);
+  assert.match(findFn, /geocodeUsZip/);
+  assert.match(findFn, /COPY\.zipGeocodeMiss/);
   assert.match(findFn, /COPY\.nearbyNeedsLocation/);
   assert.doesNotMatch(findFn, /nearbyCourses\(await getCurrentFix\(\)\)/);
   assert.doesNotMatch(findFn, /watchFix|Watch GPS|acceptFix/);
@@ -203,6 +205,10 @@ test('distance sort uses a fresh phone fix; missing or stale falls back to name'
     ['zebra', 'middle', 'alpha'],
   );
 
+  assert.deepEqual(planNearbyCourseSearch({ query: '72205', phoneFix: null, nowMs }), {
+    mode: 'zip',
+    zip: '72205',
+  });
   assert.deepEqual(planNearbyCourseSearch({ query: '  magnolia  ', phoneFix: null, nowMs }), {
     mode: 'search',
     q: 'magnolia',

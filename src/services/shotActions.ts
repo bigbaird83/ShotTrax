@@ -2,6 +2,7 @@ import { Alert } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import {
   applyClosedShot,
+  finishHoleChipIn,
   getHole,
   getOpenShotForHole,
   insertNoGpsShot,
@@ -11,6 +12,7 @@ import {
   getShot,
   insertPlacedShot,
   insertPlacedShotAtSeq,
+  listShotsForHole,
   nextShotSeq,
   restoreShotSnapshot,
   sealOpenShotWithoutGps,
@@ -30,6 +32,9 @@ import { homeClubTapRunsAcceptFix, planClubTapAfterChosenFix } from '../domain/h
 import { confirmPlacedShot, placedShotRunsAcceptFix, planPlacedShot } from '../domain/shotSource';
 import type { GpsFix, OpenShot, PenaltyReason } from '../domain/types';
 import { COPY } from '../domain/playerCopy';
+import { finishHoleOnGreen, planFinishHole } from '../domain/finishHole';
+import { lastLandingMark } from '../domain/yardsToGreen';
+import { isValidLatLng } from '../domain/latLng';
 import { acceptFix, forceMark } from '../sensing/api';
 import { getCurrentFix } from './location';
 
@@ -201,6 +206,122 @@ export async function markShotWithClub(
     }
   });
   return { plan, fix };
+}
+
+/**
+ * Finish hole: last GPS mark under the selected club, close the hole.
+ * Same phone/Watch gates as a normal mark. Never invents a putt or green.
+ */
+export async function finishHoleWithClub(
+  db: SQLiteDatabase,
+  args: {
+    roundId: string;
+    holeNumber: number;
+    clubId: string;
+    force?: boolean;
+    watchFix?: GpsFix | null;
+    tee?: { lat: number; lng: number } | null;
+    holePin?: { lat: number; lng: number } | null;
+    holeCount: number;
+  },
+): Promise<{ plan: MarkPlan; fix: GpsFix; finished: boolean; gir: boolean }> {
+  const hole = getHole(db, args.roundId, args.holeNumber);
+  if (!hole) {
+    throw new Error(`Hole ${args.holeNumber} not found`);
+  }
+  if (isPutterClubId(args.clubId)) {
+    throw new Error(COPY.finishHoleNeedsClub);
+  }
+  const fix = await resolveMarkFix(args.watchFix);
+  const holePin =
+    args.holePin ??
+    (hole.greenLat != null && hole.greenLng != null
+      ? { lat: hole.greenLat, lng: hole.greenLng }
+      : null);
+  const tap = planClubTapAfterChosenFix({
+    chosenFix: { lat: fix.lat, lng: fix.lng },
+    tee: args.tee ?? null,
+    holePin,
+  });
+  if (tap?.kind === 'blocked' || tap?.kind === 'tee') {
+    return { plan: { status: 'blocked' }, fix, finished: false, gir: false };
+  }
+
+  const existing = getOpenShotForHole(db, hole.id);
+  const shots = listShotsForHole(db, hole.id);
+  const teeStart = isValidLatLng({ lat: hole.teeLat ?? Number.NaN, lng: hole.teeLng ?? Number.NaN })
+    ? { lat: hole.teeLat!, lng: hole.teeLng! }
+    : null;
+  const priorPin = lastLandingMark(shots) ?? teeStart;
+  const open: OpenShot | null = existing
+    ? existing
+    : priorPin
+      ? {
+          id: 'finish-pending',
+          startLat: priorPin.lat,
+          startLng: priorPin.lng,
+          startFixQuality: null,
+        }
+      : null;
+
+  const onGreen = finishHoleOnGreen({
+    lastMark: { lat: fix.lat, lng: fix.lng },
+    green: holePin,
+    greenDepthYards: hole.greenDepthYards,
+  });
+
+  if (open) {
+    const plan = decide(fix, open, Boolean(args.force));
+    if (plan.status !== 'commit' || !plan.closePrior) {
+      return { plan, fix, finished: false, gir: false };
+    }
+    const creating = !existing;
+    const shotCount = shots.length + (creating ? 1 : 0);
+    const planned = planFinishHole({
+      onGreen,
+      par: hole.par,
+      shotCount,
+      holeNumber: args.holeNumber,
+      holeCount: args.holeCount,
+    });
+    db.withTransactionSync(() => {
+      let close = plan.closePrior!;
+      if (existing) {
+        updateShotClub(db, existing.id, args.clubId);
+      } else {
+        const id = insertOpenShot(db, {
+          holeId: hole.id,
+          clubId: args.clubId,
+          seq: nextShotSeq(db, hole.id),
+          lat: open.startLat,
+          lng: open.startLng,
+          accuracyM: null,
+          startFixQuality: null,
+        });
+        close = { ...close, shotId: id };
+      }
+      applyClosedShot(db, close);
+      finishHoleChipIn(db, hole.id, planned.gir);
+      setRoundLastClub(db, args.roundId, args.clubId);
+    });
+    return { plan, fix, finished: true, gir: planned.gir };
+  }
+
+  const planned = planFinishHole({
+    onGreen,
+    par: hole.par,
+    shotCount: shots.length,
+    holeNumber: args.holeNumber,
+    holeCount: args.holeCount,
+  });
+  finishHoleChipIn(db, hole.id, planned.gir);
+  setRoundLastClub(db, args.roundId, args.clubId);
+  return {
+    plan: { status: 'commit', startFixQuality: null, closePrior: null },
+    fix,
+    finished: true,
+    gir: planned.gir,
+  };
 }
 
 export async function endOpenShot(

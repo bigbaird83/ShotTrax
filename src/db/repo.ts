@@ -109,6 +109,7 @@ type HoleRow = {
   putts: number | null;
   putt_lengths: string | null;
   putts_done: number | null;
+  gir: number | null;
 };
 
 type ShotRow = {
@@ -210,6 +211,7 @@ function mapHole(row: HoleRow): Hole {
     putts: clampPutts(row.putts ?? 0),
     puttLengths: parsePuttLengths(row.putt_lengths),
     puttsDone: (row.putts_done ?? 0) === 1,
+    gir: row.gir == null ? null : row.gir === 1,
   };
 }
 
@@ -665,6 +667,15 @@ export function finishHolePutts(
   const planned = planMadeIt({ putts, lengths });
   if (!planned.ok) return;
   updateHolePutts(db, holeId, planned.putts, planned.lengths, true);
+}
+
+/** Chip-in / hole-out: close the hole with zero putts. Never invents a putt or putt yards. */
+export function finishHoleChipIn(db: SQLiteDatabase, holeId: string, gir: boolean): void {
+  db.runSync('UPDATE holes SET putts = 0, putt_lengths = ?, putts_done = 1, gir = ? WHERE id = ?', [
+    '',
+    gir ? 1 : 0,
+    holeId,
+  ]);
 }
 
 /** Close an open GPS shot without an end pin — never invents coordinates. */

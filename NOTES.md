@@ -26,7 +26,8 @@ Without a key, course search and nearby are disabled and do not call the network
 When a key is present:
 
 - Nearby search is `GET https://golfcoursesapi.com/api/v1/courses?lat=&lng=&radius=` (radius km, max 100). Nearby wakes a **phone** fix — never Watch GPS.
-- Text search is `GET /api/v1/courses?q=` (name, city, state, or zip). Search is text / geocode only — never Watch GPS and never the 15 m / 25 m mark gates.
+- Text search is `GET /api/v1/courses?q=` (name, city, or state). Search is text only — never Watch GPS and never the 15 m / 25 m mark gates.
+- US ZIP / ZIP+4 is detected, geocoded to a point, then nearby (`GET /courses?lat=&lng=&radius=`). Geocode miss is an explicit error — never phone-nearby and never a silent empty list. ShotTraxx does not invent zip coordinates.
 - Course detail is `GET /api/v1/courses/:id` (named teeboxes → par, SI/handicap, hole yardage, rating, slope)
 - Flow: search or nearby → one list with played courses on top → select course → select named tee. Start 9/18 stays off until that pick is real.
 - Green centroids are `GET /api/v1/courses/:id/green-centers` (**Pro/Max**; `403` on free → greens stay blank)

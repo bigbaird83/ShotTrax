@@ -106,7 +106,7 @@ import type { Club, PenaltyReason } from '@/src/domain/types';
 import { lastLandingMark, markToGreen, planPlayHeaderYards, toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
 import { describeGpsSource } from '@/src/services/location';
 import { shareRoundSnapshot } from '@/src/services/shareRound';
-import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, undoShotEdit, deleteHoleShot } from '@/src/services/shotActions';
+import { endOpenShot, markShotWithClub, finishHoleWithClub, promptForPlan, takeDrop, undoLastShot, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, undoShotEdit, deleteHoleShot } from '@/src/services/shotActions';
 import { useLiveFix } from '@/src/services/useLiveFix';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
 import { pushWatchPuttSheet } from '@/src/services/watchClub';
@@ -124,6 +124,7 @@ import { formatShotLockChip } from '@/src/domain/shotLock';
 import { HoleMap } from '@/src/ui/HoleMap';
 import { MarkCheck } from '@/src/ui/MarkCheck';
 import { FullSheet } from '@/src/ui/Sheet';
+import { HowToBody } from '@/src/ui/HowToBody';
 import { PuttSheetBody } from '@/src/ui/PuttSheetBody';
 import { ScorecardBody } from '@/src/ui/ScorecardBody';
 import { COLOR_THEMES, tapTarget, type, type ColorPalette } from '@/src/ui/theme';
@@ -179,6 +180,7 @@ export default function HoleScreen() {
   const [checkNonce, setCheckNonce] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
   const [firstLaunchTipDismissed, setFirstLaunchTipDismissed] = useState(false);
+  const [howToOpen, setHowToOpen] = useState(false);
 
   const round = useMemo(() => getRound(db, id), [db, id, revision]);
   const hole = useMemo(() => getHole(db, id, holeNumber), [db, id, holeNumber, revision]);
@@ -742,6 +744,41 @@ export default function HoleScreen() {
   const onMark = (force = false) => {
     if (!sticky) return Promise.resolve();
     return markClub(sticky, force);
+  };
+
+  const onFinishHole = async (force = false) => {
+    if (readOnly || placing || !sticky || !round) return;
+    if (isPutterClubId(sticky.id)) return;
+    setBusy(true);
+    try {
+      const { plan, finished } = await finishHoleWithClub(db, {
+        roundId: id,
+        holeNumber,
+        clubId: sticky.id,
+        force,
+        tee: holeTee,
+        holeCount: round.holeCount,
+      });
+      const waiting = promptForPlan(plan, () => {
+        void onFinishHole(true);
+      });
+      if (waiting || !finished) return;
+      hapticMark();
+      setCheckNonce((n) => n + 1);
+      setToast(COPY.holedOut);
+      bump();
+      const dest = holeAfterDone(holeNumber, round.holeCount);
+      if (dest.kind === 'summary') {
+        router.replace(`/round/${id}/summary`);
+        return;
+      }
+      router.replace(`/round/${id}/hole/${dest.holeNumber}`);
+    } catch (err) {
+      hapticWarn();
+      Alert.alert('Couldn’t finish hole', err instanceof Error ? err.message : 'Try again.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const dismissScorecard = () => {
@@ -1329,6 +1366,16 @@ export default function HoleScreen() {
                 <MarkCheck nonce={checkNonce} />
               </Pressable>
             ) : null}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={COPY.finishHole}
+              disabled={busy || readOnly || placing || !sticky || isPutterClubId(sticky.id)}
+              onPress={() => void onFinishHole()}
+              style={[styles.dockAction, styles.dockFinish]}>
+              <Text style={styles.dockFinishText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                {COPY.finishHole}
+              </Text>
+            </Pressable>
             {!readOnly ? (
               <Pressable
                 accessibilityRole="button"
@@ -1449,6 +1496,14 @@ export default function HoleScreen() {
             }}
           />
           <BigButton
+            label={COPY.howTo}
+            variant="ghost"
+            onPress={() => {
+              setMenuOpen(false);
+              setHowToOpen(true);
+            }}
+          />
+          <BigButton
             label={COPY.settings}
             variant="ghost"
             onPress={() => {
@@ -1457,6 +1512,10 @@ export default function HoleScreen() {
             }}
           />
         </View>
+      </FullSheet>
+
+      <FullSheet visible={howToOpen} title={COPY.howTo} onClose={() => setHowToOpen(false)}>
+        <HowToBody />
       </FullSheet>
 
       <FullSheet
@@ -2057,6 +2116,13 @@ function makeStyles(colors: ColorPalette) {
     paddingHorizontal: 2,
   },
   dockActionText: { color: colors.cream, fontWeight: '800', fontSize: 11, textAlign: 'center' },
+  dockFinish: { backgroundColor: colors.lime, borderColor: colors.lime },
+  dockFinishText: {
+    color: colors.onAccent,
+    fontWeight: '900',
+    fontSize: 11,
+    textAlign: 'center',
+  },
   dockScorecard: { flexGrow: 1.15, flexShrink: 0, minWidth: 72, paddingHorizontal: 4 },
   dockScorecardText: {
     color: colors.cream,
