@@ -17,6 +17,7 @@ import {
   scanCabotPocket,
   scanCourseCardDetails,
   scanKnownArCourseCards,
+  signalLabBulkCardFailRules,
   tallyCourseCardPaint,
   decideCourseCardPaint,
   dumpHole1PayloadsSideBySide,
@@ -454,4 +455,24 @@ test('Signal Lab side-by-side: thin API vs Magnolia + Camden paint', () => {
   });
   assert.equal(seeded.green, null);
   assert.equal(seeded.greenSource, null);
+});
+
+test('Signal Lab bulk fail rules: null, ~0,0, same-point, or past 700 yd is a miss', () => {
+  const rules = signalLabBulkCardFailRules();
+  assert.equal(rules.missOnNullTeeOrGreen, true);
+  assert.equal(rules.missOnNearZero, true);
+  assert.equal(rules.missOnSamePointFewMeters, true);
+  assert.equal(rules.missOnSpanPast700Yd, true);
+  assert.equal(rules.missNeverGreenVoid, true);
+  assert.equal(rules.docDoesNotSmokeCourses, true);
+
+  const dump = scanKnownArCourseCards();
+  assert.deepEqual(formatCourseCardFailList(dump.failList), [
+    'Cypress Creek (Cabot) — null tee+green',
+    'Greystone Country Club (Cabot) — null tee+green',
+    'Pleasant Valley Country Club (Little Rock) — null tee+green',
+  ]);
+  assert.equal(dump.failCount, 3);
+  assert.equal(dump.paintCount, 2);
+  assert.equal(dump.tally.oneOff, false);
 });

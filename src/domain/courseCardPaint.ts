@@ -175,6 +175,25 @@ export function courseCardAbsurdSpanMountsMapView(): false {
   return false;
 }
 
+/** Signal Lab bulk card fail rules. Miss card — never a green void. */
+export function signalLabBulkCardFailRules(): {
+  missOnNullTeeOrGreen: true;
+  missOnNearZero: true;
+  missOnSamePointFewMeters: true;
+  missOnSpanPast700Yd: true;
+  missNeverGreenVoid: true;
+  docDoesNotSmokeCourses: true;
+} {
+  return {
+    missOnNullTeeOrGreen: true,
+    missOnNearZero: true,
+    missOnSamePointFewMeters: true,
+    missOnSpanPast700Yd: true,
+    missNeverGreenVoid: true,
+    docDoesNotSmokeCourses: true,
+  };
+}
+
 /** Paint bug only when the region looks like a normal hole. */
 export function courseCardPaintOnlyWhenNormalHole(): true {
   return true;
