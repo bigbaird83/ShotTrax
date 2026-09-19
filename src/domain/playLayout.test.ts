@@ -102,6 +102,7 @@ import {
   holeMapRequiresLocationPermission,
   signalLabBlankMapBuild39,
   signalLabCypressBlankMap,
+  signalLabCypressHydrate,
 } from './playLayout';
 import { PHONE_WHEEL_PILL_HEIGHT } from './clubStrip';
 import {
@@ -762,6 +763,10 @@ test('P0: full-bleed MapView has real height under the glass dock; Add shot keep
   assert.equal(signalLabCypressBlankMap().threeBlanksNotOneOff, true);
   assert.equal(signalLabCypressBlankMap().logsFailList, true);
   assert.equal(signalLabCypressBlankMap().doesNotAskDocToSmoke, true);
+  assert.equal(signalLabCypressHydrate().cypressOnly, true);
+  assert.equal(signalLabCypressHydrate().paintsViaHydrateWhenProMisses, true);
+  assert.equal(signalLabCypressHydrate().neverInventFromClubhouse, true);
+  assert.equal(signalLabCypressHydrate().greystoneWestStillMisses, true);
   assert.match(map, /collapsable=\{false\}/);
   const userLoc = map.slice(map.indexOf('showsUserLocation='), map.indexOf('showsMyLocationButton'));
   assert.match(userLoc, /holeMapUserLocationVisible\(\{/);

@@ -3,6 +3,7 @@ import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { prefetchCourseHydrateOnce, resolveHydrateTeeGreen } from '@/src/course/hydrate';
 import { ensureHoleTeeGreen } from '@/src/course/prefetch';
 import {
   cachedOsmOverlay,
@@ -403,7 +404,32 @@ export default function HoleScreen() {
     hole?.greenLat != null && hole.greenLng != null
       ? { lat: hole.greenLat, lng: hole.greenLng }
       : null;
-  const green = isCourseCardLatLng(greenCandidate) ? greenCandidate : null;
+  const proGreen = isCourseCardLatLng(greenCandidate) ? greenCandidate : null;
+  const courseLocation =
+    round?.courseLat != null && round.courseLng != null
+      ? { lat: round.courseLat, lng: round.courseLng }
+      : null;
+  const overlay =
+    osmOverlay ??
+    cachedOsmOverlay({ courseId: round?.courseApiId, holeNumber, green: proGreen });
+  const courseTee = courseTeeFromHole(hole);
+  const overlayTee = resolveOverlayTee(overlay, holeNumber, proGreen);
+  const cachedTee = cachedResolvedTee({ courseId: round?.courseApiId, holeNumber, green: proGreen });
+  const proTee = resolvePlayHoleTee({
+    courseTee,
+    overlayTee,
+    cachedTee,
+    green: proGreen,
+  });
+  const hydrated = resolveHydrateTeeGreen({
+    name: round?.courseName,
+    location: isCourseCardLatLng(courseLocation) ? courseLocation : null,
+    holeNumber,
+    tee: proTee,
+    green: proGreen,
+  });
+  const holeTee = hydrated.tee;
+  const green = hydrated.green;
   const pins = {
     front: pinOrNull(
       hole?.greenFrontLat != null && hole.greenFrontLng != null
@@ -450,25 +476,25 @@ export default function HoleScreen() {
     return { id, label: formatSuggestedClubChip(club?.shortName ?? id, stripPlan.carries[id]) };
   });
   const wheelSelectedId = selectedClubId ?? stripPlan.pickId;
-  const overlay =
-    osmOverlay ??
-    cachedOsmOverlay({ courseId: round?.courseApiId, holeNumber, green });
-  const courseTee = courseTeeFromHole(hole);
-  const overlayTee = resolveOverlayTee(overlay, holeNumber, green);
-  const cachedTee = cachedResolvedTee({ courseId: round?.courseApiId, holeNumber, green });
-  const holeTee = resolvePlayHoleTee({
-    courseTee,
-    overlayTee,
-    cachedTee,
-    green,
-  });
   if (holeTee) {
     rememberResolvedTee({ courseId: round?.courseApiId, holeNumber, green }, holeTee);
   }
   useEffect(() => {
+    prefetchCourseHydrateOnce({
+      name: round?.courseName,
+      location: isCourseCardLatLng(courseLocation) ? courseLocation : null,
+      courseId: round?.courseApiId,
+    });
+  }, [round?.courseName, round?.courseApiId, round?.courseLat, round?.courseLng]);
+  useEffect(() => {
     if (!hole?.id || !holeTee) return;
     saveHoleTee(db, hole.id, holeTee);
   }, [db, hole?.id, holeTee?.lat, holeTee?.lng]);
+  useEffect(() => {
+    if (!hole?.id || !hydrated.usedHydrate || !green) return;
+    if (hole.greenSource === 'user_estimate') return;
+    setHoleGreen(db, hole.id, { ...green, source: 'course_centroid' });
+  }, [db, hole?.id, hole?.greenSource, hydrated.usedHydrate, green?.lat, green?.lng]);
   const courseCardFrame = diagnoseCourseCardFrame({
     tee: holeTee,
     green,
