@@ -41,7 +41,9 @@ test('Signal Lab: play theme swap does not remount the map or re-run the hole ca
   assert.doesNotMatch(playMap, /themeId|high-contrast|playTheme/);
   assert.match(
     playMap,
-    /frameEpoch=\{catchUpFullScreen \? 'catchup' : `play-\$\{hole\.number\}-\$\{playFrameNonce\}`\}/,
+    /frameEpoch=\{playMapFrameEpoch\(\{ holeNumber: hole\.number, nonce: playFrameNonce \}\)\}/,
   );
+  assert.doesNotMatch(playMap, /catchUpFullScreen \? 'catchup'/);
+  assert.doesNotMatch(playMap, /frameEpoch=\{catchUpFullScreen/);
   assert.match(playMap, /showPhonePin=\{!catchUpFullScreen\}/);
 });

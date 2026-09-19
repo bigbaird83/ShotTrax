@@ -326,6 +326,16 @@ export function playDockGlassIgnoresTouches(): true {
   return true;
 }
 
+/** Frost layer is pointerEvents none so pinch can reach the map. */
+export function playDockFrostPointerEvents(): 'none' {
+  return 'none';
+}
+
+/** Add shot keeps the play map instance and the first course-card frame. */
+export function addShotOpensOnPlayFrame(): true {
+  return true;
+}
+
 /** Menu is a button, not lime text, on home and play. */
 export function playMenuIsButton(): true {
   return true;

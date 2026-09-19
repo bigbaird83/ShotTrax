@@ -49,7 +49,7 @@ import { allClubsHref, playHrefAfterHoleChange } from '@/src/domain/playNav';
 import { canAdvanceHole, holesNeedingOpenShots } from '@/src/domain/holeAdvance';
 import { isPutterClubId } from '@/src/domain/defaultBag';
 import { catchUpPinFromTap, planCancelCatchUp, planCatchUpSheet } from '@/src/domain/catchUpMap';
-import { courseTeeFromHole, planCourseCardCamera, resolvePlayHoleTee } from '@/src/domain/holeCamera';
+import { courseTeeFromHole, planCourseCardCamera, playMapFrameEpoch, resolvePlayHoleTee } from '@/src/domain/holeCamera';
 import { deleteShotPrompt } from '@/src/domain/deleteShot';
 import { planInsertSlots } from '@/src/domain/insertShot';
 import { confirmUndoIsLive, planConfirmUndo, type ConfirmUndoWindow } from '@/src/domain/confirmUndo';
@@ -929,7 +929,7 @@ export default function HoleScreen() {
 
   return (
     <View style={styles.fill}>
-      <View style={catchUpFullScreen ? styles.mapWrapFull : styles.mapFill}>
+      <View style={styles.mapFill}>
         <HoleMap
           fullBleed
           holeNumber={hole.number}
@@ -956,7 +956,7 @@ export default function HoleScreen() {
           showPhonePin={!catchUpFullScreen}
           allowMapsChrome={!catchUpFullScreen}
           hideYardsOverlay
-          frameEpoch={catchUpFullScreen ? 'catchup' : `play-${hole.number}-${playFrameNonce}`}
+          frameEpoch={playMapFrameEpoch({ holeNumber: hole.number, nonce: playFrameNonce })}
           onFrameReady={setMapFramed}
           heading={courseCamera?.heading ?? null}
           framePoints={
@@ -1713,7 +1713,6 @@ function makeStyles(colors: ColorPalette) {
   return StyleSheet.create({
   fill: { flex: 1, backgroundColor: colors.bg },
   mapFill: { flex: 1, minHeight: '60%', flexGrow: 1, flexBasis: '60%' },
-  mapWrapFull: { flex: 1, minHeight: 0 },
   catchUpBar: {
     flexDirection: 'row',
     alignItems: 'center',

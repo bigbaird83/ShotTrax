@@ -52,6 +52,39 @@ export function holeCameraLeavesAloneAfterOpen(): true {
   return true;
 }
 
+/** Opening Add shot must not remount MapView or re-run the tee→green camera. */
+export function addShotRemountsCamera(): false {
+  return false;
+}
+
+export function addShotChangesFrameEpoch(): false {
+  return false;
+}
+
+export function addShotReframesAfterOpen(): false {
+  return false;
+}
+
+export function playAndAddShotShareFrameEpoch(): true {
+  return true;
+}
+
+/**
+ * One epoch for round start, hole play, and Add shot.
+ * Menu / scorecard return bumps `nonce`. Add shot does not.
+ */
+export function playMapFrameEpoch(args: { holeNumber: number; nonce: number }): string {
+  return `play-${args.holeNumber}-${args.nonce}`;
+}
+
+/** After the first tee→green apply, pan and pinch stay on. */
+export function holeMapScrollZoomAfterFrame(args: {
+  lockFrame?: boolean;
+  holeCameraReady: boolean;
+}): boolean {
+  return !args.lockFrame || args.holeCameraReady;
+}
+
 export function holeCameraReframesOnGps(): false {
   return false;
 }

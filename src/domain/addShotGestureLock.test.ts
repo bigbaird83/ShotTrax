@@ -3,11 +3,18 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { haversineYards, roundYards } from './haversine';
 import {
+  addShotChangesFrameEpoch,
+  addShotReframesAfterOpen,
+  addShotRemountsCamera,
   holeCameraLeavesAloneAfterOpen,
   holeCameraReframesOnPinch,
   holeCameraReframesOnPinDrag,
   holeCameraReframesOnTwoFingerPan,
+  holeMapScrollZoomAfterFrame,
   holeMapUserLocationVisible,
+  playAndAddShotShareFrameEpoch,
+  playMapFrameEpoch,
+  planCourseCardCamera,
 } from './holeCamera';
 import {
   addShotFollowsUser,
@@ -24,6 +31,7 @@ import {
   addShotShowsUserLocation,
   addShotTwoFingerPanAfterFrame,
   dragOneFingerMovesToPin,
+  dragOverlayPointerEvents,
   dragTwoFingersPanAndZoom,
   liveShotYardsFromThisFromPin,
   liveYardsAfterMapPan,
@@ -31,8 +39,21 @@ import {
   liveYardsUseScreenPixel,
   mapPanChangesLiveYards,
   mapPinchChangesLiveYards,
+  twoFingerOwnsMap,
 } from './placeToDrag';
-import { addShotFollowsUserLocation, addShotHidesUserLocation } from './playLayout';
+import {
+  addShotFollowsUserLocation,
+  addShotHidesUserLocation,
+  addShotOpensOnPlayFrame,
+  playDockFrostPointerEvents,
+  playDockGlassIgnoresTouches,
+  playDockPassesTwoFingerPan,
+} from './playLayout';
+import {
+  formatShotLockChip,
+  shotLockChipUsesCarryAverage,
+  shotLockChipUsesHoleCardYards,
+} from './shotLock';
 
 const from = { lat: 37.0, lng: -122.0 };
 const pin = { lat: 37.001, lng: -122.0 };
@@ -65,9 +86,35 @@ test('Signal Lab: Add shot two-finger pan/pinch after frame leave the camera and
   assert.equal(addShotGesturesRerunCourseCardCamera(), false);
   assert.equal(addShotGesturesLeaveCameraAloneAfterFrame(), true);
   assert.equal(holeCameraLeavesAloneAfterOpen(), true);
+  assert.equal(addShotRemountsCamera(), false);
+  assert.equal(addShotChangesFrameEpoch(), false);
+  assert.equal(addShotReframesAfterOpen(), false);
+  assert.equal(playAndAddShotShareFrameEpoch(), true);
+  assert.equal(addShotOpensOnPlayFrame(), true);
+  assert.equal(playMapFrameEpoch({ holeNumber: 1, nonce: 0 }), 'play-1-0');
+  assert.equal(playMapFrameEpoch({ holeNumber: 1, nonce: 0 }), playMapFrameEpoch({ holeNumber: 1, nonce: 0 }));
+  assert.notEqual(playMapFrameEpoch({ holeNumber: 1, nonce: 0 }), 'catchup');
+  assert.deepEqual(planCourseCardCamera({ tee: from, green, phone }), {
+    points: [from, green],
+    heading: 0,
+  });
+  assert.equal(holeMapScrollZoomAfterFrame({ lockFrame: true, holeCameraReady: true }), true);
+  assert.equal(holeMapScrollZoomAfterFrame({ lockFrame: true, holeCameraReady: false }), false);
+  assert.equal(twoFingerOwnsMap(2), true);
+  assert.equal(twoFingerOwnsMap(1), false);
+  assert.equal(dragOverlayPointerEvents(true), 'none');
+  assert.equal(dragOverlayPointerEvents(false), 'auto');
+  assert.equal(playDockFrostPointerEvents(), 'none');
+  assert.equal(playDockGlassIgnoresTouches(), true);
+  assert.equal(playDockPassesTwoFingerPan(), true);
   assert.equal(holeCameraReframesOnPinDrag(), false);
   assert.equal(holeCameraReframesOnTwoFingerPan(), false);
   assert.equal(holeCameraReframesOnPinch(), false);
+
+  assert.equal(formatShotLockChip({ shortName: '7i', distanceYards: 162 }), '7i · 162');
+  assert.notEqual(formatShotLockChip({ shortName: '7i', distanceYards: 162 }), '7i · 371');
+  assert.equal(shotLockChipUsesHoleCardYards(), false);
+  assert.equal(shotLockChipUsesCarryAverage(), false);
 
   assert.equal(addShotGestureYardsUsePinHaversine(), true);
   assert.equal(addShotGestureYardsUseFingerPixel(), false);
@@ -163,6 +210,31 @@ test('Signal Lab: Add shot two-finger pan/pinch after frame leave the camera and
   assert.match(playMap, /lockFrame/);
   assert.match(playMap, /courseCamera\?\.points/);
   assert.match(playMap, /setPlaceToDraft\(point\)/);
+  assert.match(hole, /<View style=\{styles\.mapFill\}>/);
+  assert.match(
+    playMap,
+    /frameEpoch=\{playMapFrameEpoch\(\{ holeNumber: hole\.number, nonce: playFrameNonce \}\)\}/,
+  );
   assert.doesNotMatch(playMap, /showsUserLocation=\{true\}/);
+  assert.doesNotMatch(playMap, /catchUpFullScreen \? 'catchup'/);
+  assert.doesNotMatch(playMap, /frameEpoch=\{catchUpFullScreen/);
+  assert.doesNotMatch(hole, /catchUpFullScreen \? styles\.mapWrapFull/);
   assert.equal((hole.match(/planCourseCardCamera\(/g) ?? []).length, 1);
+  assert.match(hole, /pointerEvents="none" style=\{styles\.dockGlass\}/);
+  assert.match(hole, /dockPassMap \? 'none' : 'box-none'/);
+  assert.match(hole, /formatShotLockChip/);
+  assert.match(hole, /closePrior\.distanceYards/);
+  assert.match(hole, /placed\.ok \? placed\.distanceYards/);
+  assert.doesNotMatch(
+    hole.slice(hole.indexOf('const chip = formatShotLockChip'), hole.indexOf('const chip = formatShotLockChip') + 220),
+    /hole\.yards|playHeaderYards|typicalCarry/,
+  );
+
+  const camera = readFileSync(new URL('./holeCamera.ts', import.meta.url), 'utf8');
+  const epochFn = camera.slice(
+    camera.indexOf('export function playMapFrameEpoch'),
+    camera.indexOf('export function holeMapScrollZoomAfterFrame'),
+  );
+  assert.match(epochFn, /return `play-\$\{args\.holeNumber\}-\$\{args\.nonce\}`/);
+  assert.doesNotMatch(epochFn, /catchup/);
 });

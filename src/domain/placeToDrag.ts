@@ -80,6 +80,15 @@ export function dragTwoFingersPanAndZoom(): true {
   return true;
 }
 
+/** Second finger yields the overlay so MapView owns the pinch / pan. */
+export function twoFingerOwnsMap(touchCount: number): boolean {
+  return touchCount >= 2;
+}
+
+export function dragOverlayPointerEvents(mapOwnsGesture: boolean): 'none' | 'auto' {
+  return mapOwnsGesture ? 'none' : 'auto';
+}
+
 export function dragKeepsPinchZoom(): true {
   return true;
 }

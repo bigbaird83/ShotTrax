@@ -35,6 +35,12 @@ import {
   openingCameraRequiresTeeAndGreen,
   openingHoleRegionContainsTeeAndGreen,
   planCourseCardCamera,
+  playAndAddShotShareFrameEpoch,
+  playMapFrameEpoch,
+  addShotChangesFrameEpoch,
+  addShotReframesAfterOpen,
+  addShotRemountsCamera,
+  holeMapScrollZoomAfterFrame,
   planHoleCamera,
   regionIsHoleFrame,
   resolveHoleTee,
@@ -76,6 +82,13 @@ test('planCourseCardCamera is tee+green only; phone, house, and a lone pin never
   assert.equal(courseCardCameraWaitsForPhoneFix(), false);
   assert.equal(courseCardCameraUsesPhone(), false);
   assert.equal(courseCardCameraFramesLonePin(), false);
+  assert.equal(addShotRemountsCamera(), false);
+  assert.equal(addShotChangesFrameEpoch(), false);
+  assert.equal(addShotReframesAfterOpen(), false);
+  assert.equal(playAndAddShotShareFrameEpoch(), true);
+  assert.equal(playMapFrameEpoch({ holeNumber: 3, nonce: 2 }), 'play-3-2');
+  assert.notEqual(playMapFrameEpoch({ holeNumber: 3, nonce: 2 }), 'catchup');
+  assert.equal(holeMapScrollZoomAfterFrame({ lockFrame: true, holeCameraReady: true }), true);
 });
 
 test('tee-to-green north puts the green at the top (heading 0)', () => {
