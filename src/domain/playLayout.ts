@@ -469,15 +469,15 @@ export function signalLabCypressBlankMap(): {
 
 /**
  * Doc override: Cypress Creek (Cabot) paints from a real hydrate when Pro
- * tee+green miss. Greystone west + Pleasant Valley stay on the miss card.
- * Never invent from the clubhouse or scorecard yards.
+ * tee+green miss. Greystone (west Cabot) has its own hydrate. Pleasant Valley
+ * stays on the miss card. Never invent from the clubhouse or scorecard yards.
  */
 export function signalLabCypressHydrate(): {
   cypressOnly: true;
   paintsViaHydrateWhenProMisses: true;
   neverInventFromClubhouse: true;
   neverInventFromScorecardYards: true;
-  greystoneWestStillMisses: true;
+  greystoneWestStillMisses: false;
   pleasantValleyStillMisses: true;
   prefetchAllEighteenOnce: true;
   meterUniqueHydrateOnce: true;
@@ -487,7 +487,34 @@ export function signalLabCypressHydrate(): {
     paintsViaHydrateWhenProMisses: true,
     neverInventFromClubhouse: true,
     neverInventFromScorecardYards: true,
-    greystoneWestStillMisses: true,
+    greystoneWestStillMisses: false,
+    pleasantValleyStillMisses: true,
+    prefetchAllEighteenOnce: true,
+    meterUniqueHydrateOnce: true,
+  };
+}
+
+/**
+ * Doc override: Greystone Country Club (Cabot) paints from its OSM hydrate
+ * when Pro tee+green miss. Cypress Creek stays on the Cypress hydrate.
+ * Never invent from the clubhouse or scorecard yards.
+ */
+export function signalLabGreystoneHydrate(): {
+  greystoneCabotOnly: true;
+  paintsViaHydrateWhenProMisses: true;
+  neverInventFromClubhouse: true;
+  neverInventFromScorecardYards: true;
+  cypressStillExclusive: true;
+  pleasantValleyStillMisses: true;
+  prefetchAllEighteenOnce: true;
+  meterUniqueHydrateOnce: true;
+} {
+  return {
+    greystoneCabotOnly: true,
+    paintsViaHydrateWhenProMisses: true,
+    neverInventFromClubhouse: true,
+    neverInventFromScorecardYards: true,
+    cypressStillExclusive: true,
     pleasantValleyStillMisses: true,
     prefetchAllEighteenOnce: true,
     meterUniqueHydrateOnce: true,

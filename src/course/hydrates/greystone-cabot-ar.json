@@ -1,0 +1,244 @@
+{
+  "courseKey": "greystone-cabot-ar",
+  "displayName": "Greystone Country Club",
+  "locality": "Cabot, AR",
+  "source": "osm",
+  "sourceRef": "osm:way/889653505 Greystone Country Club; Signal PASS 2026-09-19; H11 unlabeled green way/889985712 kept (real OSM green ~4.4m from hole end); nearest-tee may be forward/mid (same caveat as Cypress)",
+  "fetchedAt": "2026-09-19T22:38:58Z",
+  "holes": [
+    {
+      "hole": 1,
+      "par": 4,
+      "tee": {
+        "lat": 35.0214267,
+        "lng": -92.0612297,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.0202789,
+        "lng": -92.058169
+      }
+    },
+    {
+      "hole": 2,
+      "par": 3,
+      "tee": {
+        "lat": 35.0206594,
+        "lng": -92.0581283,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.0221226,
+        "lng": -92.0579479
+      }
+    },
+    {
+      "hole": 3,
+      "par": 4,
+      "tee": {
+        "lat": 35.0227127,
+        "lng": -92.0583823,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.023792,
+        "lng": -92.0546442
+      }
+    },
+    {
+      "hole": 4,
+      "par": 4,
+      "tee": {
+        "lat": 35.0239983,
+        "lng": -92.0557048,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.0264458,
+        "lng": -92.0531673
+      }
+    },
+    {
+      "hole": 5,
+      "par": 5,
+      "tee": {
+        "lat": 35.0269943,
+        "lng": -92.0519485,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.0271829,
+        "lng": -92.0469801
+      }
+    },
+    {
+      "hole": 6,
+      "par": 3,
+      "tee": {
+        "lat": 35.0267225,
+        "lng": -92.0459175,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.0284239,
+        "lng": -92.0456366
+      }
+    },
+    {
+      "hole": 7,
+      "par": 4,
+      "tee": {
+        "lat": 35.0277383,
+        "lng": -92.0462538,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.028098,
+        "lng": -92.0507044
+      }
+    },
+    {
+      "hole": 8,
+      "par": 4,
+      "tee": {
+        "lat": 35.028125,
+        "lng": -92.0517823,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.0271701,
+        "lng": -92.0554159
+      }
+    },
+    {
+      "hole": 9,
+      "par": 5,
+      "tee": {
+        "lat": 35.0266224,
+        "lng": -92.0567297,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.0237248,
+        "lng": -92.0611829
+      }
+    },
+    {
+      "hole": 10,
+      "par": 4,
+      "tee": {
+        "lat": 35.0228248,
+        "lng": -92.0635216,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.0200716,
+        "lng": -92.0659709
+      }
+    },
+    {
+      "hole": 11,
+      "par": 4,
+      "tee": {
+        "lat": 35.0198281,
+        "lng": -92.0651982,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.0191851,
+        "lng": -92.0686739
+      }
+    },
+    {
+      "hole": 12,
+      "par": 3,
+      "tee": {
+        "lat": 35.0194868,
+        "lng": -92.0681176,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.0206235,
+        "lng": -92.0687021
+      }
+    },
+    {
+      "hole": 13,
+      "par": 4,
+      "tee": {
+        "lat": 35.020704,
+        "lng": -92.0695245,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.0179662,
+        "lng": -92.0702545
+      }
+    },
+    {
+      "hole": 14,
+      "par": 5,
+      "tee": {
+        "lat": 35.0171994,
+        "lng": -92.0702214,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.0129021,
+        "lng": -92.0701858
+      }
+    },
+    {
+      "hole": 15,
+      "par": 4,
+      "tee": {
+        "lat": 35.0124965,
+        "lng": -92.070321,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.0135104,
+        "lng": -92.0670502
+      }
+    },
+    {
+      "hole": 16,
+      "par": 3,
+      "tee": {
+        "lat": 35.0135012,
+        "lng": -92.0682578,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.0144771,
+        "lng": -92.0689584
+      }
+    },
+    {
+      "hole": 17,
+      "par": 4,
+      "tee": {
+        "lat": 35.0152371,
+        "lng": -92.0688027,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.0172073,
+        "lng": -92.0652724
+      }
+    },
+    {
+      "hole": 18,
+      "par": 5,
+      "tee": {
+        "lat": 35.0173032,
+        "lng": -92.0639258,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.021303,
+        "lng": -92.0632006
+      }
+    }
+  ]
+}

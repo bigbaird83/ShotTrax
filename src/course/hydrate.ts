@@ -4,11 +4,16 @@ import { isCourseCardLatLng, type LatLng } from '../domain/latLng';
 import type { CourseLayoutSeed } from './layout';
 import { rememberResolvedTee } from './osmOverlay';
 import cypressOsm from './hydrates/cypress-creek-cabot-ar.json';
+import greystoneOsm from './hydrates/greystone-cabot-ar.json';
 
 export const CYPRESS_CREEK_CABOT_AR_KEY = 'cypress-creek-cabot-ar';
+export const GREYSTONE_CABOT_AR_KEY = 'greystone-cabot-ar';
 
 /** Clubhouse / course pin only — never a tee or green. */
 export const CYPRESS_CREEK_CLUBHOUSE: LatLng = { lat: 35.027715, lng: -92.031642 };
+
+/** Course-center pin for Greystone (west of Cypress). Never a tee or green. */
+export const GREYSTONE_CABOT_CLUBHOUSE: LatLng = { lat: 35.021, lng: -92.061 };
 
 export type CourseHydrateSource = 'golfapi' | 'osm' | 'manual_verified';
 
@@ -53,7 +58,10 @@ const HYDRATE_SOURCES: CourseHydrateSource[] = ['golfapi', 'osm', 'manual_verifi
 
 const REGISTRY: Record<string, unknown> = {
   [CYPRESS_CREEK_CABOT_AR_KEY]: cypressOsm,
+  [GREYSTONE_CABOT_AR_KEY]: greystoneOsm,
 };
+
+const CLUBHOUSE_PINS: readonly LatLng[] = [CYPRESS_CREEK_CLUBHOUSE, GREYSTONE_CABOT_CLUBHOUSE];
 
 const GOLFAPI_KEY_NAMES = [
   'GOLFAPI_KEY',
@@ -118,7 +126,7 @@ export function hydrateHolePassesGates(hole: {
 /** Clubhouse pin is never a hole end. Nearby real tees/greens are fine. */
 export function isClubhousePin(point: LatLng | null | undefined): boolean {
   if (!isCourseCardLatLng(point)) return false;
-  return haversineYards(point, CYPRESS_CREEK_CLUBHOUSE) < 5;
+  return CLUBHOUSE_PINS.some((pin) => haversineYards(point, pin) < 5);
 }
 
 export function inventGreenFromClubhouse(): false {
@@ -131,7 +139,7 @@ export function inventGreenFromScorecardYards(): false {
 
 /**
  * Cypress Creek Golf Club (Cabot) only.
- * Greystone Country Club (west course) never matches.
+ * Greystone Country Club (west course) never matches this key.
  */
 export function matchesCypressCreekCabot(course: CourseHydrateMatch): boolean {
   if (asString(course.courseKey) === CYPRESS_CREEK_CABOT_AR_KEY) return true;
@@ -158,8 +166,35 @@ export function matchesCypressCreekCabot(course: CourseHydrateMatch): boolean {
   );
 }
 
+/**
+ * Greystone Country Club (Cabot) only — west of Cypress Creek.
+ * "Cypress Creek at Greystone" stays on the Cypress hydrate.
+ */
+export function matchesGreystoneCabot(course: CourseHydrateMatch): boolean {
+  if (asString(course.courseKey) === GREYSTONE_CABOT_AR_KEY) return true;
+  const name = normalizeName(course.name);
+  if (!name) return false;
+  if (/cypress creek/.test(name)) return false;
+  if (!/\bgreystone\b/.test(name)) return false;
+  const bag = [
+    name,
+    normalizeName(course.city),
+    normalizeName(course.state),
+    normalizeName(course.locality),
+  ].join(' ');
+  if (/\bcabot\b/.test(bag)) return true;
+  if (/\bar\b/.test(bag) || /\barkansas\b/.test(bag)) return true;
+  if (isCourseCardLatLng(course.location)) {
+    const yards = haversineYards(course.location, GREYSTONE_CABOT_CLUBHOUSE);
+    if (yards <= 1800) return true;
+  }
+  return false;
+}
+
 export function resolveCourseHydrateKey(course: CourseHydrateMatch): string | null {
-  return matchesCypressCreekCabot(course) ? CYPRESS_CREEK_CABOT_AR_KEY : null;
+  if (matchesCypressCreekCabot(course)) return CYPRESS_CREEK_CABOT_AR_KEY;
+  if (matchesGreystoneCabot(course)) return GREYSTONE_CABOT_AR_KEY;
+  return null;
 }
 
 function parseHydrateHole(raw: unknown): CourseHydrateHole | null {
