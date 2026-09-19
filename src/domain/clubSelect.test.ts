@@ -236,7 +236,7 @@ test("Add shot opening region contains tee and green and does not wait when 282 
   assert.match(map, /showWaitingOnLocationLine/);
   assert.match(map, /!yardsOnCard/);
   assert.match(map, /hideYardsOverlay/);
-  assert.match(map, /holeFrameOnScreen/);
+  assert.match(map, /paintableRegion/);
   assert.match(map, /Never wait on a phone fix/);
   assert.doesNotMatch(map, /styles\.placeHint/);
   const locked = map.slice(map.indexOf('const lockedRegion'), map.indexOf('const dragLines'));

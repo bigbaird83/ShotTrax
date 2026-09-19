@@ -206,7 +206,7 @@ test('P0 third pass: HoleMap remounts once sized, lifts cover, always seeds init
   assert.match(map, /key=\{mapPaintKey\}/);
   assert.match(map, /mapCanPaint \? \(/);
   assert.match(map, /holeMapPaintKey\(mapBox\)/);
-  assert.match(map, /holeMapShouldMount\(mapBox\)/);
+  assert.match(map, /holeMapShouldMountMap\(\{/);
   assert.match(map, /style=\{\[styles\.map, mapBox,/);
   assert.match(map, /bleed: \{\s*\n\s*\.\.\.StyleSheet\.absoluteFill,/);
   assert.match(map, /map: \{\s*\n\s*\.\.\.StyleSheet\.absoluteFill,/);
