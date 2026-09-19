@@ -42,10 +42,32 @@ test('shot trails are dashed, club-tinted, and carry a yard chip', () => {
   });
   assert.ok(trail);
   assert.equal(trail?.chip, '162 yd');
+  assert.notEqual(trail?.chip, '371 yd');
+  assert.notEqual(formatTrailYardChip(162), '371 yd');
   assert.equal(trail?.showQualityBadge, true);
   assert.deepEqual([...trail!.dash], [8, 6]);
   assert.ok(trail && Math.abs(trail.mid.lat - 37.005) < 1e-9);
   assert.doesNotMatch(trail!.tint, /lime|#C8F542/i);
+
+  const forced = planShotTrail({
+    start: { lat: 37, lng: -122 },
+    end: { lat: 37.01, lng: -122 },
+    clubId: 'club_7i',
+    distanceYards: 162,
+    fixQuality: 'forced',
+  });
+  assert.equal(forced?.chip, '162 yd');
+  assert.notEqual(forced?.chip, '371 yd');
+  assert.equal(forced?.showQualityBadge, true);
+
+  const good = planShotTrail({
+    start: { lat: 37, lng: -122 },
+    end: { lat: 37.01, lng: -122 },
+    distanceYards: 162,
+    fixQuality: 'good',
+  });
+  assert.equal(good?.chip, '162 yd');
+  assert.equal(good?.showQualityBadge, false);
 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   assert.match(map, /planShotTrail/);

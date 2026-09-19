@@ -77,6 +77,7 @@ import {
   playHapticsOnShotLock,
   playHapticsOnHoleChange,
   playDockPassesTwoFingerPan,
+  playDockGlassIgnoresTouches,
   PLAY_GLASS_DOCK_LIFT,
   playScorecardWraps,
   playSameClubHiddenUntilShot,
@@ -551,6 +552,7 @@ test('build 35 cook-gate: glass dock, one accent, trails, type, cards, empty, ha
   assert.equal(playHapticsOnShotLock(), true);
   assert.equal(playHapticsOnHoleChange(), true);
   assert.equal(playDockPassesTwoFingerPan(), true);
+  assert.equal(playDockGlassIgnoresTouches(), true);
   assert.ok(PLAY_GLASS_DOCK_LIFT > PLAY_DOCK_ACTION_MIN_HEIGHT);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
@@ -565,6 +567,13 @@ test('build 35 cook-gate: glass dock, one accent, trails, type, cards, empty, ha
 
   assert.match(hole, /colors\.glass/);
   assert.match(hole, /pointerEvents="box-none"/);
+  assert.match(hole, /styles\.dockGlass/);
+  assert.match(hole, /pointerEvents="none" style=\{styles\.dockGlass\}/);
+  assert.match(hole, /pointerEvents="box-none" style=\{styles\.dockRow\}/);
+  assert.match(hole, /touches\.length >= 2/);
+  assert.match(hole, /dockPassMap \? 'none' : 'box-none'/);
+  assert.match(phone, /touches\.length >= 2/);
+  assert.match(phone, /passMap \? 'none' : 'box-none'/);
   assert.match(hole, /position: 'absolute'/);
   assert.match(hole, /PLAY_GLASS_DOCK_LIFT/);
   assert.match(hole, /formatPlayHeaderPrimary/);
@@ -598,4 +607,29 @@ test('build 35 cook-gate: glass dock, one accent, trails, type, cards, empty, ha
   assert.match(watch, /session\.pick\(clubId: club.id\)/);
   assert.doesNotMatch(watch, /DragGesture|clubStripSlideUpConfirmed|session\.select\(club.id\)/);
   assert.match(icon, /locked A5/);
+});
+
+test('Signal Lab: trail chip is logged yards, soft/forced keep a badge, glass dock passes two-finger pan', () => {
+  assert.equal(playDockPassesTwoFingerPan(), true);
+  assert.equal(playDockGlassIgnoresTouches(), true);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const phone = readFileSync(new URL('../ui/ClubStrip.tsx', import.meta.url), 'utf8');
+  const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
+  const badge = readFileSync(new URL('../ui/Badge.tsx', import.meta.url), 'utf8');
+  const dock = hole.slice(hole.indexOf('style={[styles.dock'), hole.indexOf('<FullSheet'));
+  const trailBlock = map.slice(map.indexOf('{closed.map((shot, index)'), map.indexOf('{shots.filter(hasGpsStart)'));
+
+  assert.match(dock, /pointerEvents="none" style=\{styles\.dockGlass\}/);
+  assert.match(dock, /pointerEvents="box-none" style=\{styles\.dockRow\}/);
+  assert.match(dock, /dockPassMap \? 'none' : 'box-none'/);
+  assert.match(dock, /touches\.length >= 2/);
+  assert.match(phone, /touches\.length >= 2/);
+  assert.doesNotMatch(dock, /backgroundColor: colors\.glass/);
+
+  assert.match(trailBlock, /distanceYards: shot\.distanceYards/);
+  assert.match(trailBlock, /fixQuality: shot\.fixQuality/);
+  assert.match(trailBlock, /QualityBadge/);
+  assert.doesNotMatch(trailBlock, /playHeaderYards|hole\.yards|yardsToGreen/);
+  assert.match(badge, /quality === 'soft' \|\| quality === 'forced'/);
 });

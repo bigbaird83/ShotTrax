@@ -129,6 +129,7 @@ export default function HoleScreen() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [playFrameNonce, setPlayFrameNonce] = useState(0);
   const [mapFramed, setMapFramed] = useState(false);
+  const [dockPassMap, setDockPassMap] = useState(false);
   const addShotFromRef = useRef<LatLng | null>(null);
   const [confirmUndo, setConfirmUndo] = useState<ConfirmUndoWindow | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -1168,11 +1169,19 @@ export default function HoleScreen() {
 
       {!hideHoleButtons && (catchUpFullScreen || !courseCamera || mapFramed) ? (
         <View
-          pointerEvents="box-none"
+          pointerEvents={dockPassMap ? 'none' : 'box-none'}
+          onTouchStart={(event) => {
+            if (event.nativeEvent.touches.length >= 2) setDockPassMap(true);
+          }}
+          onTouchEnd={(event) => {
+            if (event.nativeEvent.touches.length === 0) setDockPassMap(false);
+          }}
+          onTouchCancel={() => setDockPassMap(false)}
           style={[styles.dock, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-          <View style={styles.dockRow}>
-            <View style={styles.dockStrip}>
-              <ClubStrip
+          <View pointerEvents="none" style={styles.dockGlass} />
+          <View pointerEvents="box-none" style={styles.dockRow}>
+            <View pointerEvents="box-none" style={styles.dockStrip}>
+              <ClubStrip>
                 items={stripItems}
                 pickId={wheelSelectedId}
                 windowStart={stripPlan.windowStart}
@@ -1186,7 +1195,7 @@ export default function HoleScreen() {
               />
             </View>
           </View>
-          <View style={styles.dockRow}>
+          <View pointerEvents="box-none" style={styles.dockRow}>
             {sticky ? (
               <Pressable
                 accessibilityRole="button"
@@ -1837,12 +1846,15 @@ function makeStyles(colors: ColorPalette) {
     bottom: 0,
     flexGrow: 0,
     flexShrink: 0,
-    backgroundColor: colors.glass,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
     paddingHorizontal: 10,
     paddingTop: 8,
     gap: 8,
+  },
+  dockGlass: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.glass,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
   },
   dockRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'nowrap', gap: 6 },
   dockStrip: { flex: 1, minWidth: 0, height: PHONE_WHEEL_STRIP_HEIGHT },

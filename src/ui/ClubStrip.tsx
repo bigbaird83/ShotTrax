@@ -45,6 +45,7 @@ export function ClubStrip({ items, pickId, windowStart = 0, onPick, disabled, co
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const scrollRef = useRef<ScrollView>(null);
   const [width, setWidth] = useState(0);
+  const [passMap, setPassMap] = useState(false);
   const pillWidth = pillWidthForStrip(width, items.length, compact);
   const loops = items.length > 1 ? LOOP_COPIES : 1;
   const origin = items.length > 1 ? items.length : 0;
@@ -113,8 +114,16 @@ export function ClubStrip({ items, pickId, windowStart = 0, onPick, disabled, co
 
   return (
     <View
+      pointerEvents={passMap ? 'none' : 'box-none'}
       style={[styles.wrap, compact && styles.wrapCompact]}
-      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
+      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+      onTouchStart={(event) => {
+        if (event.nativeEvent.touches.length >= 2) setPassMap(true);
+      }}
+      onTouchEnd={(event) => {
+        if (event.nativeEvent.touches.length === 0) setPassMap(false);
+      }}
+      onTouchCancel={() => setPassMap(false)}>
       {width > 0 ? (
         <ScrollView
           ref={scrollRef}

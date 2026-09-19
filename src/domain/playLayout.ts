@@ -321,6 +321,11 @@ export function playDockPassesTwoFingerPan(): true {
   return true;
 }
 
+/** Frost fill never captures. Only the club pills and dock actions take touches. */
+export function playDockGlassIgnoresTouches(): true {
+  return true;
+}
+
 /** Menu is a button, not lime text, on home and play. */
 export function playMenuIsButton(): true {
   return true;
