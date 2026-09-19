@@ -1,19 +1,31 @@
+import { classifyAccuracyM } from './fixQuality';
 import type { GpsFix } from './types';
 
-/** Signal Lab lock. Stretch only. */
+/** Watch club tap may attach a sample this fresh. Stale → phone fallback. */
 export const WATCH_FIX_MAX_AGE_SEC = 3;
 
+/** Signal Lab: Watch tap uses the same 15 m / 25 m gates as acceptFix. */
+export function watchTapUsesAccuracyGates(): true {
+  return true;
+}
+
+/** Signal Lab: missing / stale / poor Watch falls back to the phone. Never invent. */
+export function watchTapFallsBackToPhone(): true {
+  return true;
+}
+
 /**
- * Stretch: prefer a Watch GPS fix when it is fresh and at least as accurate as the phone.
+ * Watch club tap → Watch GPS only when the sample is fresh and inside the
+ * same 15 m / 25 m gates as acceptFix (good or soft). Phone tap passes no
+ * watchFix and uses the phone. Missing / stale / poor Watch sample falls
+ * back to phone. Never invents a coordinate. The 600-yard tee check runs
+ * on whichever fix is saved.
  *
  * preferWatch = watchFix
  *   && ageSec <= 3
- *   && watch.accuracyM > 0
- *   && (phoneFix == null || watch.accuracyM <= phone.accuracyM)
+ *   && accuracyM > 0
+ *   && classifyAccuracyM(accuracyM) !== 'poor'
  * markFix = preferWatch ? watchFix : phoneFix
- *
- * Never invents a coordinate. Caller still runs acceptFix bands
- * (soft → Approximate; none → wait / Mark anyway).
  */
 export function preferWatchFix(args: {
   watchFix: GpsFix | null;
@@ -24,11 +36,12 @@ export function preferWatchFix(args: {
   const watchFix = args.watchFix;
   const phoneFix = args.phoneFix;
   const ageSec = watchFix != null ? (now - watchFix.timestamp) / 1000 : Number.POSITIVE_INFINITY;
+  const watchClass = watchFix ? classifyAccuracyM(watchFix.accuracyM) : 'poor';
   const preferWatch = Boolean(
     watchFix &&
       ageSec <= WATCH_FIX_MAX_AGE_SEC &&
       Number(watchFix.accuracyM) > 0 &&
-      (phoneFix == null || Number(watchFix.accuracyM) <= Number(phoneFix.accuracyM)),
+      watchClass !== 'poor',
   );
   const markFix = preferWatch ? watchFix : phoneFix;
   return { fix: markFix, usedWatch: preferWatch };

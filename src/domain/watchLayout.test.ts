@@ -142,5 +142,6 @@ test('282 opening window includes Dr; Watch control band is ~40%; round start fr
   assert.match(map, /!yardsOnCard/);
 
   const homeSrc = readFileSync(new URL('../../app/(tabs)/index.tsx', import.meta.url), 'utf8');
-  assert.match(homeSrc, /fillLayoutTeesFromOsm/);
+  assert.match(homeSrc, /prefetchCourseCardInBackground/);
+  assert.doesNotMatch(homeSrc, /fillLayoutTeesFromOsm/);
 });

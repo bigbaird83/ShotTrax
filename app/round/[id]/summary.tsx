@@ -11,6 +11,7 @@ import { lockHoleCamera, resolveHoleTee, shotPinsForHoleCamera } from '@/src/dom
 import { planNerdOut } from '@/src/domain/nerdOut';
 import { formatPenaltyRow, totalPenaltyStrokes } from '@/src/domain/penalty';
 import { COPY } from '@/src/domain/playerCopy';
+import { shareRoundSnapshot } from '@/src/services/shareRound';
 import { reconcileHoleScore } from '@/src/domain/scoreReconcile';
 import { useLiveFix } from '@/src/services/useLiveFix';
 import { BigButton } from '@/src/ui/BigButton';
@@ -166,6 +167,13 @@ export default function RoundSummaryScreen() {
       })}
 
       <BigButton label={COPY.nerdOut} variant="secondary" onPress={() => setNerdOpen(true)} />
+      <BigButton
+        label={COPY.share}
+        variant="secondary"
+        onPress={() => {
+          void shareRoundSnapshot(db, id);
+        }}
+      />
       <BigButton label={COPY.home} variant="ghost" onPress={() => router.replace('/')} />
 
       <FullSheet visible={nerdOpen} title={COPY.nerdOut} onClose={() => setNerdOpen(false)}>

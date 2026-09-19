@@ -3,7 +3,6 @@ import { test } from 'node:test';
 import { DEFAULT_BAG } from './defaultBag';
 import { resolveStickyClub, sameClubNeedsLoggedShot, sameClubVisibleWithoutShot, selectClubForMark } from './stickyClub';
 import type { Club } from './types';
-import { matchSpokenClub } from './voiceClub';
 
 function bag(): Club[] {
   return DEFAULT_BAG.map((club) => ({ ...club, enabled: true }));
@@ -29,10 +28,10 @@ test('sticky club skips a club that was turned off', () => {
   assert.equal(sticky?.id, 'club_8i');
 });
 
-test('voice maps a spoken club for an immediate mark', () => {
+test('tap select marks that club; null does not invent one', () => {
   const clubs = bag();
-  const heard = matchSpokenClub('seven iron', clubs);
-  const selected = selectClubForMark(heard, clubs);
+  const seven = clubs.find((club) => club.id === 'club_7i') ?? null;
+  const selected = selectClubForMark(seven, clubs);
   assert.equal(selected?.id, 'club_7i');
   assert.equal(selectClubForMark(null, clubs), null);
 });

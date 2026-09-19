@@ -3,11 +3,10 @@ import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getCourseDataClient } from '@/src/course/client';
+import { ensureHoleTeeGreen } from '@/src/course/prefetch';
 import {
   cachedOsmOverlay,
   cachedResolvedTee,
-  rememberOsmOverlay,
   rememberResolvedTee,
   resolveOverlayTee,
 } from '@/src/course/osmOverlay';
@@ -96,6 +95,7 @@ import { resolveStickyClub, selectClubForMark } from '@/src/domain/stickyClub';
 import type { Club, PenaltyReason } from '@/src/domain/types';
 import { lastLandingMark, markToGreen, planPlayHeaderYards, toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
 import { describeGpsSource } from '@/src/services/location';
+import { shareRoundSnapshot } from '@/src/services/shareRound';
 import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, undoShotEdit, deleteHoleShot } from '@/src/services/shotActions';
 import { useLiveFix } from '@/src/services/useLiveFix';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
@@ -355,30 +355,29 @@ export default function HoleScreen() {
   }, [confirmUndo, bump]);
 
   useEffect(() => {
-    const location =
+    const greenPin =
       hole?.greenLat != null && hole.greenLng != null
         ? { lat: hole.greenLat, lng: hole.greenLng }
         : null;
-    if (!location) {
-      return;
-    }
+    const courseTee =
+      hole?.teeLat != null && hole.teeLng != null ? { lat: hole.teeLat, lng: hole.teeLng } : null;
     let live = true;
-    void getCourseDataClient()
-      .fetchOsmOverlay({
-        courseId: round?.courseApiId,
-        location,
-        holeNumber,
-        radiusM: 1000,
-      })
-      .then((overlay) => {
-        if (!live || !overlay) return;
-        rememberOsmOverlay(
-          { courseId: round?.courseApiId, holeNumber, green: location },
-          overlay,
-        );
-        const tee = resolveOverlayTee(overlay, holeNumber, location);
-        if (tee) rememberResolvedTee({ courseId: round?.courseApiId, holeNumber, green: location }, tee);
-        setOsmOverlay(overlay);
+    void ensureHoleTeeGreen({
+      courseId: round?.courseApiId,
+      holeNumber,
+      tee: courseTee,
+      green: greenPin,
+      location: greenPin ?? courseTee,
+    })
+      .then((frame) => {
+        if (!live) return;
+        const overlay = cachedOsmOverlay({
+          courseId: round?.courseApiId,
+          holeNumber,
+          green: frame.green,
+        });
+        if (overlay) setOsmOverlay(overlay);
+        if (frame.fetched) setPlayFrameNonce((nonce) => nonce + 1);
       })
       .catch(() => {
         // Keep the last overlay. Do not fall back to the clubhouse / phone.
@@ -386,7 +385,7 @@ export default function HoleScreen() {
     return () => {
       live = false;
     };
-  }, [round?.courseApiId, hole?.greenLat, hole?.greenLng, holeNumber]);
+  }, [round?.courseApiId, hole?.greenLat, hole?.greenLng, hole?.teeLat, hole?.teeLng, holeNumber]);
 
   const green =
     hole?.greenLat != null && hole.greenLng != null
@@ -1350,6 +1349,14 @@ export default function HoleScreen() {
             onPress={() => {
               setMenuOpen(false);
               setScorecardOpen(true);
+            }}
+          />
+          <BigButton
+            label={COPY.share}
+            variant="ghost"
+            onPress={() => {
+              setMenuOpen(false);
+              void shareRoundSnapshot(db, id, { currentHoleNumber: holeNumber });
             }}
           />
           <BigButton

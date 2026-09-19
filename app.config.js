@@ -30,12 +30,17 @@ module.exports = ({ config }) => {
     trimKey(process.env.EXPO_PUBLIC_GOLF_COURSES_API_KEY) ??
     trimKey(extra.golfCoursesApiKey) ??
     null;
+  const shareSyncUrl =
+    trimKey(process.env.EXPO_PUBLIC_SHARE_SYNC_URL) ??
+    trimKey(extra.shareSyncUrl) ??
+    null;
 
   return {
     ...config,
     extra: {
       ...extra,
       golfCoursesApiKey,
+      shareSyncUrl,
     },
   };
 };

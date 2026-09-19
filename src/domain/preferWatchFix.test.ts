@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { SOFT_GPS_MAX_M, SOFT_GPS_MIN_M } from '../config/sensing';
 import { acceptFix } from '../sensing/gates';
-import { preferWatchFix, watchFixFromPick, WATCH_FIX_MAX_AGE_SEC } from './preferWatchFix';
+import { readFileSync } from 'node:fs';
+import { preferWatchFix, watchFixFromPick, watchTapFallsBackToPhone, watchTapUsesAccuracyGates, WATCH_FIX_MAX_AGE_SEC } from './preferWatchFix';
 import type { GpsFix } from './types';
 
 function fix(partial: Partial<GpsFix> & { lat: number; lng: number }): GpsFix {
@@ -15,9 +16,9 @@ function fix(partial: Partial<GpsFix> & { lat: number; lng: number }): GpsFix {
   };
 }
 
-test('prefers a fresh Watch fix that is at least as accurate as the phone', () => {
-  const watch = fix({ lat: 1, lng: 2, accuracyM: 4, timestamp: 1_000_000 });
-  const phone = fix({ lat: 3, lng: 4, accuracyM: 10, timestamp: 1_000_000 });
+test('Watch tap uses a fresh Watch fix even when the phone is more accurate', () => {
+  const watch = fix({ lat: 1, lng: 2, accuracyM: 12, timestamp: 1_000_000 });
+  const phone = fix({ lat: 3, lng: 4, accuracyM: 5, timestamp: 1_000_000 });
   const result = preferWatchFix({ watchFix: watch, phoneFix: phone, nowMs: 1_002_000 });
   assert.equal(result.usedWatch, true);
   assert.equal(result.fix, watch);
@@ -31,10 +32,9 @@ test('falls back to phone when Watch fix is stale', () => {
   assert.equal(result.fix, phone);
 });
 
-test('falls back to phone when Watch accuracy is worse', () => {
-  const watch = fix({ lat: 1, lng: 2, accuracyM: 12, timestamp: 1_000_000 });
+test('phone tap (no Watch sample) uses the phone fix', () => {
   const phone = fix({ lat: 3, lng: 4, accuracyM: 5, timestamp: 1_000_000 });
-  const result = preferWatchFix({ watchFix: watch, phoneFix: phone, nowMs: 1_001_000 });
+  const result = preferWatchFix({ watchFix: null, phoneFix: phone, nowMs: 1_001_000 });
   assert.equal(result.usedWatch, false);
   assert.equal(result.fix, phone);
 });
@@ -47,12 +47,12 @@ test('rejects Watch accuracy of 0 and uses phone', () => {
   assert.equal(result.fix, phone);
 });
 
-test('falls back to phone when phone accuracy is unknown', () => {
+test('Watch tap still uses Watch when phone accuracy is unknown', () => {
   const watch = fix({ lat: 1, lng: 2, accuracyM: 4, timestamp: 1_000_000 });
   const phone = fix({ lat: 3, lng: 4, accuracyM: null, timestamp: 1_000_000 });
   const result = preferWatchFix({ watchFix: watch, phoneFix: phone, nowMs: 1_001_000 });
-  assert.equal(result.usedWatch, false);
-  assert.equal(result.fix, phone);
+  assert.equal(result.usedWatch, true);
+  assert.equal(result.fix, watch);
 });
 
 test('uses Watch when phone fix is missing', () => {
@@ -62,15 +62,7 @@ test('uses Watch when phone fix is missing', () => {
   assert.equal(result.fix, watch);
 });
 
-test('equal accuracy prefers Watch (accuracyM <= phone)', () => {
-  const watch = fix({ lat: 1, lng: 2, accuracyM: 8, timestamp: 1_000_000 });
-  const phone = fix({ lat: 3, lng: 4, accuracyM: 8, timestamp: 1_000_000 });
-  const result = preferWatchFix({ watchFix: watch, phoneFix: phone, nowMs: 1_001_000 });
-  assert.equal(result.usedWatch, true);
-  assert.equal(result.fix, watch);
-});
-
-test('ageSec of exactly 3s still prefers Watch', () => {
+test('ageSec of exactly 3s still uses Watch', () => {
   const watch = fix({ lat: 1, lng: 2, accuracyM: 4, timestamp: 1_000_000 });
   const phone = fix({ lat: 3, lng: 4, accuracyM: 10, timestamp: 1_000_000 });
   const result = preferWatchFix({
@@ -89,7 +81,7 @@ test('no Watch and no phone → markFix is null (never invent)', () => {
   assert.equal(result.fix, null);
 });
 
-test('preferred Watch fix still uses acceptFix bands — soft auto-accepts, poor needs force', () => {
+test('soft Watch (15–25 m) is used; poor Watch (>25 m) falls back to phone', () => {
   const softWatch = fix({ lat: 1, lng: 2, accuracyM: SOFT_GPS_MIN_M, timestamp: 1_000_000 });
   const worsePhone = fix({ lat: 3, lng: 4, accuracyM: SOFT_GPS_MAX_M, timestamp: 1_000_000 });
   const soft = preferWatchFix({ watchFix: softWatch, phoneFix: worsePhone, nowMs: 1_001_000 });
@@ -98,13 +90,55 @@ test('preferred Watch fix still uses acceptFix bands — soft auto-accepts, poor
   assert.equal(softAccept.ok, true);
   if (softAccept.ok) assert.equal(softAccept.fixQuality, 'soft');
 
+  const atSoftMax = preferWatchFix({
+    watchFix: fix({ lat: 1, lng: 2, accuracyM: SOFT_GPS_MAX_M, timestamp: 1_000_000 }),
+    phoneFix: worsePhone,
+    nowMs: 1_001_000,
+  });
+  assert.equal(atSoftMax.usedWatch, true);
+  assert.equal(SOFT_GPS_MAX_M, 25);
+
   const poorWatch = fix({ lat: 1, lng: 2, accuracyM: SOFT_GPS_MAX_M + 1, timestamp: 1_000_000 });
-  const poorerPhone = fix({ lat: 3, lng: 4, accuracyM: 80, timestamp: 1_000_000 });
-  const poor = preferWatchFix({ watchFix: poorWatch, phoneFix: poorerPhone, nowMs: 1_001_000 });
-  assert.equal(poor.usedWatch, true);
-  const poorAccept = acceptFix(poor.fix!);
-  assert.equal(poorAccept.ok, false);
-  if (!poorAccept.ok) assert.equal(poorAccept.reason, 'poor_gps');
+  const goodPhone = fix({ lat: 3, lng: 4, accuracyM: 8, timestamp: 1_000_000 });
+  const poor = preferWatchFix({ watchFix: poorWatch, phoneFix: goodPhone, nowMs: 1_001_000 });
+  assert.equal(poor.usedWatch, false);
+  assert.equal(poor.fix, goodPhone);
+});
+
+test('Signal Lab: Watch tap keeps the 15/25 m gates and phone fallback', () => {
+  assert.equal(watchTapUsesAccuracyGates(), true);
+  assert.equal(watchTapFallsBackToPhone(), true);
+  assert.equal(SOFT_GPS_MIN_M, 15);
+  assert.equal(SOFT_GPS_MAX_M, 25);
+
+  const goodWatch = preferWatchFix({
+    watchFix: fix({ lat: 1, lng: 2, accuracyM: SOFT_GPS_MIN_M - 0.1 }),
+    phoneFix: fix({ lat: 3, lng: 4, accuracyM: 4 }),
+    nowMs: 1_001_000,
+  });
+  assert.equal(goodWatch.usedWatch, true);
+
+  const missingAccuracy = preferWatchFix({
+    watchFix: fix({ lat: 1, lng: 2, accuracyM: null }),
+    phoneFix: fix({ lat: 3, lng: 4, accuracyM: 8 }),
+    nowMs: 1_001_000,
+  });
+  assert.equal(missingAccuracy.usedWatch, false);
+  assert.equal(missingAccuracy.fix?.lat, 3);
+
+  const missingWatch = preferWatchFix({
+    watchFix: null,
+    phoneFix: fix({ lat: 9, lng: 8, accuracyM: 6 }),
+    nowMs: 1_001_000,
+  });
+  assert.equal(missingWatch.usedWatch, false);
+  assert.equal(missingWatch.fix?.lat, 9);
+
+  const actions = readFileSync(new URL('../services/shotActions.ts', import.meta.url), 'utf8');
+  assert.match(actions, /preferWatchFix/);
+  const watch = readFileSync(new URL('../services/watchClub.ts', import.meta.url), 'utf8');
+  assert.match(watch, /watchFixFromPick/);
+  assert.match(watch, /Watch GPS when fresh and within 15\/25 m; phone fallback otherwise/);
 });
 
 test('watchFixFromPick requires lat/lng — never invents a coordinate', () => {

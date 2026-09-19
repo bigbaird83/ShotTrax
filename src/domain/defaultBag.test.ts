@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   clubCountsTowardDistanceSamples,
   DEFAULT_BAG,
+  GAP_WEDGE_CLUB_ID,
   isLegacyStockCarry,
   isPutterClubId,
   LEGACY_STOCK_CARRY_YARDS,
@@ -51,17 +52,17 @@ test('long irons sit between hybrid and 5i in loft and bag order', () => {
   assert.ok(four.sortOrder < five.sortOrder);
 });
 
-test('default bag wedges are PW, 48°, 50°, GW, 56°, 60° — 48/50 are not putters', () => {
+test('default bag wedges are PW, 48°, 50°, 52°, 56°, 60° — club_gw stays Gap Wedge id', () => {
   const byId = new Map(DEFAULT_BAG.map((club) => [club.id, club]));
   assert.equal(byId.get('club_pw')?.shortName, 'PW');
   assert.equal(byId.get('club_pw')?.name, 'Pitching Wedge');
   assert.deepEqual(
     STOCK_WEDGES.map((id) => byId.get(id)?.shortName),
-    ['48°', '50°', 'GW', '56°', '60°'],
+    ['48°', '50°', '52°', '56°', '60°'],
   );
   assert.deepEqual(
     STOCK_WEDGES.map((id) => byId.get(id)?.name),
-    ['48°', '50°', 'Gap Wedge', '56°', '60°'],
+    ['48°', '50°', '52°', '56°', '60°'],
   );
   const pw = byId.get('club_pw');
   const w48 = byId.get('club_48');
@@ -71,6 +72,10 @@ test('default bag wedges are PW, 48°, 50°, GW, 56°, 60° — 48/50 are not pu
   const w60 = byId.get('club_lw');
   const putter = byId.get('club_putter');
   assert.ok(pw && w48 && w50 && gw && w56 && w60 && putter);
+  assert.equal(gw.id, GAP_WEDGE_CLUB_ID);
+  assert.equal(GAP_WEDGE_CLUB_ID, 'club_gw');
+  assert.equal(gw.shortName, '52°');
+  assert.equal(gw.name, '52°');
   assert.ok(pw.loftRank < w48.loftRank);
   assert.ok(w48.loftRank < w50.loftRank);
   assert.ok(w50.loftRank < gw.loftRank);
@@ -80,7 +85,8 @@ test('default bag wedges are PW, 48°, 50°, GW, 56°, 60° — 48/50 are not pu
   assert.equal(isPutterClubId('club_48'), false);
   assert.equal(isPutterClubId('club_50'), false);
   assert.equal(DEFAULT_BAG.filter((club) => club.shortName === 'SW').length, 0);
-  assert.equal(DEFAULT_BAG.filter((club) => club.shortName === '52°').length, 0);
+  assert.equal(DEFAULT_BAG.filter((club) => club.shortName === 'GW').length, 0);
+  assert.equal(DEFAULT_BAG.filter((club) => club.shortName === '52°').length, 1);
 });
 
 test('putter stays in the bag but has no typical-carry seed and is not a distance sample', () => {

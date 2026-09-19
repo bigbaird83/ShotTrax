@@ -99,6 +99,40 @@ test('a Watch pick that shares the phone home location starts at the tee', () =>
   assert.notEqual(tap && 'start' in tap ? tap.start.lat : null, home.lat);
 });
 
+test('on-course Watch pick uses Watch fix then the 600-yard tee check', () => {
+  const watchOnCourse: GpsFix = {
+    lat: onCourse.lat,
+    lng: onCourse.lng,
+    accuracyM: 8,
+    mocked: false,
+    isSimulator: false,
+    timestamp: 1_000_000,
+  };
+  const phoneHome: GpsFix = {
+    lat: home.lat,
+    lng: home.lng,
+    accuracyM: 8,
+    mocked: false,
+    isSimulator: false,
+    timestamp: 1_000_000,
+  };
+  const chosen = preferWatchFix({
+    watchFix: watchOnCourse,
+    phoneFix: phoneHome,
+    nowMs: 1_001_000,
+  });
+  assert.equal(chosen.usedWatch, true);
+  assert.ok(haversineYards(onCourse, tee) < 600);
+  const tap = planClubTapAfterChosenFix({
+    chosenFix: chosen.fix ? { lat: chosen.fix.lat, lng: chosen.fix.lng } : null,
+    tee,
+  });
+  assert.equal(tap?.kind, 'phone');
+  assert.equal(tap?.source, 'gps');
+  assert.equal(tap?.runsAcceptFix, true);
+  assert.deepEqual(tap && 'start' in tap ? tap.start : null, onCourse);
+});
+
 test('on-course chosen fix still runs 15 m good and 25 m soft gates', () => {
   assert.equal(clubTapSkipsOnCourseAccuracyGates(), false);
   assert.equal(SOFT_GPS_MIN_M, 15);

@@ -39,7 +39,7 @@ export function homeClubTapPaths(): readonly [
   return ['same_club', 'all_clubs', 'watch_bag', 'wheel_tap', 'watch_tap'];
 }
 
-/** Prefer Watch vs phone first. The 600-yard check is on that chosen fix. */
+/** Watch tap uses Watch if fresh and within 15/25 m gates. 600-yard check is on that chosen fix. */
 export function clubTapMeasuresChosenFix(): true {
   return true;
 }
@@ -50,7 +50,7 @@ export function clubTapSkipsOnCourseAccuracyGates(): false {
 }
 
 /**
- * Measure the fix we were about to save — after Watch-vs-phone preference.
+ * Measure the fix we were about to save — after Watch-vs-phone choice.
  * Do not invent a coordinate. Do not skip on-course accuracy gates.
  */
 export function planClubTapAfterChosenFix(args: {

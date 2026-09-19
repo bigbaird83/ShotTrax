@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { getCourseDataClient } from '@/src/course/client';
 import { layoutFromTee } from '@/src/course/layout';
-import { fillLayoutTeesFromOsm } from '@/src/course/osmOverlay';
+import { prefetchCourseCardInBackground, rememberLayoutHoles } from '@/src/course/prefetch';
 import type { CourseDetail, CourseSummary, TeeSet } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
 import {
@@ -55,7 +55,11 @@ async function loadLayout(
   tee: TeeSet | null,
 ): Promise<CourseLayoutSeed> {
   const resolved = detail ?? (await getCourseDataClient().getCourse(course.id).catch(() => null));
-  if (resolved) return fillLayoutTeesFromOsm(layoutFromTee(resolved, tee), { timeoutMs: 3500 });
+  if (resolved) {
+    const layout = layoutFromTee(resolved, tee);
+    rememberLayoutHoles(layout);
+    return layout;
+  }
   return {
     apiId: course.id,
     name: course.name,
@@ -125,6 +129,7 @@ export default function HomeScreen() {
     const round = startRound(db, holeCount, course.name, layout);
     bump();
     router.push(playHrefAfterRoundStart(round.id));
+    prefetchCourseCardInBackground(layout);
   };
 
   const commitPick = async (pick: CoursePick) => {
@@ -142,6 +147,7 @@ export default function HomeScreen() {
         attachCourseToRound(db, active.id, pick.course.name, layout);
         bump();
         router.push(playHrefAfterRoundStart(active.id));
+        prefetchCourseCardInBackground(layout);
       } catch (err) {
         Alert.alert('Couldn’t attach course', err instanceof Error ? err.message : 'Try again.');
       } finally {
