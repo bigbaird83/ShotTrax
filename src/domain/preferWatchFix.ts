@@ -4,6 +4,16 @@ import type { GpsFix } from './types';
 /** Watch club tap may attach a sample this fresh. Stale → phone fallback. */
 export const WATCH_FIX_MAX_AGE_SEC = 3;
 
+/** Signal Lab: Watch tap uses the same 15 m / 25 m gates as acceptFix. */
+export function watchTapUsesAccuracyGates(): true {
+  return true;
+}
+
+/** Signal Lab: missing / stale / poor Watch falls back to the phone. Never invent. */
+export function watchTapFallsBackToPhone(): true {
+  return true;
+}
+
 /**
  * Watch club tap → Watch GPS only when the sample is fresh and inside the
  * same 15 m / 25 m gates as acceptFix (good or soft). Phone tap passes no

@@ -61,7 +61,7 @@ test('live share is hole, score, and last closed club·yards — no GPS trail', 
   assert.equal(spectatorKeepsApproximateOnSoftForced(), true);
 
   const live = planSpectatorLive({ holeNumber: 2, score: 3, shots: holes[1].shots });
-  assert.deepEqual(live, { hole: 2, score: 3, lastClubYards: '52° · 105' });
+  assert.deepEqual(live, { hole: 2, score: 3, lastClubYards: `52° · 105 · ${COPY.approximate}` });
   assert.equal(lastClosedClubYards(holes[2].shots), null);
   assert.equal(lastClosedClubYards([shot({ distanceYards: 140, endedAt: null })]), null);
   assert.equal(lastClosedClubYards([shot({ distanceYards: 140, source: 'no_gps' })]), null);
@@ -160,6 +160,48 @@ test('share text is readable without opening a map or granting location', () => 
   assert.match(doneText, /ShotTraxx · Finished/);
   assert.match(doneText, /1  7i · 155  4/);
   assert.match(doneText, new RegExp(`2  52° · 105  3 · ${COPY.approximate}`));
+});
+
+test('Signal Lab: share yards stay logged pin-to-pin with Approximate when soft/forced', () => {
+  assert.equal(spectatorInventsFromCardYards(), false);
+  assert.equal(spectatorKeepsApproximateOnSoftForced(), true);
+
+  const cardOnly: SpectatorHoleInput = {
+    number: 4,
+    score: 5,
+    cardYards: 418,
+    shots: [],
+  };
+  assert.equal(planSpectatorHoleRow(cardOnly).pinToPinYards, null);
+  assert.equal(planSpectatorHoleRow(cardOnly).approximate, false);
+
+  const forced = planSpectatorHoleRow({
+    number: 5,
+    score: 4,
+    cardYards: 390,
+    shots: [shot({ clubShortName: 'Dr', distanceYards: 241, fixQuality: 'forced' })],
+  });
+  assert.equal(forced.pinToPinYards, 241);
+  assert.notEqual(forced.pinToPinYards, 390);
+  assert.equal(forced.approximate, true);
+  assert.match(formatSpectatorHoleLine(forced), /Approximate/);
+
+  const placed = planSpectatorHoleRow({
+    number: 6,
+    score: 3,
+    cardYards: 170,
+    shots: [shot({ clubShortName: '9i', distanceYards: 132, source: 'placed', fixQuality: null })],
+  });
+  assert.equal(placed.pinToPinYards, 132);
+  assert.equal(placed.approximate, false);
+
+  const liveSoft = lastClosedClubYards(holes[1].shots);
+  assert.equal(liveSoft, `52° · 105 · ${COPY.approximate}`);
+  assert.equal(lastClosedClubYards(holes[0].shots), '7i · 155');
+
+  const share = readFileSync(new URL('../services/shareRound.ts', import.meta.url), 'utf8');
+  assert.match(share, /distanceYards: shot\.distanceYards/);
+  assert.doesNotMatch(share, /pinToPinYards: hole\.yards/);
 });
 
 test('share surfaces use the spectator helper and do not upload a live trail', () => {

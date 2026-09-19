@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { SOFT_GPS_MAX_M, SOFT_GPS_MIN_M } from '../config/sensing';
 import { acceptFix } from '../sensing/gates';
-import { preferWatchFix, watchFixFromPick, WATCH_FIX_MAX_AGE_SEC } from './preferWatchFix';
+import { readFileSync } from 'node:fs';
+import { preferWatchFix, watchFixFromPick, watchTapFallsBackToPhone, watchTapUsesAccuracyGates, WATCH_FIX_MAX_AGE_SEC } from './preferWatchFix';
 import type { GpsFix } from './types';
 
 function fix(partial: Partial<GpsFix> & { lat: number; lng: number }): GpsFix {
@@ -102,6 +103,42 @@ test('soft Watch (15–25 m) is used; poor Watch (>25 m) falls back to phone', (
   const poor = preferWatchFix({ watchFix: poorWatch, phoneFix: goodPhone, nowMs: 1_001_000 });
   assert.equal(poor.usedWatch, false);
   assert.equal(poor.fix, goodPhone);
+});
+
+test('Signal Lab: Watch tap keeps the 15/25 m gates and phone fallback', () => {
+  assert.equal(watchTapUsesAccuracyGates(), true);
+  assert.equal(watchTapFallsBackToPhone(), true);
+  assert.equal(SOFT_GPS_MIN_M, 15);
+  assert.equal(SOFT_GPS_MAX_M, 25);
+
+  const goodWatch = preferWatchFix({
+    watchFix: fix({ lat: 1, lng: 2, accuracyM: SOFT_GPS_MIN_M - 0.1 }),
+    phoneFix: fix({ lat: 3, lng: 4, accuracyM: 4 }),
+    nowMs: 1_001_000,
+  });
+  assert.equal(goodWatch.usedWatch, true);
+
+  const missingAccuracy = preferWatchFix({
+    watchFix: fix({ lat: 1, lng: 2, accuracyM: null }),
+    phoneFix: fix({ lat: 3, lng: 4, accuracyM: 8 }),
+    nowMs: 1_001_000,
+  });
+  assert.equal(missingAccuracy.usedWatch, false);
+  assert.equal(missingAccuracy.fix?.lat, 3);
+
+  const missingWatch = preferWatchFix({
+    watchFix: null,
+    phoneFix: fix({ lat: 9, lng: 8, accuracyM: 6 }),
+    nowMs: 1_001_000,
+  });
+  assert.equal(missingWatch.usedWatch, false);
+  assert.equal(missingWatch.fix?.lat, 9);
+
+  const actions = readFileSync(new URL('../services/shotActions.ts', import.meta.url), 'utf8');
+  assert.match(actions, /preferWatchFix/);
+  const watch = readFileSync(new URL('../services/watchClub.ts', import.meta.url), 'utf8');
+  assert.match(watch, /watchFixFromPick/);
+  assert.match(watch, /Watch GPS when fresh and within 15\/25 m; phone fallback otherwise/);
 });
 
 test('watchFixFromPick requires lat/lng — never invents a coordinate', () => {

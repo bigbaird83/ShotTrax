@@ -169,6 +169,47 @@ test('background card prefetch remembers every hole tee+green without a phone fi
   assert.deepEqual(cachedResolvedTee({ courseId: seed.apiId, holeNumber: 2, green: hole2Green }), hole2Tee);
 });
 
+test('Signal Lab: prefetch never blocks hole 1 or falls back to the phone for framing', async () => {
+  assert.equal(startRoundBlocksOnCardPrefetch(), false);
+  assert.equal(cameraFallsBackToPhoneForFraming(), false);
+
+  const missed = await ensureHoleTeeGreen(
+    {
+      courseId: 'phone-frame',
+      holeNumber: 1,
+      tee: null,
+      green: null,
+      location: home,
+    },
+    { fetchOverlay: async () => null },
+  );
+  assert.notDeepEqual(missed.tee, home);
+  assert.notDeepEqual(missed.green, home);
+  assert.equal(missed.tee, null);
+  assert.equal(missed.green, null);
+  assert.equal(
+    cameraFrameFromCache({
+      courseId: 'phone-frame',
+      holeNumber: 1,
+      tee: null,
+      green: null,
+      phone: home,
+    }),
+    null,
+  );
+
+  const homeSrc = readFileSync(new URL('../../app/(tabs)/index.tsx', import.meta.url), 'utf8');
+  const apply = homeSrc.slice(homeSrc.indexOf('const applyPickedCourse'), homeSrc.indexOf('const commitPick'));
+  assert.ok(apply.indexOf('router.push') < apply.indexOf('prefetchCourseCardInBackground'));
+  assert.doesNotMatch(apply, /await prefetchCourseCard/);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const camera = hole.slice(hole.indexOf('const courseCamera ='), hole.indexOf('const addShotFrom ='));
+  assert.match(camera, /planCourseCardCamera/);
+  assert.match(camera, /phone: null/);
+  assert.doesNotMatch(camera, /phone: fix/);
+});
+
 test('hole camera still uses cached tee+green and fetches the current hole only', () => {
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   assert.match(hole, /ensureHoleTeeGreen/);

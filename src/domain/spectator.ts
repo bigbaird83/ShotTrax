@@ -85,7 +85,9 @@ export function lastClosedClubYards(shots: SpectatorShotInput[]): string | null 
   const closed = shots.filter(isClosedDistanceShot);
   if (closed.length === 0) return null;
   const last = closed[closed.length - 1];
-  return formatClubYards(last.clubShortName, last.distanceYards);
+  const line = formatClubYards(last.clubShortName, last.distanceYards);
+  if (!line) return null;
+  return isApproximateQuality(last.fixQuality) ? `${line} · ${COPY.approximate}` : line;
 }
 
 export function lastClosedShot(shots: SpectatorShotInput[]): SpectatorShotInput | null {
