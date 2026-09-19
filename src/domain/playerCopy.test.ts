@@ -102,6 +102,8 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.firstRoundHint, 'Pick a course and start 9 or 18.');
   assert.equal(COPY.nearbyEmpty, 'No courses found.');
   assert.equal(COPY.nearbyEmptyHint, 'Pull to refresh, or search by name, city, state, or zip.');
+  assert.equal(COPY.nearbyNeedsLocation, 'Nearby needs location');
+  assert.equal(COPY.clearSearch, 'Clear search');
   assert.equal(COPY.courseNamePlaceholder, 'Search by name, city, state, or zip');
   assert.equal(COPY.nearbyUnavailable, 'Courses aren’t available right now. Pull to refresh or try again.');
   assert.doesNotMatch(COPY.courseNamePlaceholder, /optional/i);

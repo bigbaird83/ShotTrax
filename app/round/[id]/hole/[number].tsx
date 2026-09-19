@@ -52,12 +52,22 @@ import { canAdvanceHole, holesNeedingOpenShots } from '@/src/domain/holeAdvance'
 import { isPutterClubId } from '@/src/domain/defaultBag';
 import { catchUpPinFromTap, planCancelCatchUp, planCatchUpSheet } from '@/src/domain/catchUpMap';
 import {
+  decideCourseCardPaint,
+  dumpHole1PayloadsSideBySide,
+  logCabotPocket,
+  logCourseCardPaint,
+  logHole1PayloadsSideBySide,
+  scanCabotPocket,
+  showPlayDockForCourseCard,
+} from '@/src/domain/courseCardPaint';
+import {
   courseTeeFromHole,
   diagnoseCourseCardFrame,
   planCourseCardCamera,
   playMapFrameEpoch,
   resolvePlayHoleTee,
 } from '@/src/domain/holeCamera';
+import { isCourseCardLatLng } from '@/src/domain/latLng';
 import { deleteShotPrompt } from '@/src/domain/deleteShot';
 import { planInsertSlots } from '@/src/domain/insertShot';
 import { confirmUndoIsLive, planConfirmUndo, type ConfirmUndoWindow } from '@/src/domain/confirmUndo';
@@ -355,12 +365,14 @@ export default function HoleScreen() {
   }, [confirmUndo, bump]);
 
   useEffect(() => {
-    const greenPin =
+    const greenCandidate =
       hole?.greenLat != null && hole.greenLng != null
         ? { lat: hole.greenLat, lng: hole.greenLng }
         : null;
-    const courseTee =
+    const teeCandidate =
       hole?.teeLat != null && hole.teeLng != null ? { lat: hole.teeLat, lng: hole.teeLng } : null;
+    const greenPin = isCourseCardLatLng(greenCandidate) ? greenCandidate : null;
+    const courseTee = isCourseCardLatLng(teeCandidate) ? teeCandidate : null;
     let live = true;
     void ensureHoleTeeGreen({
       courseId: round?.courseApiId,
@@ -387,10 +399,11 @@ export default function HoleScreen() {
     };
   }, [round?.courseApiId, hole?.greenLat, hole?.greenLng, hole?.teeLat, hole?.teeLng, holeNumber]);
 
-  const green =
+  const greenCandidate =
     hole?.greenLat != null && hole.greenLng != null
       ? { lat: hole.greenLat, lng: hole.greenLng }
       : null;
+  const green = isCourseCardLatLng(greenCandidate) ? greenCandidate : null;
   const pins = {
     front: pinOrNull(
       hole?.greenFrontLat != null && hole.greenFrontLng != null
@@ -466,6 +479,46 @@ export default function HoleScreen() {
     green,
     phone: null,
   });
+  const courseCardPaint = decideCourseCardPaint({
+    tee: holeTee,
+    green,
+    phone: null,
+  });
+  useEffect(() => {
+    logCourseCardPaint({
+      courseName: round?.courseName,
+      holeNumber,
+      decision: courseCardPaint,
+    });
+    if (holeNumber === 1 && /cypress|greystone|pleasant valley/i.test(round?.courseName ?? '')) {
+      const live = { tee: holeTee, green };
+      const name = round?.courseName ?? '';
+      logHole1PayloadsSideBySide(
+        dumpHole1PayloadsSideBySide({
+          cypress: /cypress/i.test(name) ? live : { tee: null, green: null },
+          greystone: /greystone/i.test(name) ? live : { tee: null, green: null },
+          pleasantValley: /pleasant valley/i.test(name) ? live : { tee: null, green: null },
+        }),
+      );
+      logCabotPocket(
+        scanCabotPocket({
+          cypress: /cypress/i.test(name) ? live : { tee: null, green: null },
+          greystone: /greystone/i.test(name) ? live : { tee: null, green: null },
+        }),
+      );
+    }
+  }, [
+    round?.courseName,
+    holeNumber,
+    courseCardPaint.mount,
+    courseCardPaint.reason,
+    courseCardPaint.tee?.lat,
+    courseCardPaint.tee?.lng,
+    courseCardPaint.green?.lat,
+    courseCardPaint.green?.lng,
+    holeTee,
+    green,
+  ]);
   const addShotFrom = resolveAddShotFromPin({
     tee: holeTee,
     lastLanding: lastLandingMark(shots),
@@ -1003,9 +1056,9 @@ export default function HoleScreen() {
           hideYardsOverlay
           frameEpoch={playMapFrameEpoch({ holeNumber: hole.number, nonce: playFrameNonce })}
           onFrameReady={setMapFramed}
-          heading={courseCamera?.heading ?? null}
+          heading={courseCardPaint.mount ? courseCamera?.heading ?? null : null}
           framePoints={
-            courseCardFrame.ok
+            courseCardPaint.mount && courseCardFrame.ok
               ? courseCamera?.points.map((point) => ({
                   latitude: point.lat,
                   longitude: point.lng,
@@ -1209,7 +1262,11 @@ export default function HoleScreen() {
         ) : null}
         {!catchUpFullScreen &&
         !hideHoleButtons &&
-        (!courseCamera || mapFramed) ? (
+        showPlayDockForCourseCard({
+          paintMounts: courseCardPaint.mount,
+          mapFramed,
+          catchUpFullScreen,
+        }) ? (
           <View
             pointerEvents="box-none"
             style={[styles.allClubsFloat, { bottom: PLAY_GLASS_DOCK_LIFT + Math.max(insets.bottom, 8) }]}>
@@ -1226,7 +1283,12 @@ export default function HoleScreen() {
           </View>
         ) : null}
 
-      {!hideHoleButtons && (catchUpFullScreen || !courseCamera || mapFramed) ? (
+      {!hideHoleButtons &&
+      showPlayDockForCourseCard({
+        paintMounts: courseCardPaint.mount,
+        mapFramed,
+        catchUpFullScreen,
+      }) ? (
         <View
           pointerEvents={dockPassMap ? 'none' : 'box-none'}
           onTouchStart={(event) => {
@@ -1508,12 +1570,14 @@ export default function HoleScreen() {
             showPhonePin={false}
             allowMapsChrome
             frameEpoch={`edit-${hole.number}-${editingShot?.id ?? 'none'}`}
-            heading={courseCamera?.heading ?? null}
+            heading={courseCardPaint.mount ? courseCamera?.heading ?? null : null}
             framePoints={
-              courseCamera?.points.map((point) => ({
-                latitude: point.lat,
-                longitude: point.lng,
-              }))
+              courseCardPaint.mount
+                ? courseCamera?.points.map((point) => ({
+                    latitude: point.lat,
+                    longitude: point.lng,
+                  }))
+                : undefined
             }
           />
           <ScrollView contentContainerStyle={styles.sheetPad}>

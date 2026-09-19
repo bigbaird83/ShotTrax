@@ -151,13 +151,13 @@ test('round start, Add shot, and edit all call the same course-card helper', () 
   assert.doesNotMatch(hole, /addShotFramePoints/);
 
   const playMap = hole.slice(hole.indexOf('<HoleMap'), hole.indexOf('onDropGreenEstimate'));
-  assert.match(playMap, /heading=\{courseCamera\?\.heading \?\? null\}/);
+  assert.match(playMap, /heading=\{courseCardPaint\.mount \? courseCamera\?\.heading \?\? null : null\}/);
   assert.match(playMap, /courseCamera\?\.points/);
   assert.match(playMap, /playMapFrameEpoch\(\{ holeNumber: hole\.number, nonce: playFrameNonce \}\)/);
   assert.doesNotMatch(playMap, /catchUpFullScreen \? 'catchup'/);
   assert.doesNotMatch(playMap, /frameEpoch=\{catchUpFullScreen/);
 
   const editMap = hole.slice(hole.indexOf('visible={editOpen && !editClubOpen}'), hole.indexOf('visible={scoreOpen}'));
-  assert.match(editMap, /heading=\{courseCamera\?\.heading \?\? null\}/);
+  assert.match(editMap, /heading=\{courseCardPaint\.mount \? courseCamera\?\.heading \?\? null : null\}/);
   assert.match(editMap, /courseCamera\?\.points/);
 });

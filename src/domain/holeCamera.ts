@@ -1,7 +1,12 @@
 import { METERS_PER_YARD } from '../config/sensing';
 import { planCatchUpFrame, type CatchUpFrameMode } from './catchUpMap';
 import { haversineYards } from './haversine';
-import { isValidLatLng, type LatLng } from './latLng';
+import { isCourseCardLatLng, isValidLatLng, type LatLng } from './latLng';
+
+/** Same point within a few meters — not a hole. */
+export const COURSE_CARD_MIN_HOLE_SPAN_YARDS = 5;
+/** Past about 700 yd is farther than a real hole (clubhouse / two holes). */
+export const COURSE_CARD_MAX_HOLE_SPAN_YARDS = 700;
 
 function toRad(deg: number): number {
   return (deg * Math.PI) / 180;
@@ -161,8 +166,8 @@ export function diagnoseCourseCardFrame(args: {
   phone?: LatLng | null;
 }): CourseCardFrameDiagnosis {
   void args.phone;
-  const tee = isValidLatLng(args.tee) ? args.tee : null;
-  const green = isValidLatLng(args.green) ? args.green : null;
+  const tee = isCourseCardLatLng(args.tee) ? args.tee : null;
+  const green = isCourseCardLatLng(args.green) ? args.green : null;
   if (tee && green) return { ok: true, tee, green, missing: null };
   return {
     ok: false,
@@ -190,6 +195,28 @@ export function diagnoseCourseCardHole(hole: {
  * Phone is ignored. Tee at the bottom, green at the top.
  * Missing tee or green → null. Never a lone pin. Never the house.
  */
+export function courseCardHoleSpanYards(
+  tee: LatLng | null | undefined,
+  green: LatLng | null | undefined,
+): number | null {
+  if (!isValidLatLng(tee) || !isValidLatLng(green)) return null;
+  const span = haversineYards(tee, green);
+  return Number.isFinite(span) ? span : null;
+}
+
+export function courseCardSpanIsSamePoint(span: number | null): boolean {
+  return span != null && span < COURSE_CARD_MIN_HOLE_SPAN_YARDS;
+}
+
+export function courseCardSpanIsAbsurd(span: number | null): boolean {
+  return span != null && span > COURSE_CARD_MAX_HOLE_SPAN_YARDS;
+}
+
+/** Fairway Research: only a normal hole span may paint. */
+export function courseCardSpanLooksLikeHole(span: number | null): boolean {
+  return span != null && !courseCardSpanIsSamePoint(span) && !courseCardSpanIsAbsurd(span);
+}
+
 export function planCourseCardCamera(args: {
   tee: LatLng | null;
   green: LatLng | null;
@@ -198,6 +225,8 @@ export function planCourseCardCamera(args: {
   void args.phone;
   const card = diagnoseCourseCardFrame(args);
   if (!card.ok) return null;
+  const span = courseCardHoleSpanYards(card.tee, card.green);
+  if (!courseCardSpanLooksLikeHole(span)) return null;
   const heading = holeCameraHeading(card.tee, card.green);
   if (heading == null) return null;
   return { points: [card.tee, card.green], heading };

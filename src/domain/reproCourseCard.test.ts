@@ -20,12 +20,19 @@ import {
   playMapHostUsesAbsoluteFill,
 } from './playLayout';
 import {
+  CAMDEN_CC,
   CYPRESS_CREEK_CABOT,
+  CABOT_POCKET_LIVE_CARDS,
+  GREYSTONE_CABOT,
   MAGNOLIA_CC,
   MYSTIC_CREEK_EL_DORADO,
+  PAINTS_REPRO_CARDS,
+  PLEASANT_VALLEY_LITTLE_ROCK,
   REPRO_COURSE_CARDS,
+  camdenHole1Card,
   courseCardHoleHasTeeAndGreen,
   cypressCreekHole1Card,
+  greystoneHole1Card,
   magnoliaHole1Card,
   mysticCreekHole1Card,
 } from './reproCourseCard';
@@ -107,6 +114,33 @@ test('repro cards are Magnolia plus Cypress Creek; missing tee or green never wa
   );
   assert.equal(CYPRESS_CREEK_CABOT.city, 'Cabot');
   assert.equal(CYPRESS_CREEK_CABOT.state, 'AR');
+  assert.equal(CAMDEN_CC.name, 'Camden Country Club');
+  assert.equal(CAMDEN_CC.city, 'Camden');
+  assert.deepEqual(camdenHole1Card(), {
+    tee: CAMDEN_CC.hole1.tee,
+    green: CAMDEN_CC.hole1.green,
+  });
+  assert.equal(courseCardHoleHasTeeAndGreen(CAMDEN_CC.hole1), true);
+  assert.deepEqual(
+    PAINTS_REPRO_CARDS.map((course) => course.name),
+    ['Magnolia Country Club', 'Camden Country Club'],
+  );
+  assert.equal(GREYSTONE_CABOT.name, 'Greystone Country Club');
+  assert.equal(GREYSTONE_CABOT.city, 'Cabot');
+  assert.deepEqual(
+    CABOT_POCKET_LIVE_CARDS.map((course) => `${course.name}:${course.city}`),
+    ['Cypress Creek:Cabot', 'Greystone Country Club:Cabot'],
+  );
+  assert.equal(CABOT_POCKET_LIVE_CARDS.every((course) => course.hole1.tee == null && course.hole1.green == null), true);
+  assert.deepEqual(greystoneHole1Card(), {
+    tee: GREYSTONE_CABOT.hole1.tee,
+    green: GREYSTONE_CABOT.hole1.green,
+  });
+  assert.equal(courseCardHoleHasTeeAndGreen(GREYSTONE_CABOT.hole1), true);
+  assert.equal(PLEASANT_VALLEY_LITTLE_ROCK.name, 'Pleasant Valley Country Club');
+  assert.equal(PLEASANT_VALLEY_LITTLE_ROCK.city, 'Little Rock');
+  assert.equal(PLEASANT_VALLEY_LITTLE_ROCK.hole1.tee, null);
+  assert.equal(PLEASANT_VALLEY_LITTLE_ROCK.hole1.green, null);
   assert.equal(MYSTIC_CREEK_EL_DORADO.city, 'El Dorado');
   assert.deepEqual(cypressCreekHole1Card(), {
     tee: CYPRESS_CREEK_CABOT.hole1.tee,

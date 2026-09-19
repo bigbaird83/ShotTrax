@@ -37,14 +37,28 @@ function pick(record: Record<string, unknown>, keys: string[]): unknown {
   return undefined;
 }
 
+/**
+ * Parse a numeric pair. `[lat, lng]` first; GeoJSON Position `[lng, lat]`
+ * when the first number cannot be a latitude (|lng| > 90).
+ */
+function parseCoordPair(first: number, second: number): LatLng | null {
+  const asLatLng = { lat: first, lng: second };
+  if (isValidLatLng(asLatLng)) return asLatLng;
+  const asLngLat = { lat: second, lng: first };
+  if (Math.abs(first) > 90 && Math.abs(second) <= 90 && isValidLatLng(asLngLat)) {
+    return asLngLat;
+  }
+  return null;
+}
+
 /** Parse a lat/lng pair. Returns null instead of inventing a pin. */
 export function parseLatLng(raw: unknown): LatLng | null {
   if (raw == null) return null;
   if (Array.isArray(raw) && raw.length >= 2) {
-    const lat = asFiniteNumber(raw[0]);
-    const lng = asFiniteNumber(raw[1]);
-    const point = lat != null && lng != null ? { lat, lng } : null;
-    return isValidLatLng(point) ? point : null;
+    const first = asFiniteNumber(raw[0]);
+    const second = asFiniteNumber(raw[1]);
+    if (first == null || second == null) return null;
+    return parseCoordPair(first, second);
   }
   const record = asRecord(raw);
   if (record) {
@@ -128,7 +142,15 @@ export function parseGreenCentroid(raw: unknown): LatLng | null {
   const record = asRecord(raw);
   if (!record) return parseLatLng(raw);
   const nested = parseLatLng(
-    pick(record, ['green', 'green_center', 'greenCenter', 'centroid', 'green_centroid']),
+    pick(record, [
+      'green',
+      'green_center',
+      'greenCenter',
+      'green_location',
+      'greenLocation',
+      'centroid',
+      'green_centroid',
+    ]),
   );
   if (nested) return nested;
   const lat = asFiniteNumber(pick(record, ['green_lat', 'greenLat', 'green_latitude']));
@@ -145,7 +167,18 @@ export function parseHoleTee(raw: unknown): LatLng | null {
   const record = asRecord(raw);
   if (!record) return null;
   const nested = parseLatLng(
-    pick(record, ['tee', 'tee_center', 'teeCenter', 'tee_centroid', 'teebox', 'tee_box']),
+    pick(record, [
+      'tee',
+      'tee_center',
+      'teeCenter',
+      'tee_centroid',
+      'tee_location',
+      'teeLocation',
+      'teebox',
+      'tee_box',
+      'teebox_center',
+      'teeboxCenter',
+    ]),
   );
   if (nested) return nested;
   const lat = asFiniteNumber(pick(record, ['tee_lat', 'teeLat', 'tee_latitude']));
@@ -329,11 +362,16 @@ export type GreenCenterRow = {
 export function parseGreenCenters(json: unknown): GreenCenterRow[] {
   const payload = unwrapData(json);
   const record = asRecord(payload);
+  const fromNamed =
+    record &&
+    (pick(record, ['green_centers', 'greenCenters', 'greens', 'green_center', 'greenCentersList']));
   const rows = Array.isArray(payload)
     ? payload
-    : record
-      ? findHolesArray(record)
-      : [];
+    : Array.isArray(fromNamed)
+      ? fromNamed
+      : record
+        ? findHolesArray(record)
+        : [];
   const out: GreenCenterRow[] = [];
   for (const item of rows) {
     const holeNumber = parseHoleNumber(item);

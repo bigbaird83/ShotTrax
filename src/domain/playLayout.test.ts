@@ -101,6 +101,7 @@ import {
   holeMapRemountsWhenMapBoxSized,
   holeMapRequiresLocationPermission,
   signalLabBlankMapBuild39,
+  signalLabCypressBlankMap,
 } from './playLayout';
 import { PHONE_WHEEL_PILL_HEIGHT } from './clubStrip';
 import {
@@ -268,7 +269,7 @@ test('Add shot, play, and edit open hole-up once; map chip stays, footer does no
   assert.doesNotMatch(hole, /lockHoleCamera/);
   assert.match(hole, /styles\.catchUpHint/);
   assert.match(hole, /placeHint=\{placeHint\}/);
-  assert.match(hole, /heading=\{courseCamera\?\.heading \?\? null\}/);
+  assert.match(hole, /heading=\{courseCardPaint\.mount \? courseCamera\?\.heading \?\? null : null\}/);
   assert.doesNotMatch(hole, /heading=\{fix|deviceHeading|compass/);
 
   const playMap = hole.slice(hole.indexOf('<HoleMap'), hole.indexOf('onDropGreenEstimate'));
@@ -279,7 +280,7 @@ test('Add shot, play, and edit open hole-up once; map chip stays, footer does no
   const editMap = hole.slice(hole.indexOf('visible={editOpen && !editClubOpen}'), hole.indexOf('visible={scoreOpen}'));
   assert.match(editMap, /<HoleMap/);
   assert.match(editMap, /lockFrame/);
-  assert.match(editMap, /heading=\{courseCamera\?\.heading \?\? null\}/);
+  assert.match(editMap, /heading=\{courseCardPaint\.mount \? courseCamera\?\.heading \?\? null : null\}/);
   assert.match(editMap, /courseCamera\?\.points/);
 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
@@ -306,7 +307,8 @@ test('opening, Prev/Next, and Scorecard or Menu return reframe before the dock c
   assert.match(hole, /bumpPlayFrame/);
   assert.match(hole, /dismissScorecard/);
   assert.match(hole, /goToHole/);
-  assert.match(hole, /!hideHoleButtons && \(catchUpFullScreen \|\| !courseCamera \|\| mapFramed\)/);
+  assert.match(hole, /showPlayDockForCourseCard\(\{/);
+  assert.match(hole, /paintMounts: courseCardPaint\.mount/);
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   assert.match(map, /onFrameReady/);
   assert.match(map, /styles\.userDot/);
@@ -497,12 +499,12 @@ test('round start and Add shot both call the same helper and frame tee+green wit
   assert.doesNotMatch(hole, /planHoleCamera/);
 
   const playMap = hole.slice(hole.indexOf('<HoleMap'), hole.indexOf('onDropGreenEstimate'));
-  assert.match(playMap, /heading=\{courseCamera\?\.heading \?\? null\}/);
+  assert.match(playMap, /heading=\{courseCardPaint\.mount \? courseCamera\?\.heading \?\? null : null\}/);
   assert.match(playMap, /courseCamera\?\.points/);
   assert.doesNotMatch(playMap, /holeCamera|addShotPoints|getCurrentFix/);
 
   const editMap = hole.slice(hole.indexOf('visible={editOpen && !editClubOpen}'), hole.indexOf('visible={scoreOpen}'));
-  assert.match(editMap, /heading=\{courseCamera\?\.heading \?\? null\}/);
+  assert.match(editMap, /heading=\{courseCardPaint\.mount \? courseCamera\?\.heading \?\? null : null\}/);
   assert.match(editMap, /courseCamera\?\.points/);
   assert.doesNotMatch(editMap, /holeCamera|lockHoleCamera/);
 });
@@ -744,6 +746,22 @@ test('P0: full-bleed MapView has real height under the glass dock; Add shot keep
   assert.equal(signalLabBlankMapBuild39().alwaysPassesInitialRegion, true);
   assert.equal(signalLabBlankMapBuild39().coverLiftsWhenSized, true);
   assert.equal(signalLabBlankMapBuild39().addShotDoesNotRemountSizedMap, true);
+  assert.equal(signalLabCypressBlankMap().missDoesNotMountMapView, true);
+  assert.equal(signalLabCypressBlankMap().playDockOnMiss, true);
+  assert.equal(signalLabCypressBlankMap().magnoliaStillPaints, true);
+  assert.equal(signalLabCypressBlankMap().camdenStillPaints, true);
+  assert.equal(signalLabCypressBlankMap().cypressSpecific, false);
+  assert.equal(signalLabCypressBlankMap().cabotPocket, true);
+  assert.equal(signalLabCypressBlankMap().checksCypressAndGreystoneTogether, true);
+  assert.equal(signalLabCypressBlankMap().sideBySideMagnoliaCamdenCypress, true);
+  assert.equal(signalLabCypressBlankMap().missWhenSamePoint, true);
+  assert.equal(signalLabCypressBlankMap().missWhenAbsurdSpan, true);
+  assert.equal(signalLabCypressBlankMap().paintOnlyWhenNormalHole, true);
+  assert.equal(signalLabCypressBlankMap().logsFailVsPaintCount, true);
+  assert.equal(signalLabCypressBlankMap().blanksCypressGreystonePleasantValley, true);
+  assert.equal(signalLabCypressBlankMap().threeBlanksNotOneOff, true);
+  assert.equal(signalLabCypressBlankMap().logsFailList, true);
+  assert.equal(signalLabCypressBlankMap().doesNotAskDocToSmoke, true);
   assert.match(map, /collapsable=\{false\}/);
   const userLoc = map.slice(map.indexOf('showsUserLocation='), map.indexOf('showsMyLocationButton'));
   assert.match(userLoc, /holeMapUserLocationVisible\(\{/);
@@ -753,8 +771,10 @@ test('P0: full-bleed MapView has real height under the glass dock; Add shot keep
   const fallback = map.slice(map.indexOf('function TrailFallback'), map.indexOf('function NativeHoleMap'));
   assert.match(fallback, /frameMiss/);
   assert.match(fallback, /COPY\.courseCardMissingFrame/);
+  assert.match(fallback, /styles\.missCard/);
+  assert.match(fallback, /course-card-miss/);
   assert.doesNotMatch(
-    fallback.slice(fallback.indexOf('frameMiss'), fallback.indexOf('YardsToGreenBadge')),
+    fallback.slice(fallback.indexOf('if (frameMiss)'), fallback.indexOf('YardsToGreenBadge')),
     /COPY\.waitingOnLocation/,
   );
 });

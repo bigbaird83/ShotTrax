@@ -410,6 +410,64 @@ export function signalLabBlankMapBuild39(): {
 }
 
 /**
+ * Signal Lab — thin course-card tier (not a remount/paint bug).
+ * PAINTS: Magnolia CC, Camden CC.
+ * BLANKS: Cypress Creek (Cabot), Greystone (Cabot), Pleasant Valley (Little Rock).
+ * Three blanks — not a one-off. Miss card first. Fail-count logging.
+ */
+export function signalLabCypressBlankMap(): {
+  logsHole1TeeGreen: true;
+  sideBySideMagnoliaCamdenCypress: true;
+  cypressSpecific: false;
+  cabotPocket: true;
+  checksCypressAndGreystoneTogether: true;
+  thinApiShowsMissAndFailCount: true;
+  missWhenTeeOrGreenMissing: true;
+  missWhenNearZero: true;
+  missWhenSamePoint: true;
+  missWhenAbsurdSpan: true;
+  paintOnlyWhenNormalHole: true;
+  missWhenCameraNull: true;
+  missDoesNotMountMapView: true;
+  neverInventGreenFromCenter: true;
+  magnoliaStillPaints: true;
+  camdenStillPaints: true;
+  playDockOnMiss: true;
+  logsFailVsPaintCount: true;
+  blanksCypressGreystonePleasantValley: true;
+  threeBlanksNotOneOff: true;
+  logsFailList: true;
+  doesNotAskDocToSmoke: true;
+  osmNeverSeedsCourseCardGreen: true;
+} {
+  return {
+    logsHole1TeeGreen: true,
+    sideBySideMagnoliaCamdenCypress: true,
+    cypressSpecific: false,
+    cabotPocket: true,
+    checksCypressAndGreystoneTogether: true,
+    thinApiShowsMissAndFailCount: true,
+    missWhenTeeOrGreenMissing: true,
+    missWhenNearZero: true,
+    missWhenSamePoint: true,
+    missWhenAbsurdSpan: true,
+    paintOnlyWhenNormalHole: true,
+    missWhenCameraNull: true,
+    missDoesNotMountMapView: true,
+    neverInventGreenFromCenter: true,
+    magnoliaStillPaints: true,
+    camdenStillPaints: true,
+    playDockOnMiss: true,
+    logsFailVsPaintCount: true,
+    blanksCypressGreystonePleasantValley: true,
+    threeBlanksNotOneOff: true,
+    logsFailList: true,
+    doesNotAskDocToSmoke: true,
+    osmNeverSeedsCourseCardGreen: true,
+  };
+}
+
+/**
  * Signal Lab build 36 — Add shot gesture lock.
  * 1. First frame is course tee + green center only.
  * 2. After that, do not reframe.

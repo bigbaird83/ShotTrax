@@ -196,7 +196,7 @@ test("Add shot opening region contains tee and green and does not wait when 282 
   assert.equal(addShotShowsWaitingWithCardYards(), false);
   assert.equal(addShotShowsWaitingOnLocation(), false);
   const tee = { lat: 37.0, lng: -122.0 };
-  const green = { lat: 37.01, lng: -122.0 };
+  const green = { lat: 37.0036, lng: -122.0 };
   const home = { lat: 40.7128, lng: -74.006 };
   const camera = planCourseCardCamera({ tee, green, phone: null });
   const fromHome = planCourseCardCamera({ tee, green, phone: home });
@@ -214,7 +214,7 @@ test("Add shot opening region contains tee and green and does not wait when 282 
   const playMap = hole.slice(hole.indexOf('<HoleMap'), hole.indexOf('onDropGreenEstimate'));
   assert.match(playMap, /lockFrame/);
   assert.match(playMap, /framePoints=/);
-  assert.match(playMap, /heading=\{courseCamera\?\.heading/);
+  assert.match(playMap, /heading=\{courseCardPaint\.mount \? courseCamera\?\.heading/);
   assert.match(playMap, /showPhonePin=\{!catchUpFullScreen\}/);
   assert.match(playMap, /userFix=\{catchUpFullScreen \? null : fix\}/);
   assert.match(playMap, /courseCamera\?\.points/);

@@ -129,7 +129,7 @@ test('282 opening window includes Dr; Watch control band is ~40%; round start fr
   assert.doesNotMatch(hole, /addShotFramePoints/);
   const playMap = hole.slice(hole.indexOf('<HoleMap'), hole.indexOf('onDropGreenEstimate'));
   assert.match(playMap, /courseCamera\?\.points/);
-  assert.match(playMap, /heading=\{courseCamera\?\.heading/);
+  assert.match(playMap, /heading=\{courseCardPaint\.mount \? courseCamera\?\.heading/);
   assert.doesNotMatch(playMap, /holeCamera\?\.points/);
   assert.doesNotMatch(playMap, /getCurrentFix/);
 
