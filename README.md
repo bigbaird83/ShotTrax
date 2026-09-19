@@ -116,7 +116,7 @@ eas submit -p ios
 
 | Permission | When |
 | --- | --- |
-| **Location When In Use** | Nearby courses, yards to green, and club-pick shot marks while the app is open. ShotTraxx does not invent coordinates. Watch location marks a Watch club tap (phone fallback if that sample is missing or stale). Nearby stays phone-only. The `expo-location` plugin sets Always / background / motion purpose keys to `false` so prebuild does not inject them. |
+| **Location When In Use** | Nearby courses, yards to green, and club-pick shot marks while the app is open. ShotTraxx does not invent coordinates. Watch location marks a Watch club tap (phone fallback if that sample is missing or stale). Nearby stays phone-only. The `expo-location` plugin sets Always / background / motion purpose keys to `false` so prebuild does not inject them. `motionUsagePermission: false` alone still compiles ExpoLocation's CoreMotion activity APIs (ITMS-90683). `./plugins/withDisableExpoLocationMotion` strips that linkage from the shipping iOS binary. Do not add a dead `NSMotionUsageDescription`. |
 | **Photo Library** (iOS) | Not used. `NSPhotoLibraryUsageDescription` and `NSPhotoLibraryAddUsageDescription` are in the plist so App Store review (ITMS-90683) can ship. Photos prompts stay out of scope. |
 
 Not in this IPA (and not in the plist): Always location, Bluetooth, motion, microphone, speech recognition, Watch mic. Watch Connectivity does not need Bluetooth purpose strings.
