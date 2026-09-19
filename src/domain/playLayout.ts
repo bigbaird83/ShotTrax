@@ -385,6 +385,29 @@ export function signalLabAddShotGestureLock(): {
   };
 }
 
+/**
+ * Signal Lab build 38 — blank map second pass.
+ * 1. Remount MapView once mapBox has a real size (zero-height first mount never paints tiles).
+ * 2. Never gate the map on location permission.
+ * 3. planCourseCardCamera null → explicit miss UI, not an endless green cover.
+ * 4. First frame is course tee+green, phone:null, showsUserLocation off.
+ */
+export function signalLabBlankMapBuild38(): {
+  remountMapWhenSized: true;
+  gatesOnLocationPermission: false;
+  courseCardMissShowsExplicitUi: true;
+  firstFramePhoneNull: true;
+  showsUserLocationOnLockFrame: false;
+} {
+  return {
+    remountMapWhenSized: true,
+    gatesOnLocationPermission: false,
+    courseCardMissShowsExplicitUi: true,
+    firstFramePhoneNull: true,
+    showsUserLocationOnLockFrame: false,
+  };
+}
+
 /** Menu is a button, not lime text, on home and play. */
 export function playMenuIsButton(): true {
   return true;

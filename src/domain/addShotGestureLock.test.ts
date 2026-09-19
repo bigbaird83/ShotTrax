@@ -285,7 +285,7 @@ test('Signal Lab: course-card first frame, then leave camera alone; scroll/zoom 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const mapFill = hole.slice(hole.indexOf('mapFill:'), hole.indexOf('catchUpBar:'));
   assert.match(mapFill, /StyleSheet\.absoluteFill/);
-  assert.match(mapFill, /minHeight: '60%'/);
+  assert.match(mapFill, /minHeight: 0/);
   assert.match(hole, /const courseCamera = planCourseCardCamera\(\{[\s\S]*?tee: holeTee,[\s\S]*?green,[\s\S]*?phone: null,/);
   assert.match(hole, /pointerEvents="none" style=\{styles\.dockGlass\}/);
   assert.doesNotMatch(hole, /pointerEvents=\{[^}]*styles\.dockGlass/);

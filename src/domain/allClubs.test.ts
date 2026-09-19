@@ -29,7 +29,7 @@ import {
   playSameClubSitsUnderWheel,
 } from './playLayout';
 
-test('phone wheel pill is taller than the Watch pill; map stays at least 60%', () => {
+test('phone wheel pill is taller than the Watch pill; map host fills under the glass dock', () => {
   assert.equal(phoneWheelPillTallerThanWatch(), true);
   assert.equal(phoneWheelLargerThanBuild31(), true);
   assert.ok(PHONE_WHEEL_PILL_HEIGHT > WATCH_WHEEL_PILL_HEIGHT);
@@ -54,8 +54,8 @@ test('phone wheel pill is taller than the Watch pill; map stays at least 60%', (
   const dock = hole.slice(hole.indexOf('style={[styles.dock'), hole.indexOf('<FullSheet'));
   const strip = dock.slice(dock.indexOf('<ClubStrip'), dock.indexOf('COPY.stickyClub'));
   assert.doesNotMatch(strip, /compact/);
-  assert.match(hole, /minHeight: '60%'/);
-  assert.match(hole, /flexBasis: '60%'/);
+  assert.match(hole, /minHeight: 0/);
+  assert.match(hole, /alignSelf: 'stretch'/);
   const sameAt = dock.indexOf('COPY.stickyClub');
   const allAt = dock.indexOf('COPY.allClubs');
   const wheelAt = dock.indexOf('<ClubStrip');

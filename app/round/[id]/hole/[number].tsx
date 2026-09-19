@@ -1775,9 +1775,8 @@ function makeStyles(colors: ColorPalette) {
   mapFill: {
     ...StyleSheet.absoluteFill,
     flex: 1,
-    minHeight: '60%',
-    flexGrow: 1,
-    flexBasis: '60%',
+    minHeight: 0,
+    alignSelf: 'stretch',
   },
   catchUpBar: {
     flexDirection: 'row',
