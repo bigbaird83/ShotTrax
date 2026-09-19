@@ -3,13 +3,10 @@ import { planCatchUpFrame, type CatchUpFrameMode } from './catchUpMap';
 import { haversineYards } from './haversine';
 import { isCourseCardLatLng, isValidLatLng, type LatLng } from './latLng';
 
-/** Stacked tee+green — not a hole. */
-export const COURSE_CARD_MIN_HOLE_SPAN_YARDS = 1;
-/**
- * Longer than any real hole (clubhouse-to-green / two holes).
- * 1500 yd still lets 0.01° heading fixtures (~1214 yd) qualify.
- */
-export const COURSE_CARD_MAX_HOLE_SPAN_YARDS = 1500;
+/** Same point within a few meters — not a hole. */
+export const COURSE_CARD_MIN_HOLE_SPAN_YARDS = 5;
+/** Past about 700 yd is farther than a real hole (clubhouse / two holes). */
+export const COURSE_CARD_MAX_HOLE_SPAN_YARDS = 700;
 
 function toRad(deg: number): number {
   return (deg * Math.PI) / 180;

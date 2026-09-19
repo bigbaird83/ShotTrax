@@ -196,7 +196,7 @@ test("Add shot opening region contains tee and green and does not wait when 282 
   assert.equal(addShotShowsWaitingWithCardYards(), false);
   assert.equal(addShotShowsWaitingOnLocation(), false);
   const tee = { lat: 37.0, lng: -122.0 };
-  const green = { lat: 37.01, lng: -122.0 };
+  const green = { lat: 37.0036, lng: -122.0 };
   const home = { lat: 40.7128, lng: -74.006 };
   const camera = planCourseCardCamera({ tee, green, phone: null });
   const fromHome = planCourseCardCamera({ tee, green, phone: home });
