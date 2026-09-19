@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { AVERAGE_OUTLIER_RATIO } from './averages';
 import {
@@ -92,4 +93,14 @@ test('Suggested seed is STOCK_AVG until typed or 5 live (20% outliers); putter o
     }),
     null,
   );
+});
+
+test('Watch top-3 reads the same rankDistanceYards table as the phone', () => {
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const watch = hole.slice(hole.indexOf('useWatchClubList'), hole.indexOf('if (!round || !hole)'));
+  assert.match(watch, /rankDistanceYards\(club\)/);
+  assert.match(watch, /top3: ranked\.map/);
+  const rank = readFileSync(new URL('./rankClubs.ts', import.meta.url), 'utf8');
+  assert.match(rank, /stockAvgCarryForSuggestion/);
+  assert.match(rank, /MIN_CLOSED_SHOTS_FOR_RANK/);
 });
