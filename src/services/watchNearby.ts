@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getCourseDataClient } from '@/src/course/client';
+import { applyCourseHydrateToLayout } from '@/src/course/hydrate';
 import type { CourseDetail, CourseSummary } from '@/src/course/types';
 import { layoutFromTee } from '@/src/course/layout';
 import { prefetchCourseCardInBackground, rememberLayoutHoles } from '@/src/course/prefetch';
@@ -191,7 +192,10 @@ export async function handleWatchNearbyJson(json: string): Promise<{ ok: boolean
         : null;
       if (start.teeName && !tee) return { ok: false, feedback: 'open the phone' };
       if (detail.tees.length > 0 && !tee) return { ok: false, feedback: 'open the phone' };
-      const layout = layoutFromTee(detail, tee);
+      const layout = applyCourseHydrateToLayout(layoutFromTee(detail, tee), {
+        name: detail.name,
+        location: detail.location,
+      });
       rememberLayoutHoles(layout);
       const round = startRound(ctx.db, holeCount, detail.name, layout);
       ctx.bump();

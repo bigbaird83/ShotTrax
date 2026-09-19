@@ -468,6 +468,33 @@ export function signalLabCypressBlankMap(): {
 }
 
 /**
+ * Doc override: Cypress Creek (Cabot) paints from a real hydrate when Pro
+ * tee+green miss. Greystone west + Pleasant Valley stay on the miss card.
+ * Never invent from the clubhouse or scorecard yards.
+ */
+export function signalLabCypressHydrate(): {
+  cypressOnly: true;
+  paintsViaHydrateWhenProMisses: true;
+  neverInventFromClubhouse: true;
+  neverInventFromScorecardYards: true;
+  greystoneWestStillMisses: true;
+  pleasantValleyStillMisses: true;
+  prefetchAllEighteenOnce: true;
+  meterUniqueHydrateOnce: true;
+} {
+  return {
+    cypressOnly: true,
+    paintsViaHydrateWhenProMisses: true,
+    neverInventFromClubhouse: true,
+    neverInventFromScorecardYards: true,
+    greystoneWestStillMisses: true,
+    pleasantValleyStillMisses: true,
+    prefetchAllEighteenOnce: true,
+    meterUniqueHydrateOnce: true,
+  };
+}
+
+/**
  * Signal Lab build 36 — Add shot gesture lock.
  * 1. First frame is course tee + green center only.
  * 2. After that, do not reframe.

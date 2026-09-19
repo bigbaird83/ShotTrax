@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { resolveHydrateTeeGreen } from '@/src/course/hydrate';
 import { cachedOsmOverlay, cachedResolvedTee, resolveOverlayTee } from '@/src/course/osmOverlay';
 import { ensureHoleTeeGreen } from '@/src/course/prefetch';
 import type { OsmOverlay } from '@/src/course/types';
@@ -109,18 +110,31 @@ export default function ClubPickScreen() {
     });
   }, [navigation, withoutGps, relabelId, id, holeNumber]);
 
-  const green =
+  const proGreen =
     holeRow?.greenLat != null && holeRow.greenLng != null
       ? { lat: holeRow.greenLat, lng: holeRow.greenLng }
       : null;
-  const overlayTee = resolveOverlayTee(osmOverlay, holeNumber, green);
-  const cachedTee = cachedResolvedTee({ courseId: round?.courseApiId, holeNumber, green });
-  const holeTee = resolvePlayHoleTee({
+  const overlayTee = resolveOverlayTee(osmOverlay, holeNumber, proGreen);
+  const cachedTee = cachedResolvedTee({ courseId: round?.courseApiId, holeNumber, green: proGreen });
+  const proTee = resolvePlayHoleTee({
     courseTee: courseTeeFromHole(holeRow),
     overlayTee,
     cachedTee,
-    green,
+    green: proGreen,
   });
+  const courseLocation =
+    round?.courseLat != null && round.courseLng != null
+      ? { lat: round.courseLat, lng: round.courseLng }
+      : null;
+  const hydrated = resolveHydrateTeeGreen({
+    name: round?.courseName,
+    location: courseLocation,
+    holeNumber,
+    tee: proTee,
+    green: proGreen,
+  });
+  const holeTee = hydrated.tee;
+  const green = hydrated.green;
   const fix = useLiveFix(!withoutGps);
 
   useEffect(() => {

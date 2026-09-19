@@ -7,6 +7,7 @@ import {
   rememberResolvedTee,
   resolveOverlayTee,
 } from './osmOverlay';
+import { applyCourseHydrateToLayout, prefetchCourseHydrateOnce } from './hydrate';
 import type { CourseLayoutSeed } from './layout';
 import type { OsmOverlay, OsmOverlayQuery } from './types';
 
@@ -176,19 +177,28 @@ export async function prefetchCourseCard(
   layout: CourseLayoutSeed,
   deps?: PrefetchDeps,
 ): Promise<PrefetchHoleFrame[]> {
-  rememberLayoutHoles(layout);
-  const holes = layout.holes ?? [];
+  const hydrated = applyCourseHydrateToLayout(layout, {
+    name: layout.name,
+    location: layout.location ?? null,
+  });
+  rememberLayoutHoles(hydrated);
+  prefetchCourseHydrateOnce({
+    name: hydrated.name,
+    location: hydrated.location ?? null,
+    courseId: hydrated.apiId,
+  });
+  const holes = hydrated.holes ?? [];
   const out: PrefetchHoleFrame[] = [];
   for (const hole of holes) {
     const green = isValidLatLng(hole.greenCentroid) ? hole.greenCentroid : null;
     const tee = isValidLatLng(hole.teeCentroid) ? hole.teeCentroid : null;
     const frame = await ensureHoleTeeGreen(
       {
-        courseId: layout.apiId,
+        courseId: hydrated.apiId,
         holeNumber: hole.number,
         tee,
         green,
-        location: green ?? (isValidLatLng(layout.location) ? layout.location : null),
+        location: green ?? (isValidLatLng(hydrated.location) ? hydrated.location : null),
       },
       deps,
     );

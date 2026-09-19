@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { getCourseDataClient } from '@/src/course/client';
+import { applyCourseHydrateToLayout } from '@/src/course/hydrate';
 import { layoutFromTee } from '@/src/course/layout';
 import { prefetchCourseCardInBackground, rememberLayoutHoles } from '@/src/course/prefetch';
 import type { CourseDetail, CourseSummary, TeeSet } from '@/src/course/types';
@@ -55,21 +56,26 @@ async function loadLayout(
   tee: TeeSet | null,
 ): Promise<CourseLayoutSeed> {
   const resolved = detail ?? (await getCourseDataClient().getCourse(course.id).catch(() => null));
-  if (resolved) {
-    const layout = layoutFromTee(resolved, tee);
-    rememberLayoutHoles(layout);
-    return layout;
-  }
-  return {
-    apiId: course.id,
+  const base = resolved
+    ? layoutFromTee(resolved, tee)
+    : {
+        apiId: course.id,
+        name: course.name,
+        location: course.location,
+        teeName: tee?.name ?? null,
+        teeRating: tee?.rating ?? null,
+        teeSlope: tee?.slope ?? null,
+        teeTotalYards: tee?.totalYards ?? null,
+        holes: [],
+      };
+  const layout = applyCourseHydrateToLayout(base, {
     name: course.name,
-    location: course.location,
-    teeName: tee?.name ?? null,
-    teeRating: tee?.rating ?? null,
-    teeSlope: tee?.slope ?? null,
-    teeTotalYards: tee?.totalYards ?? null,
-    holes: [],
-  };
+    city: course.city,
+    state: course.state,
+    location: course.location ?? base.location ?? null,
+  });
+  rememberLayoutHoles(layout);
+  return layout;
 }
 
 export default function HomeScreen() {
