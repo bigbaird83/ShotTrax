@@ -8,6 +8,7 @@ import {
   parseGreenCentroid,
   parseHoleTee,
   parseHandicap,
+  parseLatLng,
   parseNearbyCourses,
   parsePar,
   parseTeeSets,
@@ -30,6 +31,35 @@ test('parseGreenCentroid ignores tee lat/lng and 0,0 — never invents a green',
   assert.deepEqual(parseGreenCentroid({ green: { latitude: 34.11, longitude: -85.64 } }), {
     lat: 34.11,
     lng: -85.64,
+  });
+});
+
+test('parseLatLng keeps [lat,lng] and recovers GeoJSON [lng,lat] that we used to drop', () => {
+  assert.deepEqual(parseLatLng({ lat: 35.0277, lng: -92.0316 }), { lat: 35.0277, lng: -92.0316 });
+  assert.deepEqual(parseLatLng([35.0277, -92.0316]), { lat: 35.0277, lng: -92.0316 });
+  assert.deepEqual(parseLatLng([-92.0316, 35.0277]), { lat: 35.0277, lng: -92.0316 });
+  assert.equal(parseLatLng([0, 0]), null);
+});
+
+test('parseGreenCenters reads green_centers rows so Cypress coords are not dropped', () => {
+  const greens = parseGreenCenters({
+    data: {
+      course_id: 99,
+      green_centers: [{ hole: 1, lat: 35.0279, lng: -92.0288 }],
+    },
+  });
+  assert.equal(greens.length, 1);
+  assert.deepEqual(greens[0].greenCentroid, { lat: 35.0279, lng: -92.0288 });
+});
+
+test('parseHoleTee reads tee_location / teebox_center aliases', () => {
+  assert.deepEqual(parseHoleTee({ tee_location: { lat: 35.0203, lng: -92.0308 } }), {
+    lat: 35.0203,
+    lng: -92.0308,
+  });
+  assert.deepEqual(parseHoleTee({ teebox_center: { latitude: 35.0203, longitude: -92.0308 } }), {
+    lat: 35.0203,
+    lng: -92.0308,
   });
 });
 

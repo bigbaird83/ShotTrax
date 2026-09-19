@@ -410,6 +410,39 @@ export function signalLabBlankMapBuild39(): {
 }
 
 /**
+ * Signal Lab — Cypress Creek blank (vs Magnolia).
+ * 1. Log hole 1 tee + green from the course card.
+ * 2. Null / ~0,0 / planCourseCardCamera null → miss card, do not mount MapView.
+ * 3. Sane region + coords → paint path (Magnolia). Else it is still a paint bug.
+ * 4. Hole start + Add shot stay available on a miss.
+ */
+export function signalLabCypressBlankMap(): {
+  logsHole1TeeGreen: true;
+  sideBySideMagnoliaCypressGreystone: true;
+  thinApiShowsMissAndFailCount: true;
+  missWhenTeeOrGreenMissing: true;
+  missWhenNearZero: true;
+  missWhenCameraNull: true;
+  missDoesNotMountMapView: true;
+  neverInventGreenFromCenter: true;
+  magnoliaStillPaints: true;
+  playDockOnMiss: true;
+} {
+  return {
+    logsHole1TeeGreen: true,
+    sideBySideMagnoliaCypressGreystone: true,
+    thinApiShowsMissAndFailCount: true,
+    missWhenTeeOrGreenMissing: true,
+    missWhenNearZero: true,
+    missWhenCameraNull: true,
+    missDoesNotMountMapView: true,
+    neverInventGreenFromCenter: true,
+    magnoliaStillPaints: true,
+    playDockOnMiss: true,
+  };
+}
+
+/**
  * Signal Lab build 36 — Add shot gesture lock.
  * 1. First frame is course tee + green center only.
  * 2. After that, do not reframe.

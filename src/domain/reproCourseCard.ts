@@ -44,6 +44,22 @@ export const CYPRESS_CREEK_CABOT: ReproCourseCard = {
   },
 };
 
+/**
+ * Cabot neighbor of Cypress Creek. Same thin-API class when hole 1
+ * tee/green are null or ~0,0 — never invent a green from the clubhouse.
+ */
+export const GREYSTONE_CABOT: ReproCourseCard = {
+  name: 'Greystone Country Club',
+  city: 'Cabot',
+  state: 'AR',
+  location: { lat: 35.0205, lng: -92.0638 },
+  hole1: {
+    number: 1,
+    tee: { lat: 35.0188, lng: -92.0652 },
+    green: { lat: 35.0224, lng: -92.061 },
+  },
+};
+
 /** Third Doc repro — El Dorado. Same blank-map class as Magnolia and Cypress. */
 export const MYSTIC_CREEK_EL_DORADO: ReproCourseCard = {
   name: 'Mystic Creek',
@@ -81,4 +97,8 @@ export function cypressCreekHole1Card(): { tee: LatLng; green: LatLng } {
 
 export function mysticCreekHole1Card(): { tee: LatLng; green: LatLng } {
   return { tee: MYSTIC_CREEK_EL_DORADO.hole1.tee, green: MYSTIC_CREEK_EL_DORADO.hole1.green };
+}
+
+export function greystoneHole1Card(): { tee: LatLng; green: LatLng } {
+  return { tee: GREYSTONE_CABOT.hole1.tee, green: GREYSTONE_CABOT.hole1.green };
 }

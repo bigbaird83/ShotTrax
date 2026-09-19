@@ -214,7 +214,7 @@ test("Add shot opening region contains tee and green and does not wait when 282 
   const playMap = hole.slice(hole.indexOf('<HoleMap'), hole.indexOf('onDropGreenEstimate'));
   assert.match(playMap, /lockFrame/);
   assert.match(playMap, /framePoints=/);
-  assert.match(playMap, /heading=\{courseCamera\?\.heading/);
+  assert.match(playMap, /heading=\{courseCardPaint\.mount \? courseCamera\?\.heading/);
   assert.match(playMap, /showPhonePin=\{!catchUpFullScreen\}/);
   assert.match(playMap, /userFix=\{catchUpFullScreen \? null : fix\}/);
   assert.match(playMap, /courseCamera\?\.points/);

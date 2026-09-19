@@ -21,11 +21,13 @@ import {
 } from './playLayout';
 import {
   CYPRESS_CREEK_CABOT,
+  GREYSTONE_CABOT,
   MAGNOLIA_CC,
   MYSTIC_CREEK_EL_DORADO,
   REPRO_COURSE_CARDS,
   courseCardHoleHasTeeAndGreen,
   cypressCreekHole1Card,
+  greystoneHole1Card,
   magnoliaHole1Card,
   mysticCreekHole1Card,
 } from './reproCourseCard';
@@ -107,6 +109,13 @@ test('repro cards are Magnolia plus Cypress Creek; missing tee or green never wa
   );
   assert.equal(CYPRESS_CREEK_CABOT.city, 'Cabot');
   assert.equal(CYPRESS_CREEK_CABOT.state, 'AR');
+  assert.equal(GREYSTONE_CABOT.name, 'Greystone Country Club');
+  assert.equal(GREYSTONE_CABOT.city, 'Cabot');
+  assert.deepEqual(greystoneHole1Card(), {
+    tee: GREYSTONE_CABOT.hole1.tee,
+    green: GREYSTONE_CABOT.hole1.green,
+  });
+  assert.equal(courseCardHoleHasTeeAndGreen(GREYSTONE_CABOT.hole1), true);
   assert.equal(MYSTIC_CREEK_EL_DORADO.city, 'El Dorado');
   assert.deepEqual(cypressCreekHole1Card(), {
     tee: CYPRESS_CREEK_CABOT.hole1.tee,

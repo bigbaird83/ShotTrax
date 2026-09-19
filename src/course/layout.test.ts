@@ -25,6 +25,10 @@ test('seedHoleFromCourse never invents par or green', () => {
   assert.deepEqual(seedHoleFromCourse(null), blank);
   assert.deepEqual(seedHoleFromCourse({ par: null, greenCentroid: { lat: 0, lng: 0 } }), blank);
   assert.deepEqual(
+    seedHoleFromCourse({ par: 4, yards: 390, handicap: 1, greenCentroid: null }),
+    { ...blank, par: 4, parSource: 'course', yards: 390, handicap: 1 },
+  );
+  assert.deepEqual(
     seedHoleFromCourse({ par: 4, greenCentroid: { lat: 37.01, lng: -86.43 } }),
     {
       par: 4,

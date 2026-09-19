@@ -141,11 +141,18 @@ function TrailFallback({
       hasFix,
       hasGreen,
     });
+  if (frameMiss) {
+    return (
+      <View style={styles.missCard} testID="course-card-miss">
+        <Text style={styles.holeBadgeText}>Hole {holeNumber}</Text>
+        <Text style={styles.missMsg}>{COPY.courseCardMissingFrame}</Text>
+      </View>
+    );
+  }
   return (
     <View style={styles.fallback}>
       <Text style={styles.holeBadgeText}>Hole {holeNumber}</Text>
-      {frameMiss ? <Text style={styles.fallbackMsg}>{COPY.courseCardMissingFrame}</Text> : null}
-      {yardsToGreen && !hideYardsOverlay && !frameMiss ? (
+      {yardsToGreen && !hideYardsOverlay ? (
         <YardsToGreenBadge result={yardsToGreen} hasFix={hasFix} hasGreen={hasGreen} />
       ) : null}
       {waiting ? <Text style={styles.fallbackMsg}>{COPY.waitingOnLocation}</Text> : null}
@@ -343,9 +350,22 @@ function NativeHoleMap({
     if (lockFrame) setHoleCameraReady(false);
   }, [lockFrame, lockKey, heading, frameEpoch]);
 
+  const courseCardMiss = Boolean(
+    lockFrame && (!lockedRegion || !holeMapRegionIsPaintable(lockedRegion)),
+  );
+
   useEffect(() => {
-    onFrameReady?.(lockFrame ? holeCameraReady : true);
-  }, [lockFrame, holeCameraReady, onFrameReady]);
+    if (!lockFrame) {
+      onFrameReady?.(true);
+      return;
+    }
+    // Miss card: never block hole start / Add shot on a map that will not mount.
+    if (courseCardMiss) {
+      onFrameReady?.(true);
+      return;
+    }
+    onFrameReady?.(holeCameraReady);
+  }, [lockFrame, courseCardMiss, holeCameraReady, onFrameReady]);
 
   useEffect(() => {
     if (!toPinLive) setMapOwnsGesture(false);
@@ -882,6 +902,18 @@ const styles = StyleSheet.create({
     gap: 6,
     justifyContent: 'center',
   },
+  missCard: {
+    minHeight: 160,
+    flex: 1,
+    backgroundColor: colors.bg,
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+    gap: 10,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  missMsg: { color: colors.cream, fontSize: type.body, lineHeight: 22, fontWeight: '700' },
   fallbackMsg: { color: colors.muted, fontSize: type.meta, lineHeight: 20 },
   userDot: {
     width: 16,

@@ -1,7 +1,7 @@
 import { METERS_PER_YARD } from '../config/sensing';
 import { planCatchUpFrame, type CatchUpFrameMode } from './catchUpMap';
 import { haversineYards } from './haversine';
-import { isValidLatLng, type LatLng } from './latLng';
+import { isCourseCardLatLng, isValidLatLng, type LatLng } from './latLng';
 
 function toRad(deg: number): number {
   return (deg * Math.PI) / 180;
@@ -161,8 +161,8 @@ export function diagnoseCourseCardFrame(args: {
   phone?: LatLng | null;
 }): CourseCardFrameDiagnosis {
   void args.phone;
-  const tee = isValidLatLng(args.tee) ? args.tee : null;
-  const green = isValidLatLng(args.green) ? args.green : null;
+  const tee = isCourseCardLatLng(args.tee) ? args.tee : null;
+  const green = isCourseCardLatLng(args.green) ? args.green : null;
   if (tee && green) return { ok: true, tee, green, missing: null };
   return {
     ok: false,
