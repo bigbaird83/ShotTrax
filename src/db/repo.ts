@@ -7,6 +7,11 @@ import {
 import { fillEstimatedCarries, type CarrySource } from '../domain/carryFill';
 import { DEFAULT_BAG, isPutterClubId } from '../domain/defaultBag';
 import { bagCustomizeSeenValue, BAG_CUSTOMIZE_SETTING_KEY, shouldPromptBagCustomize } from '../domain/bagCustomize';
+import {
+  FIRST_LAUNCH_TIP_SETTING_KEY,
+  firstLaunchTipSeenValue,
+  isFirstLaunchTipSeen,
+} from '../domain/firstLaunchTip';
 import { planInsertPlacedShot } from '../domain/insertShot';
 import {
   COURSE_DISTANCE_SETTING_KEY,
@@ -1187,4 +1192,12 @@ export function hasSeenBagCustomize(db: SQLiteDatabase): boolean {
 
 export function markBagCustomizeSeen(db: SQLiteDatabase): void {
   setSetting(db, BAG_CUSTOMIZE_SETTING_KEY, bagCustomizeSeenValue());
+}
+
+export function hasSeenFirstLaunchTip(db: SQLiteDatabase): boolean {
+  return isFirstLaunchTipSeen(getSetting(db, FIRST_LAUNCH_TIP_SETTING_KEY));
+}
+
+export function markFirstLaunchTipSeen(db: SQLiteDatabase): void {
+  setSetting(db, FIRST_LAUNCH_TIP_SETTING_KEY, firstLaunchTipSeenValue());
 }

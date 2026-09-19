@@ -37,6 +37,8 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.longPressGreen, 'Long-press to set the green');
   assert.equal(COPY.pickClub, 'Pick a club');
   assert.equal(COPY.pickClubLede, 'Picking a club marks where you hit from.');
+  assert.equal(COPY.firstLaunchTip, 'Pick a club → walk → press to mark');
+  assert.equal(COPY.dismissFirstLaunchTip, 'Got it');
   assert.equal(COPY.sayClub, 'Say a club');
   assert.equal(COPY.sayAgain, 'Say again');
   assert.equal(COPY.allClubs, 'All clubs');

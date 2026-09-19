@@ -46,6 +46,8 @@ export const COPY = {
   top3Unlock: 'Top clubs unlock after a few shots',
   pickClub: 'Pick a club',
   pickClubLede: 'Picking a club marks where you hit from.',
+  firstLaunchTip: 'Pick a club → walk → press to mark',
+  dismissFirstLaunchTip: 'Got it',
   stickyClub: 'Same club',
   undoLast: 'Undo last',
   endShot: 'End last shot',
