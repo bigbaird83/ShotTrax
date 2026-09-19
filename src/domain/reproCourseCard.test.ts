@@ -26,6 +26,7 @@ import {
   MAGNOLIA_CC,
   MYSTIC_CREEK_EL_DORADO,
   PAINTS_REPRO_CARDS,
+  PLEASANT_VALLEY_LITTLE_ROCK,
   REPRO_COURSE_CARDS,
   camdenHole1Card,
   courseCardHoleHasTeeAndGreen,
@@ -130,6 +131,10 @@ test('repro cards are Magnolia plus Cypress Creek; missing tee or green never wa
     green: GREYSTONE_CABOT.hole1.green,
   });
   assert.equal(courseCardHoleHasTeeAndGreen(GREYSTONE_CABOT.hole1), true);
+  assert.equal(PLEASANT_VALLEY_LITTLE_ROCK.name, 'Pleasant Valley Country Club');
+  assert.equal(PLEASANT_VALLEY_LITTLE_ROCK.city, 'Little Rock');
+  assert.equal(PLEASANT_VALLEY_LITTLE_ROCK.hole1.tee, null);
+  assert.equal(PLEASANT_VALLEY_LITTLE_ROCK.hole1.green, null);
   assert.equal(MYSTIC_CREEK_EL_DORADO.city, 'El Dorado');
   assert.deepEqual(cypressCreekHole1Card(), {
     tee: CYPRESS_CREEK_CABOT.hole1.tee,

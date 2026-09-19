@@ -40,6 +40,11 @@ import {
   nerdOutTrailUsesLockFrame,
   openingCameraRequiresTeeAndGreen,
   openingHoleRegionContainsTeeAndGreen,
+  COURSE_CARD_MAX_HOLE_SPAN_YARDS,
+  courseCardHoleSpanYards,
+  courseCardSpanIsAbsurd,
+  courseCardSpanIsSamePoint,
+  courseCardSpanLooksLikeHole,
   planCourseCardCamera,
   diagnoseCourseCardFrame,
   diagnoseCourseCardHole,
@@ -60,7 +65,7 @@ import {
   everyHoleMapUsesLockFrame,
   holeMapInventPhonePoint,
 } from './holeCamera';
-import { CYPRESS_CREEK_CABOT, MAGNOLIA_CC, MYSTIC_CREEK_EL_DORADO, courseCardHoleHasTeeAndGreen } from './reproCourseCard';
+import { CAMDEN_CC, CYPRESS_CREEK_CABOT, MAGNOLIA_CC, MYSTIC_CREEK_EL_DORADO, courseCardHoleHasTeeAndGreen } from './reproCourseCard';
 
 const tee = { lat: 37.0, lng: -122.0 };
 const greenNorth = { lat: 37.01, lng: -122.0 };
@@ -87,6 +92,12 @@ test('planCourseCardCamera is tee+green only; phone, house, and a lone pin never
   assert.equal(planCourseCardCamera({ tee: null, green: greenNorth, phone: home }), null);
   assert.equal(planCourseCardCamera({ tee, green: null, phone: home }), null);
   assert.equal(planCourseCardCamera({ tee: null, green: null, phone: home }), null);
+  assert.equal(planCourseCardCamera({ tee, green: tee, phone: null }), null);
+  assert.equal(planCourseCardCamera({
+    tee: CYPRESS_CREEK_CABOT.hole1.tee,
+    green: MAGNOLIA_CC.hole1.green,
+    phone: null,
+  }), null);
   assert.equal(addShotFramePoints({ tee: null, green: greenNorth, phone: home }), null);
   assert.equal(courseCardCameraWaitsForPhoneFix(), false);
   assert.equal(courseCardMissingCameraWaitsForPhone(), false);
@@ -99,6 +110,34 @@ test('planCourseCardCamera is tee+green only; phone, house, and a lone pin never
   assert.equal(playMapFrameEpoch({ holeNumber: 3, nonce: 2 }), 'play-3-2');
   assert.notEqual(playMapFrameEpoch({ holeNumber: 3, nonce: 2 }), 'catchup');
   assert.equal(holeMapScrollZoomAfterFrame({ lockFrame: true, holeCameraReady: true }), true);
+});
+
+test('Fairway Research: same-point or absurd span is not a course-card camera', () => {
+  const fixtureSpan = courseCardHoleSpanYards(tee, greenNorth);
+  assert.ok(fixtureSpan != null);
+  assert.ok(fixtureSpan > 1000);
+  assert.ok(fixtureSpan <= COURSE_CARD_MAX_HOLE_SPAN_YARDS);
+  assert.equal(courseCardSpanLooksLikeHole(fixtureSpan), true);
+  assert.ok(planCourseCardCamera({ tee, green: greenNorth, phone: null }));
+
+  assert.equal(courseCardSpanIsSamePoint(0), true);
+  assert.equal(courseCardSpanLooksLikeHole(0), false);
+  assert.equal(planCourseCardCamera({ tee, green: tee, phone: null }), null);
+
+  const absurd = courseCardHoleSpanYards(CYPRESS_CREEK_CABOT.hole1.tee, MAGNOLIA_CC.hole1.green);
+  assert.ok(absurd != null);
+  assert.equal(courseCardSpanIsAbsurd(absurd), true);
+  assert.equal(courseCardSpanLooksLikeHole(absurd), false);
+  assert.equal(planCourseCardCamera({
+    tee: CYPRESS_CREEK_CABOT.hole1.tee,
+    green: MAGNOLIA_CC.hole1.green,
+    phone: null,
+  }), null);
+
+  for (const hole of [MAGNOLIA_CC.hole1, CAMDEN_CC.hole1, CYPRESS_CREEK_CABOT.hole1]) {
+    const span = courseCardHoleSpanYards(hole.tee, hole.green);
+    assert.equal(courseCardSpanLooksLikeHole(span), true);
+  }
 });
 
 test('tee-to-green north puts the green at the top (heading 0)', () => {

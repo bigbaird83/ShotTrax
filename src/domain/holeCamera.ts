@@ -3,6 +3,14 @@ import { planCatchUpFrame, type CatchUpFrameMode } from './catchUpMap';
 import { haversineYards } from './haversine';
 import { isCourseCardLatLng, isValidLatLng, type LatLng } from './latLng';
 
+/** Stacked tee+green — not a hole. */
+export const COURSE_CARD_MIN_HOLE_SPAN_YARDS = 1;
+/**
+ * Longer than any real hole (clubhouse-to-green / two holes).
+ * 1500 yd still lets 0.01° heading fixtures (~1214 yd) qualify.
+ */
+export const COURSE_CARD_MAX_HOLE_SPAN_YARDS = 1500;
+
 function toRad(deg: number): number {
   return (deg * Math.PI) / 180;
 }
@@ -190,6 +198,28 @@ export function diagnoseCourseCardHole(hole: {
  * Phone is ignored. Tee at the bottom, green at the top.
  * Missing tee or green → null. Never a lone pin. Never the house.
  */
+export function courseCardHoleSpanYards(
+  tee: LatLng | null | undefined,
+  green: LatLng | null | undefined,
+): number | null {
+  if (!isValidLatLng(tee) || !isValidLatLng(green)) return null;
+  const span = haversineYards(tee, green);
+  return Number.isFinite(span) ? span : null;
+}
+
+export function courseCardSpanIsSamePoint(span: number | null): boolean {
+  return span != null && span < COURSE_CARD_MIN_HOLE_SPAN_YARDS;
+}
+
+export function courseCardSpanIsAbsurd(span: number | null): boolean {
+  return span != null && span > COURSE_CARD_MAX_HOLE_SPAN_YARDS;
+}
+
+/** Fairway Research: only a normal hole span may paint. */
+export function courseCardSpanLooksLikeHole(span: number | null): boolean {
+  return span != null && !courseCardSpanIsSamePoint(span) && !courseCardSpanIsAbsurd(span);
+}
+
 export function planCourseCardCamera(args: {
   tee: LatLng | null;
   green: LatLng | null;
@@ -198,6 +228,8 @@ export function planCourseCardCamera(args: {
   void args.phone;
   const card = diagnoseCourseCardFrame(args);
   if (!card.ok) return null;
+  const span = courseCardHoleSpanYards(card.tee, card.green);
+  if (!courseCardSpanLooksLikeHole(span)) return null;
   const heading = holeCameraHeading(card.tee, card.green);
   if (heading == null) return null;
   return { points: [card.tee, card.green], heading };

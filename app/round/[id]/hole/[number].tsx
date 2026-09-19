@@ -53,7 +53,9 @@ import { isPutterClubId } from '@/src/domain/defaultBag';
 import { catchUpPinFromTap, planCancelCatchUp, planCatchUpSheet } from '@/src/domain/catchUpMap';
 import {
   decideCourseCardPaint,
+  dumpHole1PayloadsSideBySide,
   logCourseCardPaint,
+  logHole1PayloadsSideBySide,
   showPlayDockForCourseCard,
 } from '@/src/domain/courseCardPaint';
 import {
@@ -486,6 +488,17 @@ export default function HoleScreen() {
       holeNumber,
       decision: courseCardPaint,
     });
+    if (holeNumber === 1 && /cypress|greystone|pleasant valley/i.test(round?.courseName ?? '')) {
+      const live = { tee: holeTee, green };
+      const name = round?.courseName ?? '';
+      logHole1PayloadsSideBySide(
+        dumpHole1PayloadsSideBySide({
+          cypress: /cypress/i.test(name) ? live : { tee: null, green: null },
+          greystone: /greystone/i.test(name) ? live : { tee: null, green: null },
+          pleasantValley: /pleasant valley/i.test(name) ? live : { tee: null, green: null },
+        }),
+      );
+    }
   }, [
     round?.courseName,
     holeNumber,
@@ -495,6 +508,8 @@ export default function HoleScreen() {
     courseCardPaint.tee?.lng,
     courseCardPaint.green?.lat,
     courseCardPaint.green?.lng,
+    holeTee,
+    green,
   ]);
   const addShotFrom = resolveAddShotFromPin({
     tee: holeTee,

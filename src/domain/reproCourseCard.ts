@@ -94,6 +94,44 @@ export const REPRO_COURSE_CARDS = [MAGNOLIA_CC, CYPRESS_CREEK_CABOT, MYSTIC_CREE
 /** Doc-confirmed paint split: these two paint; Cypress blanks when the card is thin. */
 export const PAINTS_REPRO_CARDS = [MAGNOLIA_CC, CAMDEN_CC] as const;
 
+/**
+ * Pleasant Valley CC — Little Rock. Clubhouse pin only.
+ * Live hole-1 tee/green are missing; never invent a green from this pin.
+ */
+export const PLEASANT_VALLEY_LITTLE_ROCK = {
+  name: 'Pleasant Valley Country Club',
+  city: 'Little Rock',
+  state: 'AR' as const,
+  location: { lat: 34.77988, lng: -92.41173 },
+  hole1: { tee: null, green: null } as { tee: LatLng | null; green: LatLng | null },
+};
+
+/** Live course-card payloads Doc reported blank. Nulls are the API miss. */
+export const BLANKS_LIVE_CARDS = [
+  {
+    name: CYPRESS_CREEK_CABOT.name,
+    city: CYPRESS_CREEK_CABOT.city,
+    state: 'AR' as const,
+    location: CYPRESS_CREEK_CABOT.location,
+    hole1: { tee: null, green: null } as { tee: LatLng | null; green: LatLng | null },
+  },
+  {
+    name: GREYSTONE_CABOT.name,
+    city: GREYSTONE_CABOT.city,
+    state: 'AR' as const,
+    location: GREYSTONE_CABOT.location,
+    hole1: { tee: null, green: null } as { tee: LatLng | null; green: LatLng | null },
+  },
+  PLEASANT_VALLEY_LITTLE_ROCK,
+] as const;
+
+export const DOC_PAINT_COURSE_NAMES = ['Magnolia Country Club', 'Camden Country Club'] as const;
+export const DOC_BLANK_COURSE_NAMES = [
+  'Cypress Creek',
+  'Greystone Country Club',
+  'Pleasant Valley Country Club',
+] as const;
+
 /** Course-card hole can frame only when both tee and green are real coordinates. */
 export function courseCardHoleHasTeeAndGreen(hole: {
   tee?: LatLng | null;
@@ -124,4 +162,8 @@ export function greystoneHole1Card(): { tee: LatLng; green: LatLng } {
 
 export function camdenHole1Card(): { tee: LatLng; green: LatLng } {
   return { tee: CAMDEN_CC.hole1.tee, green: CAMDEN_CC.hole1.green };
+}
+
+export function pleasantValleyLiveHole1(): { tee: LatLng | null; green: LatLng | null } {
+  return { tee: PLEASANT_VALLEY_LITTLE_ROCK.hole1.tee, green: PLEASANT_VALLEY_LITTLE_ROCK.hole1.green };
 }

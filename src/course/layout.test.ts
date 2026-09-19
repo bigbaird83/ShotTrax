@@ -6,9 +6,49 @@ import {
   formatSiLabel,
   formatTeeHoleYards,
   formatTeeMeta,
+  hole1TeeGreenFromCourse,
   roundHoleCountFromCourse,
   seedHoleFromCourse,
 } from './layout';
+
+test('hole1TeeGreenFromCourse copies card coords and never invents', () => {
+  assert.deepEqual(
+    hole1TeeGreenFromCourse({
+      holes: [
+        {
+          holeNumber: 1,
+          par: 4,
+          yards: 380,
+          handicap: 7,
+          greenCentroid: { lat: 33.27, lng: -93.24 },
+          greenFront: null,
+          greenBack: null,
+          greenDepthYards: null,
+          teeCentroid: { lat: 33.27, lng: -93.241 },
+        },
+      ],
+      tees: [],
+    }),
+    { tee: { lat: 33.27, lng: -93.241 }, green: { lat: 33.27, lng: -93.24 } },
+  );
+  assert.deepEqual(
+    hole1TeeGreenFromCourse({
+      holes: [{
+        holeNumber: 1,
+        par: 4,
+        yards: null,
+        handicap: null,
+        greenCentroid: null,
+        greenFront: null,
+        greenBack: null,
+        greenDepthYards: null,
+        teeCentroid: null,
+      }],
+      tees: [],
+    }),
+    { tee: null, green: null },
+  );
+});
 
 test('seedHoleFromCourse never invents par or green', () => {
   const blank = {

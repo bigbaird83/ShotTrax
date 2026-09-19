@@ -1,7 +1,26 @@
-import { diagnoseCourseCardFrame, holeFrameRegion, planCourseCardCamera } from './holeCamera';
+import { hole1TeeGreenFromCourse } from '../course/layout';
+import type { CourseDetail } from '../course/types';
+import {
+  courseCardHoleSpanYards,
+  courseCardSpanIsAbsurd,
+  courseCardSpanIsSamePoint,
+  courseCardSpanLooksLikeHole,
+  diagnoseCourseCardFrame,
+  holeFrameRegion,
+  planCourseCardCamera,
+} from './holeCamera';
 import { isCourseCardLatLng, isNearZeroLatLng, type LatLng } from './latLng';
 import { holeMapRegionIsPaintable } from './mapPaint';
-import { CAMDEN_CC, CYPRESS_CREEK_CABOT, MAGNOLIA_CC } from './reproCourseCard';
+import {
+  BLANKS_LIVE_CARDS,
+  CAMDEN_CC,
+  CYPRESS_CREEK_CABOT,
+  DOC_BLANK_COURSE_NAMES,
+  DOC_PAINT_COURSE_NAMES,
+  GREYSTONE_CABOT,
+  MAGNOLIA_CC,
+  PLEASANT_VALLEY_LITTLE_ROCK,
+} from './reproCourseCard';
 
 export type CourseCardPaintReason =
   | 'sane_region'
@@ -9,6 +28,8 @@ export type CourseCardPaintReason =
   | 'missing_green'
   | 'missing_both'
   | 'zero_coord'
+  | 'same_point'
+  | 'absurd_span'
   | 'no_camera'
   | 'bad_region';
 
@@ -17,6 +38,7 @@ export type CourseCardPaintDecision = {
   reason: CourseCardPaintReason;
   tee: LatLng | null;
   green: LatLng | null;
+  spanYards: number | null;
   region: ReturnType<typeof holeFrameRegion>;
 };
 
@@ -30,16 +52,37 @@ export type Hole1PayloadRow = {
   green: LatLng | null;
   teeKind: CourseCardPointKind;
   greenKind: CourseCardPointKind;
+  spanYards: number | null;
   mount: boolean;
   reason: CourseCardPaintReason;
 };
 
+export type CourseCardTally = {
+  paint: number;
+  fail: number;
+  reasons: Partial<Record<CourseCardPaintReason, number>>;
+  /** Only one course failed in the sample — Cypress-shaped one-off. */
+  oneOff: boolean;
+  /** Two or more failed — API tier looks thin, not one bad card. */
+  thinTier: boolean;
+};
+
+export type CourseCardFailFlag = {
+  course: string;
+  city: string;
+  reason: CourseCardPaintReason;
+  why: string;
+};
+
 export type Hole1PayloadDump = {
   rows: Hole1PayloadRow[];
-  /** Magnolia + Camden paint; Cypress null/placeholder → Cypress-specific thin API, not paint. */
+  /** Magnolia + Camden paint; a blank in the known fail set → thin API, not paint. */
   thinApiPattern: boolean;
   /** Holes / cards that must show the miss card (do not mount MapView). */
   failCount: number;
+  paintCount: number;
+  tally: CourseCardTally;
+  failList: CourseCardFailFlag[];
 };
 
 /**
@@ -60,6 +103,7 @@ export function decideCourseCardPaint(args: {
       reason: 'zero_coord',
       tee: isCourseCardLatLng(teeRaw) ? teeRaw : null,
       green: isCourseCardLatLng(greenRaw) ? greenRaw : null,
+      spanYards: courseCardHoleSpanYards(teeRaw, greenRaw),
       region: null,
     };
   }
@@ -71,18 +115,26 @@ export function decideCourseCardPaint(args: {
         card.missing === 'both' ? 'missing_both' : card.missing === 'tee' ? 'missing_tee' : 'missing_green',
       tee: card.tee,
       green: card.green,
+      spanYards: courseCardHoleSpanYards(card.tee, card.green),
       region: null,
     };
   }
+  const spanYards = courseCardHoleSpanYards(card.tee, card.green);
+  if (courseCardSpanIsSamePoint(spanYards)) {
+    return { mount: false, reason: 'same_point', tee: card.tee, green: card.green, spanYards, region: null };
+  }
+  if (courseCardSpanIsAbsurd(spanYards)) {
+    return { mount: false, reason: 'absurd_span', tee: card.tee, green: card.green, spanYards, region: null };
+  }
   const camera = planCourseCardCamera({ tee: card.tee, green: card.green, phone: null });
   if (!camera) {
-    return { mount: false, reason: 'no_camera', tee: card.tee, green: card.green, region: null };
+    return { mount: false, reason: 'no_camera', tee: card.tee, green: card.green, spanYards, region: null };
   }
   const region = holeFrameRegion(camera.points);
-  if (!holeMapRegionIsPaintable(region)) {
-    return { mount: false, reason: 'bad_region', tee: card.tee, green: card.green, region: null };
+  if (!holeMapRegionIsPaintable(region) || !courseCardSpanLooksLikeHole(spanYards)) {
+    return { mount: false, reason: 'bad_region', tee: card.tee, green: card.green, spanYards, region: null };
   }
-  return { mount: true, reason: 'sane_region', tee: card.tee, green: card.green, region };
+  return { mount: true, reason: 'sane_region', tee: card.tee, green: card.green, spanYards, region };
 }
 
 /** MapView mounts only for a sane course-card region. Miss never mounts. */
@@ -100,6 +152,19 @@ export function courseCardZeroCoordMountsMapView(): false {
 
 export function courseCardNullCameraMountsMapView(): false {
   return false;
+}
+
+export function courseCardSamePointMountsMapView(): false {
+  return false;
+}
+
+export function courseCardAbsurdSpanMountsMapView(): false {
+  return false;
+}
+
+/** Paint bug only when the region looks like a normal hole. */
+export function courseCardPaintOnlyWhenNormalHole(): true {
+  return true;
 }
 
 /** Never invent a green from the clubhouse / course pin ± yards. */
@@ -139,12 +204,49 @@ export function hole1PayloadRow(args: {
     course: args.course,
     city: args.city,
     hole: 1,
-    tee: paint.tee,
-    green: paint.green,
+    tee: args.tee,
+    green: args.green,
     teeKind: classifyCourseCardPoint(args.tee),
     greenKind: classifyCourseCardPoint(args.green),
+    spanYards: paint.spanYards,
     mount: paint.mount,
     reason: paint.reason,
+  };
+}
+
+export function tallyCourseCardPaint(
+  holes: Array<{
+    tee?: LatLng | null;
+    green?: LatLng | null;
+    mount?: boolean;
+    reason?: CourseCardPaintReason;
+  }>,
+): CourseCardTally {
+  const reasons: Partial<Record<CourseCardPaintReason, number>> = {};
+  let paint = 0;
+  let fail = 0;
+  for (const hole of holes) {
+    const decision =
+      hole.reason != null
+        ? { mount: hole.mount ?? hole.reason === 'sane_region', reason: hole.reason }
+        : decideCourseCardPaint({
+            tee: hole.tee ?? null,
+            green: hole.green ?? null,
+            phone: null,
+          });
+    if (decision.mount) {
+      paint += 1;
+      continue;
+    }
+    fail += 1;
+    reasons[decision.reason] = (reasons[decision.reason] ?? 0) + 1;
+  }
+  return {
+    paint,
+    fail,
+    reasons,
+    oneOff: fail === 1 && paint >= 2,
+    thinTier: fail >= 2,
   };
 }
 
@@ -158,19 +260,56 @@ export function courseCardFailCount(
   }).mount).length;
 }
 
-function kindPair(row: Hole1PayloadRow): string {
-  return `${row.teeKind}/${row.greenKind}`;
+export function courseCardFailWhy(reason: CourseCardPaintReason): string | null {
+  switch (reason) {
+    case 'sane_region':
+      return null;
+    case 'missing_both':
+      return 'null tee+green';
+    case 'missing_tee':
+      return 'null tee';
+    case 'missing_green':
+      return 'null green';
+    case 'zero_coord':
+      return '~0,0 placeholder';
+    case 'same_point':
+      return 'tee and green are the same point';
+    case 'absurd_span':
+      return 'tee–green farther than a real hole';
+    case 'no_camera':
+      return 'no course-card camera';
+    case 'bad_region':
+      return 'region is not a normal hole';
+  }
+}
+
+export function flagCourseCardFails(rows: Hole1PayloadRow[]): CourseCardFailFlag[] {
+  const flags: CourseCardFailFlag[] = [];
+  for (const row of rows) {
+    if (row.mount) continue;
+    const why = courseCardFailWhy(row.reason);
+    if (!why) continue;
+    flags.push({ course: row.course, city: row.city, reason: row.reason, why });
+  }
+  return flags;
+}
+
+/** PR / Signal Lab lines: "Cypress Creek (Cabot) — null tee+green". */
+export function formatCourseCardFailList(fails: CourseCardFailFlag[]): string[] {
+  return fails.map((fail) => `${fail.course} (${fail.city}) — ${fail.why}`);
 }
 
 /**
- * Doc split: Magnolia + Camden (paint) beside Cypress Creek Cabot.
- * Cypress null/placeholder while the other two are real → thin API, not paint.
+ * Bulk AR / known-fail sample. Magnolia + Camden paint; Cypress, Greystone,
+ * and Pleasant Valley use live card coords (null/~0,0 by default).
  */
 export function dumpHole1PayloadsSideBySide(args: {
   magnolia?: { tee: LatLng | null; green: LatLng | null };
   camden?: { tee: LatLng | null; green: LatLng | null };
-  cypress: { tee: LatLng | null; green: LatLng | null };
-}): Hole1PayloadDump {
+  cypress?: { tee: LatLng | null; green: LatLng | null };
+  greystone?: { tee: LatLng | null; green: LatLng | null };
+  pleasantValley?: { tee: LatLng | null; green: LatLng | null };
+} = {}): Hole1PayloadDump {
   const magnolia = hole1PayloadRow({
     course: MAGNOLIA_CC.name,
     city: MAGNOLIA_CC.city,
@@ -186,15 +325,66 @@ export function dumpHole1PayloadsSideBySide(args: {
   const cypress = hole1PayloadRow({
     course: CYPRESS_CREEK_CABOT.name,
     city: CYPRESS_CREEK_CABOT.city,
-    tee: args.cypress.tee,
-    green: args.cypress.green,
+    tee: args.cypress?.tee ?? BLANKS_LIVE_CARDS[0].hole1.tee,
+    green: args.cypress?.green ?? BLANKS_LIVE_CARDS[0].hole1.green,
   });
-  const rows = [magnolia, camden, cypress];
-  const cypressThin = kindPair(cypress) !== 'real/real';
+  const greystone = hole1PayloadRow({
+    course: GREYSTONE_CABOT.name,
+    city: GREYSTONE_CABOT.city,
+    tee: args.greystone?.tee ?? BLANKS_LIVE_CARDS[1].hole1.tee,
+    green: args.greystone?.green ?? BLANKS_LIVE_CARDS[1].hole1.green,
+  });
+  const pleasantValley = hole1PayloadRow({
+    course: PLEASANT_VALLEY_LITTLE_ROCK.name,
+    city: PLEASANT_VALLEY_LITTLE_ROCK.city,
+    tee: args.pleasantValley?.tee ?? PLEASANT_VALLEY_LITTLE_ROCK.hole1.tee,
+    green: args.pleasantValley?.green ?? PLEASANT_VALLEY_LITTLE_ROCK.hole1.green,
+  });
+  const rows = [magnolia, camden, cypress, greystone, pleasantValley];
+  const tally = tallyCourseCardPaint(rows);
+  const paintsOk = magnolia.mount && camden.mount;
+  const blankMiss = [cypress, greystone, pleasantValley].some((row) => !row.mount);
   return {
     rows,
-    thinApiPattern: magnolia.mount && camden.mount && cypressThin && !cypress.mount,
-    failCount: courseCardFailCount(rows),
+    thinApiPattern: paintsOk && blankMiss,
+    failCount: tally.fail,
+    paintCount: tally.paint,
+    tally,
+    failList: flagCourseCardFails(rows),
+  };
+}
+
+/** Pull the known AR fail set in one pass — no Doc smoke list. */
+export function scanKnownArCourseCards(args?: {
+  cypress?: { tee: LatLng | null; green: LatLng | null };
+  greystone?: { tee: LatLng | null; green: LatLng | null };
+  pleasantValley?: { tee: LatLng | null; green: LatLng | null };
+}): Hole1PayloadDump {
+  return dumpHole1PayloadsSideBySide(args);
+}
+
+/** Flag hole-1 tee+green on pulled course details. Never invents a point. */
+export function scanCourseCardDetails(
+  courses: Array<{
+    name: string;
+    city?: string | null;
+    holes: CourseDetail['holes'];
+    tees?: CourseDetail['tees'];
+  }>,
+): { rows: Hole1PayloadRow[]; tally: CourseCardTally; failList: CourseCardFailFlag[] } {
+  const rows = courses.map((course) => {
+    const hole1 = hole1TeeGreenFromCourse({ holes: course.holes, tees: course.tees ?? [] });
+    return hole1PayloadRow({
+      course: course.name,
+      city: course.city ?? '',
+      tee: hole1.tee,
+      green: hole1.green,
+    });
+  });
+  return {
+    rows,
+    tally: tallyCourseCardPaint(rows),
+    failList: flagCourseCardFails(rows),
   };
 }
 
@@ -214,6 +404,7 @@ export function logCourseCardPaint(args: {
     greenKind: classifyCourseCardPoint(decision.green),
     mount: decision.mount,
     reason: decision.reason,
+    spanYards: decision.spanYards,
     region: decision.region,
   });
   return decision;
@@ -224,23 +415,40 @@ export function logHole1PayloadsSideBySide(dump: Hole1PayloadDump): Hole1Payload
     magnolia: dump.rows[0],
     camdenCc: dump.rows[1],
     cypressCreekCabot: dump.rows[2],
-    paints: ['Magnolia Country Club', 'Camden Country Club'],
-    blanks: ['Cypress Creek'],
+    greystoneCabot: dump.rows[3],
+    pleasantValleyLittleRock: dump.rows[4],
+    paints: [...DOC_PAINT_COURSE_NAMES],
+    blanks: [...DOC_BLANK_COURSE_NAMES],
     thinApiPattern: dump.thinApiPattern,
+    paintCount: dump.paintCount,
     failCount: dump.failCount,
+    failList: formatCourseCardFailList(dump.failList),
+    tally: dump.tally,
+  });
+  console.log('[Signal Lab] fairway-research', {
+    paint: dump.tally.paint,
+    fail: dump.tally.fail,
+    reasons: dump.tally.reasons,
+    oneOff: dump.tally.oneOff,
+    thinTier: dump.tally.thinTier,
+    failList: formatCourseCardFailList(dump.failList),
   });
   return dump;
 }
 
 /**
- * Doc split for the ShotTraxx room: Magnolia + Camden paint; Cypress blanks
- * when live tee/green are missing. Known hole-1 cards still mount.
+ * Doc split: Magnolia + Camden paint; Cypress / Greystone / Pleasant Valley
+ * blank when live tee/green are missing. Known hole-1 fixtures still mount.
  */
 export function compareMagnoliaCypressHole1(args?: {
   cypressTee?: LatLng | null;
   cypressGreen?: LatLng | null;
   camdenTee?: LatLng | null;
   camdenGreen?: LatLng | null;
+  greystoneTee?: LatLng | null;
+  greystoneGreen?: LatLng | null;
+  pleasantValleyTee?: LatLng | null;
+  pleasantValleyGreen?: LatLng | null;
 }): {
   magnolia: CourseCardPaintDecision;
   camden: CourseCardPaintDecision;
@@ -271,6 +479,8 @@ export function compareMagnoliaCypressHole1(args?: {
   const dump = dumpHole1PayloadsSideBySide({
     camden: { tee: args?.camdenTee ?? CAMDEN_CC.hole1.tee, green: args?.camdenGreen ?? CAMDEN_CC.hole1.green },
     cypress: { tee: args?.cypressTee ?? null, green: args?.cypressGreen ?? null },
+    greystone: { tee: args?.greystoneTee ?? null, green: args?.greystoneGreen ?? null },
+    pleasantValley: { tee: args?.pleasantValleyTee ?? null, green: args?.pleasantValleyGreen ?? null },
   });
   return { magnolia, camden, cypressKnown, cypressLive, dump };
 }

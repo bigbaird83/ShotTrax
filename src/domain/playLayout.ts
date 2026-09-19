@@ -410,40 +410,54 @@ export function signalLabBlankMapBuild39(): {
 }
 
 /**
- * Signal Lab — Cypress Creek blank (vs Magnolia + Camden).
- * Doc split: Magnolia CC and Camden CC paint; Cypress Creek Cabot blanks.
- * 1. Log hole 1 tee + green from the course card.
- * 2. Null / ~0,0 / planCourseCardCamera null → miss card, do not mount MapView.
- * 3. Real coords + sane region → paint path (Magnolia, Camden).
- * 4. Hole start + Add shot stay available on a miss.
+ * Signal Lab — thin course-card tier (not a remount/paint bug).
+ * PAINTS: Magnolia CC, Camden CC.
+ * BLANKS: Cypress Creek (Cabot), Greystone (Cabot), Pleasant Valley (Little Rock).
+ * Bulk-scan those cards. Do not ask Doc to smoke random courses.
  */
 export function signalLabCypressBlankMap(): {
   logsHole1TeeGreen: true;
   sideBySideMagnoliaCamdenCypress: true;
-  cypressSpecific: true;
+  cypressSpecific: false;
   thinApiShowsMissAndFailCount: true;
   missWhenTeeOrGreenMissing: true;
   missWhenNearZero: true;
+  missWhenSamePoint: true;
+  missWhenAbsurdSpan: true;
+  paintOnlyWhenNormalHole: true;
   missWhenCameraNull: true;
   missDoesNotMountMapView: true;
   neverInventGreenFromCenter: true;
   magnoliaStillPaints: true;
   camdenStillPaints: true;
   playDockOnMiss: true;
+  logsFailVsPaintCount: true;
+  blanksCypressGreystonePleasantValley: true;
+  logsFailList: true;
+  doesNotAskDocToSmoke: true;
+  osmNeverSeedsCourseCardGreen: true;
 } {
   return {
     logsHole1TeeGreen: true,
     sideBySideMagnoliaCamdenCypress: true,
-    cypressSpecific: true,
+    cypressSpecific: false,
     thinApiShowsMissAndFailCount: true,
     missWhenTeeOrGreenMissing: true,
     missWhenNearZero: true,
+    missWhenSamePoint: true,
+    missWhenAbsurdSpan: true,
+    paintOnlyWhenNormalHole: true,
     missWhenCameraNull: true,
     missDoesNotMountMapView: true,
     neverInventGreenFromCenter: true,
     magnoliaStillPaints: true,
     camdenStillPaints: true,
     playDockOnMiss: true,
+    logsFailVsPaintCount: true,
+    blanksCypressGreystonePleasantValley: true,
+    logsFailList: true,
+    doesNotAskDocToSmoke: true,
+    osmNeverSeedsCourseCardGreen: true,
   };
 }
 

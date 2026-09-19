@@ -750,8 +750,15 @@ test('P0: full-bleed MapView has real height under the glass dock; Add shot keep
   assert.equal(signalLabCypressBlankMap().playDockOnMiss, true);
   assert.equal(signalLabCypressBlankMap().magnoliaStillPaints, true);
   assert.equal(signalLabCypressBlankMap().camdenStillPaints, true);
-  assert.equal(signalLabCypressBlankMap().cypressSpecific, true);
+  assert.equal(signalLabCypressBlankMap().cypressSpecific, false);
   assert.equal(signalLabCypressBlankMap().sideBySideMagnoliaCamdenCypress, true);
+  assert.equal(signalLabCypressBlankMap().missWhenSamePoint, true);
+  assert.equal(signalLabCypressBlankMap().missWhenAbsurdSpan, true);
+  assert.equal(signalLabCypressBlankMap().paintOnlyWhenNormalHole, true);
+  assert.equal(signalLabCypressBlankMap().logsFailVsPaintCount, true);
+  assert.equal(signalLabCypressBlankMap().blanksCypressGreystonePleasantValley, true);
+  assert.equal(signalLabCypressBlankMap().logsFailList, true);
+  assert.equal(signalLabCypressBlankMap().doesNotAskDocToSmoke, true);
   assert.match(map, /collapsable=\{false\}/);
   const userLoc = map.slice(map.indexOf('showsUserLocation='), map.indexOf('showsMyLocationButton'));
   assert.match(userLoc, /holeMapUserLocationVisible\(\{/);

@@ -85,6 +85,20 @@ export function layoutFromCourseDetail(detail: CourseDetail, tee?: TeeSet | null
   return layoutFromTee(detail, tee ?? detail.tees[0] ?? null);
 }
 
+/** Hole-1 tee+green from a pulled card. Missing stays null — never invented. */
+export function hole1TeeGreenFromCourse(detail: Pick<CourseDetail, 'holes' | 'tees'>): {
+  tee: LatLng | null;
+  green: LatLng | null;
+} {
+  const fromHoles = detail.holes.find((hole) => hole.holeNumber === 1);
+  const fromTee = detail.tees[0]?.holes.find((hole) => hole.holeNumber === 1);
+  const hole = fromHoles ?? fromTee;
+  return {
+    tee: hole?.teeCentroid ?? null,
+    green: hole?.greenCentroid ?? null,
+  };
+}
+
 export function layoutFromHoles(
   apiId: string,
   holes: HoleCourseData[],
