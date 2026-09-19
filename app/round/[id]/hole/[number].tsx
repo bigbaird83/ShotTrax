@@ -1181,7 +1181,7 @@ export default function HoleScreen() {
           <View pointerEvents="none" style={styles.dockGlass} />
           <View pointerEvents="box-none" style={styles.dockRow}>
             <View pointerEvents="box-none" style={styles.dockStrip}>
-              <ClubStrip>
+              <ClubStrip
                 items={stripItems}
                 pickId={wheelSelectedId}
                 windowStart={stripPlan.windowStart}
@@ -1851,7 +1851,7 @@ function makeStyles(colors: ColorPalette) {
     gap: 8,
   },
   dockGlass: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: colors.glass,
     borderTopWidth: 1,
     borderTopColor: colors.line,

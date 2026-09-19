@@ -617,13 +617,13 @@ test('Signal Lab: trail chip is logged yards, soft/forced keep a badge, glass do
   const phone = readFileSync(new URL('../ui/ClubStrip.tsx', import.meta.url), 'utf8');
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   const badge = readFileSync(new URL('../ui/Badge.tsx', import.meta.url), 'utf8');
-  const dock = hole.slice(hole.indexOf('style={[styles.dock'), hole.indexOf('<FullSheet'));
+  const dock = hole.slice(hole.indexOf('dockPassMap ?'), hole.indexOf('<FullSheet'));
   const trailBlock = map.slice(map.indexOf('{closed.map((shot, index)'), map.indexOf('{shots.filter(hasGpsStart)'));
 
   assert.match(dock, /pointerEvents="none" style=\{styles\.dockGlass\}/);
   assert.match(dock, /pointerEvents="box-none" style=\{styles\.dockRow\}/);
   assert.match(dock, /dockPassMap \? 'none' : 'box-none'/);
-  assert.match(dock, /touches\.length >= 2/);
+  assert.match(hole, /touches\.length >= 2/);
   assert.match(phone, /touches\.length >= 2/);
   assert.doesNotMatch(dock, /backgroundColor: colors\.glass/);
 
