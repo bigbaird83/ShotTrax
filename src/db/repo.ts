@@ -13,6 +13,11 @@ import {
   parseCourseDistanceUnit,
   type CourseDistanceUnit,
 } from '../domain/courseDistance';
+import {
+  COLOR_THEME_SETTING_KEY,
+  parseColorThemeId,
+  type ColorThemeId,
+} from '../domain/colorTheme';
 import { clubAverageFromShots, type ClubAverage } from '../domain/averages';
 import { rememberResolvedTee } from '../course/osmOverlay';
 import { isValidLatLng } from '../domain/latLng';
@@ -1166,6 +1171,14 @@ export function getCourseDistanceUnit(db: SQLiteDatabase): CourseDistanceUnit {
 
 export function setCourseDistanceUnit(db: SQLiteDatabase, unit: CourseDistanceUnit): void {
   setSetting(db, COURSE_DISTANCE_SETTING_KEY, unit);
+}
+
+export function getColorTheme(db: SQLiteDatabase): ColorThemeId {
+  return parseColorThemeId(getSetting(db, COLOR_THEME_SETTING_KEY));
+}
+
+export function setColorTheme(db: SQLiteDatabase, theme: ColorThemeId): void {
+  setSetting(db, COLOR_THEME_SETTING_KEY, parseColorThemeId(theme));
 }
 
 export function hasSeenBagCustomize(db: SQLiteDatabase): boolean {

@@ -1,8 +1,9 @@
 import { SymbolView } from 'expo-symbols';
 import { Tabs } from 'expo-router';
-import { colors } from '@/src/ui/theme';
+import { useColors } from '@/src/ui/ColorThemeProvider';
 
 export default function TabLayout() {
+  const colors = useColors();
   return (
     <Tabs
       screenOptions={{

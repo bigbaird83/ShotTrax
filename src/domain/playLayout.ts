@@ -276,6 +276,9 @@ export function addShotFollowsUserLocation(): false {
   return false;
 }
 
+/** Menu and dock controls — 44pt minimum. No half-size orphans. */
+export const PLAY_CONTROL_MIN_TAP = 44;
+
 /** Build 31 club-pill height. Dock actions match this, not the tiny 31 dock chips. */
 export const PLAY_DOCK_ACTION_MIN_HEIGHT = 52;
 

@@ -96,8 +96,8 @@ test('Signal Lab: putter stays out of averages and top-3', () => {
   assert.ok(!ranked.some((club) => club.id === PUTTER_CLUB_ID));
 });
 
-test('Signal Lab: next hole still opens club-select = mark', () => {
-  assert.equal(shouldAutoOpenClubPick({ readOnly: false, shotCount: 0 }), true);
+test('Signal Lab: next hole stays on play — All clubs does not auto-open', () => {
+  assert.equal(shouldAutoOpenClubPick({ readOnly: false, shotCount: 0 }), false);
   assert.equal(shouldAutoOpenClubPick({ readOnly: false, shotCount: 1 }), false);
   assert.equal(shouldAutoOpenClubPick({ readOnly: true, shotCount: 0 }), false);
   assert.equal(shouldAutoOpenClubPick({ readOnly: false, shotCount: 0, openingPutts: true }), false);

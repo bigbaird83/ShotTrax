@@ -1,8 +1,10 @@
+import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { COPY } from '@/src/domain/playerCopy';
 import { planScorecard, scorecardMarkGlyph, type ScorecardHole } from '@/src/domain/scorecard';
 import { BigButton } from './BigButton';
-import { colors, type } from './theme';
+import { useColors } from './ColorThemeProvider';
+import { type, type ColorPalette } from './theme';
 
 type HoleIn = {
   number: number;
@@ -18,6 +20,8 @@ export function ScorecardBody({
   holes: HoleIn[];
   onBack: () => void;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const rows: ScorecardHole[] = planScorecard(holes);
   return (
     <View style={styles.wrap}>
@@ -44,20 +48,22 @@ export function ScorecardBody({
   );
 }
 
-const styles = StyleSheet.create({
-  wrap: { gap: 8 },
-  table: { gap: 8 },
-  head: { flexDirection: 'row', paddingHorizontal: 8 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.bgElevated,
-    borderRadius: 12,
-    minHeight: 48,
-    paddingHorizontal: 8,
-  },
-  cell: { flex: 1, color: colors.muted, fontSize: type.tiny, fontWeight: '800' },
-  val: { flex: 1, color: colors.cream, fontSize: type.body, fontWeight: '800' },
-  num: { flex: 0.6 },
-  mark: { flex: 0.7, textAlign: 'right', color: colors.lime },
-});
+function makeStyles(colors: ColorPalette) {
+  return StyleSheet.create({
+    wrap: { gap: 8 },
+    table: { gap: 8 },
+    head: { flexDirection: 'row', paddingHorizontal: 8 },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.bgElevated,
+      borderRadius: 12,
+      minHeight: 48,
+      paddingHorizontal: 8,
+    },
+    cell: { flex: 1, color: colors.muted, fontSize: type.tiny, fontWeight: '800' },
+    val: { flex: 1, color: colors.cream, fontSize: type.body, fontWeight: '800' },
+    num: { flex: 0.6 },
+    mark: { flex: 0.7, textAlign: 'right', color: colors.cream },
+  });
+}

@@ -30,6 +30,8 @@ import {
   type CourseLayoutSeed,
 } from '@/src/db/repo';
 import { COPY, formatTeeMeta } from '@/src/domain/playerCopy';
+import { playHrefAfterRoundStart } from '@/src/domain/playNav';
+import { formatHistoryRow } from '@/src/domain/roundHistory';
 import { describeGpsSource } from '@/src/services/location';
 import { BagCarryList, BagCustomizeActions } from '@/src/ui/BagCarryList';
 import { BigButton } from '@/src/ui/BigButton';
@@ -37,7 +39,8 @@ import { CoursePicker, type CoursePick } from '@/src/ui/CoursePicker';
 import { GpsBanner } from '@/src/ui/GpsBanner';
 import { Screen } from '@/src/ui/Screen';
 import { FullSheet } from '@/src/ui/Sheet';
-import { colors, tapTarget, type } from '@/src/ui/theme';
+import { useColors } from '@/src/ui/ColorThemeProvider';
+import { tapTarget, type, type ColorPalette } from '@/src/ui/theme';
 import { getCurrentFix } from '@/src/services/location';
 import { setWatchCoursePickedHandler } from '@/src/services/watchNearby';
 
@@ -62,6 +65,8 @@ async function loadLayout(
 
 export default function HomeScreen() {
   const { db, revision, bump } = useDb();
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [courseName, setCourseName] = useState('');
   const [picked, setPicked] = useState<CourseSummary | null>(null);
   const [pickedTee, setPickedTee] = useState<TeeSet | null>(null);
@@ -98,7 +103,7 @@ export default function HomeScreen() {
     const layout = await loadLayout(course, pickedDetail, pickedTee);
     const round = startRound(db, holeCount, course.name, layout);
     bump();
-    router.push(`/round/${round.id}/hole/1`);
+    router.push(playHrefAfterRoundStart(round.id));
   };
 
   const commitPick = async (pick: CoursePick) => {
@@ -115,7 +120,7 @@ export default function HomeScreen() {
         const layout = await loadLayout(pick.course, pick.detail, pick.tee);
         attachCourseToRound(db, active.id, pick.course.name, layout);
         bump();
-        router.push(`/round/${active.id}/hole/1`);
+        router.push(playHrefAfterRoundStart(active.id));
       } catch (err) {
         Alert.alert('Couldn’t attach course', err instanceof Error ? err.message : 'Try again.');
       } finally {
@@ -136,7 +141,7 @@ export default function HomeScreen() {
 
   const onStart = (holeCount: 9 | 18) => {
     if (active) {
-      router.push(`/round/${active.id}/hole/1`);
+      router.push(playHrefAfterRoundStart(active.id));
       return;
     }
     void (async () => {
@@ -149,7 +154,7 @@ export default function HomeScreen() {
         const name = courseName.trim() || null;
         const round = startRound(db, holeCount, name);
         bump();
-        router.push(`/round/${round.id}/hole/1`);
+        router.push(playHrefAfterRoundStart(round.id));
       } catch (err) {
         Alert.alert('Couldn’t start round', err instanceof Error ? err.message : 'Try again.');
       } finally {
@@ -263,7 +268,7 @@ export default function HomeScreen() {
           </Text>
           <BigButton
             label={COPY.continueRound}
-            onPress={() => router.push(`/round/${active.id}/hole/1`)}
+            onPress={() => router.push(playHrefAfterRoundStart(active.id))}
           />
           <BigButton
             label="Finish round"
@@ -308,11 +313,17 @@ export default function HomeScreen() {
           const scored = holes.filter((h) => h.score != null);
           const total = scored.reduce((sum, h) => sum + (h.score ?? 0), 0);
           const open = round.finishedAt == null;
+          const row = formatHistoryRow({
+            startedAt: round.startedAt,
+            courseName: round.courseName,
+            teeName: round.teeName,
+            score: scored.length ? total : null,
+          });
           return (
             <Pressable
               key={round.id}
               onPress={() =>
-                router.push(open ? `/round/${round.id}/hole/1` : `/round/${round.id}/summary`)
+                router.push(open ? playHrefAfterRoundStart(round.id) : `/round/${round.id}/summary`)
               }
               onLongPress={() => {
                 Alert.alert(COPY.deleteRound, COPY.deleteRoundConfirm, [
@@ -329,14 +340,16 @@ export default function HomeScreen() {
               }}
               style={styles.row}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.rowTitle}>{round.courseName ?? 'Round'}</Text>
+                <Text style={styles.rowTitle}>{row.courseName}</Text>
                 <Text style={styles.cardMeta}>
-                  {new Date(round.startedAt).toLocaleString()}
-                  {round.teeName ? ` · ${round.teeName}` : ''} · {round.holeCount} holes
+                  {row.date} · {row.tees}
                   {open ? ' · in progress' : ''}
                 </Text>
               </View>
-              <Text style={styles.score}>{scored.length ? total : '—'}</Text>
+              <View style={styles.scoreCol}>
+                <Text style={styles.relative}>{row.relative}</Text>
+                <Text style={styles.score}>{row.score}</Text>
+              </View>
             </Pressable>
           );
         })
@@ -345,56 +358,60 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  homeBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  title: { color: colors.cream, fontSize: type.title, fontWeight: '900', flex: 1 },
-  menuButton: {
-    minHeight: tapTarget,
-    minWidth: 88,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: colors.lime,
-    backgroundColor: colors.bgElevated,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  menuButtonText: { color: colors.cream, fontWeight: '800', fontSize: type.button },
-  lede: { color: colors.muted, fontSize: type.body, lineHeight: 22 },
-  hint: { color: colors.muted, fontSize: type.tiny },
-  meta: { color: colors.cream, fontSize: type.meta, fontWeight: '700' },
-  input: {
-    minHeight: 56,
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    color: colors.cream,
-    fontSize: 18,
-    backgroundColor: colors.bgElevated,
-  },
-  card: {
-    backgroundColor: colors.bgElevated,
-    borderRadius: 16,
-    padding: 14,
-    gap: 10,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  cardTitle: { color: colors.cream, fontSize: 20, fontWeight: '800' },
-  cardMeta: { color: colors.muted, fontSize: type.meta },
-  section: { color: colors.cream, fontSize: 18, fontWeight: '800', marginTop: 8 },
-  muted: { color: colors.muted, fontSize: type.body },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: colors.bgElevated,
-    padding: 14,
-    borderRadius: 14,
-    minHeight: tapTarget,
-    gap: 8,
-  },
-  rowTitle: { color: colors.cream, fontSize: 18, fontWeight: '700' },
-  score: { color: colors.lime, fontSize: 24, fontWeight: '900' },
-});
+function makeStyles(colors: ColorPalette) {
+  return StyleSheet.create({
+    homeBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+    title: { color: colors.cream, fontSize: type.title, fontWeight: '900', flex: 1 },
+    menuButton: {
+      minHeight: tapTarget,
+      minWidth: 88,
+      paddingHorizontal: 14,
+      borderRadius: 14,
+      borderWidth: 2,
+      borderColor: colors.line,
+      backgroundColor: colors.bgElevated,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    menuButtonText: { color: colors.cream, fontWeight: '800', fontSize: type.button },
+    lede: { color: colors.muted, fontSize: type.body, lineHeight: 22 },
+    hint: { color: colors.muted, fontSize: type.tiny },
+    meta: { color: colors.cream, fontSize: type.meta, fontWeight: '700' },
+    input: {
+      minHeight: 56,
+      borderWidth: 1,
+      borderColor: colors.line,
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      color: colors.cream,
+      fontSize: 18,
+      backgroundColor: colors.bgElevated,
+    },
+    card: {
+      backgroundColor: colors.bgElevated,
+      borderRadius: 16,
+      padding: 14,
+      gap: 10,
+      borderWidth: 1,
+      borderColor: colors.line,
+    },
+    cardTitle: { color: colors.cream, fontSize: 20, fontWeight: '800' },
+    cardMeta: { color: colors.muted, fontSize: type.meta },
+    section: { color: colors.cream, fontSize: 18, fontWeight: '800', marginTop: 8 },
+    muted: { color: colors.muted, fontSize: type.body },
+    row: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      backgroundColor: colors.bgElevated,
+      padding: 14,
+      borderRadius: 14,
+      minHeight: tapTarget,
+      gap: 8,
+    },
+    rowTitle: { color: colors.cream, fontSize: 18, fontWeight: '700' },
+    scoreCol: { alignItems: 'flex-end', gap: 2 },
+    relative: { color: colors.muted, fontSize: type.tiny, fontWeight: '800' },
+    score: { color: colors.cream, fontSize: 24, fontWeight: '900' },
+  });
+}

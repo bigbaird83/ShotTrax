@@ -64,6 +64,7 @@ import {
   playAllClubsSitsBesideWheel,
   playShowsSayClub,
   watchShowsSayClub,
+  PLAY_CONTROL_MIN_TAP,
   PLAY_DOCK_ACTION_MIN_HEIGHT,
   playDockActionMinHeight,
   playMenuIsButton,
@@ -78,6 +79,7 @@ import {
   playEditUsesCourseCardCamera,
   playAndAddShotShareCourseCardCamera,
 } from './playLayout';
+import { PHONE_WHEEL_PILL_HEIGHT } from './clubStrip';
 
 test('play map fills at least 60% down to a two-row dock; header is overlay', () => {
   const layout = planPlayLayout();
@@ -505,4 +507,30 @@ test('build 32 cook-gate: Menu is a button, All clubs floats, dock matches 31 pi
   assert.doesNotMatch(pick, /COPY\.sayClub/);
   assert.doesNotMatch(watch, /Say a club/);
   assert.doesNotMatch(watch, /Listening/);
+});
+
+test('build 33 cook-gate: play stays on hole, three themes, history row fields', () => {
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const home = readFileSync(new URL('../../app/(tabs)/index.tsx', import.meta.url), 'utf8');
+  const settings = readFileSync(new URL('../../app/settings.tsx', import.meta.url), 'utf8');
+
+  assert.doesNotMatch(hole, /shouldAutoOpenClubPick/);
+  assert.match(hole, /playHrefAfterHoleChange/);
+  assert.match(hole, /allClubsHref/);
+  assert.match(hole, /hapticLight/);
+  assert.match(hole, /styles\.holeMeta/);
+  assert.match(hole, /formatPlayHeader\(hole\.number, hole\.par, playHeaderYards\.yards\)/);
+  assert.match(home, /playHrefAfterRoundStart/);
+  assert.match(home, /formatHistoryRow/);
+  assert.match(home, /row\.date/);
+  assert.match(home, /row\.tees/);
+  assert.match(settings, /COLOR_THEME_IDS/);
+  assert.match(settings, /COPY\.colorTheme/);
+  assert.doesNotMatch(settings, /ColorPicker/);
+  assert.ok(playDockActionMinHeight() >= PLAY_CONTROL_MIN_TAP);
+  assert.equal(PLAY_CONTROL_MIN_TAP, 44);
+  assert.ok(PHONE_WHEEL_PILL_HEIGHT >= PLAY_CONTROL_MIN_TAP);
+  assert.match(home, /row\.relative/);
+  assert.equal(playHidesMapsLegal(), true);
+  assert.equal(playHidesMapsCompass(), true);
 });

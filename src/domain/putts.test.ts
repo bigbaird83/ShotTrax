@@ -75,8 +75,8 @@ test('Made it needs at least one putt with a bucket', () => {
   }
 });
 
-test('next hole with no shots opens Pick a club (club-select = mark)', () => {
-  assert.equal(shouldAutoOpenClubPick({ readOnly: false, shotCount: 0 }), true);
+test('next hole with no shots stays on play — All clubs does not auto-open', () => {
+  assert.equal(shouldAutoOpenClubPick({ readOnly: false, shotCount: 0 }), false);
   assert.equal(shouldAutoOpenClubPick({ readOnly: false, shotCount: 0, openingPutts: true }), false);
 });
 

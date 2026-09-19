@@ -5,6 +5,7 @@ import type { CourseDetail, CourseSummary } from '@/src/course/types';
 import { layoutFromTee } from '@/src/course/layout';
 import { fillLayoutTeesFromOsm } from '@/src/course/osmOverlay';
 import { startRound } from '@/src/db/repo';
+import { playHrefAfterRoundStart } from '@/src/domain/playNav';
 import type { GpsFix } from '@/src/domain/types';
 import {
   nearbyCoursesPayload,
@@ -193,7 +194,7 @@ export async function handleWatchNearbyJson(json: string): Promise<{ ok: boolean
       const layout = await fillLayoutTeesFromOsm(layoutFromTee(detail, tee), { timeoutMs: 3500 });
       const round = startRound(ctx.db, holeCount, detail.name, layout);
       ctx.bump();
-      router.push(`/round/${round.id}/hole/1`);
+      router.push(playHrefAfterRoundStart(round.id));
       return { ok: true, feedback: tee ? `${detail.name} · ${tee.name}` : detail.name };
     } catch {
       return { ok: false, feedback: PHONE_UNAVAILABLE };

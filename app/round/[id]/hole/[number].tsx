@@ -35,7 +35,8 @@ import {
 } from '@/src/db/repo';
 import { pinOrNull, formatFmbRow, hasApiFmb, yardsToGreenDepth } from '@/src/domain/greenDepth';
 import { clubPickLeaveRunsAcceptFix, planClubPickLeave } from '@/src/domain/clubPickNav';
-import { COPY, finishPuttsChip, finishShotChip, formatHoleHeader, formatPlayHeader, formatSuggestedClubChip, markedSuggestedMessage } from '@/src/domain/playerCopy';
+import { COPY, finishPuttsChip, finishShotChip, formatPlayHeader, formatSuggestedClubChip, markedSuggestedMessage } from '@/src/domain/playerCopy';
+import { allClubsHref, playHrefAfterHoleChange } from '@/src/domain/playNav';
 import { canAdvanceHole, holesNeedingOpenShots } from '@/src/domain/holeAdvance';
 import { isPutterClubId } from '@/src/domain/defaultBag';
 import { catchUpPinFromTap, planCancelCatchUp, planCatchUpSheet } from '@/src/domain/catchUpMap';
@@ -60,7 +61,6 @@ import {
   madeItAdvancesHole,
   planMadeIt,
   putterOpensPuttSheet,
-  shouldAutoOpenClubPick,
   undoLastPutt,
   type PuttDraft,
   type PuttLengthId,
@@ -83,13 +83,17 @@ import { BigButton } from '@/src/ui/BigButton';
 import { ClubButton } from '@/src/ui/ClubButton';
 import { ClubStrip } from '@/src/ui/ClubStrip';
 import { GpsBanner } from '@/src/ui/GpsBanner';
-import { hapticMark, hapticSelect, hapticTap, hapticWarn } from '@/src/ui/haptics';
+import { hapticLight, hapticMark, hapticSelect, hapticTap, hapticWarn } from '@/src/ui/haptics';
+import { useColorTheme } from '@/src/ui/ColorThemeProvider';
+import { useAmbientLight } from '@/src/ui/useAmbientLight';
+import { playThemeId } from '@/src/domain/playTheme';
+import { formatShotLockChip } from '@/src/domain/shotLock';
 import { HoleMap } from '@/src/ui/HoleMap';
 import { MarkCheck } from '@/src/ui/MarkCheck';
 import { FullSheet } from '@/src/ui/Sheet';
 import { PuttSheetBody } from '@/src/ui/PuttSheetBody';
 import { ScorecardBody } from '@/src/ui/ScorecardBody';
-import { colors, tapTarget, type } from '@/src/ui/theme';
+import { COLOR_THEMES, tapTarget, type, type ColorPalette } from '@/src/ui/theme';
 
 export default function HoleScreen() {
   const { id, number, putts: puttsParam, menu: menuParam } = useLocalSearchParams<{
@@ -101,6 +105,10 @@ export default function HoleScreen() {
   const holeNumber = Number(number);
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const { themeId: savedThemeId } = useColorTheme();
+  const ambient = useAmbientLight();
+  const colors = COLOR_THEMES[playThemeId({ saved: savedThemeId, ambient })];
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { db, revision, bump } = useDb();
   const fix = useLiveFix(true);
   const [busy, setBusy] = useState(false);
@@ -136,7 +144,6 @@ export default function HoleScreen() {
   const [osmOverlay, setOsmOverlay] = useState<OsmOverlay | null>(null);
   const [checkNonce, setCheckNonce] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
-  const autoOpened = useRef<number | null>(null);
 
   const round = useMemo(() => getRound(db, id), [db, id, revision]);
   const hole = useMemo(() => getHole(db, id, holeNumber), [db, id, holeNumber, revision]);
@@ -254,7 +261,8 @@ export default function HoleScreen() {
     setEditUndo(null);
     setConfirmUndo(null);
     setMapFramed(false);
-    router.replace(`/round/${id}/hole/${nextNumber}`);
+    hapticLight();
+    router.replace(playHrefAfterHoleChange(id, nextNumber));
   };
 
   const lastShotClubId = [...shots].reverse().find((shot) => shot.clubId)?.clubId ?? null;
@@ -340,22 +348,6 @@ export default function HoleScreen() {
       live = false;
     };
   }, [round?.courseApiId, hole?.greenLat, hole?.greenLng, holeNumber]);
-
-  useEffect(() => {
-    if (!round || !hole || Number.isNaN(holeNumber)) return;
-    if (
-      !shouldAutoOpenClubPick({
-        readOnly,
-        shotCount: shots.length,
-        openingPutts: puttsParam === '1',
-      })
-    ) {
-      return;
-    }
-    if (autoOpened.current === holeNumber) return;
-    autoOpened.current = holeNumber;
-    router.push(`/round/${id}/club-pick?hole=${holeNumber}`);
-  }, [round, hole, readOnly, shots.length, holeNumber, id, puttsParam]);
 
   const green =
     hole?.greenLat != null && hole.greenLng != null
@@ -630,6 +622,15 @@ export default function HoleScreen() {
       });
       if (!waiting && plan.status === 'commit') {
         hapticMark();
+        if (plan.closePrior) {
+          const closed = shots.find((shot) => shot.id === plan.closePrior?.shotId);
+          const closedName = closed?.clubId ? clubMap[closed.clubId]?.shortName ?? 'club' : 'club';
+          const chip = formatShotLockChip({
+            shortName: closedName,
+            distanceYards: plan.closePrior.distanceYards,
+          });
+          if (chip) setToast(chip);
+        }
         setCheckNonce((n) => n + 1);
         bump();
       }
@@ -683,7 +684,18 @@ export default function HoleScreen() {
       const waiting = promptForPlan(plan, () => {
         void onEndShot(true);
       });
-      if (!waiting) bump();
+      if (!waiting && plan.status === 'commit' && plan.closePrior) {
+        const closed = shots.find((shot) => shot.id === plan.closePrior?.shotId);
+        const closedName = closed?.clubId ? clubMap[closed.clubId]?.shortName ?? 'club' : 'club';
+        const chip = formatShotLockChip({
+          shortName: closedName,
+          distanceYards: plan.closePrior.distanceYards,
+        });
+        if (chip) setToast(chip);
+        bump();
+      } else if (!waiting) {
+        bump();
+      }
     } catch (err) {
       Alert.alert('Couldn’t end shot', err instanceof Error ? err.message : 'Try again.');
     } finally {
@@ -761,12 +773,13 @@ export default function HoleScreen() {
 
   const openBag = () => {
     if (placing) return;
-    router.push(`/round/${id}/club-pick?hole=${holeNumber}`);
+    router.push(allClubsHref(id, holeNumber));
   };
 
   const confirmToPin = () => {
     const result = confirmPlaceToDraft({ from: placeFrom, draft: placeToDraft });
     if (result.status === 'empty') return;
+    hapticLight();
     setPlaceTo(result.to);
     setPlaceClubOpen(true);
   };
@@ -786,6 +799,14 @@ export default function HoleScreen() {
       return;
     }
     hapticMark();
+    hapticLight();
+    const placed = planPlacedShot(placeFrom, placeTo);
+    const club = clubs.find((row) => row.id === clubId);
+    const chip = formatShotLockChip({
+      shortName: club?.shortName ?? '',
+      distanceYards: placed.ok ? placed.distanceYards : null,
+    });
+    if (chip) setToast(chip);
     setConfirmUndo(planConfirmUndo(result.id, Date.now()));
     resetPlace();
     bump();
@@ -976,8 +997,14 @@ export default function HoleScreen() {
                   <Text style={styles.backLabel}>{COPY.cancelPlace}</Text>
                 </Pressable>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.holeTitle}>
-                    {formatPlayHeader(hole.number, hole.par, playHeaderYards.yards)}
+                  <Text
+                    style={styles.holeTitle}
+                    numberOfLines={1}
+                    accessibilityLabel={formatPlayHeader(hole.number, hole.par, playHeaderYards.yards)}>
+                    {`Hole ${hole.number}`}
+                    <Text style={styles.holeMeta}>
+                      {` · ${formatParLabel(hole.par)}${round.teeName ? ` · ${round.teeName}` : ''}`}
+                    </Text>
                   </Text>
                 </View>
               </View>
@@ -990,8 +1017,14 @@ export default function HoleScreen() {
                   <Text style={styles.menuButtonText}>{COPY.menu}</Text>
                 </Pressable>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.holeTitle} numberOfLines={1}>
-                    {formatPlayHeader(hole.number, hole.par, playHeaderYards.yards)}
+                  <Text
+                    style={styles.holeTitle}
+                    numberOfLines={1}
+                    accessibilityLabel={formatPlayHeader(hole.number, hole.par, playHeaderYards.yards)}>
+                    {`Hole ${hole.number}`}
+                    <Text style={styles.holeMeta}>
+                      {` · ${formatParLabel(hole.par)}${round.teeName ? ` · ${round.teeName}` : ''}`}
+                    </Text>
                   </Text>
                 </View>
               </View>
@@ -1650,7 +1683,8 @@ export default function HoleScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ColorPalette) {
+  return StyleSheet.create({
   fill: { flex: 1, backgroundColor: colors.bg },
   mapFill: { flex: 1, minHeight: '60%', flexGrow: 1, flexBasis: '60%' },
   mapWrapFull: { flex: 1, minHeight: 0 },
@@ -1658,14 +1692,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: 'rgba(11,26,18,0.88)',
+    backgroundColor: colors.overlay,
     borderRadius: 14,
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
   catchUpHint: {
     marginTop: 8,
-    backgroundColor: 'rgba(11,26,18,0.88)',
+    backgroundColor: colors.overlay,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -1690,7 +1724,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: 'rgba(11,26,18,0.88)',
+    backgroundColor: colors.overlay,
     borderRadius: 14,
     paddingHorizontal: 10,
     paddingVertical: 8,
@@ -1701,14 +1735,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 14,
     borderWidth: 2,
-    borderColor: colors.lime,
+    borderColor: colors.line,
     backgroundColor: colors.bgElevated,
     alignItems: 'center',
     justifyContent: 'center',
   },
   menuButtonText: { color: colors.cream, fontWeight: '800', fontSize: type.button },
   back: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 },
-  backLabel: { color: colors.lime, fontWeight: '800', fontSize: type.meta },
+  backLabel: { color: colors.cream, fontWeight: '800', fontSize: type.meta },
   allClubsFloat: {
     position: 'absolute',
     left: 12,
@@ -1729,13 +1763,14 @@ const styles = StyleSheet.create({
   },
   allClubsPillText: { color: colors.cream, fontWeight: '800', fontSize: type.chip },
   holeTitle: { color: colors.cream, fontSize: type.body, fontWeight: '900' },
+  holeMeta: { color: colors.muted, fontSize: type.tiny, fontWeight: '700' },
   shotLine: { marginTop: 6, maxHeight: 36, flexGrow: 0 },
   shotLineInner: { alignItems: 'center', gap: 6, paddingRight: 8 },
   shotLineItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   shotLineShot: {
     minHeight: 32,
     borderRadius: 10,
-    backgroundColor: 'rgba(11,26,18,0.88)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: 10,
     justifyContent: 'center',
   },
@@ -1746,15 +1781,15 @@ const styles = StyleSheet.create({
     minWidth: 32,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.lime,
+    borderColor: colors.line,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(11,26,18,0.88)',
+    backgroundColor: colors.overlay,
   },
-  shotLinePlusText: { color: colors.lime, fontSize: 18, fontWeight: '900', lineHeight: 20 },
+  shotLinePlusText: { color: colors.cream, fontSize: 18, fontWeight: '900', lineHeight: 20 },
   overlayBanner: {
     marginTop: 6,
-    backgroundColor: 'rgba(11,26,18,0.88)',
+    backgroundColor: colors.overlay,
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -1764,16 +1799,16 @@ const styles = StyleSheet.create({
     marginTop: 6,
     minHeight: 32,
     justifyContent: 'center',
-    backgroundColor: 'rgba(11,26,18,0.88)',
+    backgroundColor: colors.overlay,
     borderRadius: 10,
     paddingHorizontal: 10,
   },
   overlayToast: {
     marginTop: 6,
-    color: colors.lime,
+    color: colors.cream,
     fontSize: type.tiny,
     fontWeight: '800',
-    backgroundColor: 'rgba(11,26,18,0.88)',
+    backgroundColor: colors.overlay,
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -1813,7 +1848,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgElevated,
     paddingHorizontal: 8,
   },
-  dockChipPrimary: { borderColor: colors.lime, borderWidth: 2, backgroundColor: '#1C3A24' },
+  dockChipPrimary: { borderColor: colors.lime, borderWidth: 2, backgroundColor: colors.accentWash },
   dockChipText: { color: colors.cream, fontWeight: '800', fontSize: type.tiny },
   dockChipPrimaryText: { color: colors.lime, fontWeight: '900' },
   dockAction: {
@@ -1851,11 +1886,11 @@ const styles = StyleSheet.create({
     minHeight: tapTarget,
     borderColor: colors.lime,
     borderWidth: 2,
-    backgroundColor: '#1C3A24',
+    backgroundColor: colors.accentWash,
   },
   top3Text: { color: colors.cream, fontWeight: '800', fontSize: type.chip },
   top3PrimaryText: { color: colors.lime, fontSize: type.button, fontWeight: '900' },
-  suggest: { color: colors.lime, fontSize: type.tiny, fontWeight: '800' },
+  suggest: { color: colors.muted, fontSize: type.tiny, fontWeight: '800' },
   row: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   warn: { color: colors.orange, fontSize: type.meta, fontWeight: '700' },
   muted: { color: colors.muted, fontSize: type.body },
@@ -1875,7 +1910,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.bgElevated,
   },
-  chipOn: { borderColor: colors.lime, backgroundColor: '#1C3A24' },
+  chipOn: { borderColor: colors.lime, backgroundColor: colors.accentWash },
   chipText: { color: colors.cream, fontSize: 22, fontWeight: '800' },
   step: {
     minHeight: 64,
@@ -1887,7 +1922,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.line,
   },
-  stepText: { color: colors.lime, fontSize: 32, fontWeight: '800' },
+  stepText: { color: colors.cream, fontSize: 32, fontWeight: '800' },
   score: { color: colors.cream, fontSize: 36, fontWeight: '900', minWidth: 64, textAlign: 'center' },
   shot: {
     flexDirection: 'row',
@@ -1904,13 +1939,13 @@ const styles = StyleSheet.create({
     minWidth: 36,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: colors.lime,
+    borderColor: colors.line,
     alignItems: 'center',
     justifyContent: 'center',
     marginVertical: 4,
   },
-  insertPlusText: { color: colors.lime, fontSize: 22, fontWeight: '900', lineHeight: 24 },
-  shotSeq: { color: colors.lime, fontWeight: '900', fontSize: 20, width: 24 },
+  insertPlusText: { color: colors.cream, fontSize: 22, fontWeight: '900', lineHeight: 24 },
+  shotSeq: { color: colors.cream, fontWeight: '900', fontSize: 20, width: 24 },
   shotClub: { color: colors.cream, fontSize: 18, fontWeight: '700' },
   reasonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   reasonChip: {
@@ -1934,4 +1969,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: colors.bgElevated,
   },
-});
+  });
+}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { NativeSyntheticEvent, NativeScrollEvent, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   CLUB_STRIP_GAP,
@@ -9,7 +9,8 @@ import {
   clubStripWindowStartClamped,
   wrapClubStripIndex,
 } from '../domain/clubStrip';
-import { colors, type } from './theme';
+import { useColors } from './ColorThemeProvider';
+import { type, type ColorPalette } from './theme';
 
 export type ClubStripItem = {
   id: string;
@@ -39,6 +40,8 @@ function pillWidthForStrip(width: number, count: number, _compact?: boolean): nu
 
 /** Sideways carry wheel. Three full pills. Tap selects; swipe does not mark. */
 export function ClubStrip({ items, pickId, windowStart = 0, onPick, disabled, compact }: Props) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const scrollRef = useRef<ScrollView>(null);
   const [width, setWidth] = useState(0);
   const pillWidth = pillWidthForStrip(width, items.length, compact);
@@ -154,22 +157,29 @@ export function ClubStrip({ items, pickId, windowStart = 0, onPick, disabled, co
   );
 }
 
-const styles = StyleSheet.create({
-  wrap: { width: '100%', height: PHONE_WHEEL_PILL_HEIGHT + 8 },
-  wrapCompact: { height: 40 },
-  pill: {
-    height: PHONE_WHEEL_PILL_HEIGHT,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.line,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgElevated,
-    paddingHorizontal: 6,
-  },
-  pillCompact: { height: 36, borderRadius: 10 },
-  pillPick: { borderColor: colors.lime, borderWidth: 2, backgroundColor: '#1C3A24' },
-  label: { color: colors.cream, fontWeight: '800', fontSize: type.chip },
-  labelCompact: { fontSize: type.tiny },
-  labelPick: { color: colors.lime, fontWeight: '900' },
-});
+function makeStyles(colors: ColorPalette) {
+  return StyleSheet.create({
+    wrap: { width: '100%', height: PHONE_WHEEL_PILL_HEIGHT + 8 },
+    wrapCompact: { height: 40 },
+    pill: {
+      height: PHONE_WHEEL_PILL_HEIGHT,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.line,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.bgElevated,
+      paddingHorizontal: 6,
+    },
+    pillCompact: { height: 36, borderRadius: 10 },
+    pillPick: {
+      borderColor: colors.lime,
+      borderWidth: 3,
+      backgroundColor: colors.accentWash,
+      transform: [{ scale: 1.04 }],
+    },
+    label: { color: colors.cream, fontWeight: '800', fontSize: type.chip },
+    labelCompact: { fontSize: type.tiny },
+    labelPick: { color: colors.lime, fontWeight: '900' },
+  });
+}

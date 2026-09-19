@@ -23,3 +23,8 @@ export function hapticWarn(): void {
 export function hapticTap(): void {
   void run(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium));
 }
+
+/** Shot lock / hole change — light, not a success banner. */
+export function hapticLight(): void {
+  void run(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light));
+}

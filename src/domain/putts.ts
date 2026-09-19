@@ -159,14 +159,13 @@ export function madeItAdvancesHole(args: {
 }
 
 /**
- * After Made it (or arriving on a fresh hole), Pick a club still marks GPS.
- * Opening the putt sheet skips this so Putter is never a silent mark.
+ * All clubs never auto-opens on start or hole change.
+ * The play/hole view stays up. All clubs is only the All clubs control.
  */
-export function shouldAutoOpenClubPick(args: {
+export function shouldAutoOpenClubPick(_args: {
   readOnly: boolean;
   shotCount: number;
   openingPutts?: boolean;
-}): boolean {
-  if (args.readOnly || args.openingPutts) return false;
-  return args.shotCount === 0;
+}): false {
+  return false;
 }

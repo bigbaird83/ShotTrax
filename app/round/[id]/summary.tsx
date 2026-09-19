@@ -17,13 +17,16 @@ import { BigButton } from '@/src/ui/BigButton';
 import { HoleMap } from '@/src/ui/HoleMap';
 import { Screen } from '@/src/ui/Screen';
 import { FullSheet } from '@/src/ui/Sheet';
-import { colors } from '@/src/ui/theme';
+import { useColors } from '@/src/ui/ColorThemeProvider';
+import { type ColorPalette } from '@/src/ui/theme';
 
 const NERD_TRAIL_TO_GREEN = { yards: null, quality: 'none' as const };
 
 export default function RoundSummaryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { db, revision } = useDb();
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [nerdOpen, setNerdOpen] = useState(false);
   const [osmOverlay, setOsmOverlay] = useState<OsmOverlay | null>(null);
   const round = useMemo(() => getRound(db, id), [db, id, revision]);
@@ -236,11 +239,12 @@ export default function RoundSummaryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  kicker: { color: colors.lime, fontWeight: '800', letterSpacing: 1 },
+function makeStyles(colors: ColorPalette) {
+  return StyleSheet.create({
+  kicker: { color: colors.muted, fontWeight: '800', letterSpacing: 1 },
   title: { color: colors.cream, fontSize: 28, fontWeight: '900' },
   total: { color: colors.cream, fontSize: 48, fontWeight: '900' },
-  toPar: { color: colors.lime, fontSize: 28, fontWeight: '800' },
+  toPar: { color: colors.cream, fontSize: 28, fontWeight: '800' },
   muted: { color: colors.muted, fontSize: 16 },
   penalty: { color: colors.amber, fontSize: 14, fontWeight: '700' },
   warn: { color: colors.orange, fontSize: 13, fontWeight: '700' },
@@ -253,7 +257,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     minHeight: 64,
   },
-  holeNum: { color: colors.lime, fontSize: 22, fontWeight: '900', width: 28 },
+  holeNum: { color: colors.cream, fontSize: 22, fontWeight: '900', width: 28 },
   holeTitle: { color: colors.cream, fontSize: 18, fontWeight: '700' },
   score: { color: colors.cream, fontSize: 24, fontWeight: '900' },
   nerdPad: { padding: 16, gap: 10, paddingBottom: 40 },
@@ -269,4 +273,5 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     minHeight: 64,
   },
-});
+  });
+}

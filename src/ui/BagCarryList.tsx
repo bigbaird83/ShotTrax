@@ -6,7 +6,8 @@ import { fillEstimatedCarries } from '@/src/domain/carryFill';
 import { isPutterClubId, parseTypicalCarryYards } from '@/src/domain/defaultBag';
 import { COPY } from '@/src/domain/playerCopy';
 import type { Club } from '@/src/domain/types';
-import { colors, tapTarget, type } from './theme';
+import { useColors } from './ColorThemeProvider';
+import { tapTarget, type, type ColorPalette } from './theme';
 
 type Props = {
   db: SQLiteDatabase;
@@ -16,6 +17,8 @@ type Props = {
 };
 
 export function BagCarryList({ db, clubs, onChange, onRename }: Props) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const filled = useMemo(() => fillEstimatedCarries(clubs), [clubs]);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
 
@@ -96,6 +99,8 @@ export function BagCustomizeActions({
   onSkip: () => void;
   onDone: () => void;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={styles.actions}>
       <Pressable accessibilityRole="button" onPress={onSkip} style={styles.skip}>
@@ -108,7 +113,8 @@ export function BagCustomizeActions({
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ColorPalette) {
+  return StyleSheet.create({
   list: { gap: 10 },
   row: {
     minHeight: tapTarget,
@@ -155,5 +161,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: colors.lime,
   },
-  doneLabel: { color: colors.bg, fontSize: type.body, fontWeight: '900' },
-});
+  doneLabel: { color: colors.onAccent, fontSize: type.body, fontWeight: '900' },
+  });
+}

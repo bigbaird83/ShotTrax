@@ -1,7 +1,9 @@
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { COPY } from '../domain/playerCopy';
 import { PUTT_LENGTHS, type PuttDraft, type PuttLengthId } from '../domain/putts';
-import { colors, tapTarget, type } from './theme';
+import { useColors } from './ColorThemeProvider';
+import { tapTarget, type, type ColorPalette } from './theme';
 import { BigButton } from './BigButton';
 
 export function PuttSheetBody({
@@ -19,6 +21,8 @@ export function PuttSheetBody({
   onUndo: () => void;
   onMadeIt: () => void;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const canAdd = draft.lengths.length < 5 && !disabled;
   const canMake = draft.lengths.length > 0 && !disabled;
   return (
@@ -59,7 +63,8 @@ export function PuttSheetBody({
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ColorPalette) {
+  return StyleSheet.create({
   wrap: { padding: 16, gap: 12, paddingBottom: 40 },
   lede: { color: colors.cream, fontSize: type.body, fontWeight: '800' },
   muted: { color: colors.muted, fontSize: type.body },
@@ -74,7 +79,7 @@ const styles = StyleSheet.create({
     minHeight: 52,
   },
   puttN: { color: colors.cream, fontSize: type.body, fontWeight: '800' },
-  puttLen: { color: colors.lime, fontSize: type.body, fontWeight: '900' },
+  puttLen: { color: colors.cream, fontSize: type.body, fontWeight: '900' },
   buckets: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   bucket: {
     flexGrow: 1,
@@ -83,11 +88,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: 14,
     borderWidth: 2,
-    borderColor: colors.lime,
+    borderColor: colors.line,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgElevated,
   },
   bucketOff: { opacity: 0.45, borderColor: colors.line },
   bucketText: { color: colors.cream, fontSize: type.meta, fontWeight: '800', textAlign: 'center' },
-});
+  });
+}

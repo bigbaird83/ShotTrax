@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
+import { useMemo } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, space } from './theme';
+import { useColors } from './ColorThemeProvider';
+import { space, type ColorPalette } from './theme';
 
 export function Screen({
   children,
@@ -18,6 +20,8 @@ export function Screen({
   refreshing?: boolean;
   onRefresh?: () => void;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const pad = padded ? styles.pad : styles.bare;
   const refresh =
     onRefresh != null ? (
@@ -42,20 +46,22 @@ export function Screen({
   );
 }
 
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  pad: {
-    padding: space.md,
-    paddingBottom: 32,
-    gap: 12,
-  },
-  bare: {
-    flex: 1,
-  },
-  fill: {
-    flex: 1,
-  },
-});
+function makeStyles(colors: ColorPalette) {
+  return StyleSheet.create({
+    safe: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    pad: {
+      padding: space.md,
+      paddingBottom: 32,
+      gap: 12,
+    },
+    bare: {
+      flex: 1,
+    },
+    fill: {
+      flex: 1,
+    },
+  });
+}

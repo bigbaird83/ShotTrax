@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { isGolfCoursesApiConfigured } from '@/src/course/config';
 import { getCourseDataClient } from '@/src/course/client';
@@ -8,7 +8,8 @@ import { COPY } from '@/src/domain/playerCopy';
 import { formatCourseDistance, type CourseDistanceUnit } from '@/src/domain/courseDistance';
 import { getCurrentFix } from '@/src/services/location';
 import { BigButton } from './BigButton';
-import { colors, tapTarget, type } from './theme';
+import { useColors } from './ColorThemeProvider';
+import { tapTarget, type, type ColorPalette } from './theme';
 
 export type CoursePick = {
   course: CourseSummary;
@@ -44,6 +45,8 @@ export function CoursePicker({
   onRefreshReady,
   courseDistanceUnit = 'mi',
 }: Props) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const configured = isGolfCoursesApiConfigured();
   const [busy, setBusy] = useState(false);
   const [teeBusy, setTeeBusy] = useState(false);
@@ -168,7 +171,8 @@ export function CoursePicker({
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ColorPalette) {
+  return StyleSheet.create({
   box: { flex: 1, gap: 10, paddingHorizontal: 16, paddingBottom: 16 },
   list: { flex: 1 },
   label: { color: colors.muted, fontSize: type.meta, fontWeight: '700' },
@@ -188,4 +192,5 @@ const styles = StyleSheet.create({
   rowOn: { borderColor: colors.lime },
   rowTitle: { color: colors.cream, fontSize: type.body, fontWeight: '700' },
   teeBox: { gap: 8, marginTop: 8 },
-});
+  });
+}
