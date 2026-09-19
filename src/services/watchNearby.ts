@@ -3,7 +3,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { getCourseDataClient } from '@/src/course/client';
 import type { CourseDetail, CourseSummary } from '@/src/course/types';
 import { layoutFromTee } from '@/src/course/layout';
-import { fillLayoutTeesFromOsm } from '@/src/course/osmOverlay';
+import { prefetchCourseCardInBackground, rememberLayoutHoles } from '@/src/course/prefetch';
 import { startRound } from '@/src/db/repo';
 import { playHrefAfterRoundStart } from '@/src/domain/playNav';
 import type { GpsFix } from '@/src/domain/types';
@@ -191,10 +191,12 @@ export async function handleWatchNearbyJson(json: string): Promise<{ ok: boolean
         : null;
       if (start.teeName && !tee) return { ok: false, feedback: 'open the phone' };
       if (detail.tees.length > 0 && !tee) return { ok: false, feedback: 'open the phone' };
-      const layout = await fillLayoutTeesFromOsm(layoutFromTee(detail, tee), { timeoutMs: 3500 });
+      const layout = layoutFromTee(detail, tee);
+      rememberLayoutHoles(layout);
       const round = startRound(ctx.db, holeCount, detail.name, layout);
       ctx.bump();
       router.push(playHrefAfterRoundStart(round.id));
+      prefetchCourseCardInBackground(layout);
       return { ok: true, feedback: tee ? `${detail.name} · ${tee.name}` : detail.name };
     } catch {
       return { ok: false, feedback: PHONE_UNAVAILABLE };

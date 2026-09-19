@@ -1,8 +1,8 @@
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { getCourseDataClient } from '@/src/course/client';
-import { cachedResolvedTee, resolveOverlayTee } from '@/src/course/osmOverlay';
+import { cachedOsmOverlay, cachedResolvedTee, resolveOverlayTee } from '@/src/course/osmOverlay';
+import { ensureHoleTeeGreen } from '@/src/course/prefetch';
 import type { OsmOverlay } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
 import { getHole, getRound, listClubAverages, listClubs, listShotsForHole } from '@/src/db/repo';
@@ -134,14 +134,21 @@ export default function ClubPickScreen() {
       return;
     }
     let live = true;
-    void getCourseDataClient()
-      .fetchOsmOverlay({
-        courseId: round?.courseApiId,
-        location,
-        holeNumber,
-      })
-      .then((overlay) => {
-        if (live) setOsmOverlay(overlay);
+    void ensureHoleTeeGreen({
+      courseId: round?.courseApiId,
+      holeNumber,
+      tee: courseTeeFromHole(holeRow),
+      green,
+      location,
+    })
+      .then((frame) => {
+        if (!live) return;
+        const overlay = cachedOsmOverlay({
+          courseId: round?.courseApiId,
+          holeNumber,
+          green: frame.green,
+        });
+        setOsmOverlay(overlay);
       })
       .catch(() => {
         if (live) setOsmOverlay(null);
@@ -149,7 +156,7 @@ export default function ClubPickScreen() {
     return () => {
       live = false;
     };
-  }, [green, round?.courseApiId, round?.courseLat, round?.courseLng, holeNumber]);
+  }, [green, holeRow, round?.courseApiId, round?.courseLat, round?.courseLng, holeNumber]);
 
   const toGreen = toGreenDisplayFromHole({
     courseYards: holeRow?.yards ?? null,

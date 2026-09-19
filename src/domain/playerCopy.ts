@@ -30,6 +30,13 @@ export const COPY = {
   waitingOnLocation: 'Waiting on your location.',
   courseCardMissingFrame: 'Need the course tee and green for this hole.',
   approximate: 'Approximate',
+  share: 'Share',
+  shareLive: 'Share live',
+  spectatorTitle: 'ShotTraxx',
+  spectatorLive: 'Live',
+  spectatorFinished: 'Finished',
+  spectatorNeedsNoLocation: 'Spectator view — no location needed.',
+  spectatorEmpty: 'Nothing to show yet.',
   longPressGreen: 'Long-press to set the green',
   toGreen: 'To green',
   mark: 'Mark',
@@ -38,8 +45,6 @@ export const COPY = {
   drop: 'Drop',
   penalty: 'Penalty',
   sayClub: 'Say a club',
-  sayAgain: 'Say again',
-  listening: 'Listening…',
   bag: 'Bag',
   fullBag: 'Full bag',
   allClubs: 'All clubs',
@@ -85,7 +90,6 @@ export const COPY = {
   noShots: 'No shots yet. Pick a club after you hit.',
   inPlay: 'In play',
   logged: 'Logged',
-  didntCatchClub: 'Didn’t catch a club. Say it again or pick one.',
   suggested: 'Suggested',
   changeClub: 'Change club',
   editShot: 'Edit shot',
@@ -152,19 +156,6 @@ export function finishShotChip(holeNumber: number): string {
 
 export function markedSuggestedMessage(shortName: string): string {
   return `Marked ${shortName} (suggested) · Change club.`;
-}
-
-/** Voice fail always offers a tap into the bag — never voice-only recovery. */
-export function voiceFailRecovery(): {
-  banner: string;
-  primaryLabel: string;
-  secondaryLabel: string;
-} {
-  return {
-    banner: COPY.didntCatchClub,
-    primaryLabel: COPY.pickClub,
-    secondaryLabel: COPY.sayAgain,
-  };
 }
 
 export function formatParLabel(par: number | null): string {

@@ -1,0 +1,176 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { test } from 'node:test';
+import { COPY } from './playerCopy';
+import {
+  approximateFromFixQuality,
+  decodeSpectatorPayload,
+  encodeSpectatorPayload,
+  formatSpectatorHoleLine,
+  formatSpectatorShareText,
+  lastClosedClubYards,
+  parseSpectatorPayload,
+  pinToPinYardsFromShots,
+  planSpectatorHoleRow,
+  planSpectatorLive,
+  planSpectatorPayload,
+  spectatorInventsFromCardYards,
+  spectatorKeepsApproximateOnSoftForced,
+  spectatorNeedsViewerLocation,
+  spectatorPayloadHasCoordinates,
+  spectatorUploadsLiveGpsTrail,
+  type SpectatorHoleInput,
+  type SpectatorShotInput,
+} from './spectator';
+
+function shot(partial: Partial<SpectatorShotInput> & Pick<SpectatorShotInput, 'distanceYards'>): SpectatorShotInput {
+  return {
+    clubShortName: '7i',
+    endedAt: '2026-09-19T18:00:00.000Z',
+    source: 'gps',
+    fixQuality: 'good',
+    ...partial,
+  };
+}
+
+const holes: SpectatorHoleInput[] = [
+  {
+    number: 1,
+    score: 4,
+    cardYards: 412,
+    shots: [shot({ clubShortName: 'Dr', distanceYards: 248 }), shot({ clubShortName: '7i', distanceYards: 155 })],
+  },
+  {
+    number: 2,
+    score: 3,
+    cardYards: 170,
+    shots: [shot({ clubShortName: '52°', distanceYards: 105, fixQuality: 'soft' })],
+  },
+  {
+    number: 3,
+    score: null,
+    cardYards: 390,
+    shots: [],
+  },
+];
+
+test('live share is hole, score, and last closed club·yards — no GPS trail', () => {
+  assert.equal(spectatorNeedsViewerLocation(), false);
+  assert.equal(spectatorUploadsLiveGpsTrail(), false);
+  assert.equal(spectatorInventsFromCardYards(), false);
+  assert.equal(spectatorKeepsApproximateOnSoftForced(), true);
+
+  const live = planSpectatorLive({ holeNumber: 2, score: 3, shots: holes[1].shots });
+  assert.deepEqual(live, { hole: 2, score: 3, lastClubYards: '52° · 105' });
+  assert.equal(lastClosedClubYards(holes[2].shots), null);
+  assert.equal(lastClosedClubYards([shot({ distanceYards: 140, endedAt: null })]), null);
+  assert.equal(lastClosedClubYards([shot({ distanceYards: 140, source: 'no_gps' })]), null);
+
+  const payload = planSpectatorPayload({
+    token: 'tok_live',
+    courseName: 'Pine Valley',
+    finished: false,
+    currentHoleNumber: 2,
+    holes,
+  });
+  assert.equal(payload.finished, false);
+  assert.deepEqual(payload.live, live);
+  assert.deepEqual(payload.holes, []);
+  assert.equal(spectatorPayloadHasCoordinates(payload), false);
+  assert.doesNotMatch(JSON.stringify(payload), /40\.7128|-74\.006|lat|lng/);
+});
+
+test('finished share lists every hole with club · pin-to-pin yards · score', () => {
+  const payload = planSpectatorPayload({
+    token: 'tok_done',
+    courseName: 'Pine Valley',
+    finished: true,
+    currentHoleNumber: 3,
+    holes,
+  });
+  assert.equal(payload.live, null);
+  assert.equal(payload.holes.length, 3);
+  assert.deepEqual(payload.holes[0], {
+    hole: 1,
+    club: '7i',
+    pinToPinYards: 155,
+    score: 4,
+    approximate: false,
+  });
+  assert.deepEqual(payload.holes[1], {
+    hole: 2,
+    club: '52°',
+    pinToPinYards: 105,
+    score: 3,
+    approximate: true,
+  });
+  assert.deepEqual(payload.holes[2], {
+    hole: 3,
+    club: null,
+    pinToPinYards: null,
+    score: null,
+    approximate: false,
+  });
+  assert.notEqual(payload.holes[0].pinToPinYards, 412);
+  assert.equal(pinToPinYardsFromShots(holes[0].shots), 155);
+  assert.equal(planSpectatorHoleRow(holes[0]).pinToPinYards, 155);
+  assert.equal(approximateFromFixQuality('forced'), true);
+  assert.equal(approximateFromFixQuality('good'), false);
+  assert.match(formatSpectatorHoleLine(payload.holes[1]), /Approximate/);
+  assert.doesNotMatch(formatSpectatorHoleLine(payload.holes[0]), /Approximate/);
+});
+
+test('encode/decode keeps the thin payload and never invents coordinates', () => {
+  const payload = planSpectatorPayload({
+    token: 'tok_round',
+    courseName: 'Cypress',
+    finished: true,
+    holes,
+  });
+  const encoded = encodeSpectatorPayload(payload);
+  assert.equal(decodeSpectatorPayload(encoded)?.token, 'tok_round');
+  assert.deepEqual(decodeSpectatorPayload(encoded), payload);
+  assert.equal(decodeSpectatorPayload('not-payload'), null);
+  assert.equal(parseSpectatorPayload({ token: '' }), null);
+  assert.equal(parseSpectatorPayload({ token: 'x', finished: true, holes: [{ hole: 1, score: 5 }] })?.holes[0].score, 5);
+});
+
+test('share text is readable without opening a map or granting location', () => {
+  const live = planSpectatorPayload({
+    token: 't',
+    courseName: 'Magnolia',
+    finished: false,
+    currentHoleNumber: 1,
+    holes,
+  });
+  const liveText = formatSpectatorShareText(live);
+  assert.match(liveText, /ShotTraxx · Live/);
+  assert.match(liveText, /Magnolia/);
+  assert.match(liveText, /Hole 1 · 4/);
+  assert.match(liveText, /7i · 155/);
+  assert.doesNotMatch(liveText, /lat|lng|GPS|trail/i);
+
+  const done = planSpectatorPayload({
+    token: 't',
+    courseName: 'Magnolia',
+    finished: true,
+    holes,
+  });
+  const doneText = formatSpectatorShareText(done);
+  assert.match(doneText, /ShotTraxx · Finished/);
+  assert.match(doneText, /1  7i · 155  4/);
+  assert.match(doneText, new RegExp(`2  52° · 105  3 · ${COPY.approximate}`));
+});
+
+test('share surfaces use the spectator helper and do not upload a live trail', () => {
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const summary = readFileSync(new URL('../../app/round/[id]/summary.tsx', import.meta.url), 'utf8');
+  const spectator = readFileSync(new URL('../../app/s/[token].tsx', import.meta.url), 'utf8');
+  assert.match(hole, /shareRoundSnapshot/);
+  assert.match(summary, /shareRoundSnapshot/);
+  assert.match(spectator, /decodeSpectatorPayload/);
+  assert.match(spectator, /COPY\.spectatorNeedsNoLocation/);
+  assert.doesNotMatch(hole, /getCurrentFix\(\).*share/);
+  assert.doesNotMatch(spectator, /getCurrentFix/);
+  assert.doesNotMatch(spectator, /expo-location/);
+});

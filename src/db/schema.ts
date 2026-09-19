@@ -226,6 +226,7 @@ export function migrate(db: SQLiteDatabase): void {
   ensureColumn(db, 'rounds', 'tee_slope', 'INTEGER');
   ensureColumn(db, 'rounds', 'tee_total_yards', 'INTEGER');
   ensureColumn(db, 'rounds', 'last_club_id', 'TEXT');
+  ensureColumn(db, 'rounds', 'share_token', 'TEXT');
   ensureColumn(db, 'holes', 'green_front_lat', 'REAL');
   ensureColumn(db, 'holes', 'green_front_lng', 'REAL');
   ensureColumn(db, 'holes', 'green_back_lat', 'REAL');
@@ -255,7 +256,7 @@ export function migrate(db: SQLiteDatabase): void {
   clearLegacyStockCarry(db);
 }
 
-/** First-run seed plus insert any stock clubs missing from an older bag (2i / 3i / 4i / 48° / 50° / GW / 56° / 60°). */
+/** First-run seed plus insert any stock clubs missing from an older bag (2i / 3i / 4i / 48° / 50° / 52° / 56° / 60°). */
 function ensureStockBag(db: SQLiteDatabase): void {
   const existing = new Set(
     db.getAllSync<{ id: string }>('SELECT id FROM clubs').map((row) => row.id),

@@ -84,6 +84,7 @@ type RoundRow = {
   tee_slope: number | null;
   tee_total_yards: number | null;
   last_club_id: string | null;
+  share_token?: string | null;
 };
 
 type HoleRow = {
@@ -575,6 +576,24 @@ export function deleteRound(db: SQLiteDatabase, id: string): void {
 
 export function setRoundLastClub(db: SQLiteDatabase, roundId: string, clubId: string | null): void {
   db.runSync('UPDATE rounds SET last_club_id = ? WHERE id = ?', [clubId, roundId]);
+}
+
+export function getRoundShareToken(db: SQLiteDatabase, roundId: string): string | null {
+  const row = db.getFirstSync<{ share_token: string | null }>(
+    'SELECT share_token FROM rounds WHERE id = ?',
+    [roundId],
+  );
+  const token = row?.share_token?.trim();
+  return token ? token : null;
+}
+
+/** Same token for live + finished so the share link stays up after the round. */
+export function ensureRoundShareToken(db: SQLiteDatabase, roundId: string): string {
+  const existing = getRoundShareToken(db, roundId);
+  if (existing) return existing;
+  const token = newId().replace(/-/g, '').slice(0, 16);
+  db.runSync('UPDATE rounds SET share_token = ? WHERE id = ?', [token, roundId]);
+  return token;
 }
 
 export function listHoles(db: SQLiteDatabase, roundId: string): Hole[] {

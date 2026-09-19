@@ -4,8 +4,11 @@ export const PUTTER_CLUB_ID = 'club_putter';
 
 export const STOCK_LONG_IRONS = ['club_2i', 'club_3i', 'club_4i'] as const;
 
-/** Distinct lofted wedges. PW stays separate. 48° / 50° sit between PW and GW. */
+/** Distinct lofted wedges. PW stays separate. 48° / 50° sit between PW and 52° (club_gw). */
 export const STOCK_WEDGES = ['club_48', 'club_50', 'club_gw', 'club_sw', 'club_lw'] as const;
+
+/** Gap Wedge stock id. Display is 52° — same pattern as 56° / 60°. Old rounds keep this id. */
+export const GAP_WEDGE_CLUB_ID = 'club_gw';
 
 export type StockClub = Omit<Club, 'enabled'>;
 
@@ -74,7 +77,7 @@ export const DEFAULT_BAG: StockClub[] = [
   { id: 'club_pw', name: 'Pitching Wedge', shortName: 'PW', loftRank: 12, sortOrder: 12, typicalCarryYards: null },
   { id: 'club_48', name: '48°', shortName: '48°', loftRank: 13, sortOrder: 13, typicalCarryYards: null },
   { id: 'club_50', name: '50°', shortName: '50°', loftRank: 14, sortOrder: 14, typicalCarryYards: null },
-  { id: 'club_gw', name: 'Gap Wedge', shortName: 'GW', loftRank: 15, sortOrder: 15, typicalCarryYards: null },
+  { id: 'club_gw', name: '52°', shortName: '52°', loftRank: 15, sortOrder: 15, typicalCarryYards: null },
   { id: 'club_sw', name: '56°', shortName: '56°', loftRank: 16, sortOrder: 16, typicalCarryYards: null },
   { id: 'club_lw', name: '60°', shortName: '60°', loftRank: 17, sortOrder: 17, typicalCarryYards: null },
   { id: 'club_putter', name: 'Putter', shortName: 'Pt', loftRank: 18, sortOrder: 18, typicalCarryYards: null },

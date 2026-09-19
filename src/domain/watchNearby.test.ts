@@ -365,14 +365,25 @@ test('build 26 locks stay: delete confirm, 60% map, one-line header, 600-yard te
   const app = readFileSync(new URL('../../app.json', import.meta.url), 'utf8');
   assert.match(
     app,
-    /NSLocationWhenInUseUsageDescription": "ShotTraxx captures GPS when you pick a club to mark where you hit from\./,
+    /NSLocationWhenInUseUsageDescription": "ShotTraxx uses your location while the app is open to find courses near you, show yards to the green, and mark where you hit from when you pick a club\./,
   );
   assert.match(app, /NSPhotoLibraryUsageDescription": "ShotTraxx does not use your photo library/);
-  assert.match(app, /NSMicrophoneUsageDescription": "ShotTraxx uses the microphone only when you tap Say a club/);
+  assert.match(app, /"locationAlwaysAndWhenInUsePermission": false/);
+  assert.match(app, /"locationAlwaysPermission": false/);
+  assert.match(app, /"isIosBackgroundLocationEnabled": false/);
+  assert.match(app, /"motionUsagePermission": false/);
+  assert.doesNotMatch(app, /NSLocationAlways/);
+  assert.doesNotMatch(app, /NSMicrophoneUsageDescription/);
+  assert.doesNotMatch(app, /NSSpeechRecognitionUsageDescription/);
+  assert.doesNotMatch(app, /RECORD_AUDIO/);
+  assert.doesNotMatch(app, /expo-speech-recognition/);
+
+  const watchPlist = readFileSync(new URL('../../targets/watch/Info.plist', import.meta.url), 'utf8');
   assert.match(
-    app,
-    /NSSpeechRecognitionUsageDescription": "ShotTraxx uses speech recognition to match what you say to a club in your bag\./,
+    watchPlist,
+    /NSLocationWhenInUseUsageDescription[\s\S]*Watch location when you pick a club on the Watch to mark where you hit from/,
   );
+  assert.doesNotMatch(watchPlist, /more accurate than the phone/);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   assert.match(hole, /deleteShotPrompt/);

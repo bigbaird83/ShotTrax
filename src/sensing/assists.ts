@@ -1,6 +1,6 @@
 /**
  * Watch motion and mic-based shot detect stay out of scope.
- * Voice club pick maps speech to a club; the UI marks GPS immediately (no confirm sheet).
+ * Voice club pick is not in this IPA.
  * Putts are never auto-detected from GPS or leaving the green.
  */
 export const WATCH_ASSIST = false;

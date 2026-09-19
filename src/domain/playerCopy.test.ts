@@ -14,7 +14,6 @@ import {
   formatSuggestedClubChip,
   formatTeeMeta,
   markedSuggestedMessage,
-  voiceFailRecovery,
   yardsToGreenPlayerLabel,
   showWaitingOnLocationLine,
   waitingOnLocationWhenYardsShown,
@@ -38,13 +37,13 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.courseCardMissingFrame, 'Need the course tee and green for this hole.');
   assert.equal(lockFrameEmptyStateWaitsForPhone(), false);
   assert.doesNotMatch(COPY.courseCardMissingFrame, /location|GPS|phone|fix/i);
+  assert.equal(COPY.share, 'Share');
   assert.equal(COPY.longPressGreen, 'Long-press to set the green');
   assert.equal(COPY.pickClub, 'Pick a club');
   assert.equal(COPY.pickClubLede, 'Picking a club marks where you hit from.');
   assert.equal(COPY.firstLaunchTip, 'Pick a club → walk → press to mark');
   assert.equal(COPY.dismissFirstLaunchTip, 'Got it');
   assert.equal(COPY.sayClub, 'Say a club');
-  assert.equal(COPY.sayAgain, 'Say again');
   assert.equal(COPY.allClubs, 'All clubs');
   assert.equal(COPY.top3Unlock, 'Top clubs unlock after a few shots');
   assert.equal(COPY.stickyClub, 'Same club');
@@ -81,9 +80,6 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.home, 'Home');
   assert.equal(COPY.back, 'Back');
   assert.equal(COPY.addShot, 'Add shot');
-  assert.equal(COPY.courseCardMissingFrame, 'Need the course tee and green for this hole.');
-  assert.equal(lockFrameEmptyStateWaitsForPhone(), false);
-  assert.doesNotMatch(COPY.courseCardMissingFrame, /location|GPS|phone|fix/i);
   assert.equal(COPY.shot, 'Shot');
   assert.equal(COPY.placed, 'Placed');
   assert.equal(COPY.placeFromHint, 'Tap where you hit from.');
@@ -148,15 +144,6 @@ test('yards to green is a big number or — plus waiting copy', () => {
     showWaitingOnLocationLine({ yards: null, quality: 'none', hasFix: false, hasGreen: true }),
     true,
   );
-});
-
-test('voice fail recovery is Pick a club plus Say again, never voice-only', () => {
-  const recovery = voiceFailRecovery();
-  assert.equal(recovery.banner, COPY.didntCatchClub);
-  assert.equal(recovery.primaryLabel, 'Pick a club');
-  assert.equal(recovery.secondaryLabel, 'Say again');
-  assert.equal(recovery.primaryLabel, COPY.pickClub);
-  assert.notEqual(recovery.primaryLabel, COPY.sayClub);
 });
 
 test('suggested chips show that club’s carry, not yards-to-green', () => {

@@ -47,6 +47,7 @@ function ThemedNavigation() {
           }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="round/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="s/[token]" options={{ title: 'ShotTraxx' }} />
           <Stack.Screen name="settings" options={{ title: 'Settings' }} />
         </Stack>
       </ThemeProvider>
