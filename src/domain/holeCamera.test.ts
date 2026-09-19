@@ -11,6 +11,11 @@ import {
   courseCardCameraWaitsForPhoneFix,
   courseCardMissingCameraWaitsForPhone,
   applyHoleMapCamera,
+  mapBoxIsPaintReady,
+  holeMapShouldMountMapView,
+  holeMapGatesOnLocationPermission,
+  holeMapRevealWhenCourseFramePlanned,
+  holeMapViewFillsParent,
   holeCameraFramedAfterApply,
   holeCameraHeading,
   holeCameraIncludesPhoneFix,
@@ -461,4 +466,30 @@ test('Magnolia CC and Cypress Creek hole 1 frame tee+green; missing either is an
 
   assert.equal(courseCardCameraWaitsForPhoneFix(), false);
   assert.equal(courseCardMissingCameraWaitsForPhone(), false);
+});
+
+
+test('applyHoleMapCamera falls back to animateToRegion when setCamera is missing', () => {
+  const tee = { lat: 33.2708, lng: -93.2412 };
+  const green = { lat: 33.2741, lng: -93.2396 };
+  const region = holeFrameRegion([tee, green]);
+  const camera = holeNativeCamera([tee, green], 0);
+  assert.ok(region);
+  assert.ok(camera);
+  let animated: ReturnType<typeof holeFrameRegion> = null;
+  const map = {
+    animateToRegion: (next: NonNullable<typeof region>, _ms?: number) => {
+      animated = next;
+    },
+  };
+  assert.equal(applyHoleMapCamera(map, camera, region), true);
+  assert.deepEqual(animated, region);
+  assert.equal(holeMapViewFillsParent(), true);
+  assert.equal(mapBoxIsPaintReady(null), false);
+  assert.equal(mapBoxIsPaintReady({ width: 40, height: 900 }), false);
+  assert.equal(mapBoxIsPaintReady({ width: 390, height: 640 }), true);
+  assert.equal(holeMapShouldMountMapView({ width: 390, height: 640 }), true);
+  assert.equal(holeMapShouldMountMapView(null), false);
+  assert.equal(holeMapGatesOnLocationPermission(), false);
+  assert.equal(holeMapRevealWhenCourseFramePlanned(), true);
 });

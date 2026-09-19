@@ -561,17 +561,49 @@ export function applyHoleMapCamera(
   region?: HoleMapRegion | null,
 ): boolean {
   if (map == null) return false;
-  if (camera) {
-    if (typeof map.setCamera !== 'function') return false;
+  // Prefer setCamera (heading). If the native bridge lacks it, still frame tee→green
+  // via animateToRegion — never leave the green cover up waiting on a phone fix.
+  if (camera && typeof map.setCamera === 'function') {
     map.setCamera(camera);
     return true;
   }
-  if (region) {
-    if (typeof map.animateToRegion !== 'function') return false;
+  if (region && typeof map.animateToRegion === 'function') {
     map.animateToRegion(region, 0);
     return true;
   }
   return false;
+}
+
+/** Play / Add shot MapView must fill its parent — flex:1 alone often lays out at height 0. */
+export function holeMapViewFillsParent(): true {
+  return true;
+}
+
+/** Apple Maps often never paints tiles if MapView first mounts at height 0. */
+export function mapBoxIsPaintReady(
+  box: { width: number; height: number } | null | undefined,
+): boolean {
+  return Boolean(box && box.width >= 80 && box.height >= 80);
+}
+
+/** Mount MapView only after the host has a real box; remount when that box first appears. */
+export function holeMapShouldMountMapView(
+  box: { width: number; height: number } | null | undefined,
+): boolean {
+  return mapBoxIsPaintReady(box);
+}
+
+/** Blank-map cover must not wait on location permission. */
+export function holeMapGatesOnLocationPermission(): false {
+  return false;
+}
+
+/**
+ * Once MapView is ready and the course-card tee+green camera is planned,
+ * lift the cover even if setCamera is flaky — initialCamera already seeded the hole.
+ */
+export function holeMapRevealWhenCourseFramePlanned(): true {
+  return true;
 }
 
 /** Only a successful live apply may stick the framed flag. */

@@ -18,8 +18,11 @@ import {
   holeCameraFramedAfterApply,
   holeCameraHeading,
   holeFrameRegion,
+  holeMapRevealWhenCourseFramePlanned,
+  holeMapShouldMountMapView,
   holeMapUserLocationVisible,
   holeNativeCamera,
+  mapBoxIsPaintReady,
   regionIsHoleFrame,
 } from '@/src/domain/holeCamera';
 import { planDragShotLines } from '@/src/domain/placeToDrag';
@@ -357,15 +360,34 @@ function NativeHoleMap({
 
   const onMapLayout = (event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
+    // Host size only — MapView mounts after the box is paint-ready so Apple
+    // tiles are not asked to paint into a zero-height first layout.
     if (width >= 80 && height >= 80) {
       setMapBox((prev) =>
         prev && prev.width === width && prev.height === height ? prev : { width, height },
       );
     }
     if (!lockFrame) return;
-    if (width < 80 || height < 80) return;
+    if (!mapBoxIsPaintReady({ width, height })) return;
     if (framedOnce.current) return;
-    markFramedIfLive(frameLockedMap());
+    if (markFramedIfLive(frameLockedMap())) return;
+    // Course tee+green already planned (initialCamera/Region). Do not keep the
+    // green cover up forever if setCamera is flaky — and never wait on GPS.
+    if (holeFrameOnScreen && holeMapRevealWhenCourseFramePlanned()) {
+      framedOnce.current = true;
+      pendingLocked.current = false;
+      setHoleCameraReady(true);
+    }
+  };
+
+  const revealCourseFrameIfPlanned = () => {
+    if (!lockFrame) return false;
+    if (framedOnce.current) return true;
+    if (!holeFrameOnScreen || !holeMapRevealWhenCourseFramePlanned()) return false;
+    framedOnce.current = true;
+    pendingLocked.current = false;
+    setHoleCameraReady(true);
+    return true;
   };
 
   const onRegionSettled = (region: { latitude: number; longitude: number }) => {
@@ -429,7 +451,9 @@ function NativeHoleMap({
         if (event.nativeEvent.touches.length === 0) releaseMapGesture();
       }}
       onTouchCancel={() => releaseMapGesture()}>
+      {holeMapShouldMountMapView(mapBox) ? (
       <MapView
+        key={`hole-map-${mapBox!.width}x${mapBox!.height}`}
         ref={mapRef}
         style={[styles.map, mapBox, lockFrame && !holeCameraReady ? styles.mapHidden : null]}
         mapType="satellite"
@@ -465,7 +489,10 @@ function NativeHoleMap({
         onMapReady={() => {
           if (!lockFrame) return;
           if (framedOnce.current) return;
-          markFramedIfLive(frameLockedMap());
+          // Apply tee→green again (setCamera, else animateToRegion). initialCamera /
+          // initialRegion already seeded the hole — do not wait on location permission.
+          if (markFramedIfLive(frameLockedMap())) return;
+          revealCourseFrameIfPlanned();
         }}
         onRegionChangeComplete={onRegionSettled}
         onPress={(event) => {
@@ -659,6 +686,7 @@ function NativeHoleMap({
           </Marker>
         ) : null}
       </MapView>
+      ) : null}
       {toPinLive ? (
         <View
           ref={dragLayerRef}
@@ -755,6 +783,8 @@ const styles = StyleSheet.create({
   bleed: {
     ...StyleSheet.absoluteFill,
     flex: 1,
+    minHeight: 0,
+    alignSelf: 'stretch',
     overflow: 'hidden',
     backgroundColor: colors.bgElevated,
   },

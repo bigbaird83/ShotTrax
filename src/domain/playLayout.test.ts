@@ -86,6 +86,7 @@ import {
   playGlassDockZeroesMapHeight,
   playMapHostUsesAbsoluteFill,
   signalLabAddShotGestureLock,
+  signalLabBlankMapBuild38,
   PLAY_GLASS_DOCK_LIFT,
   playScorecardWraps,
   playSameClubHiddenUntilShot,
@@ -152,8 +153,8 @@ test('play hole screen uses the fill layout and does not keep the empty middle',
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   assert.match(hole, /planPlayLayout/);
   assert.match(hole, /styles\.mapFill/);
-  assert.match(hole, /minHeight: '60%'/);
-  assert.match(hole, /flexBasis: '60%'/);
+  assert.match(hole, /minHeight: 0/);
+  assert.match(hole, /alignSelf: 'stretch'/);
   assert.match(hole, /StyleSheet\.absoluteFill/);
   assert.equal(playGlassDockZeroesMapHeight(), false);
   assert.equal(playMapHostUsesAbsoluteFill(), true);
@@ -421,7 +422,7 @@ test('play map still mounts; waiting line is off when 282 is on the card; Scorec
   const play = hole.slice(0, hole.indexOf('<FullSheet'));
   assert.match(play, /<HoleMap/);
   assert.match(play, /styles\.mapFill/);
-  assert.match(hole, /minHeight: '60%'/);
+  assert.match(hole, /minHeight: 0/);
   assert.match(play, /\{sticky \? \(/);
   assert.match(hole, /styles\.dockScorecard/);
   assert.match(play, /numberOfLines=\{1\}/);
@@ -701,8 +702,8 @@ test('P0: full-bleed MapView has real height under the glass dock; Add shot keep
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   const mapFill = hole.slice(hole.indexOf('mapFill:'), hole.indexOf('catchUpBar:'));
   assert.match(mapFill, /StyleSheet\.absoluteFill/);
-  assert.match(mapFill, /minHeight: '60%'/);
-  assert.match(mapFill, /flexBasis: '60%'/);
+  assert.match(mapFill, /minHeight: 0/);
+  assert.match(mapFill, /alignSelf: 'stretch'/);
   assert.match(hole, /<View collapsable=\{false\} style=\{styles\.mapFill\}>/);
   assert.doesNotMatch(hole, /catchUpFullScreen \? styles\.mapWrapFull/);
   assert.equal((hole.match(/planCourseCardCamera\(/g) ?? []).length, 1);
@@ -713,6 +714,15 @@ test('P0: full-bleed MapView has real height under the glass dock; Add shot keep
   assert.match(map, /bleed: \{\s*\n\s*\.\.\.StyleSheet\.absoluteFill,/);
   assert.match(map, /map: \{\s*\n\s*\.\.\.StyleSheet\.absoluteFill,/);
   assert.match(map, /style=\{\[styles\.map, mapBox,/);
+  assert.match(map, /holeMapShouldMountMapView\(mapBox\)/);
+  assert.match(map, /key=\{`hole-map-\$\{mapBox!\.width\}x\$\{mapBox!\.height\}`\}/);
+  assert.match(map, /holeMapRevealWhenCourseFramePlanned/);
+  assert.match(map, /revealCourseFrameIfPlanned/);
+  assert.equal(signalLabBlankMapBuild38().remountMapWhenSized, true);
+  assert.equal(signalLabBlankMapBuild38().gatesOnLocationPermission, false);
+  assert.equal(signalLabBlankMapBuild38().courseCardMissShowsExplicitUi, true);
+  assert.equal(signalLabBlankMapBuild38().firstFramePhoneNull, true);
+  assert.equal(signalLabBlankMapBuild38().showsUserLocationOnLockFrame, false);
   assert.match(map, /collapsable=\{false\}/);
   const userLoc = map.slice(map.indexOf('showsUserLocation='), map.indexOf('showsMyLocationButton'));
   assert.match(userLoc, /holeMapUserLocationVisible\(\{/);
