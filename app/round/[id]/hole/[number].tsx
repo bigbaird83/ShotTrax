@@ -46,7 +46,7 @@ import { planInsertSlots } from '@/src/domain/insertShot';
 import { confirmUndoIsLive, planConfirmUndo, type ConfirmUndoWindow } from '@/src/domain/confirmUndo';
 import { confirmPlaceToDraft, courseGreenCenterForLine, resolveAddShotFromPin } from '@/src/domain/placeToDrag';
 import { applyWheelSelection } from '@/src/domain/clubSelect';
-import { PHONE_WHEEL_PILL_HEIGHT, planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
+import { PHONE_WHEEL_PILL_HEIGHT, PHONE_WHEEL_STRIP_HEIGHT, planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
 import { PLAY_DOCK_ACTION_MIN_HEIGHT, planPlayLayout } from '@/src/domain/playLayout';
 import { planPlacedShot } from '@/src/domain/shotSource';
 import { planUndoPlacePins } from '@/src/domain/undoLastShot';
@@ -642,6 +642,11 @@ export default function HoleScreen() {
     }
   };
 
+  const confirmWheelClub = (clubId: string) => {
+    const full = clubs.find((row) => row.id === clubId) ?? null;
+    void markClub(full);
+  };
+
   const onMark = (force = false) => {
     if (!sticky) return Promise.resolve();
     return markClub(sticky, force);
@@ -1167,6 +1172,7 @@ export default function HoleScreen() {
                   if (placing) return;
                   setSelectedClubId(applyWheelSelection(id));
                 }}
+                onConfirm={confirmWheelClub}
               />
             </View>
           </View>
@@ -1824,7 +1830,7 @@ function makeStyles(colors: ColorPalette) {
     gap: 8,
   },
   dockRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'nowrap', gap: 6 },
-  dockStrip: { flex: 1, minWidth: 0, height: PHONE_WHEEL_PILL_HEIGHT + 8 },
+  dockStrip: { flex: 1, minWidth: 0, height: PHONE_WHEEL_STRIP_HEIGHT, overflow: 'visible' },
   dockChip: {
     flex: 1,
     minHeight: 36,

@@ -20,6 +20,9 @@ import {
   clubStripPhoneMatchesWatch,
   clubStripPutterIncluded,
   clubStripScrollMarksShot,
+  clubStripSlideUpConfirmed,
+  clubStripSlideUpMarksShot,
+  clubStripCenterLiftsAboveNeighbors,
   clubStripShorterPeeksLeft,
   clubStripSortedByCarry,
   clubStripSortedByIronNumber,
@@ -54,7 +57,9 @@ import {
   CLUB_STRIP_SEAM_GAP,
   CLUB_STRIP_VISIBLE_PILLS,
   PHONE_WHEEL_PILL_HEIGHT,
+  PHONE_WHEEL_STRIP_HEIGHT,
   WATCH_WHEEL_PILL_HEIGHT,
+  WATCH_WHEEL_STRIP_HEIGHT,
   phoneWheelPillTallerThanWatch,
   planClubStrip,
   wrapClubStripIndex,
@@ -76,6 +81,9 @@ test('strip is carry-sorted, full bag, putter off, center is closest to yards le
   assert.equal(clubStripLongerPeeksRight(), true);
   assert.equal(clubStripSwipeMarksShot(), false);
   assert.equal(clubStripScrollMarksShot(), false);
+  assert.equal(clubStripSlideUpMarksShot(), true);
+  assert.equal(clubStripCenterLiftsAboveNeighbors(), true);
+  assert.equal(clubStripSlideUpConfirmed(0, -28), true);
   assert.equal(clubStripOnlyTapMarks(), false);
   assert.equal(clubStripPutterIncluded(), false);
   assert.equal(clubStripCenterIsClosestCarry(), true);
@@ -250,11 +258,14 @@ test('phone strip tap is the old chip mark, and the center pill is closest to ho
   assert.match(pickMark, /tee: holeTee/);
 });
 
-test('phone and Watch strip UIs peek neighbors and mark only on tap', () => {
+test('phone and Watch strip UIs peek neighbors; slide-up marks, swipe does not', () => {
   const phone = readFileSync(new URL('../ui/ClubStrip.tsx', import.meta.url), 'utf8');
   assert.match(phone, /CLUB_STRIP_VISIBLE_PILLS/);
   assert.match(phone, /windowStart/);
   assert.match(phone, /onPress=\{\(\) => onPick\(item\.id\)\}/);
+  assert.match(phone, /onConfirm/);
+  assert.match(phone, /clubStripSlideUpConfirmed/);
+  assert.match(phone, /CLUB_STRIP_PICK_SCALE/);
   assert.match(phone, /scrollTo/);
   assert.match(phone, /paddingHorizontal: 0/);
   assert.doesNotMatch(phone, /PILL_RATIO = 0\.62/);
@@ -273,6 +284,7 @@ test('phone and Watch strip UIs peek neighbors and mark only on tap', () => {
   const dock = hole.slice(hole.indexOf('styles.dock'), hole.indexOf('<FullSheet'));
   assert.match(dock, /<ClubStrip/);
   assert.match(dock, /applyWheelSelection/);
+  assert.match(dock, /onConfirm=\{confirmWheelClub\}/);
   assert.doesNotMatch(dock, /void markClub\(full\)/);
   assert.doesNotMatch(dock, /COPY\.allClubs/);
   assert.doesNotMatch(dock, /COPY\.sayClub/);
@@ -291,12 +303,19 @@ test('phone and Watch strip UIs peek neighbors and mark only on tap', () => {
 
   assert.equal(phoneWheelPillTallerThanWatch(), true);
   assert.ok(PHONE_WHEEL_PILL_HEIGHT > WATCH_WHEEL_PILL_HEIGHT);
+  assert.ok(PHONE_WHEEL_STRIP_HEIGHT > PHONE_WHEEL_PILL_HEIGHT);
   assert.equal(WATCH_WHEEL_PILL_HEIGHT, 44);
+  assert.ok(WATCH_WHEEL_STRIP_HEIGHT > WATCH_WHEEL_PILL_HEIGHT);
   assert.match(phone, /PHONE_WHEEL_PILL_HEIGHT/);
+  assert.match(phone, /PHONE_WHEEL_STRIP_HEIGHT/);
   assert.doesNotMatch(dock, /compact/);
 
   const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
   assert.match(watch, /height: 44/);
+  assert.match(watch, /scaleEffect\(picked \? 1\.18 : 1\)/);
+  assert.match(watch, /DragGesture/);
+  assert.match(watch, /clubStripSlideUpConfirmed/);
+  assert.match(watch, /session\.pick\(clubId: club.id\)/);
   assert.match(watch, /ScrollView\(\.horizontal/);
   assert.match(watch, /onTapGesture/);
   assert.match(watch, /scrollTo\(stripWindowToken/);

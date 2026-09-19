@@ -4,10 +4,13 @@ import { test } from 'node:test';
 import { PUTTER_CLUB_ID } from './defaultBag';
 import {
   applyWheelSelection,
+  clubStripSlideUpMarksShot,
   clubStripTapMarksShot,
   clubStripTapSelectsClub,
+  planClubStripGesture,
   watchBagTapMarksShot,
   watchSelectionMatchesPhone,
+  watchStripSlideUpMarksShot,
   watchStripTapMarksShot,
   watchStripTapSelectsClub,
   wheelRecomputesOnNewHole,
@@ -15,6 +18,7 @@ import {
   wheelSelectionAfterTap,
   wheelSelectionSyncsPhoneAndWatch,
 } from './clubSelect';
+import { clubStripSlideUpConfirmed } from './clubStrip';
 import { clubStripOpeningIds, clubStripWindowKey, planClubStrip } from './clubStrip';
 import {
   addShotFramePoints,
@@ -74,6 +78,7 @@ test('a non-driver tap stays selected and does not mark or reopen the window', (
   const strip = hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.stickyClub'));
   assert.match(strip, /pickId=\{wheelSelectedId\}/);
   assert.match(strip, /applyWheelSelection/);
+  assert.match(strip, /onConfirm=\{confirmWheelClub\}/);
   assert.doesNotMatch(strip, /markClub/);
   assert.match(hole, /setSelectedClubId\(null\)/);
   assert.match(hole, /\[holeNumber\]/);
@@ -139,6 +144,9 @@ test('Watch selection is the phone selection; strip tap does not mark', () => {
   assert.match(watchUi, /session\.select\(club\.id\)/);
   assert.match(watchUi, /stripSelectedId/);
   assert.match(watchUi, /selectedClubId \?\? stripPickId/);
+  assert.match(watchUi, /DragGesture/);
+  assert.match(watchUi, /clubStripSlideUpConfirmed/);
+  assert.match(watchUi, /session\.pick\(clubId: club.id\)/);
   const bag = watchUi.slice(watchUi.indexOf('ForEach(moreClubs'), watchUi.indexOf('private var moreClubs'));
   assert.match(bag, /session\.pick\(clubId: clubId\)/);
 
@@ -151,6 +159,43 @@ test('Watch selection is the phone selection; strip tap does not mark', () => {
     service.slice(service.indexOf("if (intent.kind === 'select')"), service.indexOf("if (intent.kind === 'leave')")),
     /markShotWithClub/,
   );
+});
+
+test('slide-up on the lifted club marks; swipe and tap do not', () => {
+  assert.equal(clubStripSlideUpMarksShot(), true);
+  assert.equal(watchStripSlideUpMarksShot(), true);
+  assert.deepEqual(planClubStripGesture('tap'), { selects: true, marks: false, usesHomeClubTap: false });
+  assert.deepEqual(planClubStripGesture('swipe'), { selects: false, marks: false, usesHomeClubTap: false });
+  assert.deepEqual(planClubStripGesture('scroll'), { selects: false, marks: false, usesHomeClubTap: false });
+  assert.deepEqual(planClubStripGesture('slide_up'), { selects: true, marks: true, usesHomeClubTap: true });
+  assert.equal(clubStripSlideUpConfirmed(0, -28), true);
+  assert.equal(clubStripSlideUpConfirmed(40, -20), false);
+  assert.equal(clubStripSlideUpConfirmed(8, -40), true);
+  assert.equal(clubStripSlideUpConfirmed(0, 28), false);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const confirm = hole.slice(hole.indexOf('const confirmWheelClub'), hole.indexOf('const onMark'));
+  assert.match(confirm, /void markClub\(full\)/);
+  const strip = hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.stickyClub'));
+  assert.match(strip, /onConfirm=\{confirmWheelClub\}/);
+  assert.doesNotMatch(strip, /void markClub\(full\)/);
+  const pick = strip.slice(strip.indexOf('onPick='), strip.indexOf('onConfirm='));
+  assert.match(pick, /applyWheelSelection/);
+  assert.doesNotMatch(pick, /markClub/);
+
+  const phone = readFileSync(new URL('../ui/ClubStrip.tsx', import.meta.url), 'utf8');
+  assert.match(phone, /clubStripSlideUpConfirmed/);
+  assert.match(phone, /PanResponder/);
+  assert.match(phone, /CLUB_STRIP_PICK_SCALE/);
+  assert.match(phone, /onConfirm/);
+  assert.match(phone, /onPress=\{\(\) => onPick\(item\.id\)\}/);
+
+  const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  assert.match(watch, /scaleEffect\(picked \? 1\.18 : 1\)/);
+  assert.match(watch, /offset\(y: picked \? -8 : 0\)/);
+  assert.match(watch, /session\.pick\(clubId: club.id\)/);
+  assert.match(watch, /session\.select\(club.id\)/);
+  assert.match(watch, /dy <= -28/);
 });
 
 test("Add shot opening region contains tee and green and does not wait when 282 is showing", () => {

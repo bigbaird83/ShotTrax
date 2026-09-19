@@ -48,6 +48,8 @@ import {
   watchStripSortedByName,
   watchStripSwipeMarksShot,
   watchStripScrollMarksShot,
+  watchStripSlideUpMarksShot,
+  watchStripSlideUpUsesHomeClubTap,
   watchStripOnlyTapMarks,
   watchStripCappedAtThree,
   watchStripUsesFullBag,
@@ -160,6 +162,8 @@ test('Watch suggested strip shows carry, opens on the pick, and is not stacked r
   assert.equal(watchStripSortedByName(), false);
   assert.equal(watchStripSwipeMarksShot(), false);
   assert.equal(watchStripScrollMarksShot(), false);
+  assert.equal(watchStripSlideUpMarksShot(), true);
+  assert.equal(watchStripSlideUpUsesHomeClubTap(), true);
   assert.equal(watchStripOnlyTapMarks(), false);
   assert.equal(watchStripCappedAtThree(), false);
   assert.equal(watchStripUsesFullBag(), true);
@@ -411,6 +415,8 @@ test('a bag club under All clubs marks with the same rules as a top-3 tap', () =
   const bagBtn = watchUi.slice(watchUi.indexOf('ForEach(moreClubs'), watchUi.indexOf('private var moreClubs'));
   assert.match(top3Btn, /session\.select\(club\.id\)/);
   assert.match(top3Btn, /onTapGesture/);
+  assert.match(top3Btn, /DragGesture/);
+  assert.match(top3Btn, /session\.pick\(clubId: club.id\)/);
   assert.match(bagBtn, /session\.pick\(clubId: clubId\)/);
   assert.doesNotMatch(top3Btn, /moreClubs/);
   assert.doesNotMatch(bagBtn, /leave\(|clubNav/);

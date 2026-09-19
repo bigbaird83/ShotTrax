@@ -1,7 +1,20 @@
 /**
  * Play / Watch wheel taps select a club. They do not mark a shot.
  * A later tap replaces the selection. A new hole may reopen the window.
+ * Slide the lifted center club up to mark — same path as today's mark tap.
  */
+
+export type ClubStripGesture = 'tap' | 'swipe' | 'scroll' | 'slide_up';
+
+export function planClubStripGesture(gesture: ClubStripGesture): {
+  selects: boolean;
+  marks: boolean;
+  usesHomeClubTap: boolean;
+} {
+  if (gesture === 'tap') return { selects: true, marks: false, usesHomeClubTap: false };
+  if (gesture === 'slide_up') return { selects: true, marks: true, usesHomeClubTap: true };
+  return { selects: false, marks: false, usesHomeClubTap: false };
+}
 
 export function clubStripTapMarksShot(): false {
   return false;
@@ -16,6 +29,14 @@ export function watchStripTapMarksShot(): false {
 }
 
 export function watchStripTapSelectsClub(): true {
+  return true;
+}
+
+export function clubStripSlideUpMarksShot(): true {
+  return true;
+}
+
+export function watchStripSlideUpMarksShot(): true {
   return true;
 }
 

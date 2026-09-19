@@ -1,6 +1,6 @@
 # ShotTraxx — P5.x
 
-User-facing name is **ShotTraxx** (`expo.name`, iOS `CFBundleDisplayName`, Android `label`). Bundle ID `com.shottrax.app` and Expo slug `shottrax` stay unchanged. Icon files under `assets/images/` are the Doc + Lead locked mark.
+User-facing name is **ShotTraxx** (`expo.name`, iOS `CFBundleDisplayName`, Android `label`). Bundle ID `com.shottrax.app` and Expo slug `shottrax` stay unchanged. Home-screen icon files under `assets/images/` are the locked A5 mark. Splash still uses the full **ShotTraxx** wordmark.
 
 ## Golf Courses API (nearby courses, par, green centroids)
 
