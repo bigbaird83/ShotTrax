@@ -469,8 +469,8 @@ export function signalLabCypressBlankMap(): {
 
 /**
  * Doc override: Cypress Creek (Cabot) paints from a real hydrate when Pro
- * tee+green miss. Greystone (west Cabot) has its own hydrate. Pleasant Valley
- * stays on the miss card. Never invent from the clubhouse or scorecard yards.
+ * tee+green miss. Greystone (west Cabot) and Pleasant Valley (Little Rock)
+ * have their own hydrates. Never invent from the clubhouse or scorecard yards.
  */
 export function signalLabCypressHydrate(): {
   cypressOnly: true;
@@ -478,7 +478,7 @@ export function signalLabCypressHydrate(): {
   neverInventFromClubhouse: true;
   neverInventFromScorecardYards: true;
   greystoneWestStillMisses: false;
-  pleasantValleyStillMisses: true;
+  pleasantValleyStillMisses: false;
   prefetchAllEighteenOnce: true;
   meterUniqueHydrateOnce: true;
 } {
@@ -488,7 +488,7 @@ export function signalLabCypressHydrate(): {
     neverInventFromClubhouse: true,
     neverInventFromScorecardYards: true,
     greystoneWestStillMisses: false,
-    pleasantValleyStillMisses: true,
+    pleasantValleyStillMisses: false,
     prefetchAllEighteenOnce: true,
     meterUniqueHydrateOnce: true,
   };
@@ -505,7 +505,7 @@ export function signalLabGreystoneHydrate(): {
   neverInventFromClubhouse: true;
   neverInventFromScorecardYards: true;
   cypressStillExclusive: true;
-  pleasantValleyStillMisses: true;
+  pleasantValleyStillMisses: false;
   prefetchAllEighteenOnce: true;
   meterUniqueHydrateOnce: true;
 } {
@@ -515,7 +515,35 @@ export function signalLabGreystoneHydrate(): {
     neverInventFromClubhouse: true,
     neverInventFromScorecardYards: true,
     cypressStillExclusive: true,
-    pleasantValleyStillMisses: true,
+    pleasantValleyStillMisses: false,
+    prefetchAllEighteenOnce: true,
+    meterUniqueHydrateOnce: true,
+  };
+}
+
+/**
+ * Doc override: Pleasant Valley Country Club (Little Rock) paints from its
+ * OSM+Doc hydrate when Pro tee+green miss. H11 tee is Doc-verified (OSM
+ * tee ref=11 was mid-corridor). Cypress and Greystone stay exclusive.
+ * Never invent from the clubhouse or scorecard yards.
+ */
+export function signalLabPleasantValleyHydrate(): {
+  pleasantValleyLittleRockOnly: true;
+  paintsViaHydrateWhenProMisses: true;
+  neverInventFromClubhouse: true;
+  neverInventFromScorecardYards: true;
+  cypressStillExclusive: true;
+  greystoneStillExclusive: true;
+  prefetchAllEighteenOnce: true;
+  meterUniqueHydrateOnce: true;
+} {
+  return {
+    pleasantValleyLittleRockOnly: true,
+    paintsViaHydrateWhenProMisses: true,
+    neverInventFromClubhouse: true,
+    neverInventFromScorecardYards: true,
+    cypressStillExclusive: true,
+    greystoneStillExclusive: true,
     prefetchAllEighteenOnce: true,
     meterUniqueHydrateOnce: true,
   };

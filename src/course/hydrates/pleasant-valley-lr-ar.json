@@ -1,0 +1,244 @@
+{
+  "courseKey": "pleasant-valley-lr-ar",
+  "displayName": "Pleasant Valley Country Club",
+  "locality": "Little Rock, AR",
+  "source": "manual_verified",
+  "sourceRef": "osm:relation/9510054 Pleasant Valley CC; 17 holes OSM tee/green; H11 tee=Doc-verified hole-way start way/1029471857 (OSM tee ref=11 rejected mid-corridor); H11 green=osm unlabeled way/686636682; Doc LGTM yellow start 2026-09-19",
+  "fetchedAt": "2026-09-19T22:46:07Z",
+  "holes": [
+    {
+      "hole": 1,
+      "par": 4,
+      "tee": {
+        "lat": 34.778121,
+        "lng": -92.4057792,
+        "label": "default"
+      },
+      "green": {
+        "lat": 34.7752172,
+        "lng": -92.4047103
+      }
+    },
+    {
+      "hole": 2,
+      "par": 3,
+      "tee": {
+        "lat": 34.7746482,
+        "lng": -92.4043806,
+        "label": "default"
+      },
+      "green": {
+        "lat": 34.7735912,
+        "lng": -92.4052531
+      }
+    },
+    {
+      "hole": 3,
+      "par": 4,
+      "tee": {
+        "lat": 34.7739227,
+        "lng": -92.4070334,
+        "label": "default"
+      },
+      "green": {
+        "lat": 34.7737615,
+        "lng": -92.4102782
+      }
+    },
+    {
+      "hole": 4,
+      "par": 5,
+      "tee": {
+        "lat": 34.7742131,
+        "lng": -92.4114326,
+        "label": "default"
+      },
+      "green": {
+        "lat": 34.7768218,
+        "lng": -92.4152528
+      }
+    },
+    {
+      "hole": 5,
+      "par": 3,
+      "tee": {
+        "lat": 34.7768367,
+        "lng": -92.416274,
+        "label": "default"
+      },
+      "green": {
+        "lat": 34.7768399,
+        "lng": -92.4183714
+      }
+    },
+    {
+      "hole": 6,
+      "par": 4,
+      "tee": {
+        "lat": 34.7769272,
+        "lng": -92.4191867,
+        "label": "default"
+      },
+      "green": {
+        "lat": 34.7794947,
+        "lng": -92.4168947
+      }
+    },
+    {
+      "hole": 7,
+      "par": 4,
+      "tee": {
+        "lat": 34.7801137,
+        "lng": -92.4166024,
+        "label": "default"
+      },
+      "green": {
+        "lat": 34.7811558,
+        "lng": -92.4192656
+      }
+    },
+    {
+      "hole": 8,
+      "par": 5,
+      "tee": {
+        "lat": 34.7811911,
+        "lng": -92.4179992,
+        "label": "default"
+      },
+      "green": {
+        "lat": 34.778776,
+        "lng": -92.414304
+      }
+    },
+    {
+      "hole": 9,
+      "par": 4,
+      "tee": {
+        "lat": 34.778961,
+        "lng": -92.412572,
+        "label": "default"
+      },
+      "green": {
+        "lat": 34.7784688,
+        "lng": -92.4084099
+      }
+    },
+    {
+      "hole": 10,
+      "par": 5,
+      "tee": {
+        "lat": 34.7789225,
+        "lng": -92.4074179,
+        "label": "default"
+      },
+      "green": {
+        "lat": 34.7799233,
+        "lng": -92.4126664
+      }
+    },
+    {
+      "hole": 11,
+      "par": 4,
+      "tee": {
+        "lat": 34.7807034,
+        "lng": -92.4134576,
+        "label": "default"
+      },
+      "green": {
+        "lat": 34.78218659411765,
+        "lng": -92.41640845882353
+      }
+    },
+    {
+      "hole": 12,
+      "par": 4,
+      "tee": {
+        "lat": 34.782382,
+        "lng": -92.4156417,
+        "label": "default"
+      },
+      "green": {
+        "lat": 34.7833643,
+        "lng": -92.4193511
+      }
+    },
+    {
+      "hole": 13,
+      "par": 3,
+      "tee": {
+        "lat": 34.7821278,
+        "lng": -92.4184544,
+        "label": "default"
+      },
+      "green": {
+        "lat": 34.7815351,
+        "lng": -92.4169191
+      }
+    },
+    {
+      "hole": 14,
+      "par": 4,
+      "tee": {
+        "lat": 34.7818187,
+        "lng": -92.4166186,
+        "label": "default"
+      },
+      "green": {
+        "lat": 34.7794626,
+        "lng": -92.4139477
+      }
+    },
+    {
+      "hole": 15,
+      "par": 4,
+      "tee": {
+        "lat": 34.7786604,
+        "lng": -92.4132431,
+        "label": "default"
+      },
+      "green": {
+        "lat": 34.7779315,
+        "lng": -92.4091752
+      }
+    },
+    {
+      "hole": 16,
+      "par": 4,
+      "tee": {
+        "lat": 34.7784588,
+        "lng": -92.4074433,
+        "label": "default"
+      },
+      "green": {
+        "lat": 34.7752616,
+        "lng": -92.4073989
+      }
+    },
+    {
+      "hole": 17,
+      "par": 3,
+      "tee": {
+        "lat": 34.7749681,
+        "lng": -92.4081187,
+        "label": "default"
+      },
+      "green": {
+        "lat": 34.7742996,
+        "lng": -92.4065555
+      }
+    },
+    {
+      "hole": 18,
+      "par": 5,
+      "tee": {
+        "lat": 34.7737275,
+        "lng": -92.4056947,
+        "label": "default"
+      },
+      "green": {
+        "lat": 34.7779087,
+        "lng": -92.4066155
+      }
+    }
+  ]
+}

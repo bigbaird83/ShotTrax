@@ -5,15 +5,20 @@ import type { CourseLayoutSeed } from './layout';
 import { rememberResolvedTee } from './osmOverlay';
 import cypressOsm from './hydrates/cypress-creek-cabot-ar.json';
 import greystoneOsm from './hydrates/greystone-cabot-ar.json';
+import pleasantValleyOsm from './hydrates/pleasant-valley-lr-ar.json';
 
 export const CYPRESS_CREEK_CABOT_AR_KEY = 'cypress-creek-cabot-ar';
 export const GREYSTONE_CABOT_AR_KEY = 'greystone-cabot-ar';
+export const PLEASANT_VALLEY_LR_AR_KEY = 'pleasant-valley-lr-ar';
 
 /** Clubhouse / course pin only — never a tee or green. */
 export const CYPRESS_CREEK_CLUBHOUSE: LatLng = { lat: 35.027715, lng: -92.031642 };
 
 /** Course-center pin for Greystone (west of Cypress). Never a tee or green. */
 export const GREYSTONE_CABOT_CLUBHOUSE: LatLng = { lat: 35.021, lng: -92.061 };
+
+/** Course-center pin for Pleasant Valley (Little Rock). Never a tee or green. */
+export const PLEASANT_VALLEY_LR_CLUBHOUSE: LatLng = { lat: 34.78, lng: -92.411 };
 
 export type CourseHydrateSource = 'golfapi' | 'osm' | 'manual_verified';
 
@@ -59,9 +64,14 @@ const HYDRATE_SOURCES: CourseHydrateSource[] = ['golfapi', 'osm', 'manual_verifi
 const REGISTRY: Record<string, unknown> = {
   [CYPRESS_CREEK_CABOT_AR_KEY]: cypressOsm,
   [GREYSTONE_CABOT_AR_KEY]: greystoneOsm,
+  [PLEASANT_VALLEY_LR_AR_KEY]: pleasantValleyOsm,
 };
 
-const CLUBHOUSE_PINS: readonly LatLng[] = [CYPRESS_CREEK_CLUBHOUSE, GREYSTONE_CABOT_CLUBHOUSE];
+const CLUBHOUSE_PINS: readonly LatLng[] = [
+  CYPRESS_CREEK_CLUBHOUSE,
+  GREYSTONE_CABOT_CLUBHOUSE,
+  PLEASANT_VALLEY_LR_CLUBHOUSE,
+];
 
 const GOLFAPI_KEY_NAMES = [
   'GOLFAPI_KEY',
@@ -191,9 +201,37 @@ export function matchesGreystoneCabot(course: CourseHydrateMatch): boolean {
   return false;
 }
 
+/**
+ * Pleasant Valley Country Club (Little Rock) only.
+ * Cypress Creek and Greystone (Cabot) never match this key.
+ */
+export function matchesPleasantValleyLR(course: CourseHydrateMatch): boolean {
+  if (asString(course.courseKey) === PLEASANT_VALLEY_LR_AR_KEY) return true;
+  const name = normalizeName(course.name);
+  if (!name) return false;
+  if (/cypress creek/.test(name)) return false;
+  if (/\bgreystone\b/.test(name)) return false;
+  if (!/pleasant valley/.test(name)) return false;
+  const bag = [
+    name,
+    normalizeName(course.city),
+    normalizeName(course.state),
+    normalizeName(course.locality),
+  ].join(' ');
+  if (/\bcabot\b/.test(bag) && !/little rock/.test(bag)) return false;
+  if (/little rock/.test(bag)) return true;
+  if (/\bar\b/.test(bag) || /\barkansas\b/.test(bag)) return true;
+  if (isCourseCardLatLng(course.location)) {
+    const yards = haversineYards(course.location, PLEASANT_VALLEY_LR_CLUBHOUSE);
+    if (yards <= 1800) return true;
+  }
+  return false;
+}
+
 export function resolveCourseHydrateKey(course: CourseHydrateMatch): string | null {
   if (matchesCypressCreekCabot(course)) return CYPRESS_CREEK_CABOT_AR_KEY;
   if (matchesGreystoneCabot(course)) return GREYSTONE_CABOT_AR_KEY;
+  if (matchesPleasantValleyLR(course)) return PLEASANT_VALLEY_LR_AR_KEY;
   return null;
 }
 
