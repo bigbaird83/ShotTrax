@@ -1,4 +1,5 @@
-import { isValidLatLng, type LatLng } from './latLng';
+import { diagnoseCourseCardFrame } from './holeCamera';
+import { type LatLng } from './latLng';
 
 export type ReproCourseHole = {
   number: number;
@@ -50,7 +51,11 @@ export function courseCardHoleHasTeeAndGreen(hole: {
   tee?: LatLng | null;
   green?: LatLng | null;
 }): boolean {
-  return isValidLatLng(hole.tee) && isValidLatLng(hole.green);
+  return diagnoseCourseCardFrame({
+    tee: hole.tee ?? null,
+    green: hole.green ?? null,
+    phone: null,
+  }).ok;
 }
 
 export function magnoliaHole1Card(): { tee: LatLng; green: LatLng } {

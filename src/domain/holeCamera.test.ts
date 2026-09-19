@@ -36,6 +36,8 @@ import {
   openingCameraRequiresTeeAndGreen,
   openingHoleRegionContainsTeeAndGreen,
   planCourseCardCamera,
+  diagnoseCourseCardFrame,
+  diagnoseCourseCardHole,
   playAndAddShotShareFrameEpoch,
   playMapFrameEpoch,
   addShotChangesFrameEpoch,
@@ -409,6 +411,35 @@ test('Magnolia CC and Cypress Creek hole 1 frame tee+green; missing either is an
   assert.equal(MAGNOLIA_CC.name, 'Magnolia Country Club');
   assert.equal(courseCardHoleHasTeeAndGreen(MAGNOLIA_CC.hole1), true);
   assert.equal(courseCardHoleHasTeeAndGreen(CYPRESS_CREEK_CABOT.hole1), true);
+  assert.equal(
+    diagnoseCourseCardHole({
+      teeCentroid: MAGNOLIA_CC.hole1.tee,
+      greenCentroid: MAGNOLIA_CC.hole1.green,
+    }).ok,
+    true,
+  );
+  assert.equal(
+    diagnoseCourseCardFrame({
+      tee: MAGNOLIA_CC.hole1.tee,
+      green: MAGNOLIA_CC.hole1.green,
+      phone,
+    }).ok,
+    true,
+  );
+  assert.equal(
+    diagnoseCourseCardHole({
+      teeCentroid: null,
+      greenCentroid: MAGNOLIA_CC.hole1.green,
+    }).missing,
+    'tee',
+  );
+  assert.equal(
+    diagnoseCourseCardHole({
+      teeCentroid: MAGNOLIA_CC.hole1.tee,
+      greenCentroid: null,
+    }).missing,
+    'green',
+  );
 
   for (const course of [MAGNOLIA_CC, CYPRESS_CREEK_CABOT]) {
     const hole = course.hole1;

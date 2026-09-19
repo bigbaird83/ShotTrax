@@ -3,6 +3,8 @@ import { test } from 'node:test';
 import {
   courseCardCameraWaitsForPhoneFix,
   courseCardMissingCameraWaitsForPhone,
+  diagnoseCourseCardFrame,
+  diagnoseCourseCardHole,
   holeCameraTeeBelowGreenOnScreen,
   holeFrameRegion,
   holeMapUserLocationVisible,
@@ -38,6 +40,30 @@ test('Magnolia CC hole 1 is the known Doc tee+green set for camera and layout', 
   });
 
   const card = magnoliaHole1Card();
+  const diagnosis = diagnoseCourseCardFrame({ tee: card.tee, green: card.green, phone: null });
+  const fromScorecard = diagnoseCourseCardHole({
+    teeCentroid: card.tee,
+    greenCentroid: card.green,
+  });
+  assert.equal(diagnosis.ok, true);
+  assert.equal(fromScorecard.ok, true);
+  assert.equal(diagnosis.missing, null);
+  assert.deepEqual(diagnoseCourseCardHole({ teeCentroid: null, greenCentroid: card.green }), {
+    ok: false,
+    tee: null,
+    green: card.green,
+    missing: 'tee',
+  });
+  assert.deepEqual(diagnoseCourseCardHole({ teeCentroid: card.tee, greenCentroid: null }), {
+    ok: false,
+    tee: card.tee,
+    green: null,
+    missing: 'green',
+  });
+  assert.equal(
+    diagnoseCourseCardFrame({ tee: null, green: card.green, phone }).ok,
+    false,
+  );
   const start = planCourseCardCamera({ tee: card.tee, green: card.green, phone: null });
   const addShot = planCourseCardCamera({ tee: card.tee, green: card.green, phone: null });
   const fromHouse = planCourseCardCamera({ tee: card.tee, green: card.green, phone });

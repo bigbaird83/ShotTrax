@@ -11,6 +11,8 @@ import {
   openingHoleRegionContainsPoint,
   openingHoleRegionContainsTeeAndGreen,
   planCourseCardCamera,
+  diagnoseCourseCardFrame,
+  diagnoseCourseCardHole,
 } from './holeCamera';
 import {
   COURSE_CARD_CAMERA_SURFACES,
@@ -32,6 +34,14 @@ const house = { lat: 40.7128, lng: -74.006 };
 test('shared camera region is course tee + green only, never the phone or the house', () => {
   assert.equal(MAGNOLIA_CC.name, 'Magnolia Country Club');
   assert.equal(courseCardHoleHasTeeAndGreen(magnoliaHole1Card()), true);
+  assert.equal(
+    diagnoseCourseCardHole({
+      teeCentroid: MAGNOLIA_CC.hole1.tee,
+      greenCentroid: MAGNOLIA_CC.hole1.green,
+    }).ok,
+    true,
+  );
+  assert.equal(diagnoseCourseCardFrame({ tee: null, green, phone: house }).ok, false);
   assert.equal(courseCardCameraRegionUsesPhone(), false);
   assert.equal(courseCardCameraRegionUsesHouse(), false);
 
@@ -64,7 +74,9 @@ test('shared camera region is course tee + green only, never the phone or the ho
   const src = readFileSync(new URL('./holeCamera.ts', import.meta.url), 'utf8');
   const body = src.slice(src.indexOf('export function planCourseCardCamera'), src.indexOf('export function addShotFramePoints'));
   assert.match(body, /void args\.phone/);
-  assert.match(body, /return \{ points: \[args\.tee, args\.green\], heading \}/);
+  assert.match(body, /diagnoseCourseCardFrame\(args\)/);
+  assert.match(body, /if \(!card\.ok\) return null/);
+  assert.match(body, /return \{ points: \[card\.tee, card\.green\], heading \}/);
   assert.doesNotMatch(body, /points: \[[^\]]*phone/);
 
   const regionFn = src.slice(src.indexOf('export function courseCardCameraRegion'), src.indexOf('export function courseCardCameraRegionUsesPhone'));

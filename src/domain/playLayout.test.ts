@@ -688,6 +688,8 @@ test('P0: full-bleed MapView has real height under the glass dock; Add shot keep
   assert.match(hole, /<View collapsable=\{false\} style=\{styles\.mapFill\}>/);
   assert.doesNotMatch(hole, /catchUpFullScreen \? styles\.mapWrapFull/);
   assert.equal((hole.match(/planCourseCardCamera\(/g) ?? []).length, 1);
+  assert.match(hole, /const courseCardFrame = diagnoseCourseCardFrame\(\{[\s\S]*?tee: holeTee,[\s\S]*?green,[\s\S]*?phone: null,/);
+  assert.match(hole, /courseCardFrame\.ok/);
   assert.match(hole, /const courseCamera = planCourseCardCamera\(\{[\s\S]*?tee: holeTee,[\s\S]*?green,[\s\S]*?phone: null,/);
 
   assert.match(map, /bleed: \{\s*\n\s*\.\.\.StyleSheet\.absoluteFill,/);

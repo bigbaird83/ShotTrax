@@ -52,7 +52,13 @@ import { allClubsHref, playHrefAfterHoleChange } from '@/src/domain/playNav';
 import { canAdvanceHole, holesNeedingOpenShots } from '@/src/domain/holeAdvance';
 import { isPutterClubId } from '@/src/domain/defaultBag';
 import { catchUpPinFromTap, planCancelCatchUp, planCatchUpSheet } from '@/src/domain/catchUpMap';
-import { courseTeeFromHole, planCourseCardCamera, playMapFrameEpoch, resolvePlayHoleTee } from '@/src/domain/holeCamera';
+import {
+  courseTeeFromHole,
+  diagnoseCourseCardFrame,
+  planCourseCardCamera,
+  playMapFrameEpoch,
+  resolvePlayHoleTee,
+} from '@/src/domain/holeCamera';
 import { deleteShotPrompt } from '@/src/domain/deleteShot';
 import { planInsertSlots } from '@/src/domain/insertShot';
 import { confirmUndoIsLive, planConfirmUndo, type ConfirmUndoWindow } from '@/src/domain/confirmUndo';
@@ -451,6 +457,11 @@ export default function HoleScreen() {
     if (!hole?.id || !holeTee) return;
     saveHoleTee(db, hole.id, holeTee);
   }, [db, hole?.id, holeTee?.lat, holeTee?.lng]);
+  const courseCardFrame = diagnoseCourseCardFrame({
+    tee: holeTee,
+    green,
+    phone: null,
+  });
   const courseCamera = planCourseCardCamera({
     tee: holeTee,
     green,
@@ -995,10 +1006,12 @@ export default function HoleScreen() {
           onFrameReady={setMapFramed}
           heading={courseCamera?.heading ?? null}
           framePoints={
-            courseCamera?.points.map((point) => ({
-              latitude: point.lat,
-              longitude: point.lng,
-            }))
+            courseCardFrame.ok
+              ? courseCamera?.points.map((point) => ({
+                  latitude: point.lat,
+                  longitude: point.lng,
+                }))
+              : undefined
           }
           placeHint={placeHint}
           onShotPress={placing ? undefined : openEdit}
