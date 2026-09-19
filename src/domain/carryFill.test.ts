@@ -70,6 +70,27 @@ test('3 typed anchors scale the whole bag off STOCK — not neighbor-yard interp
   assert.ok((filled.get('club_gw')?.yards ?? 0) > 0);
 });
 
+test('any three typed clubs seed the whole bag off STOCK — no required trio', () => {
+  const filled = fillEstimatedCarries([
+    club('club_5w', 2, 190),
+    club('club_9i', 11, 125),
+    club('club_sw', 16, 88),
+    club('club_driver', 0, null),
+    club('club_7i', 9, null),
+    club('club_pw', 12, null),
+    club(PUTTER_CLUB_ID, 18, 8),
+  ]);
+  assert.equal(filled.get('club_5w')?.source, 'typed');
+  assert.equal(filled.get('club_9i')?.source, 'typed');
+  assert.equal(filled.get('club_sw')?.source, 'typed');
+  assert.equal(filled.get('club_driver')?.source, 'estimated');
+  assert.equal(filled.get('club_7i')?.source, 'estimated');
+  assert.equal(filled.get('club_pw')?.source, 'estimated');
+  assert.ok((filled.get('club_driver')?.yards ?? 0) > 0);
+  assert.ok((filled.get('club_7i')?.yards ?? 0) > 0);
+  assert.equal(filled.get(PUTTER_CLUB_ID)?.source ?? null, null);
+});
+
 test('typed number always wins over the scaled stock value', () => {
   const filled = fillEstimatedCarries([
     club('club_5i', 7, 170),

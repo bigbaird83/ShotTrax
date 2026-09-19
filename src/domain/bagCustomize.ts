@@ -20,6 +20,11 @@ export function bagSetupIsFirstRunOnly(): true {
   return true;
 }
 
+/** First-run accepts any three non-putter clubs — no required trio. */
+export function bagSetupAcceptsAnyThreeClubs(): true {
+  return true;
+}
+
 /** Start 9/18 is never blocked by bag setup. Course + tee stay the start gate. */
 export function bagSetupBlocksStart(): false {
   return false;

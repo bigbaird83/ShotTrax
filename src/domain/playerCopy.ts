@@ -104,7 +104,7 @@ export const COPY = {
   bagLede: 'Your bag. Turn off what you don’t carry. Carry is on each row.',
   bagCustomizeTitle: 'Your bag',
   bagCustomizeLede:
-    'Type carry on 3 clubs to estimate the rest, or calculate from actual play.',
+    'Type carry on any 3 clubs to estimate the rest, or calculate from actual play.',
   bagCustomizeSkip: 'Calculate from actual play',
   bagCustomizeDone: 'Done',
   averagesLede: 'How far you hit each club — from marked shots.',

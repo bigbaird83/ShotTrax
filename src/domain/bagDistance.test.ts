@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { AVERAGE_OUTLIER_RATIO } from './averages';
+import { AVERAGE_OUTLIER_RATIO, clubAverageFromShots } from './averages';
 import {
+  bagSetupAcceptsAnyThreeClubs,
   bagSetupBlocksStart,
   bagSetupIsFirstRunOnly,
   canFinishBagCarrySetup,
@@ -11,10 +12,12 @@ import {
 import { fillEstimatedCarries, MIN_TYPED_CLUBS_FOR_FILL } from './carryFill';
 import { PUTTER_CLUB_ID, STOCK_AVG_CARRY, stockAvgCarryForSuggestion } from './defaultBag';
 import { MIN_CLOSED_SHOTS_FOR_RANK, rankDistanceYards } from './rankClubs';
+import { includeInDistanceAverages } from './shotSource';
 
 test('bag distances: first-run 3-typed or skip-to-play; Start stays course-gated', () => {
   assert.equal(MIN_TYPED_CLUBS_FOR_FILL, 3);
   assert.equal(bagSetupIsFirstRunOnly(), true);
+  assert.equal(bagSetupAcceptsAnyThreeClubs(), true);
   assert.equal(bagSetupBlocksStart(), false);
   assert.equal(canFinishBagCarrySetup(2), false);
   assert.equal(canFinishBagCarrySetup(3), true);
@@ -78,10 +81,43 @@ test('Suggested seed is STOCK_AVG until typed or 5 live (20% outliers); putter o
       shortName: '7i',
       loftRank: 9,
       avgYards: 162,
+      count: 4,
+      typicalCarryYards: 145,
+    }),
+    145,
+  );
+  assert.equal(
+    rankDistanceYards({
+      id: 'club_7i',
+      name: '7 Iron',
+      shortName: '7i',
+      loftRank: 9,
+      avgYards: 162,
       count: 5,
       typicalCarryYards: 145,
     }),
     162,
+  );
+  const fourKept = clubAverageFromShots(
+    [
+      { yards: 150, fixQuality: 'good' },
+      { yards: 150, fixQuality: 'good' },
+      { yards: 150, fixQuality: 'good' },
+      { yards: 150, fixQuality: 'good' },
+      { yards: 200, fixQuality: 'good' },
+    ],
+    { typedCarryYards: 145, estimatedCarryYards: null },
+  );
+  assert.equal(fourKept.count, 4);
+  assert.ok(fourKept.count < MIN_CLOSED_SHOTS_FOR_RANK);
+  assert.equal(
+    includeInDistanceAverages({
+      source: 'gps',
+      distanceYards: 8,
+      fixQuality: 'good',
+      clubId: PUTTER_CLUB_ID,
+    }),
+    false,
   );
   assert.equal(
     rankDistanceYards({

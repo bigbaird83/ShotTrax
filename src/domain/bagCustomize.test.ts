@@ -7,6 +7,7 @@ import {
   bagCarrySetupNeedsTypedClubs,
   bagCustomizeSeenValue,
   bagCustomizeSkipValue,
+  bagSetupAcceptsAnyThreeClubs,
   bagSetupBlocksStart,
   bagSetupIsFirstRunOnly,
   canFinishBagCarrySetup,
@@ -16,6 +17,7 @@ import {
 
 test('bag customize prompt is first-run only — 3 typed or skip-to-play, never again', () => {
   assert.equal(bagSetupIsFirstRunOnly(), true);
+  assert.equal(bagSetupAcceptsAnyThreeClubs(), true);
   assert.equal(bagSetupBlocksStart(), false);
   assert.equal(bagCarrySetupNeedsTypedClubs(), MIN_TYPED_CLUBS_FOR_FILL);
   assert.equal(MIN_TYPED_CLUBS_FOR_FILL, 3);
@@ -41,6 +43,16 @@ test('bag customize prompt is first-run only — 3 typed or skip-to-play, never 
     ]),
     3,
   );
+  assert.equal(
+    countTypedCarries([
+      { id: 'club_5w', typicalCarryYards: 190 },
+      { id: 'club_9i', typicalCarryYards: 128 },
+      { id: 'club_sw', typicalCarryYards: 85 },
+      { id: 'club_putter', typicalCarryYards: 8 },
+    ]),
+    3,
+  );
+  assert.equal(canFinishBagCarrySetup(3), true);
 
   assert.equal(shouldPromptBagCustomize(null), true);
   assert.equal(shouldPromptBagCustomize(undefined), true);
@@ -53,16 +65,26 @@ test('bag customize prompt is first-run only — 3 typed or skip-to-play, never 
 
 test('home bag setup is first-run, Done needs 3 typed, skip is calculate from actual play', () => {
   assert.equal(COPY.bagCustomizeSkip, 'Calculate from actual play');
+  assert.equal(
+    COPY.bagCustomizeLede,
+    'Type carry on any 3 clubs to estimate the rest, or calculate from actual play.',
+  );
   assert.doesNotMatch(COPY.bagCustomizeSkip, /optional/i);
   assert.doesNotMatch(JSON.stringify(COPY), /Course name \(optional\)/);
 
   const home = readFileSync(new URL('../../app/(tabs)/index.tsx', import.meta.url), 'utf8');
+  assert.match(home, /hasSeenBagCustomize/);
+  assert.match(home, /visible=\{bagPromptOpen\}/);
   assert.match(home, /canFinishBagCarrySetup|countTypedCarries/);
   assert.match(home, /markBagCustomizeSkipped|skipBagSetup/);
   assert.match(home, /doneDisabled=\{!canFinishBag\}/);
   assert.match(home, /disabled=\{starting \|\| !canStart\}/);
   assert.doesNotMatch(home, /disabled=\{starting \|\| !canStart \|\|.*[Bb]ag/);
   assert.doesNotMatch(home, /canStartRound\(\{[^}]*typedCount/);
+  assert.doesNotMatch(home, /startRound\([\s\S]*markBagCustomize/);
+
+  const bagTab = readFileSync(new URL('../../app/(tabs)/bag.tsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(bagTab, /hasSeenBagCustomize|bagPromptOpen|BagCustomizeActions/);
 
   const actions = readFileSync(new URL('../ui/BagCarryList.tsx', import.meta.url), 'utf8');
   assert.match(actions, /doneDisabled/);
