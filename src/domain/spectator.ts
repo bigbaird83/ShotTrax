@@ -162,42 +162,27 @@ export function planSpectatorPayload(args: {
 function bytesToBase64Url(bytes: Uint8Array): string {
   let bin = '';
   for (const byte of bytes) bin += String.fromCharCode(byte);
-  const b64 =
-    typeof Buffer !== 'undefined'
-      ? Buffer.from(bytes).toString('base64')
-      : btoa(bin);
+  const b64 = globalThis.btoa(bin);
   return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
 
 function base64UrlToBytes(value: string): Uint8Array {
   const padded = value.replace(/-/g, '+').replace(/_/g, '/');
   const pad = padded.length % 4 === 0 ? '' : '='.repeat(4 - (padded.length % 4));
-  const b64 = padded + pad;
-  if (typeof Buffer !== 'undefined') {
-    return new Uint8Array(Buffer.from(b64, 'base64'));
-  }
-  const bin = atob(b64);
+  const bin = globalThis.atob(padded + pad);
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
   return out;
 }
 
 export function encodeSpectatorPayload(payload: SpectatorPayload): string {
-  const json = JSON.stringify(payload);
-  if (typeof TextEncoder !== 'undefined') {
-    return bytesToBase64Url(new TextEncoder().encode(json));
-  }
-  return bytesToBase64Url(Uint8Array.from(Buffer.from(json, 'utf8')));
+  return bytesToBase64Url(new TextEncoder().encode(JSON.stringify(payload)));
 }
 
 export function decodeSpectatorPayload(raw: string | null | undefined): SpectatorPayload | null {
   if (raw == null || raw.trim() === '') return null;
   try {
-    const bytes = base64UrlToBytes(raw.trim());
-    const json =
-      typeof TextDecoder !== 'undefined'
-        ? new TextDecoder().decode(bytes)
-        : Buffer.from(bytes).toString('utf8');
+    const json = new TextDecoder().decode(base64UrlToBytes(raw.trim()));
     return parseSpectatorPayload(JSON.parse(json) as unknown);
   } catch {
     return null;

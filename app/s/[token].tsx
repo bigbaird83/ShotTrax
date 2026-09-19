@@ -78,10 +78,10 @@ export default function SpectatorScreen() {
 
 function makeStyles(colors: ColorPalette) {
   return StyleSheet.create({
-    kicker: { ...type.caption, color: colors.muted, textTransform: 'uppercase' },
-    title: { ...type.title, color: colors.cream, marginTop: 6 },
-    hint: { ...type.caption, color: colors.muted, marginTop: 8 },
-    muted: { ...type.body, color: colors.muted, marginTop: 6 },
+    kicker: { color: colors.muted, fontSize: type.kicker, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase' },
+    title: { color: colors.cream, fontSize: type.title, fontWeight: '900', marginTop: 6 },
+    hint: { color: colors.muted, fontSize: type.tiny, marginTop: 8 },
+    muted: { color: colors.muted, fontSize: type.body, marginTop: 6 },
     card: {
       marginTop: 20,
       padding: 16,
@@ -90,8 +90,8 @@ function makeStyles(colors: ColorPalette) {
       borderWidth: 1,
       borderColor: colors.line,
     },
-    liveHole: { ...type.subtitle, color: colors.cream },
-    liveScore: { ...type.title, color: colors.lime, marginTop: 4 },
-    row: { ...type.body, color: colors.cream, marginTop: 10 },
+    liveHole: { color: colors.cream, fontSize: type.hole, fontWeight: '800' },
+    liveScore: { color: colors.lime, fontSize: type.title, fontWeight: '900', marginTop: 4 },
+    row: { color: colors.cream, fontSize: type.body, marginTop: 10 },
   });
 }
