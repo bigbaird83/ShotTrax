@@ -34,6 +34,14 @@ test('Cypress OSM hydrate is 18 gated holes; clubhouse is never a pin', () => {
   assert.equal(hydrate?.locality, 'Cabot, AR');
   assert.equal(hydrate?.source, 'osm');
   assert.match(hydrate?.sourceRef ?? '', /way\/889858723/);
+  assert.match(hydrate?.sourceRef ?? '', /tee\/way\/781188319/);
+  assert.match(hydrate?.sourceRef ?? '', /green\/way\/781182770/);
+  assert.deepEqual(hydrate?.holes[0]?.tee, {
+    lat: 35.0254604,
+    lng: -92.0297854,
+    label: 'default',
+  });
+  assert.deepEqual(hydrate?.holes[0]?.green, { lat: 35.027902, lng: -92.0287661 });
   assert.equal(hydrate?.holes.length, 18);
   assert.deepEqual(
     hydrate?.holes.map((hole) => hole.hole),
