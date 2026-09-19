@@ -20,12 +20,15 @@ import {
   getHole,
   getOpenShotForHole,
   getRound,
+  hasSeenFirstLaunchTip,
   insertPenalty,
   listClubAverages,
   listClubs,
   listHoles,
   listPenaltiesForHole,
+  listRounds,
   listShotsForHole,
+  markFirstLaunchTipSeen,
   saveHoleTee,
   setHoleGreen,
   updateHolePar,
@@ -49,7 +52,7 @@ import { allClubsHref, playHrefAfterHoleChange } from '@/src/domain/playNav';
 import { canAdvanceHole, holesNeedingOpenShots } from '@/src/domain/holeAdvance';
 import { isPutterClubId } from '@/src/domain/defaultBag';
 import { catchUpPinFromTap, planCancelCatchUp, planCatchUpSheet } from '@/src/domain/catchUpMap';
-import { courseTeeFromHole, planCourseCardCamera, resolvePlayHoleTee } from '@/src/domain/holeCamera';
+import { courseTeeFromHole, planCourseCardCamera, playMapFrameEpoch, resolvePlayHoleTee } from '@/src/domain/holeCamera';
 import { deleteShotPrompt } from '@/src/domain/deleteShot';
 import { planInsertSlots } from '@/src/domain/insertShot';
 import { confirmUndoIsLive, planConfirmUndo, type ConfirmUndoWindow } from '@/src/domain/confirmUndo';
@@ -57,6 +60,11 @@ import { confirmPlaceToDraft, courseGreenCenterForLine, resolveAddShotFromPin } 
 import { applyWheelSelection } from '@/src/domain/clubSelect';
 import { PHONE_WHEEL_PILL_HEIGHT, PHONE_WHEEL_STRIP_HEIGHT, planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
 import { PLAY_DOCK_ACTION_MIN_HEIGHT, PLAY_GLASS_DOCK_LIFT, planPlayLayout } from '@/src/domain/playLayout';
+import {
+  firstLaunchTipHistoryRoundCount,
+  firstLaunchTipSeenValue,
+  shouldShowFirstLaunchTip,
+} from '@/src/domain/firstLaunchTip';
 import { planPlacedShot } from '@/src/domain/shotSource';
 import { planUndoPlacePins } from '@/src/domain/undoLastShot';
 import type { LatLng } from '@/src/domain/latLng';
@@ -154,6 +162,7 @@ export default function HoleScreen() {
   const [osmOverlay, setOsmOverlay] = useState<OsmOverlay | null>(null);
   const [checkNonce, setCheckNonce] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
+  const [firstLaunchTipDismissed, setFirstLaunchTipDismissed] = useState(false);
 
   const round = useMemo(() => getRound(db, id), [db, id, revision]);
   const hole = useMemo(() => getHole(db, id, holeNumber), [db, id, holeNumber, revision]);
@@ -171,6 +180,20 @@ export default function HoleScreen() {
     [db, hole, revision],
   );
   const readOnly = Boolean(round?.finishedAt);
+  const historyRoundCount = useMemo(
+    () =>
+      firstLaunchTipHistoryRoundCount({
+        roundIds: listRounds(db).map((row) => row.id),
+        currentRoundId: round?.id,
+      }),
+    [db, revision, round?.id],
+  );
+
+  useEffect(() => {
+    if (hasSeenFirstLaunchTip(db)) return;
+    if (historyRoundCount <= 0) return;
+    markFirstLaunchTipSeen(db);
+  }, [db, historyRoundCount]);
   const penaltyTotal = totalPenaltyStrokes(penalties);
   const reconcile = reconcileHoleScore({
     score: hole?.score ?? null,
@@ -908,6 +931,18 @@ export default function HoleScreen() {
   const catchUpSheet = planCatchUpSheet(placing);
   const hideHoleButtons = catchUpSheet.holeButtons === 'hidden';
   const catchUpFullScreen = catchUpSheet.map === 'fullscreen';
+  const showFirstLaunchTip =
+    !readOnly &&
+    !catchUpFullScreen &&
+    !firstLaunchTipDismissed &&
+    shouldShowFirstLaunchTip({
+      seen: hasSeenFirstLaunchTip(db) ? firstLaunchTipSeenValue() : null,
+      historyRoundCount,
+    });
+  const onDismissFirstLaunchTip = () => {
+    markFirstLaunchTipSeen(db);
+    setFirstLaunchTipDismissed(true);
+  };
   const placeHint =
     placeMode === 'edit-from'
       ? COPY.editFromHint
@@ -929,7 +964,7 @@ export default function HoleScreen() {
 
   return (
     <View style={styles.fill}>
-      <View style={catchUpFullScreen ? styles.mapWrapFull : styles.mapFill}>
+      <View style={styles.mapFill}>
         <HoleMap
           fullBleed
           holeNumber={hole.number}
@@ -956,7 +991,7 @@ export default function HoleScreen() {
           showPhonePin={!catchUpFullScreen}
           allowMapsChrome={!catchUpFullScreen}
           hideYardsOverlay
-          frameEpoch={catchUpFullScreen ? 'catchup' : `play-${hole.number}-${playFrameNonce}`}
+          frameEpoch={playMapFrameEpoch({ holeNumber: hole.number, nonce: playFrameNonce })}
           onFrameReady={setMapFramed}
           heading={courseCamera?.heading ?? null}
           framePoints={
@@ -1095,6 +1130,18 @@ export default function HoleScreen() {
                 </ScrollView>
               ) : null}
               {simBanner ? <GpsBanner message={simBanner} /> : null}
+              {showFirstLaunchTip ? (
+                <View pointerEvents="box-none" style={styles.firstLaunchTipRow}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={COPY.firstLaunchTip}
+                    onPress={onDismissFirstLaunchTip}
+                    style={styles.firstLaunchTip}>
+                    <Text style={styles.firstLaunchTipText}>{COPY.firstLaunchTip}</Text>
+                    <Text style={styles.firstLaunchTipDismiss}>{COPY.dismissFirstLaunchTip}</Text>
+                  </Pressable>
+                </View>
+              ) : null}
               {toast ? <Text style={styles.overlayToast}>{toast}</Text> : null}
               {!readOnly && confirmUndoIsLive(confirmUndo, nowMs) ? (
                 <Pressable onPress={onConfirmUndo} style={styles.overlayLink}>
@@ -1713,7 +1760,6 @@ function makeStyles(colors: ColorPalette) {
   return StyleSheet.create({
   fill: { flex: 1, backgroundColor: colors.bg },
   mapFill: { flex: 1, minHeight: '60%', flexGrow: 1, flexBasis: '60%' },
-  mapWrapFull: { flex: 1, minHeight: 0 },
   catchUpBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1838,6 +1884,32 @@ function makeStyles(colors: ColorPalette) {
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 6,
+  },
+  firstLaunchTipRow: {
+    marginTop: 6,
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
+  },
+  firstLaunchTip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: colors.overlay,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    minHeight: 32,
+  },
+  firstLaunchTipText: {
+    flexShrink: 1,
+    color: colors.cream,
+    fontSize: type.tiny,
+    fontWeight: '800',
+  },
+  firstLaunchTipDismiss: {
+    color: colors.muted,
+    fontSize: type.tiny,
+    fontWeight: '800',
   },
   dock: {
     position: 'absolute',

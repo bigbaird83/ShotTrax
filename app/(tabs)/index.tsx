@@ -23,6 +23,7 @@ import {
   getCourseDistanceUnit,
   hasSeenBagCustomize,
   listClubs,
+  markBagCustomizeSkipped,
   listHoles,
   listRounds,
   markBagCustomizeSeen,
@@ -30,6 +31,8 @@ import {
   type CourseLayoutSeed,
 } from '@/src/db/repo';
 import { formatLastPlayedChip, lastPlayedAtForCourse } from '@/src/domain/courseCard';
+import { canFinishBagCarrySetup, countTypedCarries } from '@/src/domain/bagCustomize';
+import { canStartRound } from '@/src/domain/coursePick';
 import { COPY, formatTeeMeta } from '@/src/domain/playerCopy';
 import { playHrefAfterRoundStart } from '@/src/domain/playNav';
 import { formatHistoryRow } from '@/src/domain/roundHistory';
@@ -69,7 +72,7 @@ export default function HomeScreen() {
   const { db, revision, bump } = useDb();
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const [courseName, setCourseName] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [picked, setPicked] = useState<CourseSummary | null>(null);
   const [pickedTee, setPickedTee] = useState<TeeSet | null>(null);
   const [pickedDetail, setPickedDetail] = useState<CourseDetail | null>(null);
@@ -85,6 +88,8 @@ export default function HomeScreen() {
   const courseDistanceUnit = useMemo(() => getCourseDistanceUnit(db), [db, revision]);
   const clubs = useMemo(() => listClubs(db), [db, revision]);
   const bagPromptOpen = useMemo(() => !hasSeenBagCustomize(db), [db, revision]);
+  const typedCarryCount = useMemo(() => countTypedCarries(clubs), [clubs]);
+  const canFinishBag = canFinishBagCarrySetup(typedCarryCount);
   const lastPlayedAtByCourse = useMemo(() => {
     const map: Record<string, string> = {};
     for (const round of rounds) {
@@ -99,12 +104,18 @@ export default function HomeScreen() {
       setPicked(pick.course);
       setPickedDetail(pick.detail);
       setPickedTee(null);
-      setCourseName(pick.course.name);
+      setSearchQuery(pick.course.name);
     });
     return () => setWatchCoursePickedHandler(null);
   }, []);
 
-  const finishBagPrompt = () => {
+  const skipBagSetup = () => {
+    markBagCustomizeSkipped(db);
+    bump();
+  };
+
+  const finishBagSetup = () => {
+    if (!canFinishBag) return;
     markBagCustomizeSeen(db);
     bump();
   };
@@ -117,11 +128,11 @@ export default function HomeScreen() {
   };
 
   const commitPick = async (pick: CoursePick) => {
-    const needsTee = (pick.detail?.tees.length ?? 0) > 1 && !pick.tee;
+    const needsTee = (pick.detail?.tees.length ?? 0) > 0 && !pick.tee;
     setPicked(pick.course);
     setPickedTee(pick.tee);
     setPickedDetail(pick.detail);
-    setCourseName(pick.course.name);
+    setSearchQuery(pick.course.name);
     if (needsTee) return;
     setSheetOpen(false);
     if (active) {
@@ -149,22 +160,20 @@ export default function HomeScreen() {
     void commitPick(pick);
   };
 
+  const teeCount = picked ? (pickedDetail == null ? null : pickedDetail.tees.length) : 0;
+  const needsTee = Boolean(picked) && (teeCount == null || (teeCount > 0 && !pickedTee));
+  const canStart = canStartRound({ picked, teeCount, pickedTee });
+
   const onStart = (holeCount: 9 | 18) => {
     if (active) {
       router.push(playHrefAfterRoundStart(active.id));
       return;
     }
+    if (!canStart || !picked) return;
     void (async () => {
       setStarting(true);
       try {
-        if (picked) {
-          await applyPickedCourse(picked, holeCount);
-          return;
-        }
-        const name = courseName.trim() || null;
-        const round = startRound(db, holeCount, name);
-        bump();
-        router.push(playHrefAfterRoundStart(round.id));
+        await applyPickedCourse(picked, holeCount);
       } catch (err) {
         Alert.alert('Couldn’t start round', err instanceof Error ? err.message : 'Try again.');
       } finally {
@@ -185,8 +194,6 @@ export default function HomeScreen() {
       setRefreshing(false);
     }
   }, []);
-
-  const needsTee = Boolean(picked) && (pickedDetail?.tees.length ?? 0) > 1 && !pickedTee;
   const teeLabel = pickedTee
     ? formatTeeMeta({
         name: pickedTee.name,
@@ -212,10 +219,14 @@ export default function HomeScreen() {
       <FullSheet
         visible={bagPromptOpen}
         title={COPY.bagCustomizeTitle}
-        onClose={finishBagPrompt}>
+        onClose={skipBagSetup}>
         <ScrollView contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 40 }}>
           <Text style={styles.lede}>{COPY.bagCustomizeLede}</Text>
-          <BagCustomizeActions onSkip={finishBagPrompt} onDone={finishBagPrompt} />
+          <BagCustomizeActions
+            onSkip={skipBagSetup}
+            onDone={finishBagSetup}
+            doneDisabled={!canFinishBag}
+          />
           <BagCarryList db={db} clubs={clubs} onChange={bump} />
         </ScrollView>
       </FullSheet>
@@ -225,12 +236,13 @@ export default function HomeScreen() {
       <TextInput
         placeholder={COPY.courseNamePlaceholder}
         placeholderTextColor={colors.muted}
-        value={picked?.name ?? courseName}
+        value={searchQuery}
         onChangeText={(text) => {
           setPicked(null);
           setPickedTee(null);
           setPickedDetail(null);
-          setCourseName(text);
+          setSearchQuery(text);
+          setSheetOpen(true);
         }}
         style={styles.input}
       />
@@ -255,12 +267,19 @@ export default function HomeScreen() {
         </View>
       ) : null}
 
-      <FullSheet visible={sheetOpen} title="Courses near you" onClose={() => setSheetOpen(false)}>
+      <FullSheet visible={sheetOpen} title={COPY.selectCourse} onClose={() => setSheetOpen(false)}>
         <CoursePicker
           selected={picked}
           selectedTee={pickedTee}
           attachMode={Boolean(active)}
           courseDistanceUnit={courseDistanceUnit}
+          query={searchQuery}
+          onQueryChange={(text) => {
+            setSearchQuery(text);
+            setPicked(null);
+            setPickedTee(null);
+            setPickedDetail(null);
+          }}
           onSelect={onSelectCourse}
           lastPlayedAtByCourse={lastPlayedAtByCourse}
           onRefreshReady={(fn) => {
@@ -306,7 +325,7 @@ export default function HomeScreen() {
                 ? `Start 18 at ${picked.name}${pickedTee ? ` · ${pickedTee.name}` : ''}`
                 : COPY.start18
             }
-            disabled={starting || needsTee}
+            disabled={starting || !canStart}
             onPress={() => onStart(18)}
           />
           <BigButton
@@ -316,7 +335,7 @@ export default function HomeScreen() {
                 : COPY.start9
             }
             variant="secondary"
-            disabled={starting || needsTee}
+            disabled={starting || !canStart}
             onPress={() => onStart(9)}
           />
         </View>

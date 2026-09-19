@@ -419,7 +419,7 @@ test('scrolling past the longest wraps to the shortest', () => {
   assert.match(watch, /padding\(\.trailing, club\.seamAfter/);
 });
 
-test('fill estimated carries before sort; estimable iron is in, outside the span is out', () => {
+test('fill estimated carries before sort; whole-bag STOCK scale enters the wheel, putter stays out', () => {
   assert.equal(clubStripFillsBeforeSort(), true);
   assert.equal(clubStripEstimatedEntersWheel(), true);
   assert.equal(clubStripSortsByIronHybridName(), false);
@@ -446,12 +446,13 @@ test('fill estimated carries before sort; estimable iron is in, outside the span
   assert.ok(filled.ids.includes('club_4i'));
   assert.ok(filled.ids.includes('club_7i'));
   assert.ok(filled.ids.includes('club_3w'));
+  assert.ok(filled.ids.includes('club_48'));
   assert.ok(filled.carries['club_4i'] != null && filled.carries['club_4i'] > 0);
   assert.equal(filled.carries['club_7i'], 150);
-  assert.ok(!filled.ids.includes('club_48'));
+  assert.ok(filled.carries['club_48'] != null && filled.carries['club_48'] > 0);
   assert.ok(!filled.ids.includes(PUTTER_CLUB_ID));
-  assert.equal(filled.carries['club_48'], undefined);
-  assert.deepEqual(filled.ids, ['club_pw', 'club_7i', 'club_4i', 'club_3w', 'club_driver']);
+  assert.equal(filled.carries[PUTTER_CLUB_ID], undefined);
+  assert.deepEqual(filled.ids, ['club_48', 'club_pw', 'club_7i', 'club_4i', 'club_3w', 'club_driver']);
   assert.notDeepEqual(filled.ids, ['club_3w', 'club_4i', 'club_7i', 'club_pw', 'club_driver']);
   assert.ok(filled.ids.indexOf('club_7i') < filled.ids.indexOf('club_4i'));
 

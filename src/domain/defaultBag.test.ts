@@ -9,6 +9,8 @@ import {
   PUTTER_CLUB_ID,
   STOCK_LONG_IRONS,
   STOCK_WEDGES,
+  STOCK_AVG_CARRY,
+  stockAvgCarryForSuggestion,
   typicalCarryForClub,
   typicalCarrySeedForClub,
   parseTypicalCarryYards,
@@ -131,4 +133,16 @@ test('typicalCarrySeedForClub uses the typed bag seed and never a putter carry',
     typicalCarrySeedForClub({ id: PUTTER_CLUB_ID, typicalCarryYards: 8 }),
     null,
   );
+});
+
+test('STOCK_AVG_CARRY seeds Suggested only — never the putter, never written into the bag', () => {
+  assert.equal(STOCK_AVG_CARRY.club_7i, 150);
+  assert.equal(STOCK_AVG_CARRY.club_driver, 230);
+  assert.equal(stockAvgCarryForSuggestion('club_7i'), 150);
+  assert.equal(stockAvgCarryForSuggestion(PUTTER_CLUB_ID), null);
+  assert.equal(stockAvgCarryForSuggestion('club_custom'), null);
+  assert.equal('club_putter' in STOCK_AVG_CARRY, false);
+  for (const club of DEFAULT_BAG) {
+    assert.equal(club.typicalCarryYards, null, club.id);
+  }
 });

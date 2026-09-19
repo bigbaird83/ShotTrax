@@ -13,15 +13,23 @@ export function GlassBar({
 }) {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  return <View style={[styles.bar, style]}>{children}</View>;
+  return (
+    <View pointerEvents="box-none" style={[styles.bar, style]}>
+      <View pointerEvents="none" style={styles.frost} />
+      {children}
+    </View>
+  );
 }
 
 function makeStyles(colors: ColorPalette) {
   return StyleSheet.create({
     bar: {
-      backgroundColor: colors.glass,
       borderTopWidth: 1,
       borderTopColor: colors.line,
+    },
+    frost: {
+      ...StyleSheet.absoluteFill,
+      backgroundColor: colors.glass,
     },
   });
 }

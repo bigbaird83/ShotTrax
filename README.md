@@ -4,7 +4,7 @@ Phone GPS golf shot tracker (no club sensors). **This branch is P5.x** on P1–P
 
 P5.x is the on-course hero: **pick a club to mark GPS**, sticky **Same club** one-tap, voice applies immediately (no confirm), Drop vs Penalty, delete round, haptics, and a thumb-zone layout. **Player voice only** on screen — no API/OSM/GPS-meter footnotes. F/M/B distances show only when course data includes front and back pins (never invented from a single green). Rating and slope sit on the tee. An Apple Watch companion picks clubs (top-3 + bag + Same club) and finishes the hole with the same Putter → buckets → **Made it** flow. StoreKit and Photos stay out of scope.
 
-User-facing name is **ShotTraxx** (`app.json` `expo.name`, iOS `CFBundleDisplayName`, Android `label` / home screen). Bundle ID `com.shottrax.app` and Expo slug `shottrax` stay unchanged (App Store ID). Home-screen icon is the locked Build 35 neon-arc Shot/Traxx mark at `assets/images/icon.png` (see `assets/images/README.md`). Splash / launch still shows the full wordmark **ShotTraxx**.
+User-facing name is **ShotTraxx** (`app.json` `expo.name`, iOS `CFBundleDisplayName`, Android `label` / home screen). Bundle ID `com.shottrax.app` and Expo slug `shottrax` stay unchanged (App Store ID). Home-screen icon is the locked Build 36 night-green Shot/Traxx mark at `assets/images/icon.png` (see `assets/images/README.md`). Splash / launch still shows the full wordmark **ShotTraxx**.
 
 ## Run (iOS first)
 
@@ -45,7 +45,7 @@ Expo client JS only inlines `EXPO_PUBLIC_*`. For local Expo Go, CoS must also se
 EXPO_PUBLIC_GOLF_COURSES_API_KEY=your_key_here
 ```
 
-Without a key the nearby picker is disabled (graceful copy, no network). You can still type a course name and drop a green pin. Missing par stays **Par unknown**. Missing greens stay blank.
+Without a key the nearby / search picker is disabled (graceful copy, no network). Start 9/18 stays off until a real course and tee are picked — no optional free-text course name. Search placeholder is **Search by name, city, state, or zip** (`GET /courses?q=`). Nearby uses a phone fix; search is text / geocode and never Watch GPS or the 15–25 m mark gates. Played courses sit on top of the same list. Missing par stays **Par unknown**. Missing greens stay blank.
 
 Selecting a nearby course **starts** a new round (Start 9/18) or **attaches** par/greens to a round in progress (blank holes only).
 

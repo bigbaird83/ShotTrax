@@ -145,6 +145,22 @@ test('penalties are not shots and cannot enter distance averages', () => {
   assert.equal(includeInDistanceAverages({ source: 'gps', distanceYards: 140, fixQuality: 'good' }), true);
 });
 
+test('unforced hard GPS never enters averages; forced hard does', () => {
+  assert.equal(includeInDistanceAverages({ source: 'gps', distanceYards: 420 }), false);
+  assert.equal(
+    includeInDistanceAverages({ source: 'gps', distanceYards: 420, fixQuality: 'none' }),
+    false,
+  );
+  assert.equal(
+    includeInDistanceAverages({ source: 'gps', distanceYards: 170, fixQuality: 'soft' }),
+    true,
+  );
+  assert.equal(
+    includeInDistanceAverages({ source: 'gps', distanceYards: 420, fixQuality: 'forced' }),
+    true,
+  );
+});
+
 test('putter GPS shots never count toward any club sample', () => {
   assert.equal(
     includeInDistanceAverages({

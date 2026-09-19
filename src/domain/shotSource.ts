@@ -129,12 +129,18 @@ export function confirmPlacedShot(
   return { status: 'commit' };
 }
 
+function gpsQualityCountsTowardAverage(
+  quality: ShotFixQuality | null | undefined,
+): boolean {
+  return quality === 'good' || quality === 'soft' || quality === 'forced';
+}
+
 /**
- * Distance averages and top-3 samples: closed GPS shots with haversine yards,
- * plus catch-up **Placed** shots (player confirmed from and landing map points;
- * no GPS quality). `good` / `soft` / `forced` stay in. Penalties are not shots.
- * `none` / `no_gps` are excluded even if typed yards exist. Putter shots never
- * count — scoring / green play only. No include-typed-yards toggle in MVP.
+ * Distance averages and top-3 samples: closed shots that already passed
+ * existing avg rules. GPS must be `good`, `soft` (counts with badge), or
+ * `forced` (hard / poor / >400 yd jump only after Mark anyway). Catch-up
+ * Placed shots still count (no GPS quality). `none` / `no_gps` / unforced
+ * hard never enter. Putter shots never count. 20% outliers drop later.
  */
 export function includeInDistanceAverages(shot: {
   source: ShotSource;
@@ -144,7 +150,7 @@ export function includeInDistanceAverages(shot: {
 }): boolean {
   if (shot.clubId != null && !clubCountsTowardDistanceSamples(shot.clubId)) return false;
   if (shot.source === 'placed') return shot.distanceYards != null;
-  if (shot.source !== 'gps' || shot.fixQuality === 'none') return false;
+  if (shot.source !== 'gps' || !gpsQualityCountsTowardAverage(shot.fixQuality)) return false;
   return shot.distanceYards != null;
 }
 

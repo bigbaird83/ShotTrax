@@ -78,6 +78,9 @@ import {
   playHapticsOnHoleChange,
   playDockPassesTwoFingerPan,
   playDockGlassIgnoresTouches,
+  playDockFrostPointerEvents,
+  addShotOpensOnPlayFrame,
+  signalLabAddShotGestureLock,
   PLAY_GLASS_DOCK_LIFT,
   playScorecardWraps,
   playSameClubHiddenUntilShot,
@@ -150,8 +153,12 @@ test('play hole screen uses the fill layout and does not keep the empty middle',
   assert.doesNotMatch(hole, /lockHoleCamera/);
   assert.match(hole, /lockFrame/);
   assert.doesNotMatch(hole, /lockFrame=\{catchUpFullScreen|lockFrame=\{placing/);
-  assert.match(hole, /catchUpFullScreen \? 'catchup'/);
-  assert.match(hole, /play-\$\{hole\.number\}-\$\{playFrameNonce\}/);
+  assert.match(hole, /playMapFrameEpoch/);
+  assert.doesNotMatch(hole, /catchUpFullScreen \? 'catchup'/);
+  assert.doesNotMatch(hole, /frameEpoch=\{catchUpFullScreen/);
+  assert.doesNotMatch(hole, /catchUpFullScreen \? styles\.mapWrapFull/);
+  assert.equal(addShotOpensOnPlayFrame(), true);
+  assert.equal(playDockFrostPointerEvents(), 'none');
   assert.match(hole, /onFrameReady=\{setMapFramed\}/);
   assert.match(hole, /bumpPlayFrame/);
   assert.equal(playButtonsWaitForHoleFrame(), true);
@@ -606,12 +613,20 @@ test('build 35 cook-gate: glass dock, one accent, trails, type, cards, empty, ha
   assert.doesNotMatch(phone, /onScroll=\{/);
   assert.match(watch, /session\.pick\(clubId: club.id\)/);
   assert.doesNotMatch(watch, /DragGesture|clubStripSlideUpConfirmed|session\.select\(club.id\)/);
-  assert.match(icon, /locked Build 35 neon-arc Shot\/Traxx/);
+  assert.match(icon, /locked Build 36 night-green Shot\/Traxx/);
 });
 
 test('Signal Lab: trail chip is logged yards, soft/forced keep a badge, glass dock passes two-finger pan', () => {
+  assert.deepEqual(signalLabAddShotGestureLock(), {
+    firstFrameUsesCourseCard: true,
+    reframesAfterInitialFrame: false,
+    scrollZoomAfterFrame: true,
+    dockFrostPointerEvents: 'none',
+  });
   assert.equal(playDockPassesTwoFingerPan(), true);
   assert.equal(playDockGlassIgnoresTouches(), true);
+  assert.equal(playDockFrostPointerEvents(), 'none');
+  assert.equal(addShotOpensOnPlayFrame(), true);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const phone = readFileSync(new URL('../ui/ClubStrip.tsx', import.meta.url), 'utf8');

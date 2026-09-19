@@ -41,6 +41,28 @@ test('MIN_CLOSED_SHOTS_FOR_RANK is 5', () => {
   assert.equal(MIN_CLOSED_SHOTS_FOR_RANK, 5);
 });
 
+test('Suggested uses STOCK_AVG_CARRY until typed or ≥5 live; estimated never ranks; putter stays out', () => {
+  const stock = club({ id: 'club_7i', loftRank: 9, avgYards: 0, count: 0 });
+  assert.equal(rankDistanceYards(stock), 150);
+  const typed = club({
+    id: 'club_7i',
+    loftRank: 9,
+    avgYards: 0,
+    count: 0,
+    typicalCarryYards: 145,
+  });
+  assert.equal(rankDistanceYards(typed), 145);
+  const live = club({
+    id: 'club_7i',
+    loftRank: 9,
+    avgYards: 162,
+    count: 5,
+    typicalCarryYards: 145,
+  });
+  assert.equal(rankDistanceYards(live), 162);
+  assert.equal(rankDistanceYards(club({ id: 'club_putter', loftRank: 18, avgYards: 8, count: 20 })), null);
+});
+
 test('invalid 0,0 / quality none green is not D — ranking falls back instead of inventing a pin', () => {
   const target = resolveDistanceTarget({
     toGreen: { yards: null, quality: 'none' },
@@ -267,7 +289,7 @@ test('fewer than 3 eligible clubs still surfaces those that qualify', () => {
   );
 });
 
-test('skip / no typed seed means no fake average — top-3 stays empty until live shots', () => {
+test('no typed seed still ranks Suggested from STOCK_AVG_CARRY', () => {
   const ranked = rankTopClubs(
     [
       club({ id: 'club_7i', loftRank: 9, avgYards: 0, count: 0 }),
@@ -275,7 +297,11 @@ test('skip / no typed seed means no fake average — top-3 stays empty until liv
     ],
     { source: 'yards_to_green', dYards: 150 },
   );
-  assert.deepEqual(ranked, []);
+  assert.deepEqual(
+    ranked.map((row) => row.id),
+    ['club_7i', 'club_8i'],
+  );
+  assert.equal(ranked[0].deltaYards, 0);
 });
 
 test('no eligible clubs (all <5 shots) → empty ranking so UI shows full bag', () => {
@@ -312,7 +338,7 @@ test('clubToRankInput attaches typed typical-carry seeds; putter has none and is
   assert.equal(wedgeIn.typicalCarryYards, 105);
   assert.equal(rankDistanceYards(wedgeIn), 105);
   assert.equal(skipped.typicalCarryYards, null);
-  assert.equal(rankDistanceYards(skipped), null);
+  assert.equal(rankDistanceYards(skipped), 105);
   assert.equal(putterIn.typicalCarryYards, null);
   assert.equal(rankDistanceYards(putterIn), null);
 });
@@ -358,7 +384,7 @@ test('bag-edited typical carry is the seed until 5 GPS shots; live avg then repl
 
   const cleared = clubToRankInput({ ...seven, typicalCarryYards: null }, { avgYards: 150, count: 3 });
   assert.equal(cleared.typicalCarryYards, null);
-  assert.equal(rankDistanceYards(cleared), null);
+  assert.equal(rankDistanceYards(cleared), 150);
 });
 
 test('next suggested ranks from the new landing, not the card tee number', () => {
