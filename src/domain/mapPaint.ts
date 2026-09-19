@@ -176,3 +176,19 @@ export function holeMapUsesAppleMapsOnIos(): true {
 export function holeMapSetsGoogleProvider(): false {
   return false;
 }
+
+/**
+ * Hole start and Add shot are one MapView. Opening Add shot must not
+ * mount a second instance or change the paint key.
+ */
+export function holeStartAndAddShotSharePaintPath(): true {
+  return true;
+}
+
+export function addShotOpensSecondMapView(): false {
+  return false;
+}
+
+export function addShotChangesMapPaintKey(): false {
+  return false;
+}

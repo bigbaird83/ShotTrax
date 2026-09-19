@@ -750,6 +750,8 @@ test('P0: full-bleed MapView has real height under the glass dock; Add shot keep
   assert.equal(signalLabBlankMapBuild39().tileMissAfterSeconds, true);
   assert.equal(signalLabBlankMapBuild39().iosUsesAppleMaps, true);
   assert.equal(signalLabBlankMapBuild39().usesGoogleProvider, false);
+  assert.equal(signalLabBlankMapBuild39().holeStartAndAddShotSharePaintPath, true);
+  assert.equal(signalLabBlankMapBuild39().addShotOpensSecondMapView, false);
   assert.match(map, /collapsable=\{false\}/);
   const userLoc = map.slice(map.indexOf('showsUserLocation='), map.indexOf('showsMyLocationButton'));
   assert.match(userLoc, /holeMapUserLocationVisible\(\{/);

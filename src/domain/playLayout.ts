@@ -459,6 +459,8 @@ export function signalLabBlankMapBuild39(): {
   showsUserLocationOnLockFrame: false;
   alwaysPassesInitialRegion: true;
   hidesWithOpacity: false;
+  holeStartAndAddShotSharePaintPath: true;
+  addShotOpensSecondMapView: false;
 } {
   return {
     remountMapWhenSized: true,
@@ -475,6 +477,8 @@ export function signalLabBlankMapBuild39(): {
     showsUserLocationOnLockFrame: false,
     alwaysPassesInitialRegion: true,
     hidesWithOpacity: false,
+    holeStartAndAddShotSharePaintPath: true,
+    addShotOpensSecondMapView: false,
   };
 }
 

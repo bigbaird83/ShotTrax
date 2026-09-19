@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { holeFrameRegion, holeNativeCamera, planCourseCardCamera } from './holeCamera';
 import {
+  addShotChangesMapPaintKey,
+  addShotOpensSecondMapView,
   holeMapAlwaysPassesInitialRegion,
   holeMapBoxIsPaintable,
   holeMapCoverReplacesMapView,
@@ -30,6 +32,7 @@ import {
   holeMapWaitsForLocationPermission,
   holeMapWaitsForPhoneFixToMount,
   holeNativeCameraIsPaintable,
+  holeStartAndAddShotSharePaintPath,
   missingCourseCardShowsGreenCover,
 } from './mapPaint';
 import {
@@ -37,6 +40,8 @@ import {
   holeMapMountsBeforeMeasured,
   holeMapRemountsWhenMapBoxSized,
   holeMapRequiresLocationPermission,
+  addShotKeepsPlayMapHeight,
+  addShotOpensOnPlayFrame,
   holeMapViewUsesAbsoluteFill,
   playMapHostUsesAbsoluteFill,
   signalLabBlankMapBuild39,
@@ -234,4 +239,33 @@ test('P0 third pass: HoleMap remounts once sized, lifts cover, always seeds init
   assert.match(hole, /StyleSheet\.absoluteFill/);
   assert.doesNotMatch(playMap, /showsUserLocation=\{true\}/);
   assert.doesNotMatch(playMap, /permission/);
+});
+
+test('hole start and Add shot share one MapView paint path — one bug, not two', () => {
+  assert.equal(holeStartAndAddShotSharePaintPath(), true);
+  assert.equal(addShotOpensSecondMapView(), false);
+  assert.equal(addShotChangesMapPaintKey(), false);
+  assert.equal(addShotOpensOnPlayFrame(), true);
+  assert.equal(addShotKeepsPlayMapHeight(), true);
+  assert.equal(signalLabBlankMapBuild39().holeStartAndAddShotSharePaintPath, true);
+  assert.equal(signalLabBlankMapBuild39().addShotOpensSecondMapView, false);
+  assert.equal(holeMapPaintKey({ width: 390, height: 700 }), holeMapPaintKey({ width: 390, height: 752 }));
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const play = hole.slice(0, hole.indexOf('<FullSheet'));
+  assert.equal((play.match(/<HoleMap/g) ?? []).length, 1);
+  assert.match(play, /frameEpoch=\{playMapFrameEpoch/);
+  assert.doesNotMatch(play, /frameEpoch=\{catchUpFullScreen/);
+  assert.doesNotMatch(play, /catchUpFullScreen \? <HoleMap/);
+  assert.doesNotMatch(play, /catchUpFullScreen \? styles\.mapWrapFull/);
+  assert.doesNotMatch(hole, /addShotFramePoints/);
+  assert.equal((hole.match(/planCourseCardCamera\(/g) ?? []).length, 1);
+
+  const playMap = hole.slice(hole.indexOf('<HoleMap'), hole.indexOf('onDropGreenEstimate'));
+  assert.match(playMap, /lockFrame/);
+  assert.match(playMap, /courseCamera\?\.points/);
+  assert.match(playMap, /heading=\{courseCamera\?\.heading/);
+  assert.match(playMap, /showPhonePin=\{!catchUpFullScreen\}/);
+  assert.match(playMap, /allowMapsChrome=\{!catchUpFullScreen\}/);
+  assert.doesNotMatch(playMap, /lockFrame=\{catchUpFullScreen|lockFrame=\{placing/);
 });
