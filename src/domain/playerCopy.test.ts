@@ -62,7 +62,7 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.typicalCarry, 'Typical');
   assert.equal(COPY.typicalCarryYards, 'Carry (yd)');
   assert.equal(COPY.clearTypicalCarry, 'Clear carry');
-  assert.equal(COPY.bagCustomizeSkip, 'Skip');
+  assert.equal(COPY.bagCustomizeSkip, 'Calculate from actual play');
   assert.equal(COPY.estimated, 'Estimated');
   assert.equal(COPY.insertShot, 'Insert shot');
   assert.equal(COPY.nerdOut, 'Nerd out');

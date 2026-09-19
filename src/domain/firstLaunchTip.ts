@@ -37,6 +37,18 @@ export function firstLaunchTipShownOnce(): true {
   return true;
 }
 
+export function firstLaunchTipWaitsForGps(): false {
+  return false;
+}
+
+export function firstLaunchTipRemountsMap(): false {
+  return false;
+}
+
+export function firstLaunchTipLeavesPlayFrameAlone(): true {
+  return true;
+}
+
 export function shouldShowFirstLaunchTip(args: {
   seen?: string | null;
   historyRoundCount: number;

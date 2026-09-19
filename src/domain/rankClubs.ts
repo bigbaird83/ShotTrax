@@ -1,4 +1,4 @@
-import { isPutterClubId, typicalCarrySeedForClub } from './defaultBag';
+import { isPutterClubId, stockAvgCarryForSuggestion, typicalCarrySeedForClub } from './defaultBag';
 import type { Club, ShotFixQuality } from './types';
 
 /** Live average replaces the typical-carry seed after this many closed shots. */
@@ -69,7 +69,8 @@ export function clubToRankInput(
 /**
  * Yards used for Suggested top-3.
  * Live average after ≥5 shots allowed into the average (20% filter) fully
- * replaces the seed (no blend); else typical-carry seed. Outliers do not count.
+ * replaces the seed (no blend); else typed typical-carry; else STOCK_AVG_CARRY.
+ * Estimated fills never enter ranking. Outliers do not count.
  * Putter is never rankable.
  */
 export function rankDistanceYards(club: RankClubInput): number | null {
@@ -80,7 +81,7 @@ export function rankDistanceYards(club: RankClubInput): number | null {
   if (club.typicalCarryYards != null && Number.isFinite(club.typicalCarryYards)) {
     return club.typicalCarryYards;
   }
-  return null;
+  return stockAvgCarryForSuggestion(club.id);
 }
 
 /**

@@ -95,9 +95,11 @@ export function BagCarryList({ db, clubs, onChange, onRename }: Props) {
 export function BagCustomizeActions({
   onSkip,
   onDone,
+  doneDisabled = false,
 }: {
   onSkip: () => void;
   onDone: () => void;
+  doneDisabled?: boolean;
 }) {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -106,7 +108,11 @@ export function BagCustomizeActions({
       <Pressable accessibilityRole="button" onPress={onSkip} style={styles.skip}>
         <Text style={styles.skipLabel}>{COPY.bagCustomizeSkip}</Text>
       </Pressable>
-      <Pressable accessibilityRole="button" onPress={onDone} style={styles.done}>
+      <Pressable
+        accessibilityRole="button"
+        disabled={doneDisabled}
+        onPress={onDone}
+        style={[styles.done, doneDisabled && styles.doneOff]}>
         <Text style={styles.doneLabel}>{COPY.bagCustomizeDone}</Text>
       </Pressable>
     </View>
@@ -162,5 +168,6 @@ function makeStyles(colors: ColorPalette) {
     backgroundColor: colors.lime,
   },
   doneLabel: { color: colors.onAccent, fontSize: type.body, fontWeight: '900' },
+  doneOff: { opacity: 0.4 },
   });
 }

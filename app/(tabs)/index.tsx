@@ -23,6 +23,7 @@ import {
   getCourseDistanceUnit,
   hasSeenBagCustomize,
   listClubs,
+  markBagCustomizeSkipped,
   listHoles,
   listRounds,
   markBagCustomizeSeen,
@@ -30,6 +31,7 @@ import {
   type CourseLayoutSeed,
 } from '@/src/db/repo';
 import { formatLastPlayedChip, lastPlayedAtForCourse } from '@/src/domain/courseCard';
+import { canFinishBagCarrySetup, countTypedCarries } from '@/src/domain/bagCustomize';
 import { canStartRound } from '@/src/domain/coursePick';
 import { COPY, formatTeeMeta } from '@/src/domain/playerCopy';
 import { playHrefAfterRoundStart } from '@/src/domain/playNav';
@@ -86,6 +88,8 @@ export default function HomeScreen() {
   const courseDistanceUnit = useMemo(() => getCourseDistanceUnit(db), [db, revision]);
   const clubs = useMemo(() => listClubs(db), [db, revision]);
   const bagPromptOpen = useMemo(() => !hasSeenBagCustomize(db), [db, revision]);
+  const typedCarryCount = useMemo(() => countTypedCarries(clubs), [clubs]);
+  const canFinishBag = canFinishBagCarrySetup(typedCarryCount);
   const lastPlayedAtByCourse = useMemo(() => {
     const map: Record<string, string> = {};
     for (const round of rounds) {
@@ -105,7 +109,13 @@ export default function HomeScreen() {
     return () => setWatchCoursePickedHandler(null);
   }, []);
 
-  const finishBagPrompt = () => {
+  const skipBagSetup = () => {
+    markBagCustomizeSkipped(db);
+    bump();
+  };
+
+  const finishBagSetup = () => {
+    if (!canFinishBag) return;
     markBagCustomizeSeen(db);
     bump();
   };
@@ -209,10 +219,14 @@ export default function HomeScreen() {
       <FullSheet
         visible={bagPromptOpen}
         title={COPY.bagCustomizeTitle}
-        onClose={finishBagPrompt}>
+        onClose={skipBagSetup}>
         <ScrollView contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 40 }}>
           <Text style={styles.lede}>{COPY.bagCustomizeLede}</Text>
-          <BagCustomizeActions onSkip={finishBagPrompt} onDone={finishBagPrompt} />
+          <BagCustomizeActions
+            onSkip={skipBagSetup}
+            onDone={finishBagSetup}
+            doneDisabled={!canFinishBag}
+          />
           <BagCarryList db={db} clubs={clubs} onChange={bump} />
         </ScrollView>
       </FullSheet>

@@ -11,7 +11,10 @@ import {
   firstLaunchTipIsDismissible,
   firstLaunchTipLine,
   firstLaunchTipSeenValue,
+  firstLaunchTipLeavesPlayFrameAlone,
+  firstLaunchTipRemountsMap,
   firstLaunchTipShownOnce,
+  firstLaunchTipWaitsForGps,
   isFirstLaunchTipSeen,
   shouldShowFirstLaunchTip,
   shouldSkipFirstLaunchTipForHistory,
@@ -28,6 +31,9 @@ test('first-launch tip is three beats, once, dismissible, and never blocks mark'
   assert.equal(firstLaunchTipIsDismissible(), true);
   assert.equal(firstLaunchTipBlocksMark(), false);
   assert.equal(firstLaunchTipShownOnce(), true);
+  assert.equal(firstLaunchTipWaitsForGps(), false);
+  assert.equal(firstLaunchTipRemountsMap(), false);
+  assert.equal(firstLaunchTipLeavesPlayFrameAlone(), true);
   assert.equal(FIRST_LAUNCH_TIP_SETTING_KEY, 'first_launch_mark_tip');
   assert.equal(firstLaunchTipSeenValue(), '1');
   assert.equal(isFirstLaunchTipSeen(null), false);
@@ -74,13 +80,22 @@ test('play shows the tip once, persists seen on dismiss, and mark stays live', (
   assert.match(mark, /if \(readOnly \|\| placing\) return;/);
   assert.doesNotMatch(mark, /[Tt]ip/);
 
+  const show = hole.slice(hole.indexOf('const showFirstLaunchTip'), hole.indexOf('const onDismissFirstLaunchTip'));
+  assert.doesNotMatch(show, /getCurrentFix|mapFramed|fix\?|acceptFix/);
+  const dismiss = hole.slice(hole.indexOf('const onDismissFirstLaunchTip'), hole.indexOf('const placeHint'));
+  assert.doesNotMatch(dismiss, /bumpPlayFrame|setPlayFrameNonce|getCurrentFix|MapView/);
+  assert.doesNotMatch(
+    hole.slice(hole.indexOf('useEffect(() => {\n    if (hasSeenFirstLaunchTip'), hole.indexOf('const penaltyTotal')),
+    /bumpPlayFrame|setPlayFrameNonce/,
+  );
+
   assert.match(repo, /FIRST_LAUNCH_TIP_SETTING_KEY/);
   assert.match(repo, /export function hasSeenFirstLaunchTip/);
   assert.match(repo, /export function markFirstLaunchTipSeen/);
   assert.match(repo, /firstLaunchTipSeenValue\(\)/);
 });
 
-test('build 36 cook gate still has Add-shot P0, required course pick, icon, and this tip', () => {
+test('build 36 cook gate has Add-shot P0, course pick, icon, tip, and bag distances', () => {
   assert.deepEqual(signalLabAddShotGestureLock(), {
     firstFrameUsesCourseCard: true,
     reframesAfterInitialFrame: false,
@@ -91,9 +106,11 @@ test('build 36 cook gate still has Add-shot P0, required course pick, icon, and 
   assert.equal(COPY.courseNamePlaceholder, 'Search by name, city, state, or zip');
   assert.doesNotMatch(JSON.stringify(COPY), /Course name \(optional\)|type a course name to start/i);
   assert.equal(COPY.firstLaunchTip, 'Pick a club → walk → press to mark');
+  assert.equal(COPY.bagCustomizeSkip, 'Calculate from actual play');
 
   const home = readFileSync(new URL('../../app/(tabs)/index.tsx', import.meta.url), 'utf8');
   assert.match(home, /disabled=\{starting \|\| !canStart\}/);
+  assert.match(home, /doneDisabled=\{!canFinishBag\}/);
 
   const readme = readFileSync(new URL('../../assets/images/README.md', import.meta.url), 'utf8');
   assert.match(readme, /Build 36/);

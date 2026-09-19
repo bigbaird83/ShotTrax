@@ -12,8 +12,11 @@ export type StockClub = Omit<Club, 'enabled'>;
 /** Typical carry is yards, not GPS. Cap matches the longest mark we would keep. */
 export const MAX_TYPICAL_CARRY_YARDS = 400;
 
-/** Build 19 invented these seeds. Upgrade clears a value only when it still matches. */
-export const LEGACY_STOCK_CARRY_YARDS: Readonly<Record<string, number>> = {
+/**
+ * Average-player carries for Suggested top-3 only.
+ * Not written into the bag. Putter is omitted. Typed / live still win.
+ */
+export const STOCK_AVG_CARRY: Readonly<Record<string, number>> = {
   club_driver: 230,
   club_3w: 210,
   club_5w: 195,
@@ -27,9 +30,31 @@ export const LEGACY_STOCK_CARRY_YARDS: Readonly<Record<string, number>> = {
   club_8i: 140,
   club_9i: 130,
   club_pw: 120,
+  club_48: 115,
+  club_50: 110,
   club_gw: 105,
   club_sw: 90,
   club_lw: 75,
+};
+
+/** Build 19 invented these seeds. Upgrade clears a value only when it still matches. */
+export const LEGACY_STOCK_CARRY_YARDS: Readonly<Record<string, number>> = {
+  club_driver: STOCK_AVG_CARRY.club_driver,
+  club_3w: STOCK_AVG_CARRY.club_3w,
+  club_5w: STOCK_AVG_CARRY.club_5w,
+  club_4h: STOCK_AVG_CARRY.club_4h,
+  club_2i: STOCK_AVG_CARRY.club_2i,
+  club_3i: STOCK_AVG_CARRY.club_3i,
+  club_4i: STOCK_AVG_CARRY.club_4i,
+  club_5i: STOCK_AVG_CARRY.club_5i,
+  club_6i: STOCK_AVG_CARRY.club_6i,
+  club_7i: STOCK_AVG_CARRY.club_7i,
+  club_8i: STOCK_AVG_CARRY.club_8i,
+  club_9i: STOCK_AVG_CARRY.club_9i,
+  club_pw: STOCK_AVG_CARRY.club_pw,
+  club_gw: STOCK_AVG_CARRY.club_gw,
+  club_sw: STOCK_AVG_CARRY.club_sw,
+  club_lw: STOCK_AVG_CARRY.club_lw,
 };
 
 /** Stock bag. No fake carry — empty until the player types a number (or fill estimates). */
@@ -59,9 +84,16 @@ export function isPutterClubId(clubId: string | null | undefined): boolean {
   return clubId === PUTTER_CLUB_ID;
 }
 
-/** Stock typical-carry default. Always empty — no fake average. */
+/** Stock typical-carry default stored on the bag. Always empty — no fake average. */
 export function typicalCarryForClub(_clubId: string | null | undefined): number | null {
   return null;
+}
+
+/** Suggested top-3 seed when the bag has no typed carry yet. Never the putter. */
+export function stockAvgCarryForSuggestion(clubId: string | null | undefined): number | null {
+  if (!clubId || isPutterClubId(clubId)) return null;
+  const yards = STOCK_AVG_CARRY[clubId];
+  return yards != null && Number.isFinite(yards) && yards > 0 ? yards : null;
 }
 
 /** Parse bag-edit yards. Empty or invalid → null (clear). Never invented from GPS. */

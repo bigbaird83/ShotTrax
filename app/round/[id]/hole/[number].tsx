@@ -193,8 +193,7 @@ export default function HoleScreen() {
     if (hasSeenFirstLaunchTip(db)) return;
     if (historyRoundCount <= 0) return;
     markFirstLaunchTipSeen(db);
-    bump();
-  }, [db, bump, historyRoundCount, revision]);
+  }, [db, historyRoundCount]);
   const penaltyTotal = totalPenaltyStrokes(penalties);
   const reconcile = reconcileHoleScore({
     score: hole?.score ?? null,
@@ -943,7 +942,6 @@ export default function HoleScreen() {
   const onDismissFirstLaunchTip = () => {
     markFirstLaunchTipSeen(db);
     setFirstLaunchTipDismissed(true);
-    bump();
   };
   const placeHint =
     placeMode === 'edit-from'
