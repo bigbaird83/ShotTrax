@@ -8,6 +8,7 @@ import {
 } from './parse';
 import type { CourseDataClient, CourseDetail, CourseSummary, OsmOverlayQuery } from './types';
 import type { LatLng } from '../domain/latLng';
+import { planCourseSearchParams } from '../domain/coursePick';
 
 export const GOLF_COURSES_API_BASE = 'https://golfcoursesapi.com/api/v1';
 const DEFAULT_RADIUS_KM = 25;
@@ -91,6 +92,21 @@ export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataCli
       }
       if (status < 200 || status >= 300) {
         throw new GolfCoursesApiError('Couldn’t load courses nearby.', status);
+      }
+      return parseNearbyCourses(json);
+    },
+
+    async searchCourses(query: string): Promise<CourseSummary[]> {
+      const key = getKey();
+      const params = planCourseSearchParams(query);
+      if (!key || !params) return [];
+      const search = new URLSearchParams({ q: params.q });
+      const { status, json } = await apiGet(`/courses?${search.toString()}`, key, fetchImpl);
+      if (status === 403) {
+        throw new GolfCoursesApiError('Courses aren’t available right now.', 403);
+      }
+      if (status < 200 || status >= 300) {
+        throw new GolfCoursesApiError('Couldn’t find that course.', status);
       }
       return parseNearbyCourses(json);
     },

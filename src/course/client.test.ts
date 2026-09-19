@@ -15,8 +15,10 @@ test('client is unconfigured without a key and does not call the network', async
   });
   assert.equal(client.isConfigured(), false);
   const nearby = await client.nearbyCourses({ lat: 37, lng: -122 });
+  const searched = await client.searchCourses('pebble');
   const course = await client.getCourse('4');
   assert.deepEqual(nearby, []);
+  assert.deepEqual(searched, []);
   assert.equal(course, null);
   assert.equal(calls, 0);
 });
@@ -52,6 +54,31 @@ test('nearbyCourses sends lat/lng/radius with Bearer key and parses data', async
   assert.equal(nearby.length, 1);
   assert.equal(nearby[0].name, 'Nearby CC');
   assert.equal(nearby[0].distanceMeters, 1200);
+});
+
+test('searchCourses sends q= for name, city, state, or zip and never invents a course', async () => {
+  const urls: string[] = [];
+  const client = createCourseDataClient({
+    getKey: () => 'test-key',
+    fetch: async (input) => {
+      urls.push(String(input));
+      return new Response(
+        JSON.stringify({
+          data: [{ id: '4', name: 'Bowling Green Country Club', city: 'Bowling Green', state: 'Kentucky' }],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    },
+  });
+  const found = await client.searchCourses('  bowling  ');
+  assert.equal(found.length, 1);
+  assert.equal(found[0].name, 'Bowling Green Country Club');
+  assert.match(urls[0] ?? '', /\/courses\?/);
+  assert.match(urls[0] ?? '', /q=bowling/);
+  assert.doesNotMatch(urls[0] ?? '', /lat=/);
+  const empty = await client.searchCourses('   ');
+  assert.deepEqual(empty, []);
+  assert.equal(urls.length, 1);
 });
 
 test('getCourse loads scorecard then Pro green-centers', async () => {

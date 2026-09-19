@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { isGolfCoursesApiConfigured } from '@/src/course/config';
 import { getCourseDataClient } from '@/src/course/client';
 import { formatTeeHoleYards, formatTeeMeta } from '@/src/course/layout';
 import type { CourseDetail, CourseSummary, TeeSet } from '@/src/course/types';
 import { COPY } from '@/src/domain/playerCopy';
 import { planCourseCard } from '@/src/domain/courseCard';
+import { planCourseList, planCourseSearchParams } from '@/src/domain/coursePick';
 import { type CourseDistanceUnit } from '@/src/domain/courseDistance';
 import { getCurrentFix } from '@/src/services/location';
 import { BigButton } from './BigButton';
@@ -25,6 +26,8 @@ type Props = {
   onSelect: (pick: CoursePick | null) => void;
   attachMode?: boolean;
   autoFind?: boolean;
+  query?: string;
+  onQueryChange?: (query: string) => void;
   onRefreshReady?: (refresh: () => Promise<void>) => void;
   courseDistanceUnit?: CourseDistanceUnit;
   lastPlayedAtByCourse?: Record<string, string | null | undefined>;
@@ -39,6 +42,8 @@ export function CoursePicker({
   selectedTee,
   onSelect,
   autoFind = true,
+  query = '',
+  onQueryChange,
   onRefreshReady,
   courseDistanceUnit = 'mi',
   lastPlayedAtByCourse,
@@ -58,19 +63,22 @@ export function CoursePicker({
     setBusy(true);
     setError(null);
     try {
-      const fix = await getCurrentFix();
-      const nearby = await getCourseDataClient().nearbyCourses({ lat: fix.lat, lng: fix.lng });
-      setResults(nearby);
-      if (nearby.length === 0) {
+      const params = planCourseSearchParams(query);
+      const found = params
+        ? await getCourseDataClient().searchCourses(params.q)
+        : await getCourseDataClient().nearbyCourses(await getCurrentFix());
+      const listed = planCourseList({ courses: found, lastPlayedAtByCourse });
+      setResults(listed);
+      if (listed.length === 0) {
         setError(COPY.nearbyEmpty);
       }
     } catch (err) {
       setResults([]);
-      setError(err instanceof Error ? err.message : 'Couldn’t find courses nearby.');
+      setError(err instanceof Error ? err.message : 'Couldn’t find courses.');
     } finally {
       setBusy(false);
     }
-  }, [configured]);
+  }, [configured, query, lastPlayedAtByCourse]);
 
   useEffect(() => {
     onRefreshReady?.(onFind);
@@ -78,8 +86,12 @@ export function CoursePicker({
 
   useEffect(() => {
     if (!configured || !autoFind) return;
-    void onFind();
-  }, [configured, autoFind, onFind]);
+    const delay = planCourseSearchParams(query) ? 280 : 0;
+    const timer = setTimeout(() => {
+      void onFind();
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [configured, autoFind, onFind, query]);
 
   const pickCourse = async (course: CourseSummary) => {
     setTeeBusy(true);
@@ -105,9 +117,19 @@ export function CoursePicker({
   };
 
   const emptyNearby = configured && results != null && results.length === 0 && !busy;
+  const listed = planCourseList({ courses: results ?? [], lastPlayedAtByCourse });
 
   return (
     <View style={styles.box}>
+      <TextInput
+        placeholder={COPY.courseNamePlaceholder}
+        placeholderTextColor={colors.muted}
+        value={query}
+        onChangeText={onQueryChange}
+        autoCapitalize="words"
+        autoCorrect={false}
+        style={styles.search}
+      />
       <Text style={styles.label}>{COPY.nearbyHint}</Text>
       {!configured ? <Text style={styles.meta}>{COPY.nearbyUnavailable}</Text> : null}
       {error && !emptyNearby ? <Text style={styles.warn}>{error}</Text> : null}
@@ -137,7 +159,7 @@ export function CoursePicker({
         </View>
       ) : null}
       <ScrollView style={styles.list} keyboardShouldPersistTaps="handled">
-        {results?.map((course) => {
+        {listed.map((course) => {
           const card = planCourseCard({
             name: course.name,
             distanceMeters: course.distanceMeters,
@@ -188,6 +210,16 @@ function makeStyles(colors: ColorPalette) {
   return StyleSheet.create({
   box: { flex: 1, gap: 10, paddingHorizontal: 16, paddingBottom: 16 },
   list: { flex: 1 },
+  search: {
+    minHeight: 56,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    color: colors.cream,
+    fontSize: 18,
+    backgroundColor: colors.bgElevated,
+  },
   label: { color: colors.muted, fontSize: type.meta, fontWeight: '700' },
   meta: { color: colors.muted, fontSize: type.meta, lineHeight: 20 },
   warn: { color: colors.orange, fontSize: type.meta, fontWeight: '700' },

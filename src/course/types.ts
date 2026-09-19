@@ -81,6 +81,7 @@ export type OsmOverlayHook = {
 export interface CourseDataClient {
   isConfigured(): boolean;
   nearbyCourses(from: LatLng, radiusKm?: number): Promise<CourseSummary[]>;
+  searchCourses(query: string): Promise<CourseSummary[]>;
   getCourse(id: string): Promise<CourseDetail | null>;
   fetchOsmOverlay(query: OsmOverlayQuery): Promise<OsmOverlay | null>;
 }

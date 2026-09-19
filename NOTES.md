@@ -1,6 +1,6 @@
 # ShotTraxx — P5.x
 
-User-facing name is **ShotTraxx** (`expo.name`, iOS `CFBundleDisplayName`, Android `label`). Bundle ID `com.shottrax.app` and Expo slug `shottrax` stay unchanged. Home-screen icon files under `assets/images/` are the locked Build 35 neon-arc Shot/Traxx mark. Splash still uses the full **ShotTraxx** wordmark.
+User-facing name is **ShotTraxx** (`expo.name`, iOS `CFBundleDisplayName`, Android `label`). Bundle ID `com.shottrax.app` and Expo slug `shottrax` stay unchanged. Home-screen icon files under `assets/images/` are the locked Build 36 night-green Shot/Traxx mark (illuminated pin, three lime arcs). Splash still uses the full **ShotTraxx** wordmark.
 
 ## Golf Courses API (nearby courses, par, green centroids)
 
@@ -21,13 +21,14 @@ EXPO_PUBLIC_GOLF_COURSES_API_KEY=your_key_here
 GOLF_COURSES_API_KEY=your_key_here
 ```
 
-Without a key, the **Nearby courses** picker is disabled and does not call the network. You can still type a course name and drop a green pin. ShotTraxx never invents a nearby-course list, par, SI, or green coordinate.
+Without a key, course search and nearby are disabled and do not call the network. Start 9/18 stays off until a real course (and tee, when the course lists tees) is picked. ShotTraxx never invents a nearby-course list, par, SI, or green coordinate.
 
 When a key is present:
 
-- Nearby search is `GET https://golfcoursesapi.com/api/v1/courses?lat=&lng=&radius=` (radius km, max 100)
+- Nearby search is `GET https://golfcoursesapi.com/api/v1/courses?lat=&lng=&radius=` (radius km, max 100). Nearby wakes a **phone** fix — never Watch GPS.
+- Text search is `GET /api/v1/courses?q=` (name, city, state, or zip). Search is text / geocode only — never Watch GPS and never the 15 m / 25 m mark gates.
 - Course detail is `GET /api/v1/courses/:id` (named teeboxes → par, SI/handicap, hole yardage, rating, slope)
-- Flow: nearby → select course → select named tee
+- Flow: search or nearby → one list with played courses on top → select course → select named tee. Start 9/18 stays off until that pick is real.
 - Green centroids are `GET /api/v1/courses/:id/green-centers` (**Pro/Max**; `403` on free → greens stay blank)
 - Missing par is **Par unknown**. Missing SI is **SI unknown**. Missing rating/slope/yardage stay blank. Missing green stays empty — yards to green shows **—** and **Waiting on green location.**
 

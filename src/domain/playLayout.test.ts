@@ -613,7 +613,7 @@ test('build 35 cook-gate: glass dock, one accent, trails, type, cards, empty, ha
   assert.doesNotMatch(phone, /onScroll=\{/);
   assert.match(watch, /session\.pick\(clubId: club.id\)/);
   assert.doesNotMatch(watch, /DragGesture|clubStripSlideUpConfirmed|session\.select\(club.id\)/);
-  assert.match(icon, /locked Build 35 neon-arc Shot\/Traxx/);
+  assert.match(icon, /locked Build 36 night-green Shot\/Traxx/);
 });
 
 test('Signal Lab: trail chip is logged yards, soft/forced keep a badge, glass dock passes two-finger pan', () => {
