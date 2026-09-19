@@ -96,15 +96,22 @@ import {
   playUsesCourseCardCamera,
   playEditUsesCourseCardCamera,
   playAndAddShotShareCourseCardCamera,
+  holeMapCoverLiftsWhenSized,
+  holeMapMountsBeforeMeasured,
+  holeMapRemountsWhenMapBoxSized,
+  holeMapRequiresLocationPermission,
+  signalLabBlankMapBuild39,
 } from './playLayout';
 import { PHONE_WHEEL_PILL_HEIGHT } from './clubStrip';
 import {
   CYPRESS_CREEK_CABOT,
   MAGNOLIA_CC,
+  MYSTIC_CREEK_EL_DORADO,
   REPRO_COURSE_CARDS,
   courseCardHoleHasTeeAndGreen,
   cypressCreekHole1Card,
   magnoliaHole1Card,
+  mysticCreekHole1Card,
 } from './reproCourseCard';
 
 test('play map fills at least 60% down to a two-row dock; header is overlay', () => {
@@ -276,9 +283,10 @@ test('Add shot, play, and edit open hole-up once; map chip stays, footer does no
   assert.match(editMap, /courseCamera\?\.points/);
 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
-  assert.match(map, /initialCamera: holeUpCamera/);
+  assert.match(map, /initialCamera: paintCamera/);
+  assert.match(map, /initialRegion: lockedRegion/);
   assert.doesNotMatch(map, /camera: holeUpCamera/);
-  assert.doesNotMatch(map, /region: lockedRegion/);
+  assert.doesNotMatch(map, /[^l]region: lockedRegion/);
   assert.doesNotMatch(map, /styles\.placeHint/);
   const ready = map.slice(map.indexOf('onMapReady'), map.indexOf('onRegionChangeComplete'));
   assert.match(ready, /if \(framedOnce\.current\) return;/);
@@ -676,10 +684,11 @@ test('P0: full-bleed MapView has real height under the glass dock; Add shot keep
   assert.equal(CYPRESS_CREEK_CABOT.city, 'Cabot');
   assert.deepEqual(
     REPRO_COURSE_CARDS.map((course) => course.name),
-    ['Magnolia Country Club', 'Cypress Creek'],
+    ['Magnolia Country Club', 'Cypress Creek', 'Mystic Creek'],
   );
+  assert.equal(MYSTIC_CREEK_EL_DORADO.city, 'El Dorado');
 
-  for (const card of [magnoliaHole1Card(), cypressCreekHole1Card()]) {
+  for (const card of [magnoliaHole1Card(), cypressCreekHole1Card(), mysticCreekHole1Card()]) {
     assert.equal(courseCardHoleHasTeeAndGreen(card), true);
     const start = planCourseCardCamera({ tee: card.tee, green: card.green, phone: null });
     const addShot = planCourseCardCamera({ tee: card.tee, green: card.green, phone: null });
@@ -714,15 +723,27 @@ test('P0: full-bleed MapView has real height under the glass dock; Add shot keep
   assert.match(map, /bleed: \{\s*\n\s*\.\.\.StyleSheet\.absoluteFill,/);
   assert.match(map, /map: \{\s*\n\s*\.\.\.StyleSheet\.absoluteFill,/);
   assert.match(map, /style=\{\[styles\.map, mapBox,/);
-  assert.match(map, /holeMapShouldMountMapView\(mapBox\)/);
-  assert.match(map, /key=\{`hole-map-\$\{mapBox!\.width\}x\$\{mapBox!\.height\}`\}/);
+  assert.match(map, /holeMapShouldMount\(mapBox\)/);
+  assert.match(map, /key=\{mapPaintKey\}/);
   assert.match(map, /holeMapRevealWhenCourseFramePlanned/);
   assert.match(map, /revealCourseFrameIfPlanned/);
+  assert.doesNotMatch(map, /styles\.mapHidden/);
+  assert.doesNotMatch(map, /opacity: 0/);
+  assert.match(map, /showMapCover \? \(/);
+  assert.match(map, /initialRegion: lockedRegion/);
+  assert.equal(holeMapRemountsWhenMapBoxSized(), true);
+  assert.equal(holeMapMountsBeforeMeasured(), false);
+  assert.equal(holeMapCoverLiftsWhenSized(), true);
+  assert.equal(holeMapRequiresLocationPermission(), false);
   assert.equal(signalLabBlankMapBuild38().remountMapWhenSized, true);
   assert.equal(signalLabBlankMapBuild38().gatesOnLocationPermission, false);
   assert.equal(signalLabBlankMapBuild38().courseCardMissShowsExplicitUi, true);
   assert.equal(signalLabBlankMapBuild38().firstFramePhoneNull, true);
   assert.equal(signalLabBlankMapBuild38().showsUserLocationOnLockFrame, false);
+  assert.equal(signalLabBlankMapBuild39().hidesWithOpacity, false);
+  assert.equal(signalLabBlankMapBuild39().alwaysPassesInitialRegion, true);
+  assert.equal(signalLabBlankMapBuild39().coverLiftsWhenSized, true);
+  assert.equal(signalLabBlankMapBuild39().addShotDoesNotRemountSizedMap, true);
   assert.match(map, /collapsable=\{false\}/);
   const userLoc = map.slice(map.indexOf('showsUserLocation='), map.indexOf('showsMyLocationButton'));
   assert.match(userLoc, /holeMapUserLocationVisible\(\{/);
