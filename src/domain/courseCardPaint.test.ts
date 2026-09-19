@@ -223,6 +223,7 @@ test('Signal Lab logs Cypress hole 1 tee+green and does not mount MapView on mis
   assert.equal(gate.checksCypressAndGreystoneTogether, true);
   assert.equal(gate.thinApiShowsMissAndFailCount, true);
   assert.equal(gate.blanksCypressGreystonePleasantValley, true);
+  assert.equal(gate.threeBlanksNotOneOff, true);
   assert.equal(gate.logsFailList, true);
   assert.equal(gate.doesNotAskDocToSmoke, true);
   assert.equal(gate.osmNeverSeedsCourseCardGreen, true);
@@ -296,6 +297,7 @@ test('Signal Lab side-by-side: thin API vs Magnolia + Camden paint', () => {
   assert.equal(dump.rows[4].mount, false);
   assert.equal(dump.thinApiPattern, true);
   assert.equal(dump.cabotPocket, true);
+  assert.equal(dump.threeBlanks, true);
   assert.equal(dump.failCount, 3);
   assert.equal(dump.paintCount, 2);
   assert.equal(dump.tally.paint, 2);
@@ -320,13 +322,14 @@ test('Signal Lab side-by-side: thin API vs Magnolia + Camden paint', () => {
     3,
   );
   const line = logs.find((row) => Array.isArray(row) && row[0] === '[Signal Lab] hole-1 side-by-side') as
-    | [string, { paints: string[]; blanks: string[]; cabotPocket: string[]; cabotPocketBothBlank: boolean }]
+    | [string, { paints: string[]; blanks: string[]; cabotPocket: string[]; cabotPocketBothBlank: boolean; threeBlanks: boolean }]
     | undefined;
   assert.ok(line);
   assert.deepEqual(line[1].paints, [...DOC_PAINT_COURSE_NAMES]);
   assert.deepEqual(line[1].cabotPocket, [...DOC_CABOT_POCKET_NAMES]);
   assert.deepEqual(line[1].blanks, [...DOC_BLANK_COURSE_NAMES]);
   assert.equal(line[1].cabotPocketBothBlank, true);
+  assert.equal(line[1].threeBlanks, true);
 
   const known = dumpHole1PayloadsSideBySide({
     cypress: CYPRESS_CREEK_CABOT.hole1,
@@ -335,6 +338,7 @@ test('Signal Lab side-by-side: thin API vs Magnolia + Camden paint', () => {
   });
   assert.equal(known.thinApiPattern, true);
   assert.equal(known.cabotPocket, false);
+  assert.equal(known.threeBlanks, false);
   assert.equal(known.failCount, 1);
   assert.equal(known.paintCount, 4);
   assert.equal(known.tally.oneOff, true);
@@ -379,6 +383,11 @@ test('Signal Lab side-by-side: thin API vs Magnolia + Camden paint', () => {
   assert.equal(scanned.paintCount, 2);
   assert.equal(scanned.tally.thinTier, true);
   assert.equal(scanned.cabotPocket, true);
+  assert.equal(scanned.threeBlanks, true);
+  assert.equal(scanned.rows[0].course, 'Magnolia Country Club');
+  assert.equal(scanned.rows[4].course, 'Pleasant Valley Country Club');
+  assert.equal(scanned.rows[0].mount, true);
+  assert.equal(scanned.rows[4].mount, false);
   const pocket = logCabotPocket(scanCabotPocket());
   assert.equal(pocket.bothBlank, true);
   assert.equal(pocket.failCount, 2);

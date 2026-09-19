@@ -411,9 +411,9 @@ export function signalLabBlankMapBuild39(): {
 
 /**
  * Signal Lab — thin course-card tier (not a remount/paint bug).
- * PAINTS: Magnolia CC, Camden CC (Camden AR).
- * BLANKS (Cabot pocket): Cypress Creek Country Club, Greystone — check together.
- * Miss card over green void. Fail-count logging. Do not ask Doc to smoke.
+ * PAINTS: Magnolia CC, Camden CC.
+ * BLANKS: Cypress Creek (Cabot), Greystone (Cabot), Pleasant Valley (Little Rock).
+ * Three blanks — not a one-off. Miss card first. Fail-count logging.
  */
 export function signalLabCypressBlankMap(): {
   logsHole1TeeGreen: true;
@@ -435,6 +435,7 @@ export function signalLabCypressBlankMap(): {
   playDockOnMiss: true;
   logsFailVsPaintCount: true;
   blanksCypressGreystonePleasantValley: true;
+  threeBlanksNotOneOff: true;
   logsFailList: true;
   doesNotAskDocToSmoke: true;
   osmNeverSeedsCourseCardGreen: true;
@@ -459,6 +460,7 @@ export function signalLabCypressBlankMap(): {
     playDockOnMiss: true,
     logsFailVsPaintCount: true,
     blanksCypressGreystonePleasantValley: true,
+    threeBlanksNotOneOff: true,
     logsFailList: true,
     doesNotAskDocToSmoke: true,
     osmNeverSeedsCourseCardGreen: true,

@@ -81,6 +81,8 @@ export type Hole1PayloadDump = {
   thinApiPattern: boolean;
   /** Cypress and Greystone both miss — Cabot pocket, not one card. */
   cabotPocket: boolean;
+  /** Cypress, Greystone, and Pleasant Valley all miss — not a one-off. */
+  threeBlanks: boolean;
   /** Holes / cards that must show the miss card (do not mount MapView). */
   failCount: number;
   paintCount: number;
@@ -355,10 +357,12 @@ export function dumpHole1PayloadsSideBySide(args: {
   const tally = tallyCourseCardPaint(rows);
   const paintsOk = magnolia.mount && camden.mount;
   const blankMiss = [cypress, greystone, pleasantValley].some((row) => !row.mount);
+  const threeBlanks = !cypress.mount && !greystone.mount && !pleasantValley.mount;
   return {
     rows,
     thinApiPattern: paintsOk && blankMiss,
     cabotPocket: !cypress.mount && !greystone.mount,
+    threeBlanks,
     failCount: tally.fail,
     paintCount: tally.paint,
     tally,
@@ -472,6 +476,7 @@ export function logHole1PayloadsSideBySide(dump: Hole1PayloadDump): Hole1Payload
     cabotPocket: [...DOC_CABOT_POCKET_NAMES],
     blanks: [...DOC_BLANK_COURSE_NAMES],
     cabotPocketBothBlank: dump.cabotPocket,
+    threeBlanks: dump.threeBlanks,
     thinApiPattern: dump.thinApiPattern,
     paintCount: dump.paintCount,
     failCount: dump.failCount,
@@ -484,14 +489,15 @@ export function logHole1PayloadsSideBySide(dump: Hole1PayloadDump): Hole1Payload
     reasons: dump.tally.reasons,
     oneOff: dump.tally.oneOff,
     thinTier: dump.tally.thinTier,
+    threeBlanks: dump.threeBlanks,
     failList: formatCourseCardFailList(dump.failList),
   });
   return dump;
 }
 
 /**
- * Doc split: Magnolia + Camden paint; Cypress / Greystone / Pleasant Valley
- * blank when live tee/green are missing. Known hole-1 fixtures still mount.
+ * Doc split: Magnolia + Camden paint; Cypress, Greystone, and Pleasant Valley
+ * blank when live tee/green are missing. Three blanks — not a one-off.
  */
 export function compareMagnoliaCypressHole1(args?: {
   cypressTee?: LatLng | null;

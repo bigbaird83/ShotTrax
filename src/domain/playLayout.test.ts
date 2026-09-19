@@ -759,6 +759,7 @@ test('P0: full-bleed MapView has real height under the glass dock; Add shot keep
   assert.equal(signalLabCypressBlankMap().paintOnlyWhenNormalHole, true);
   assert.equal(signalLabCypressBlankMap().logsFailVsPaintCount, true);
   assert.equal(signalLabCypressBlankMap().blanksCypressGreystonePleasantValley, true);
+  assert.equal(signalLabCypressBlankMap().threeBlanksNotOneOff, true);
   assert.equal(signalLabCypressBlankMap().logsFailList, true);
   assert.equal(signalLabCypressBlankMap().doesNotAskDocToSmoke, true);
   assert.match(map, /collapsable=\{false\}/);
