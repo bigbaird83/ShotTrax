@@ -44,7 +44,20 @@ export const CYPRESS_CREEK_CABOT: ReproCourseCard = {
   },
 };
 
-export const REPRO_COURSE_CARDS = [MAGNOLIA_CC, CYPRESS_CREEK_CABOT] as const;
+/** Third Doc repro — El Dorado. Same blank-map class as Magnolia and Cypress. */
+export const MYSTIC_CREEK_EL_DORADO: ReproCourseCard = {
+  name: 'Mystic Creek',
+  city: 'El Dorado',
+  state: 'AR',
+  location: { lat: 33.224, lng: -92.74 },
+  hole1: {
+    number: 1,
+    tee: { lat: 33.2218, lng: -92.7422 },
+    green: { lat: 33.2256, lng: -92.7388 },
+  },
+};
+
+export const REPRO_COURSE_CARDS = [MAGNOLIA_CC, CYPRESS_CREEK_CABOT, MYSTIC_CREEK_EL_DORADO] as const;
 
 /** Course-card hole can frame only when both tee and green are real coordinates. */
 export function courseCardHoleHasTeeAndGreen(hole: {
@@ -64,4 +77,8 @@ export function magnoliaHole1Card(): { tee: LatLng; green: LatLng } {
 
 export function cypressCreekHole1Card(): { tee: LatLng; green: LatLng } {
   return { tee: CYPRESS_CREEK_CABOT.hole1.tee, green: CYPRESS_CREEK_CABOT.hole1.green };
+}
+
+export function mysticCreekHole1Card(): { tee: LatLng; green: LatLng } {
+  return { tee: MYSTIC_CREEK_EL_DORADO.hole1.tee, green: MYSTIC_CREEK_EL_DORADO.hole1.green };
 }

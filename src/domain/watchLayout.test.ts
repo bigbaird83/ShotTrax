@@ -136,7 +136,8 @@ test('282 opening window includes Dr; Watch control band is ~40%; round start fr
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   assert.match(map, /A lone green is the house/);
   assert.doesNotMatch(map.slice(map.indexOf('const lockedPoints'), map.indexOf('const holeUpCamera')), /return \[green\]/);
-  assert.match(map, /lockFrame && !holeCameraReady \? \(/);
+  assert.match(map, /showMapCover \? \(/);
+  assert.match(map, /key=\{mapPaintKey\}/);
   assert.match(map, /showWaitingOnLocationLine/);
   assert.match(map, /!yardsOnCard/);
 

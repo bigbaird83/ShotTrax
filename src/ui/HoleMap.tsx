@@ -19,12 +19,18 @@ import {
   holeCameraHeading,
   holeFrameRegion,
   holeMapRevealWhenCourseFramePlanned,
-  holeMapShouldMountMapView,
   holeMapUserLocationVisible,
   holeNativeCamera,
-  mapBoxIsPaintReady,
   regionIsHoleFrame,
 } from '@/src/domain/holeCamera';
+import {
+  holeMapBoxIsPaintable,
+  holeMapPaintKey,
+  holeMapRegionIsPaintable,
+  holeMapShouldMount,
+  holeMapShowsCover,
+  holeNativeCameraIsPaintable,
+} from '@/src/domain/mapPaint';
 import { planDragShotLines } from '@/src/domain/placeToDrag';
 import { COPY, showWaitingOnLocationLine } from '@/src/domain/playerCopy';
 import { isValidLatLng } from '@/src/domain/latLng';
@@ -360,15 +366,16 @@ function NativeHoleMap({
 
   const onMapLayout = (event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
+    const next = { width, height };
     // Host size only — MapView mounts after the box is paint-ready so Apple
     // tiles are not asked to paint into a zero-height first layout.
-    if (width >= 80 && height >= 80) {
+    if (holeMapBoxIsPaintable(next)) {
       setMapBox((prev) =>
-        prev && prev.width === width && prev.height === height ? prev : { width, height },
+        prev && prev.width === width && prev.height === height ? prev : next,
       );
     }
     if (!lockFrame) return;
-    if (!mapBoxIsPaintReady({ width, height })) return;
+    if (!holeMapBoxIsPaintable(next)) return;
     if (framedOnce.current) return;
     if (markFramedIfLive(frameLockedMap())) return;
     // Course tee+green already planned (initialCamera/Region). Do not keep the
@@ -379,6 +386,22 @@ function NativeHoleMap({
       setHoleCameraReady(true);
     }
   };
+
+  const mapCanPaint = holeMapShouldMount(mapBox);
+  const mapPaintKey = holeMapPaintKey(mapBox);
+  const showMapCover = holeMapShowsCover({
+    mapBox,
+    hasFrame: Boolean(lockedRegion && holeMapRegionIsPaintable(lockedRegion)),
+  });
+
+  useEffect(() => {
+    if (!lockFrame) return;
+    if (!mapCanPaint) return;
+    if (!lockedRegion || !holeMapRegionIsPaintable(lockedRegion)) return;
+    // Host is sized and the course-card region is valid. Do not wait on setCamera
+    // or a phone fix — and never hide MapView with opacity hide (blocks Apple tiles).
+    setHoleCameraReady(true);
+  }, [lockFrame, mapCanPaint, lockedRegion]);
 
   const revealCourseFrameIfPlanned = () => {
     if (!lockFrame) return false;
@@ -407,7 +430,7 @@ function NativeHoleMap({
     markFramedIfLive(frameLockedMap());
   };
 
-  if (!lockedRegion) {
+  if (!lockedRegion || !holeMapRegionIsPaintable(lockedRegion)) {
     return (
       <View
         collapsable={false}
@@ -430,8 +453,11 @@ function NativeHoleMap({
       ? toCoord(userFix.lat, userFix.lng)
       : null;
 
-  const lockedCameraProps = holeUpCamera
-    ? { initialCamera: holeUpCamera }
+  // Always pass a paintable initialRegion so tiles fetch even if initialCamera
+  // is ignored on first paint. Reject NaN / 0,0 cameras.
+  const paintCamera = holeNativeCameraIsPaintable(holeUpCamera) ? holeUpCamera : null;
+  const lockedCameraProps = paintCamera
+    ? { initialCamera: paintCamera, initialRegion: lockedRegion }
     : { initialRegion: lockedRegion };
 
   return (
@@ -451,16 +477,17 @@ function NativeHoleMap({
         if (event.nativeEvent.touches.length === 0) releaseMapGesture();
       }}
       onTouchCancel={() => releaseMapGesture()}>
-      {holeMapShouldMountMapView(mapBox) ? (
+      {mapCanPaint ? (
       <MapView
-        key={`hole-map-${mapBox!.width}x${mapBox!.height}`}
+        key={mapPaintKey}
         ref={mapRef}
-        style={[styles.map, mapBox, lockFrame && !holeCameraReady ? styles.mapHidden : null]}
+        style={[styles.map, mapBox,]}
         mapType="satellite"
+        loadingEnabled
         {...(lockFrame
           ? lockedCameraProps
-          : holeUpCamera
-            ? { initialCamera: holeUpCamera }
+          : paintCamera
+            ? { initialCamera: paintCamera, initialRegion: lockedRegion }
             : { initialRegion: lockedRegion })}
         showsUserLocation={holeMapUserLocationVisible({
           lockFrame,
@@ -729,7 +756,7 @@ function NativeHoleMap({
           }}
         />
       ) : null}
-      {lockFrame && !holeCameraReady ? (
+      {showMapCover ? (
         <View pointerEvents="none" style={styles.mapCover} />
       ) : null}
       {!allowMapsChrome ? <View pointerEvents="none" style={styles.legalCover} /> : null}
@@ -792,7 +819,6 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     flex: 1,
   },
-  mapHidden: { opacity: 0 },
   mapCover: {
     position: 'absolute',
     top: 0,

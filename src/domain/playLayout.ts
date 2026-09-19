@@ -365,6 +365,51 @@ export function playBlankMapFixIsCourseAgnostic(): true {
 }
 
 /**
+ * Height-only (#28) + remount (#29) were not enough while opacity:0 / missing
+ * initialRegion still blanked Apple tiles. Third pass: mapPaint + always region.
+ */
+export function holeMapRemountsWhenMapBoxSized(): true {
+  return true;
+}
+
+export function holeMapMountsBeforeMeasured(): false {
+  return false;
+}
+
+/** Location permission must not gate MapView. Course tee+green frame first. */
+export function holeMapRequiresLocationPermission(): false {
+  return false;
+}
+
+/** Green cover lifts when the host is sized. Missing tee+green is the miss card. */
+export function holeMapCoverLiftsWhenSized(): true {
+  return true;
+}
+
+/**
+ * Signal Lab build 39 — blank map third pass (shared play + Add shot HoleMap).
+ * 1. Never hide MapView with opacity 0 (blocks Apple satellite tiles).
+ * 2. Always pass a valid initialRegion with initialCamera.
+ * 3. Lift cover as soon as mapBox is sized; miss card when region invalid.
+ * 4. Stable paint key ('sized') so Add shot does not remount a live play map.
+ */
+export function signalLabBlankMapBuild39(): {
+  hidesWithOpacity: false;
+  alwaysPassesInitialRegion: true;
+  coverLiftsWhenSized: true;
+  addShotDoesNotRemountSizedMap: true;
+  gatesOnLocationPermission: false;
+} {
+  return {
+    hidesWithOpacity: false,
+    alwaysPassesInitialRegion: true,
+    coverLiftsWhenSized: true,
+    addShotDoesNotRemountSizedMap: true,
+    gatesOnLocationPermission: false,
+  };
+}
+
+/**
  * Signal Lab build 36 — Add shot gesture lock.
  * 1. First frame is course tee + green center only.
  * 2. After that, do not reframe.
