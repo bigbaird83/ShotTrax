@@ -37,7 +37,8 @@ test('fill estimates after 3 typed, never overrides typed, never fills the putte
   ]);
   assert.equal(filled.get('club_6i')?.source, 'typed');
   assert.equal(filled.get('club_6i')?.yards, 162);
-  assert.equal(filled.get('club_8i')?.source, null);
+  assert.equal(filled.get('club_8i')?.source, 'estimated');
+  assert.ok((filled.get('club_8i')?.yards ?? 0) > 0);
   assert.equal(filled.get(PUTTER_CLUB_ID)?.yards ?? null, null);
 });
 
