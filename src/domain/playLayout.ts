@@ -336,6 +336,27 @@ export function addShotOpensOnPlayFrame(): true {
   return true;
 }
 
+/**
+ * Signal Lab build 36 — Add shot gesture lock.
+ * 1. First frame is course tee + green center only.
+ * 2. After that, do not reframe.
+ * 3. scrollEnabled / zoomEnabled stay on after the first frame.
+ * 4. Glass frost stays pointerEvents none so it cannot eat the pinch.
+ */
+export function signalLabAddShotGestureLock(): {
+  firstFrameUsesCourseCard: true;
+  reframesAfterInitialFrame: false;
+  scrollZoomAfterFrame: true;
+  dockFrostPointerEvents: 'none';
+} {
+  return {
+    firstFrameUsesCourseCard: true,
+    reframesAfterInitialFrame: false,
+    scrollZoomAfterFrame: true,
+    dockFrostPointerEvents: playDockFrostPointerEvents(),
+  };
+}
+
 /** Menu is a button, not lime text, on home and play. */
 export function playMenuIsButton(): true {
   return true;

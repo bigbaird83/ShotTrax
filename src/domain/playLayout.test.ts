@@ -80,6 +80,7 @@ import {
   playDockGlassIgnoresTouches,
   playDockFrostPointerEvents,
   addShotOpensOnPlayFrame,
+  signalLabAddShotGestureLock,
   PLAY_GLASS_DOCK_LIFT,
   playScorecardWraps,
   playSameClubHiddenUntilShot,
@@ -616,6 +617,12 @@ test('build 35 cook-gate: glass dock, one accent, trails, type, cards, empty, ha
 });
 
 test('Signal Lab: trail chip is logged yards, soft/forced keep a badge, glass dock passes two-finger pan', () => {
+  assert.deepEqual(signalLabAddShotGestureLock(), {
+    firstFrameUsesCourseCard: true,
+    reframesAfterInitialFrame: false,
+    scrollZoomAfterFrame: true,
+    dockFrostPointerEvents: 'none',
+  });
   assert.equal(playDockPassesTwoFingerPan(), true);
   assert.equal(playDockGlassIgnoresTouches(), true);
   assert.equal(playDockFrostPointerEvents(), 'none');

@@ -48,6 +48,7 @@ import {
   playDockFrostPointerEvents,
   playDockGlassIgnoresTouches,
   playDockPassesTwoFingerPan,
+  signalLabAddShotGestureLock,
 } from './playLayout';
 import {
   formatShotLockChip,
@@ -237,4 +238,44 @@ test('Signal Lab: Add shot two-finger pan/pinch after frame leave the camera and
   );
   assert.match(epochFn, /return `play-\$\{args\.holeNumber\}-\$\{args\.nonce\}`/);
   assert.doesNotMatch(epochFn, /catchup/);
+});
+
+test('Signal Lab: course-card first frame, then leave camera alone; scroll/zoom stay on; dock frost is none', () => {
+  const lock = signalLabAddShotGestureLock();
+  assert.equal(lock.firstFrameUsesCourseCard, true);
+  assert.equal(lock.reframesAfterInitialFrame, false);
+  assert.equal(lock.scrollZoomAfterFrame, true);
+  assert.equal(lock.dockFrostPointerEvents, 'none');
+  assert.equal(playDockFrostPointerEvents(), 'none');
+
+  const house = { lat: 40.7128, lng: -74.006 };
+  const first = planCourseCardCamera({ tee: from, green, phone: null });
+  const fromHouse = planCourseCardCamera({ tee: from, green, phone: house });
+  assert.deepEqual(first?.points, [from, green]);
+  assert.deepEqual(fromHouse, first);
+  assert.notDeepEqual(first?.points, [house]);
+  assert.equal(addShotReframesAfterOpen(), false);
+  assert.equal(addShotGesturesRerunCourseCardCamera(), false);
+  assert.equal(holeCameraLeavesAloneAfterOpen(), true);
+  assert.equal(holeMapScrollZoomAfterFrame({ lockFrame: true, holeCameraReady: true }), true);
+  assert.equal(addShotMapScrollEnabledAfterFrame(), true);
+  assert.equal(addShotMapZoomEnabledAfterFrame(), true);
+
+  const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
+  assert.match(map, /scrollEnabled=\{framedForGestures\}/);
+  assert.match(map, /zoomEnabled=\{framedForGestures\}/);
+  const settled = map.slice(map.indexOf('const onRegionSettled'), map.indexOf('if (!lockedRegion)'));
+  const afterFrame = settled.slice(
+    settled.indexOf('if (framedOnce.current)'),
+    settled.indexOf('if (regionIsHoleFrame'),
+  );
+  assert.match(afterFrame, /return;/);
+  assert.doesNotMatch(afterFrame, /applyLockedCamera|frameLockedMap|planCourseCardCamera/);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  assert.match(hole, /const courseCamera = planCourseCardCamera\(\{[\s\S]*?tee: holeTee,[\s\S]*?green,[\s\S]*?phone: null,/);
+  assert.match(hole, /pointerEvents="none" style=\{styles\.dockGlass\}/);
+  assert.doesNotMatch(hole, /pointerEvents=\{[^}]*styles\.dockGlass/);
+  const frost = hole.slice(hole.indexOf('dockGlass:'), hole.indexOf('dockRow:'));
+  assert.doesNotMatch(frost, /pointerEvents/);
 });
