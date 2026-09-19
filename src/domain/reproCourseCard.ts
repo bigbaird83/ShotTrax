@@ -31,7 +31,23 @@ export const MAGNOLIA_CC: ReproCourseCard = {
   },
 };
 
-/** Second Doc repro — same blank-map class, not a Magnolia-only card miss. */
+/**
+ * Doc TF control — paints like Magnolia. Camden, AR.
+ * Known hole-1 tee+green for camera tests, never invented at runtime.
+ */
+export const CAMDEN_CC: ReproCourseCard = {
+  name: 'Camden Country Club',
+  city: 'Camden',
+  state: 'AR',
+  location: { lat: 33.5826, lng: -92.8734 },
+  hole1: {
+    number: 1,
+    tee: { lat: 33.5808, lng: -92.8752 },
+    green: { lat: 33.5844, lng: -92.8716 },
+  },
+};
+
+/** Doc TF blank — Cypress-specific. Cabot, AR. Missing live tee/green → miss card. */
 export const CYPRESS_CREEK_CABOT: ReproCourseCard = {
   name: 'Cypress Creek',
   city: 'Cabot',
@@ -75,6 +91,9 @@ export const MYSTIC_CREEK_EL_DORADO: ReproCourseCard = {
 
 export const REPRO_COURSE_CARDS = [MAGNOLIA_CC, CYPRESS_CREEK_CABOT, MYSTIC_CREEK_EL_DORADO] as const;
 
+/** Doc-confirmed paint split: these two paint; Cypress blanks when the card is thin. */
+export const PAINTS_REPRO_CARDS = [MAGNOLIA_CC, CAMDEN_CC] as const;
+
 /** Course-card hole can frame only when both tee and green are real coordinates. */
 export function courseCardHoleHasTeeAndGreen(hole: {
   tee?: LatLng | null;
@@ -101,4 +120,8 @@ export function mysticCreekHole1Card(): { tee: LatLng; green: LatLng } {
 
 export function greystoneHole1Card(): { tee: LatLng; green: LatLng } {
   return { tee: GREYSTONE_CABOT.hole1.tee, green: GREYSTONE_CABOT.hole1.green };
+}
+
+export function camdenHole1Card(): { tee: LatLng; green: LatLng } {
+  return { tee: CAMDEN_CC.hole1.tee, green: CAMDEN_CC.hole1.green };
 }

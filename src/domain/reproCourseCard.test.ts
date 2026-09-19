@@ -20,11 +20,14 @@ import {
   playMapHostUsesAbsoluteFill,
 } from './playLayout';
 import {
+  CAMDEN_CC,
   CYPRESS_CREEK_CABOT,
   GREYSTONE_CABOT,
   MAGNOLIA_CC,
   MYSTIC_CREEK_EL_DORADO,
+  PAINTS_REPRO_CARDS,
   REPRO_COURSE_CARDS,
+  camdenHole1Card,
   courseCardHoleHasTeeAndGreen,
   cypressCreekHole1Card,
   greystoneHole1Card,
@@ -109,6 +112,17 @@ test('repro cards are Magnolia plus Cypress Creek; missing tee or green never wa
   );
   assert.equal(CYPRESS_CREEK_CABOT.city, 'Cabot');
   assert.equal(CYPRESS_CREEK_CABOT.state, 'AR');
+  assert.equal(CAMDEN_CC.name, 'Camden Country Club');
+  assert.equal(CAMDEN_CC.city, 'Camden');
+  assert.deepEqual(camdenHole1Card(), {
+    tee: CAMDEN_CC.hole1.tee,
+    green: CAMDEN_CC.hole1.green,
+  });
+  assert.equal(courseCardHoleHasTeeAndGreen(CAMDEN_CC.hole1), true);
+  assert.deepEqual(
+    PAINTS_REPRO_CARDS.map((course) => course.name),
+    ['Magnolia Country Club', 'Camden Country Club'],
+  );
   assert.equal(GREYSTONE_CABOT.name, 'Greystone Country Club');
   assert.equal(GREYSTONE_CABOT.city, 'Cabot');
   assert.deepEqual(greystoneHole1Card(), {

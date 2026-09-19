@@ -1,7 +1,7 @@
 import { diagnoseCourseCardFrame, holeFrameRegion, planCourseCardCamera } from './holeCamera';
 import { isCourseCardLatLng, isNearZeroLatLng, type LatLng } from './latLng';
 import { holeMapRegionIsPaintable } from './mapPaint';
-import { CYPRESS_CREEK_CABOT, GREYSTONE_CABOT, MAGNOLIA_CC } from './reproCourseCard';
+import { CAMDEN_CC, CYPRESS_CREEK_CABOT, MAGNOLIA_CC } from './reproCourseCard';
 
 export type CourseCardPaintReason =
   | 'sane_region'
@@ -36,7 +36,7 @@ export type Hole1PayloadRow = {
 
 export type Hole1PayloadDump = {
   rows: Hole1PayloadRow[];
-  /** Cabot cards share null/placeholder while Magnolia is real → thin API, not paint. */
+  /** Magnolia + Camden paint; Cypress null/placeholder → Cypress-specific thin API, not paint. */
   thinApiPattern: boolean;
   /** Holes / cards that must show the miss card (do not mount MapView). */
   failCount: number;
@@ -163,13 +163,13 @@ function kindPair(row: Hole1PayloadRow): string {
 }
 
 /**
- * Magnolia (control) beside Cypress Creek Cabot and Greystone Cabot.
- * Same null/placeholder pair on the Cabot cards → thin API data, not a paint bug.
+ * Doc split: Magnolia + Camden (paint) beside Cypress Creek Cabot.
+ * Cypress null/placeholder while the other two are real → thin API, not paint.
  */
 export function dumpHole1PayloadsSideBySide(args: {
   magnolia?: { tee: LatLng | null; green: LatLng | null };
+  camden?: { tee: LatLng | null; green: LatLng | null };
   cypress: { tee: LatLng | null; green: LatLng | null };
-  greystone: { tee: LatLng | null; green: LatLng | null };
 }): Hole1PayloadDump {
   const magnolia = hole1PayloadRow({
     course: MAGNOLIA_CC.name,
@@ -177,23 +177,23 @@ export function dumpHole1PayloadsSideBySide(args: {
     tee: args.magnolia?.tee ?? MAGNOLIA_CC.hole1.tee,
     green: args.magnolia?.green ?? MAGNOLIA_CC.hole1.green,
   });
+  const camden = hole1PayloadRow({
+    course: CAMDEN_CC.name,
+    city: CAMDEN_CC.city,
+    tee: args.camden?.tee ?? CAMDEN_CC.hole1.tee,
+    green: args.camden?.green ?? CAMDEN_CC.hole1.green,
+  });
   const cypress = hole1PayloadRow({
     course: CYPRESS_CREEK_CABOT.name,
     city: CYPRESS_CREEK_CABOT.city,
     tee: args.cypress.tee,
     green: args.cypress.green,
   });
-  const greystone = hole1PayloadRow({
-    course: GREYSTONE_CABOT.name,
-    city: GREYSTONE_CABOT.city,
-    tee: args.greystone.tee,
-    green: args.greystone.green,
-  });
-  const rows = [magnolia, cypress, greystone];
-  const cabotSameThin = kindPair(cypress) === kindPair(greystone) && kindPair(cypress) !== 'real/real';
+  const rows = [magnolia, camden, cypress];
+  const cypressThin = kindPair(cypress) !== 'real/real';
   return {
     rows,
-    thinApiPattern: magnolia.mount && cabotSameThin && !cypress.mount && !greystone.mount,
+    thinApiPattern: magnolia.mount && camden.mount && cypressThin && !cypress.mount,
     failCount: courseCardFailCount(rows),
   };
 }
@@ -204,7 +204,7 @@ export function logCourseCardPaint(args: {
   decision: CourseCardPaintDecision;
 }): CourseCardPaintDecision {
   const { courseName, holeNumber, decision } = args;
-  // Signal Lab device log: Cypress / Greystone hole 1 tee/green vs Magnolia.
+  // Signal Lab device log: Cypress hole 1 tee/green vs Magnolia + Camden.
   console.log('[Signal Lab] course-card', {
     course: courseName ?? 'unknown',
     hole: holeNumber,
@@ -222,8 +222,10 @@ export function logCourseCardPaint(args: {
 export function logHole1PayloadsSideBySide(dump: Hole1PayloadDump): Hole1PayloadDump {
   console.log('[Signal Lab] hole-1 side-by-side', {
     magnolia: dump.rows[0],
-    cypressCreekCabot: dump.rows[1],
-    greystoneCabot: dump.rows[2],
+    camdenCc: dump.rows[1],
+    cypressCreekCabot: dump.rows[2],
+    paints: ['Magnolia Country Club', 'Camden Country Club'],
+    blanks: ['Cypress Creek'],
     thinApiPattern: dump.thinApiPattern,
     failCount: dump.failCount,
   });
@@ -231,20 +233,19 @@ export function logHole1PayloadsSideBySide(dump: Hole1PayloadDump): Hole1Payload
 }
 
 /**
- * Magnolia vs Cypress/Greystone split for the ShotTraxx room.
- * Known hole-1 cards mount. Live Cabot null/~0,0 is a miss + fail count.
+ * Doc split for the ShotTraxx room: Magnolia + Camden paint; Cypress blanks
+ * when live tee/green are missing. Known hole-1 cards still mount.
  */
 export function compareMagnoliaCypressHole1(args?: {
   cypressTee?: LatLng | null;
   cypressGreen?: LatLng | null;
-  greystoneTee?: LatLng | null;
-  greystoneGreen?: LatLng | null;
+  camdenTee?: LatLng | null;
+  camdenGreen?: LatLng | null;
 }): {
   magnolia: CourseCardPaintDecision;
+  camden: CourseCardPaintDecision;
   cypressKnown: CourseCardPaintDecision;
   cypressLive: CourseCardPaintDecision;
-  greystoneKnown: CourseCardPaintDecision;
-  greystoneLive: CourseCardPaintDecision;
   dump: Hole1PayloadDump;
 } {
   const magnolia = decideCourseCardPaint({
@@ -252,14 +253,14 @@ export function compareMagnoliaCypressHole1(args?: {
     green: MAGNOLIA_CC.hole1.green,
     phone: null,
   });
+  const camden = decideCourseCardPaint({
+    tee: args?.camdenTee ?? CAMDEN_CC.hole1.tee,
+    green: args?.camdenGreen ?? CAMDEN_CC.hole1.green,
+    phone: null,
+  });
   const cypressKnown = decideCourseCardPaint({
     tee: CYPRESS_CREEK_CABOT.hole1.tee,
     green: CYPRESS_CREEK_CABOT.hole1.green,
-    phone: null,
-  });
-  const greystoneKnown = decideCourseCardPaint({
-    tee: GREYSTONE_CABOT.hole1.tee,
-    green: GREYSTONE_CABOT.hole1.green,
     phone: null,
   });
   const cypressLive = decideCourseCardPaint({
@@ -267,14 +268,9 @@ export function compareMagnoliaCypressHole1(args?: {
     green: args?.cypressGreen ?? null,
     phone: null,
   });
-  const greystoneLive = decideCourseCardPaint({
-    tee: args?.greystoneTee ?? null,
-    green: args?.greystoneGreen ?? null,
-    phone: null,
-  });
   const dump = dumpHole1PayloadsSideBySide({
+    camden: { tee: args?.camdenTee ?? CAMDEN_CC.hole1.tee, green: args?.camdenGreen ?? CAMDEN_CC.hole1.green },
     cypress: { tee: args?.cypressTee ?? null, green: args?.cypressGreen ?? null },
-    greystone: { tee: args?.greystoneTee ?? null, green: args?.greystoneGreen ?? null },
   });
-  return { magnolia, cypressKnown, cypressLive, greystoneKnown, greystoneLive, dump };
+  return { magnolia, camden, cypressKnown, cypressLive, dump };
 }
