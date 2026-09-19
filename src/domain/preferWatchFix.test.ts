@@ -15,9 +15,9 @@ function fix(partial: Partial<GpsFix> & { lat: number; lng: number }): GpsFix {
   };
 }
 
-test('prefers a fresh Watch fix that is at least as accurate as the phone', () => {
-  const watch = fix({ lat: 1, lng: 2, accuracyM: 4, timestamp: 1_000_000 });
-  const phone = fix({ lat: 3, lng: 4, accuracyM: 10, timestamp: 1_000_000 });
+test('Watch tap uses a fresh Watch fix even when the phone is more accurate', () => {
+  const watch = fix({ lat: 1, lng: 2, accuracyM: 12, timestamp: 1_000_000 });
+  const phone = fix({ lat: 3, lng: 4, accuracyM: 5, timestamp: 1_000_000 });
   const result = preferWatchFix({ watchFix: watch, phoneFix: phone, nowMs: 1_002_000 });
   assert.equal(result.usedWatch, true);
   assert.equal(result.fix, watch);
@@ -31,10 +31,9 @@ test('falls back to phone when Watch fix is stale', () => {
   assert.equal(result.fix, phone);
 });
 
-test('falls back to phone when Watch accuracy is worse', () => {
-  const watch = fix({ lat: 1, lng: 2, accuracyM: 12, timestamp: 1_000_000 });
+test('phone tap (no Watch sample) uses the phone fix', () => {
   const phone = fix({ lat: 3, lng: 4, accuracyM: 5, timestamp: 1_000_000 });
-  const result = preferWatchFix({ watchFix: watch, phoneFix: phone, nowMs: 1_001_000 });
+  const result = preferWatchFix({ watchFix: null, phoneFix: phone, nowMs: 1_001_000 });
   assert.equal(result.usedWatch, false);
   assert.equal(result.fix, phone);
 });
@@ -47,12 +46,12 @@ test('rejects Watch accuracy of 0 and uses phone', () => {
   assert.equal(result.fix, phone);
 });
 
-test('falls back to phone when phone accuracy is unknown', () => {
+test('Watch tap still uses Watch when phone accuracy is unknown', () => {
   const watch = fix({ lat: 1, lng: 2, accuracyM: 4, timestamp: 1_000_000 });
   const phone = fix({ lat: 3, lng: 4, accuracyM: null, timestamp: 1_000_000 });
   const result = preferWatchFix({ watchFix: watch, phoneFix: phone, nowMs: 1_001_000 });
-  assert.equal(result.usedWatch, false);
-  assert.equal(result.fix, phone);
+  assert.equal(result.usedWatch, true);
+  assert.equal(result.fix, watch);
 });
 
 test('uses Watch when phone fix is missing', () => {
@@ -62,15 +61,7 @@ test('uses Watch when phone fix is missing', () => {
   assert.equal(result.fix, watch);
 });
 
-test('equal accuracy prefers Watch (accuracyM <= phone)', () => {
-  const watch = fix({ lat: 1, lng: 2, accuracyM: 8, timestamp: 1_000_000 });
-  const phone = fix({ lat: 3, lng: 4, accuracyM: 8, timestamp: 1_000_000 });
-  const result = preferWatchFix({ watchFix: watch, phoneFix: phone, nowMs: 1_001_000 });
-  assert.equal(result.usedWatch, true);
-  assert.equal(result.fix, watch);
-});
-
-test('ageSec of exactly 3s still prefers Watch', () => {
+test('ageSec of exactly 3s still uses Watch', () => {
   const watch = fix({ lat: 1, lng: 2, accuracyM: 4, timestamp: 1_000_000 });
   const phone = fix({ lat: 3, lng: 4, accuracyM: 10, timestamp: 1_000_000 });
   const result = preferWatchFix({

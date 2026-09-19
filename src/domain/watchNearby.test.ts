@@ -373,11 +373,17 @@ test('build 26 locks stay: delete confirm, 60% map, one-line header, 600-yard te
   assert.match(app, /"isIosBackgroundLocationEnabled": false/);
   assert.match(app, /"motionUsagePermission": false/);
   assert.doesNotMatch(app, /NSLocationAlways/);
-  assert.match(app, /NSMicrophoneUsageDescription": "ShotTraxx uses the microphone only when you tap Say a club/);
+  assert.doesNotMatch(app, /NSMicrophoneUsageDescription/);
+  assert.doesNotMatch(app, /NSSpeechRecognitionUsageDescription/);
+  assert.doesNotMatch(app, /RECORD_AUDIO/);
+  assert.doesNotMatch(app, /expo-speech-recognition/);
+
+  const watchPlist = readFileSync(new URL('../../targets/watch/Info.plist', import.meta.url), 'utf8');
   assert.match(
-    app,
-    /NSSpeechRecognitionUsageDescription": "ShotTraxx uses speech recognition to match what you say to a club in your bag\./,
+    watchPlist,
+    /NSLocationWhenInUseUsageDescription[\s\S]*Watch location when you pick a club on the Watch to mark where you hit from/,
   );
+  assert.doesNotMatch(watchPlist, /more accurate than the phone/);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   assert.match(hole, /deleteShotPrompt/);

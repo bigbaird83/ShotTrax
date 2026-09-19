@@ -134,7 +134,7 @@ export async function markShotWithClub(
   if (!hole) {
     throw new Error(`Hole ${args.holeNumber} not found`);
   }
-  // Prefer Watch vs phone first. Then measure that chosen fix to the tee.
+  // Watch tap: Watch GPS if fresh, else phone. Phone tap: phone only.
   const fix = args.fixOverride ?? (await resolveMarkFix(args.watchFix));
   const holePin =
     args.holePin ??

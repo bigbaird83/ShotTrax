@@ -1,8 +1,8 @@
 # ShotTraxx
 
-Phone GPS golf shot tracker (no club sensors). **This branch is P5.x** on P1–P5.2 (GPS mark-shot, scores, club averages, hole map trails, voice club pick, top-3, penalties, nearby courses, OSM outlines).
+Phone GPS golf shot tracker (no club sensors). **This branch is P5.x** on P1–P5.2 (GPS mark-shot, scores, club averages, hole map trails, top-3, penalties, nearby courses, OSM outlines). Voice club pick is not in this IPA.
 
-P5.x is the on-course hero: **pick a club to mark GPS**, sticky **Same club** one-tap, voice applies immediately (no confirm), Drop vs Penalty, delete round, haptics, and a thumb-zone layout. **Player voice only** on screen — no API/OSM/GPS-meter footnotes. F/M/B distances show only when course data includes front and back pins (never invented from a single green). Rating and slope sit on the tee. An Apple Watch companion picks clubs (top-3 + bag + Same club) and finishes the hole with the same Putter → buckets → **Made it** flow. StoreKit and Photos stay out of scope.
+P5.x is the on-course hero: **pick a club to mark GPS**, sticky **Same club** one-tap, Drop vs Penalty, delete round, haptics, and a thumb-zone layout. **Player voice only** on screen — no API/OSM/GPS-meter footnotes. F/M/B distances show only when course data includes front and back pins (never invented from a single green). Rating and slope sit on the tee. An Apple Watch companion picks clubs (top-3 + bag + Same club) and finishes the hole with the same Putter → buckets → **Made it** flow. StoreKit, Photos, and microphone stay out of scope.
 
 User-facing name is **ShotTraxx** (`app.json` `expo.name`, iOS `CFBundleDisplayName`, Android `label` / home screen). Bundle ID `com.shottrax.app` and Expo slug `shottrax` stay unchanged (App Store ID). Home-screen icon is the locked Build 36 night-green Shot/Traxx mark at `assets/images/icon.png` (see `assets/images/README.md`). Splash / launch still shows the full wordmark **ShotTraxx**.
 
@@ -18,16 +18,16 @@ Then:
 - iPhone with **Expo Go**: scan the QR code (location + SQLite + Apple Maps via `react-native-maps`)
 - iOS Simulator: press `i` (see simulator GPS below)
 
-**Voice club pick** uses `expo-speech-recognition` (microphone + speech recognition). That native module is **not** in Expo Go — use a development build:
+The Apple Watch companion needs a **native** binary. Use a development build:
 
 ```bash
 npx expo prebuild
 npx expo run:ios
 ```
 
-or an EAS development build (`eas build -p ios --profile development`). Tap targets remain if speech is unavailable.
+or an EAS development build (`eas build -p ios --profile development`). Phone tap targets work in Expo Go.
 
-To install a store-signed build with voice on a physical iPhone, use **TestFlight** below (Expo Go is not enough).
+To install a store-signed build with Watch on a physical iPhone, use **TestFlight** below (Expo Go is not enough).
 
 ## Splash
 
@@ -57,7 +57,7 @@ Hole map draws Overpass `golf=green`, `golf=fairway`, `golf=tee`, and `golf=hole
 
 ## Install on your iPhone (TestFlight)
 
-Voice club pick needs a **native** binary. `expo-speech-recognition` is **not** in Expo Go. A production EAS build submitted to TestFlight is the path that covers voice on a real iPhone.
+The Watch companion needs a **native** binary. A production EAS build submitted to TestFlight is the path that covers Watch on a real iPhone.
 
 ### You need
 
@@ -116,12 +116,10 @@ eas submit -p ios
 
 | Permission | When |
 | --- | --- |
-| **Location When In Use** | Nearby courses, yards to green, and club-pick shot marks while the app is open. ShotTraxx does not invent coordinates. Watch location is the same purpose, used only when Watch GPS is more accurate than the phone. The `expo-location` plugin sets Always / background / motion purpose keys to `false` so prebuild does not inject them. |
+| **Location When In Use** | Nearby courses, yards to green, and club-pick shot marks while the app is open. ShotTraxx does not invent coordinates. Watch location marks a Watch club tap (phone fallback if that sample is missing or stale). Nearby stays phone-only. The `expo-location` plugin sets Always / background / motion purpose keys to `false` so prebuild does not inject them. |
 | **Photo Library** (iOS) | Not used. `NSPhotoLibraryUsageDescription` and `NSPhotoLibraryAddUsageDescription` are in the plist so App Store review (ITMS-90683) can ship. Photos prompts stay out of scope. |
-| **Microphone** | Only after **Say a club**. Used to capture the utterance. Not on Watch. |
-| **Speech Recognition** (iOS) | Maps the utterance to a bag club and applies it immediately. |
 
-Not in this IPA (and not in the plist): Always location, Bluetooth, motion, Watch mic. Watch Connectivity does not need Bluetooth purpose strings.
+Not in this IPA (and not in the plist): Always location, Bluetooth, motion, microphone, speech recognition, Watch mic. Watch Connectivity does not need Bluetooth purpose strings.
 
 ## Apple Watch (ships in this IPA)
 
@@ -129,7 +127,7 @@ Companion via `@bacons/apple-targets` (`targets/watch`, bundle `com.shottrax.app
 
 - Watch Connectivity types this cut:
   - Phone → Watch `clubList`: `{ type, top3, bag, labels, holeNumber, yardsToGreen, yardsQuality }` pushed on hole change / fix quality change / bag rank change (ranking stays on phone). `yardsToGreen` is `yardsToGreen().yards` (`null` when quality is none). `yardsQuality` is `good | soft | none` — same bands as the phone, never invent.
-  - Watch → Phone `clubPick`: `{ type, clubId, at: ISO8601 }` plus optional Watch GPS (`lat`, `lng`, `accuracyM`) when the sample is ≤3 s old and accuracy > 0. Stretch prefer lock: `preferWatch = watchFix && ageSec <= 3 && watch.accuracyM > 0 && (phoneFix == null || watch.accuracyM <= phone.accuracyM)`; `markFix = preferWatch ? watchFix : phoneFix`. Then same `acceptFix` bands. Soft → Approximate. Quality none → wait / Mark anyway. Never invent / silent fail. **Putter** does not mark GPS — it opens the putt sheet.
+  - Watch → Phone `clubPick`: `{ type, clubId, at: ISO8601 }` plus optional Watch GPS (`lat`, `lng`, `accuracyM`) when the sample is ≤3 s old and accuracy > 0. Watch club tap → Watch GPS; phone tap → phone fix. `preferWatch = watchFix && ageSec <= 3 && watch.accuracyM > 0`; `markFix = preferWatch ? watchFix : phoneFix` (phone fallback if Watch is missing or stale). Then same `acceptFix` bands. Soft → Approximate. Quality none → wait / Mark anyway. Never invent / silent fail. **Putter** does not mark GPS — it opens the putt sheet. Nearby stays phone-only.
   - Phone → Watch `puttSheet`: `{ type, open, holeNumber, lengths, labels, canAdd, canMake }` when Putter is selected.
   - Watch → Phone `puttPick`: `{ type, action: add|undo|made, at, lengthId? }` — buckets then **Made it** finishes the hole.
 - Watch status: **Hole N · XXX yd** (same yardsToGreen as phone); **—** when quality is none; tiny **Approximate** chip when soft (never SOFT on the wrist).
@@ -156,11 +154,11 @@ EAS credentials for `com.shottrax.app.watch` and `com.shottrax.app.watch.widget`
 
 1. Find a nearby course (GPS) or type a name, then start a 9- or 18-hole round (or attach a course to a round in progress). Nearby list distance is **miles** by default (**Course distance: Miles / Kilometers** in Settings). Shot yards and putt buckets stay as they are.
 2. On a hole, par comes from the course when present; otherwise **Par unknown**. Set par and score (large +/− targets).
-3. Hole advance opens **Pick a club**. Say or tap a club — that **marks GPS immediately** (start now; closes the prior shot’s end). On-screen: “Picking a club marks where you hit from.” No Confirm sheet. Top-3 **#1 suggested** is larger/highlighted; #2–3 are secondary. **Back** returns to the hole and marks nothing. **Home** returns to Rounds and keeps the round in progress — marks nothing. Neither tap selects a club. Same labels on Watch.
+3. Hole advance opens **Pick a club**. Tap a club — that **marks GPS immediately** (start now; closes the prior shot’s end). On-screen: “Picking a club marks where you hit from.” No Confirm sheet. Top-3 **#1 suggested** is larger/highlighted; #2–3 are secondary. **Back** returns to the hole and marks nothing. **Home** returns to Rounds and keeps the round in progress — marks nothing. Neither tap selects a club. Same labels on Watch. **Say a club** is gone.
 4. **Next** is always allowed even if the hole is unfinished. Nothing invented. A **Finish shot · Hole N** / **Finish putts · Hole N** chip flags unfinished shots or putts.
 5. **Walk-away assist** (Pick a club only — shot pending, no club tap yet this lie): dwell ≥10 s inside 8 yd, then leave ≥20 yd for 2 consecutive fixes → auto-mark **#1** at the lie pin (not the cart). Badge **Suggested**. Toast: **“Marked 7i (suggested) · Change club.”** Soft dwell → Approximate + Suggested. Poor/none dwell never silent-marks. Already-marked lie / Drop-Penalty / Change club / no-GPS skip. Re-arm only after the next dwell. Club tap / Watch stay primary.
 6. **Change club** on any logged shot later — GPS start/end and yards stay; club averages follow the new club.
-7. **All clubs** stays on the hole sheet and opens the full bag. The sticky club chip (e.g. **2 i**) does the same. **Same club** is the one-tap repeat mark. Voice fail offers **Pick a club** (opens the bag) and **Say again** — never voice-only. **Undo last** if the club was wrong (or pick another before you walk). **Mark without club**, Drop / Penalty, and catch-up **Add shot** stay available. GPS at the club pick = shot **start**; if this hole already had an open GPS shot, that same fix is its **end** and yards are logged (haversine).
+7. **All clubs** stays on the hole sheet and opens the full bag. The sticky club chip (e.g. **2 i**) does the same. **Same club** is the one-tap repeat mark. **Undo last** if the club was wrong (or pick another before you walk). **Mark without club**, Drop / Penalty, and catch-up **Add shot** stay available. GPS at the club pick = shot **start**; if this hole already had an open GPS shot, that same fix is its **end** and yards are logged (haversine).
 8. **End last shot** closes an open GPS shot without starting a new one.
 9. **+ Penalty** adds 1–5 penalty strokes to the hole score, with reason water / OB / unplayable / other (optional note). Shown as a penalty row — not a map polyline. A penalty is **not a Shot for distance**: it never hits `acceptFix`, haversine, club averages, or top-3.
 10. **Add shot** (catch-up only, not live play): tap where you hit from **and** where it landed. Yards are haversine between those two points, shown immediately. Then pick a club — **top 3 ranked against that shot’s yards** (not yards-to-green) plus **All clubs**. Badge **Placed**. Counts in club averages because you confirmed the spots. Tap any shot to **edit**: move **from**, move **to**, or **change club**. Club-only keeps coordinates and moves averages. Moving a pin badges **Placed** and recomputes yards. **Undo edit** if that was wrong. No typed yards, no invented GPS. Live play is unchanged: club tap marks start; next mark or green closes it. Putter stays out of averages. No auto-putts. **Next** is always allowed; a chip flags unfinished shots or putts.
@@ -268,6 +266,6 @@ ShotTraxx **does not synthesize a fairway or fake points**.
 ## Tests
 
 ```bash
-npm test          # domain tests + sensing smoke + course client, including yards-to-green, sticky club, F/M/B, drop, voice
+npm test          # domain tests + sensing smoke + course client, including yards-to-green, sticky club, F/M/B, drop
 npm run typecheck
 ```
