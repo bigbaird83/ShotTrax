@@ -642,11 +642,6 @@ export default function HoleScreen() {
     }
   };
 
-  const confirmWheelClub = (clubId: string) => {
-    const full = clubs.find((row) => row.id === clubId) ?? null;
-    void markClub(full);
-  };
-
   const onMark = (force = false) => {
     if (!sticky) return Promise.resolve();
     return markClub(sticky, force);
@@ -1171,8 +1166,9 @@ export default function HoleScreen() {
                 onPick={(id) => {
                   if (placing) return;
                   setSelectedClubId(applyWheelSelection(id));
+                  const full = clubs.find((row) => row.id === id) ?? null;
+                  void markClub(full);
                 }}
-                onConfirm={confirmWheelClub}
               />
             </View>
           </View>
@@ -1830,7 +1826,7 @@ function makeStyles(colors: ColorPalette) {
     gap: 8,
   },
   dockRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'nowrap', gap: 6 },
-  dockStrip: { flex: 1, minWidth: 0, height: PHONE_WHEEL_STRIP_HEIGHT, overflow: 'visible' },
+  dockStrip: { flex: 1, minWidth: 0, height: PHONE_WHEEL_STRIP_HEIGHT },
   dockChip: {
     flex: 1,
     minHeight: 36,

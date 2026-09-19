@@ -1,42 +1,34 @@
 /**
- * Play / Watch wheel taps select a club. They do not mark a shot.
- * A later tap replaces the selection. A new hole may reopen the window.
- * Slide the lifted center club up to mark — same path as today's mark tap.
+ * One press on a Play / Watch wheel club marks that club.
+ * That press is the mark — no select-then-press, no slide-up.
+ * A later press marks the new club. Scroll / swipe never marks.
+ * A new hole may reopen the window.
  */
 
-export type ClubStripGesture = 'tap' | 'swipe' | 'scroll' | 'slide_up';
+export type ClubStripGesture = 'tap' | 'swipe' | 'scroll';
 
 export function planClubStripGesture(gesture: ClubStripGesture): {
   selects: boolean;
   marks: boolean;
   usesHomeClubTap: boolean;
 } {
-  if (gesture === 'tap') return { selects: true, marks: false, usesHomeClubTap: false };
-  if (gesture === 'slide_up') return { selects: true, marks: true, usesHomeClubTap: true };
+  if (gesture === 'tap') return { selects: true, marks: true, usesHomeClubTap: true };
   return { selects: false, marks: false, usesHomeClubTap: false };
 }
 
-export function clubStripTapMarksShot(): false {
-  return false;
+export function clubStripTapMarksShot(): true {
+  return true;
 }
 
 export function clubStripTapSelectsClub(): true {
   return true;
 }
 
-export function watchStripTapMarksShot(): false {
-  return false;
+export function watchStripTapMarksShot(): true {
+  return true;
 }
 
 export function watchStripTapSelectsClub(): true {
-  return true;
-}
-
-export function clubStripSlideUpMarksShot(): true {
-  return true;
-}
-
-export function watchStripSlideUpMarksShot(): true {
   return true;
 }
 
@@ -64,10 +56,10 @@ export function wheelSelectionAfterTap(args: {
   openingPickId: string | null;
   previousId: string | null;
   tappedId: string;
-}): { selectedId: string; marksShot: false; recomputesWindow: false } {
+}): { selectedId: string; marksShot: true; recomputesWindow: false } {
   void args.openingPickId;
   void args.previousId;
-  return { selectedId: args.tappedId, marksShot: false, recomputesWindow: false };
+  return { selectedId: args.tappedId, marksShot: true, recomputesWindow: false };
 }
 
 export function watchSelectionMatchesPhone(

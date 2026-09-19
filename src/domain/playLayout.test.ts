@@ -283,7 +283,7 @@ test('after a shot lands the next suggested club is already the primary chip', (
   assert.match(hole, /planClubStrip/);
   assert.match(hole, /target\?\.dYards/);
   assert.match(hole, /applyWheelSelection/);
-  assert.doesNotMatch(hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.stickyClub')), /void markClub\(full\)/);
+  assert.match(hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.stickyClub')), /void markClub\(full\)/);
   assert.match(hole, /resolveNextShotDistanceTarget/);
   assert.match(hole, /lastLandingMark/);
   assert.doesNotMatch(hole, /nextClub|Next club|suggestedButton/);
@@ -533,4 +533,23 @@ test('build 33 cook-gate: play stays on hole, three themes, history row fields',
   assert.match(home, /row\.relative/);
   assert.equal(playHidesMapsLegal(), true);
   assert.equal(playHidesMapsCompass(), true);
+});
+
+test('build 35 cook-gate: one press marks, scroll never marks, no slide-up', () => {
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const phone = readFileSync(new URL('../ui/ClubStrip.tsx', import.meta.url), 'utf8');
+  const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  const strip = hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.stickyClub'));
+  const mark = hole.slice(hole.indexOf('const markClub'), hole.indexOf('const onMark'));
+
+  assert.match(strip, /void markClub\(full\)/);
+  assert.match(strip, /applyWheelSelection/);
+  assert.match(mark, /markShotWithClub/);
+  assert.match(mark, /tee: holeTee/);
+  assert.doesNotMatch(hole, /confirmWheelClub|onConfirm=\{confirmWheelClub\}/);
+  assert.doesNotMatch(phone, /onConfirm|PanResponder|clubStripSlideUpConfirmed/);
+  assert.match(phone, /onPress=\{\(\) => onPick\(item\.id\)\}/);
+  assert.doesNotMatch(phone, /onScroll=\{/);
+  assert.match(watch, /session\.pick\(clubId: club.id\)/);
+  assert.doesNotMatch(watch, /DragGesture|clubStripSlideUpConfirmed|session\.select\(club.id\)/);
 });
