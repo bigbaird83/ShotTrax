@@ -21,7 +21,7 @@
   <key>CFBundleVersion</key>
   <string>1</string>
   <key>NSLocationWhenInUseUsageDescription</key>
-  <string>ShotTraxx uses Watch location only when you pick a club, if it is more accurate than the phone.</string>
+  <string>ShotTraxx uses Watch location when you pick a club on the Watch to mark where you hit from.</string>
   <key>WKApplication</key>
   <true/>
   <key>WKCompanionAppBundleIdentifier</key>

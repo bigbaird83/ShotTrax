@@ -19,11 +19,9 @@
         "CFBundleDisplayName": "ShotTraxx",
         "CFBundleName": "ShotTraxx",
         "ITSAppUsesNonExemptEncryption": false,
-        "NSLocationWhenInUseUsageDescription": "ShotTraxx captures GPS when you pick a club to mark where you hit from.",
+        "NSLocationWhenInUseUsageDescription": "ShotTraxx uses your location while the app is open to find courses near you, show yards to the green, and mark where you hit from when you pick a club.",
         "NSPhotoLibraryUsageDescription": "ShotTraxx does not use your photo library. This description is required to ship on the App Store.",
-        "NSPhotoLibraryAddUsageDescription": "ShotTraxx does not save photos to your library. This description is required to ship on the App Store.",
-        "NSMicrophoneUsageDescription": "ShotTraxx uses the microphone only when you tap Say a club so you can name a club like “seven iron”.",
-        "NSSpeechRecognitionUsageDescription": "ShotTraxx uses speech recognition to match what you say to a club in your bag."
+        "NSPhotoLibraryAddUsageDescription": "ShotTraxx does not save photos to your library. This description is required to ship on the App Store."
       }
     },
     "android": {
@@ -37,8 +35,7 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION",
-        "RECORD_AUDIO"
+        "ACCESS_FINE_LOCATION"
       ]
     },
     "web": {
@@ -60,14 +57,11 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "ShotTraxx captures GPS when you pick a club to mark where you hit from."
-        }
-      ],
-      [
-        "expo-speech-recognition",
-        {
-          "microphonePermission": "ShotTraxx uses the microphone only when you tap Say a club so you can name a club like “seven iron”.",
-          "speechRecognitionPermission": "ShotTraxx uses speech recognition to match what you say to a club in your bag."
+          "locationWhenInUsePermission": "ShotTraxx uses your location while the app is open to find courses near you, show yards to the green, and mark where you hit from when you pick a club.",
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false,
+          "isIosBackgroundLocationEnabled": false,
+          "motionUsagePermission": false
         }
       ],
       "react-native-maps",

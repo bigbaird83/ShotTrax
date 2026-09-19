@@ -178,7 +178,7 @@ test('clubPick required keys are type, clubId, ISO8601 at; Watch GPS is optional
   assert.equal(parseClubPick({ type: 'mark', clubId: 'club_7i', at: '2026-09-17T18:00:00.000Z' }), null);
 });
 
-test('clubPick may carry Watch GPS; phone prefers it only when fresh and at least as accurate', () => {
+test('clubPick may carry Watch GPS; Watch tap uses it when fresh, else phone', () => {
   const parsed = parseClubPick({
     type: 'clubPick',
     clubId: 'club_7i',
