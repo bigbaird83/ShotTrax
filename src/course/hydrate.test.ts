@@ -3,13 +3,19 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { decideCourseCardPaint } from '../domain/courseCardPaint';
 import { planCourseCardCamera } from '../domain/holeCamera';
-import { signalLabCypressHydrate, signalLabGreystoneHydrate } from '../domain/playLayout';
+import {
+  signalLabCypressHydrate,
+  signalLabGreystoneHydrate,
+  signalLabPleasantValleyHydrate,
+} from '../domain/playLayout';
 import { GREYSTONE_CABOT, PLEASANT_VALLEY_LITTLE_ROCK } from '../domain/reproCourseCard';
 import {
   CYPRESS_CREEK_CABOT_AR_KEY,
   CYPRESS_CREEK_CLUBHOUSE,
   GREYSTONE_CABOT_AR_KEY,
   GREYSTONE_CABOT_CLUBHOUSE,
+  PLEASANT_VALLEY_LR_AR_KEY,
+  PLEASANT_VALLEY_LR_CLUBHOUSE,
   applyCourseHydrateToLayout,
   fetchGolfApiCypressHydrate,
   getGolfApiKey,
@@ -21,6 +27,7 @@ import {
   loadHydrateForCourse,
   matchesCypressCreekCabot,
   matchesGreystoneCabot,
+  matchesPleasantValleyLR,
   parseCourseHydrate,
   prefetchCourseHydrateOnce,
   resetHydrateMeterForTests,
@@ -30,6 +37,7 @@ import {
 
 const hydrate = loadCourseHydrate(CYPRESS_CREEK_CABOT_AR_KEY);
 const greystoneHydrate = loadCourseHydrate(GREYSTONE_CABOT_AR_KEY);
+const pleasantValleyHydrate = loadCourseHydrate(PLEASANT_VALLEY_LR_AR_KEY);
 
 test('Cypress OSM hydrate is 18 gated holes; clubhouse is never a pin', () => {
   assert.ok(hydrate);
@@ -55,8 +63,10 @@ test('Cypress OSM hydrate is 18 gated holes; clubhouse is never a pin', () => {
   assert.equal(inventGreenFromScorecardYards(), false);
   assert.equal(signalLabCypressHydrate().paintsViaHydrateWhenProMisses, true);
   assert.equal(signalLabCypressHydrate().greystoneWestStillMisses, false);
+  assert.equal(signalLabCypressHydrate().pleasantValleyStillMisses, false);
   assert.equal(isClubhousePin(CYPRESS_CREEK_CLUBHOUSE), true);
   assert.equal(isClubhousePin(GREYSTONE_CABOT_CLUBHOUSE), true);
+  assert.equal(isClubhousePin(PLEASANT_VALLEY_LR_CLUBHOUSE), true);
   for (const hole of hydrate?.holes ?? []) {
     const tee = { lat: hole.tee.lat, lng: hole.tee.lng };
     const green = { lat: hole.green.lat, lng: hole.green.lng };
@@ -91,9 +101,55 @@ test('Greystone OSM hydrate is 18 gated holes; clubhouse is never a pin', () => 
   );
   assert.equal(signalLabGreystoneHydrate().paintsViaHydrateWhenProMisses, true);
   assert.equal(signalLabGreystoneHydrate().cypressStillExclusive, true);
+  assert.equal(signalLabGreystoneHydrate().pleasantValleyStillMisses, false);
   assert.equal(inventGreenFromClubhouse(), false);
   assert.equal(inventGreenFromScorecardYards(), false);
   for (const hole of greystoneHydrate?.holes ?? []) {
+    const tee = { lat: hole.tee.lat, lng: hole.tee.lng };
+    const green = { lat: hole.green.lat, lng: hole.green.lng };
+    assert.equal(isClubhousePin(tee), false);
+    assert.equal(isClubhousePin(green), false);
+    assert.equal(hydrateHolePassesGates({ tee, green }), true);
+    assert.equal(decideCourseCardPaint({ tee, green, phone: null }).mount, true);
+    assert.ok(planCourseCardCamera({ tee, green, phone: null }));
+  }
+});
+
+test('Pleasant Valley OSM+Doc hydrate is 18 gated holes; clubhouse is never a pin', () => {
+  assert.ok(pleasantValleyHydrate);
+  assert.equal(pleasantValleyHydrate?.courseKey, 'pleasant-valley-lr-ar');
+  assert.equal(pleasantValleyHydrate?.displayName, 'Pleasant Valley Country Club');
+  assert.equal(pleasantValleyHydrate?.locality, 'Little Rock, AR');
+  assert.equal(pleasantValleyHydrate?.source, 'manual_verified');
+  assert.match(pleasantValleyHydrate?.sourceRef ?? '', /relation\/9510054/);
+  assert.match(pleasantValleyHydrate?.sourceRef ?? '', /H11 tee=Doc-verified hole-way start way\/1029471857/);
+  assert.match(pleasantValleyHydrate?.sourceRef ?? '', /H11 green=osm unlabeled way\/686636682/);
+  assert.deepEqual(pleasantValleyHydrate?.holes[0]?.tee, {
+    lat: 34.778121,
+    lng: -92.4057792,
+    label: 'default',
+  });
+  assert.deepEqual(pleasantValleyHydrate?.holes[0]?.green, { lat: 34.7752172, lng: -92.4047103 });
+  assert.deepEqual(pleasantValleyHydrate?.holes[10]?.tee, {
+    lat: 34.7807034,
+    lng: -92.4134576,
+    label: 'default',
+  });
+  assert.deepEqual(pleasantValleyHydrate?.holes[10]?.green, {
+    lat: 34.78218659411765,
+    lng: -92.41640845882353,
+  });
+  assert.equal(pleasantValleyHydrate?.holes.length, 18);
+  assert.deepEqual(
+    pleasantValleyHydrate?.holes.map((hole) => hole.hole),
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
+  );
+  assert.equal(signalLabPleasantValleyHydrate().paintsViaHydrateWhenProMisses, true);
+  assert.equal(signalLabPleasantValleyHydrate().cypressStillExclusive, true);
+  assert.equal(signalLabPleasantValleyHydrate().greystoneStillExclusive, true);
+  assert.equal(inventGreenFromClubhouse(), false);
+  assert.equal(inventGreenFromScorecardYards(), false);
+  for (const hole of pleasantValleyHydrate?.holes ?? []) {
     const tee = { lat: hole.tee.lat, lng: hole.tee.lng };
     const green = { lat: hole.green.lat, lng: hole.green.lng };
     assert.equal(isClubhousePin(tee), false);
@@ -118,6 +174,8 @@ test('hydrate gates match the miss card: null, ~0,0, same-point, past 700 yd', (
   assert.equal(hydrateHolePassesGates({ tee, green: CYPRESS_CREEK_CLUBHOUSE }), false);
   assert.equal(hydrateHolePassesGates({ tee: GREYSTONE_CABOT_CLUBHOUSE, green }), false);
   assert.equal(hydrateHolePassesGates({ tee, green: GREYSTONE_CABOT_CLUBHOUSE }), false);
+  assert.equal(hydrateHolePassesGates({ tee: PLEASANT_VALLEY_LR_CLUBHOUSE, green }), false);
+  assert.equal(hydrateHolePassesGates({ tee, green: PLEASANT_VALLEY_LR_CLUBHOUSE }), false);
   assert.equal(
     hydrateHolePassesGates({
       tee,
@@ -166,11 +224,54 @@ test('matching is Greystone Cabot only — Cypress Creek never hits Greystone', 
   assert.equal(matchesGreystoneCabot({ name: 'Cypress Creek Golf Club', city: 'Cabot' }), false);
   assert.equal(matchesGreystoneCabot({ name: 'Cypress Creek Golf Club', location: GREYSTONE_CABOT_CLUBHOUSE }), false);
   assert.equal(matchesGreystoneCabot({ name: PLEASANT_VALLEY_LITTLE_ROCK.name }), false);
+  assert.equal(matchesGreystoneCabot({ name: PLEASANT_VALLEY_LITTLE_ROCK.name, city: PLEASANT_VALLEY_LITTLE_ROCK.city }), false);
   assert.equal(matchesGreystoneCabot({ name: 'Magnolia Country Club' }), false);
   assert.equal(matchesGreystoneCabot({ name: 'Greystone Country Club' }), false);
   assert.equal(resolveCourseHydrateKey({ name: 'Greystone Country Club', city: 'Cabot' }), GREYSTONE_CABOT_AR_KEY);
   assert.equal(loadHydrateForCourse({ name: 'Greystone Country Club', city: 'Cabot' })?.courseKey, GREYSTONE_CABOT_AR_KEY);
   assert.equal(loadHydrateForCourse({ name: 'Cypress Creek Golf Club', city: 'Cabot' })?.courseKey, CYPRESS_CREEK_CABOT_AR_KEY);
+});
+
+test('matching is Pleasant Valley Little Rock only — Cypress and Greystone Cabot never match', () => {
+  assert.equal(
+    matchesPleasantValleyLR({ name: PLEASANT_VALLEY_LITTLE_ROCK.name, city: PLEASANT_VALLEY_LITTLE_ROCK.city }),
+    true,
+  );
+  assert.equal(matchesPleasantValleyLR({ name: 'Pleasant Valley Country Club', city: 'Little Rock', state: 'AR' }), true);
+  assert.equal(matchesPleasantValleyLR({ name: 'Pleasant Valley', locality: 'Little Rock, AR' }), true);
+  assert.equal(
+    matchesPleasantValleyLR({
+      name: 'Pleasant Valley Country Club',
+      location: PLEASANT_VALLEY_LITTLE_ROCK.location,
+    }),
+    true,
+  );
+  assert.equal(
+    matchesPleasantValleyLR({ name: 'Pleasant Valley Country Club', location: PLEASANT_VALLEY_LR_CLUBHOUSE }),
+    true,
+  );
+  assert.equal(matchesPleasantValleyLR({ courseKey: PLEASANT_VALLEY_LR_AR_KEY }), true);
+  assert.equal(matchesPleasantValleyLR({ name: 'Pleasant Valley Country Club' }), false);
+  assert.equal(matchesPleasantValleyLR({ name: 'Cypress Creek Golf Club', city: 'Cabot' }), false);
+  assert.equal(matchesPleasantValleyLR({ name: 'Cypress Creek at Greystone' }), false);
+  assert.equal(matchesPleasantValleyLR({ name: 'Cypress Creek Golf Club', location: PLEASANT_VALLEY_LR_CLUBHOUSE }), false);
+  assert.equal(matchesPleasantValleyLR({ name: GREYSTONE_CABOT.name, city: GREYSTONE_CABOT.city }), false);
+  assert.equal(matchesPleasantValleyLR({ name: 'Greystone Country Club', city: 'Little Rock' }), false);
+  assert.equal(matchesPleasantValleyLR({ name: 'Greystone Country Club', location: PLEASANT_VALLEY_LR_CLUBHOUSE }), false);
+  assert.equal(matchesPleasantValleyLR({ name: 'Pleasant Valley Country Club', city: 'Cabot' }), false);
+  assert.equal(matchesPleasantValleyLR({ name: 'Magnolia Country Club' }), false);
+  assert.equal(matchesCypressCreekCabot({ name: PLEASANT_VALLEY_LITTLE_ROCK.name, city: 'Little Rock' }), false);
+  assert.equal(matchesGreystoneCabot({ name: PLEASANT_VALLEY_LITTLE_ROCK.name, city: 'Little Rock' }), false);
+  assert.equal(
+    resolveCourseHydrateKey({ name: 'Pleasant Valley Country Club', city: 'Little Rock' }),
+    PLEASANT_VALLEY_LR_AR_KEY,
+  );
+  assert.equal(
+    loadHydrateForCourse({ name: 'Pleasant Valley Country Club', city: 'Little Rock' })?.courseKey,
+    PLEASANT_VALLEY_LR_AR_KEY,
+  );
+  assert.equal(resolveCourseHydrateKey({ name: 'Cypress Creek Golf Club', city: 'Cabot' }), CYPRESS_CREEK_CABOT_AR_KEY);
+  assert.equal(resolveCourseHydrateKey({ name: 'Greystone Country Club', city: 'Cabot' }), GREYSTONE_CABOT_AR_KEY);
 });
 
 test('Pro-null Cypress uses hydrate; a sane Pro card is left alone', () => {
@@ -225,12 +326,25 @@ test('Pro-null Cypress uses hydrate; a sane Pro card is left alone', () => {
     tee: null,
     green: null,
   });
-  assert.equal(pleasant.usedHydrate, false);
-  assert.equal(pleasant.tee, null);
-  assert.equal(pleasant.green, null);
+  assert.equal(pleasant.usedHydrate, true);
+  assert.equal(pleasant.courseKey, PLEASANT_VALLEY_LR_AR_KEY);
+  assert.deepEqual(pleasant.tee, {
+    lat: pleasantValleyHydrate!.holes[0].tee.lat,
+    lng: pleasantValleyHydrate!.holes[0].tee.lng,
+  });
+  assert.deepEqual(pleasant.green, {
+    lat: pleasantValleyHydrate!.holes[0].green.lat,
+    lng: pleasantValleyHydrate!.holes[0].green.lng,
+  });
+  assert.notDeepEqual(pleasant.tee, { lat: hydrate!.holes[0].tee.lat, lng: hydrate!.holes[0].tee.lng });
+  assert.notDeepEqual(pleasant.tee, {
+    lat: greystoneHydrate!.holes[0].tee.lat,
+    lng: greystoneHydrate!.holes[0].tee.lng,
+  });
+  assert.equal(decideCourseCardPaint({ tee: pleasant.tee, green: pleasant.green, phone: null }).mount, true);
 });
 
-test('layout apply fills thin Cypress and Greystone cards; other courses stay empty', () => {
+test('layout apply fills thin Cypress, Greystone, and Pleasant Valley cards', () => {
   const filled = applyCourseHydrateToLayout(
     { apiId: 'pro-cypress', name: 'Cypress Creek Golf Club', location: CYPRESS_CREEK_CLUBHOUSE, holes: [] },
     { name: 'Cypress Creek Golf Club', city: 'Cabot', state: 'AR' },
@@ -264,7 +378,22 @@ test('layout apply fills thin Cypress and Greystone cards; other courses stay em
     { apiId: 'pro-pv', name: PLEASANT_VALLEY_LITTLE_ROCK.name, location: PLEASANT_VALLEY_LITTLE_ROCK.location, holes: [] },
     { name: PLEASANT_VALLEY_LITTLE_ROCK.name, city: PLEASANT_VALLEY_LITTLE_ROCK.city },
   );
-  assert.deepEqual(pleasant.holes, []);
+  assert.equal(pleasant.holes?.length, 18);
+  assert.deepEqual(pleasant.holes?.[0]?.teeCentroid, {
+    lat: pleasantValleyHydrate!.holes[0].tee.lat,
+    lng: pleasantValleyHydrate!.holes[0].tee.lng,
+  });
+  assert.deepEqual(pleasant.holes?.[0]?.greenCentroid, {
+    lat: pleasantValleyHydrate!.holes[0].green.lat,
+    lng: pleasantValleyHydrate!.holes[0].green.lng,
+  });
+  assert.deepEqual(pleasant.holes?.[10]?.teeCentroid, {
+    lat: pleasantValleyHydrate!.holes[10].tee.lat,
+    lng: pleasantValleyHydrate!.holes[10].tee.lng,
+  });
+  assert.notDeepEqual(pleasant.holes?.[0]?.teeCentroid, filled.holes?.[0]?.teeCentroid);
+  assert.notDeepEqual(pleasant.holes?.[0]?.teeCentroid, greystone.holes?.[0]?.teeCentroid);
+  assert.equal(pleasant.holes?.[0]?.yards, null);
 });
 
 test('prefetch meters unique hydrate once and golfapi does not invent without a key', async () => {
@@ -279,15 +408,17 @@ test('prefetch meters unique hydrate once and golfapi does not invent without a 
     prefetchCourseHydrateOnce({ name: 'Cypress Creek Golf Club', city: 'Cabot' });
     prefetchCourseHydrateOnce({ name: 'Greystone Country Club', city: 'Cabot' });
     prefetchCourseHydrateOnce({ name: 'Greystone Country Club', city: 'Cabot' });
+    prefetchCourseHydrateOnce({ name: 'Pleasant Valley Country Club', city: 'Little Rock' });
+    prefetchCourseHydrateOnce({ name: 'Pleasant Valley Country Club', city: 'Little Rock' });
   } finally {
     console.log = original;
   }
   const hydrateLogs = logs.filter((row) => Array.isArray(row) && row[0] === '[Signal Lab] hydrate');
-  assert.equal(hydrateLogs.length, 2);
+  assert.equal(hydrateLogs.length, 3);
   const payloads = hydrateLogs.map((row) => (row as unknown[])[1] as { courseKey?: string; holes?: number });
   assert.deepEqual(
     payloads.map((row) => row.courseKey).sort(),
-    [CYPRESS_CREEK_CABOT_AR_KEY, GREYSTONE_CABOT_AR_KEY].sort(),
+    [CYPRESS_CREEK_CABOT_AR_KEY, GREYSTONE_CABOT_AR_KEY, PLEASANT_VALLEY_LR_AR_KEY].sort(),
   );
   assert.equal(payloads.every((row) => row.holes === 18), true);
 
