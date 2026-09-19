@@ -64,6 +64,7 @@
           "motionUsagePermission": false
         }
       ],
+      "./plugins/withDisableExpoLocationMotion",
       "react-native-maps",
       "@bacons/apple-targets"
     ],

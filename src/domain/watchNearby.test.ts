@@ -372,7 +372,9 @@ test('build 26 locks stay: delete confirm, 60% map, one-line header, 600-yard te
   assert.match(app, /"locationAlwaysPermission": false/);
   assert.match(app, /"isIosBackgroundLocationEnabled": false/);
   assert.match(app, /"motionUsagePermission": false/);
+  assert.match(app, /"\.\/plugins\/withDisableExpoLocationMotion"/);
   assert.doesNotMatch(app, /NSLocationAlways/);
+  assert.doesNotMatch(app, /NSMotionUsageDescription/);
   assert.doesNotMatch(app, /NSMicrophoneUsageDescription/);
   assert.doesNotMatch(app, /NSSpeechRecognitionUsageDescription/);
   assert.doesNotMatch(app, /RECORD_AUDIO/);
@@ -383,6 +385,7 @@ test('build 26 locks stay: delete confirm, 60% map, one-line header, 600-yard te
     watchPlist,
     /NSLocationWhenInUseUsageDescription[\s\S]*Watch location when you pick a club on the Watch to mark where you hit from/,
   );
+  assert.doesNotMatch(watchPlist, /NSMotionUsageDescription/);
   assert.doesNotMatch(watchPlist, /more accurate than the phone/);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
