@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
+import { useMemo } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, tapTarget, type } from './theme';
+import { useColors } from './ColorThemeProvider';
+import { tapTarget, type, type ColorPalette } from './theme';
 
 type Props = {
   visible: boolean;
@@ -13,6 +15,8 @@ type Props = {
 /** Layout O — full-screen course / tee / bag / drop sheets. */
 export function FullSheet({ visible, title, onClose, children }: Props) {
   const insets = useSafeAreaInsets();
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
       <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
@@ -28,19 +32,21 @@ export function FullSheet({ visible, title, onClose, children }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
-  bar: {
-    minHeight: tapTarget,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
-  },
-  title: { color: colors.cream, fontSize: type.hole, fontWeight: '900' },
-  done: { minHeight: tapTarget, justifyContent: 'center', paddingHorizontal: 8 },
-  doneLabel: { color: colors.lime, fontSize: type.button, fontWeight: '800' },
-  body: { flex: 1 },
-});
+function makeStyles(colors: ColorPalette) {
+  return StyleSheet.create({
+    root: { flex: 1, backgroundColor: colors.bg },
+    bar: {
+      minHeight: tapTarget,
+      paddingHorizontal: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      borderBottomWidth: 1,
+      borderBottomColor: colors.line,
+    },
+    title: { color: colors.cream, fontSize: type.hole, fontWeight: '900' },
+    done: { minHeight: tapTarget, justifyContent: 'center', paddingHorizontal: 8 },
+    doneLabel: { color: colors.cream, fontSize: type.button, fontWeight: '800' },
+    body: { flex: 1 },
+  });
+}

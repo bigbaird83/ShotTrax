@@ -1,7 +1,8 @@
 import { Stack } from 'expo-router';
-import { colors } from '@/src/ui/theme';
+import { useColors } from '@/src/ui/ColorThemeProvider';
 
 export default function RoundLayout() {
+  const colors = useColors();
   return (
     <Stack
       screenOptions={{

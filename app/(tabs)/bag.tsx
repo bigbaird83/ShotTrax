@@ -5,11 +5,14 @@ import { addClub, deleteClub, listClubs, restoreDefaultBag, updateClub } from '@
 import { COPY } from '@/src/domain/playerCopy';
 import { BagCarryList } from '@/src/ui/BagCarryList';
 import { BigButton } from '@/src/ui/BigButton';
+import { useColors } from '@/src/ui/ColorThemeProvider';
 import { Screen } from '@/src/ui/Screen';
-import { colors, type } from '@/src/ui/theme';
+import { type, type ColorPalette } from '@/src/ui/theme';
 
 export default function BagScreen() {
   const { db, revision, bump } = useDb();
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const clubs = useMemo(() => listClubs(db), [db, revision]);
   const [name, setName] = useState('');
   const [shortName, setShortName] = useState('');
@@ -90,17 +93,19 @@ export default function BagScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  lede: { color: colors.muted, fontSize: type.body, lineHeight: 22 },
-  addTitle: { color: colors.cream, fontSize: 18, fontWeight: '800', marginTop: 8 },
-  input: {
-    minHeight: 56,
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    color: colors.cream,
-    fontSize: 18,
-    backgroundColor: colors.bgElevated,
-  },
-});
+function makeStyles(colors: ColorPalette) {
+  return StyleSheet.create({
+    lede: { color: colors.muted, fontSize: type.body, lineHeight: 22 },
+    addTitle: { color: colors.cream, fontSize: 18, fontWeight: '800', marginTop: 8 },
+    input: {
+      minHeight: 56,
+      borderWidth: 1,
+      borderColor: colors.line,
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      color: colors.cream,
+      fontSize: 18,
+      backgroundColor: colors.bgElevated,
+    },
+  });
+}

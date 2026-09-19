@@ -1,25 +1,55 @@
 import { router } from 'expo-router';
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
-import { getCourseDistanceUnit, setCourseDistanceUnit } from '@/src/db/repo';
+import { getColorTheme, getCourseDistanceUnit, setColorTheme, setCourseDistanceUnit } from '@/src/db/repo';
 import { COPY } from '@/src/domain/playerCopy';
 import type { CourseDistanceUnit } from '@/src/domain/courseDistance';
+import { COLOR_THEME_IDS, type ColorThemeId } from '@/src/domain/colorTheme';
 import { BigButton } from '@/src/ui/BigButton';
+import { useColors } from '@/src/ui/ColorThemeProvider';
 import { Screen } from '@/src/ui/Screen';
-import { colors, tapTarget, type } from '@/src/ui/theme';
+import { tapTarget, type, type ColorPalette } from '@/src/ui/theme';
 
 export default function SettingsScreen() {
   const { db, bump } = useDb();
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const unit = getCourseDistanceUnit(db);
+  const themeId = getColorTheme(db);
 
   const setUnit = (next: CourseDistanceUnit) => {
     setCourseDistanceUnit(db, next);
     bump();
   };
 
+  const setTheme = (next: ColorThemeId) => {
+    setColorTheme(db, next);
+    bump();
+  };
+
   return (
     <Screen>
       <Text style={styles.title}>{COPY.settings}</Text>
+      <Text style={styles.label}>{COPY.colorTheme}</Text>
+      <View style={styles.themeCol}>
+        {COLOR_THEME_IDS.map((id) => (
+          <Pressable
+            key={id}
+            accessibilityRole="button"
+            accessibilityState={{ selected: themeId === id }}
+            onPress={() => setTheme(id)}
+            style={[styles.chip, themeId === id && styles.chipOn]}>
+            <Text style={[styles.chipText, themeId === id && styles.chipTextOn]}>
+              {id === 'dark-lime'
+                ? COPY.themeDarkLime
+                : id === 'light'
+                  ? COPY.themeLight
+                  : COPY.themeHighContrast}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
       <Text style={styles.label}>{COPY.courseDistanceSetting}</Text>
       <View style={styles.row}>
         <Pressable
@@ -40,20 +70,26 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  title: { color: colors.cream, fontSize: type.hole, fontWeight: '900' },
-  label: { color: colors.cream, fontSize: type.body, fontWeight: '800' },
-  row: { flexDirection: 'row', gap: 10 },
-  chip: {
-    flex: 1,
-    minHeight: tapTarget,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: colors.line,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgElevated,
-  },
-  chipOn: { borderColor: colors.lime, backgroundColor: '#1C3A24' },
-  chipText: { color: colors.cream, fontSize: type.button, fontWeight: '800' },
-});
+function makeStyles(colors: ColorPalette) {
+  return StyleSheet.create({
+    title: { color: colors.cream, fontSize: type.hole, fontWeight: '900' },
+    label: { color: colors.cream, fontSize: type.body, fontWeight: '800' },
+    row: { flexDirection: 'row', gap: 10 },
+    themeCol: { gap: 10 },
+    chip: {
+      flex: 1,
+      minHeight: tapTarget,
+      borderRadius: 16,
+      borderWidth: 2,
+      borderColor: colors.line,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.bgElevated,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    chipOn: { borderColor: colors.lime, backgroundColor: colors.accentWash },
+    chipText: { color: colors.cream, fontSize: type.button, fontWeight: '800' },
+    chipTextOn: { color: colors.lime },
+  });
+}

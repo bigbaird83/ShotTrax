@@ -85,8 +85,14 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.nextHole, 'Next hole');
   assert.equal(COPY.courseDistance, 'Course distance');
   assert.equal(COPY.courseDistanceSetting, 'Course distance: Miles / Kilometers');
+  assert.equal(COPY.colorTheme, 'Color theme');
+  assert.equal(COPY.themeDarkLime, 'Dark lime');
+  assert.equal(COPY.themeLight, 'Light');
+  assert.equal(COPY.themeHighContrast, 'High contrast');
   assert.equal(COPY.miles, 'Miles');
   assert.equal(COPY.kilometers, 'Kilometers');
+  assert.equal(COPY.noRounds, 'Your first round will show up here.');
+  assert.equal(COPY.noShots, 'No shots yet. Pick a club after you hit.');
   assert.equal(finishPuttsChip(4), 'Finish putts · Hole 4');
   assert.equal(finishShotChip(2), 'Finish shot · Hole 2');
   assert.equal(markedSuggestedMessage('7i'), 'Marked 7i (suggested) · Change club.');

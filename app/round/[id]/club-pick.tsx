@@ -23,7 +23,8 @@ import { useWatchClubList } from '@/src/services/useWatchClubList';
 import { BigButton } from '@/src/ui/BigButton';
 import { hapticMark, hapticSelect, hapticWarn } from '@/src/ui/haptics';
 import { Screen } from '@/src/ui/Screen';
-import { colors, type } from '@/src/ui/theme';
+import { useColors } from '@/src/ui/ColorThemeProvider';
+import { type, type ColorPalette } from '@/src/ui/theme';
 
 export default function ClubPickScreen() {
   const { id, hole, noGps, shot: shotId } = useLocalSearchParams<{
@@ -37,6 +38,8 @@ export default function ClubPickScreen() {
   const relabelId = typeof shotId === 'string' && shotId.length > 0 ? shotId : null;
   const navigation = useNavigation();
   const { db, revision, bump } = useDb();
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const leavingRef = useRef(false);
 
@@ -334,7 +337,9 @@ export default function ClubPickScreen() {
           disabled={busy}
           onPress={() => void markClub(club)}
           style={[styles.bagCell, selected?.id === club.id && styles.bagCellOn]}>
-          <Text numberOfLines={1} style={styles.bagShort}>
+          <Text
+            numberOfLines={1}
+            style={[styles.bagShort, selected?.id === club.id && styles.bagShortOn]}>
             {club.shortName}
           </Text>
           <Text numberOfLines={1} style={styles.bagName}>
@@ -400,10 +405,11 @@ export default function ClubPickScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ColorPalette) {
+  return StyleSheet.create({
   title: { color: colors.cream, fontSize: type.hole, fontWeight: '900' },
   lede: { color: colors.muted, fontSize: type.body, lineHeight: 22 },
-  left: { color: colors.lime, fontSize: type.body, fontWeight: '800' },
+  left: { color: colors.cream, fontSize: type.body, fontWeight: '800' },
   navRow: { flexDirection: 'row', gap: 10 },
   headerBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
   headerBtnText: { color: colors.cream, fontSize: type.body, fontWeight: '800' },
@@ -434,7 +440,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingVertical: 6,
   },
-  bagCellOn: { borderColor: colors.lime, borderWidth: 2, backgroundColor: '#1C3A24' },
-  bagShort: { color: colors.lime, fontWeight: '900', fontSize: type.chip },
+  bagCellOn: { borderColor: colors.lime, borderWidth: 2, backgroundColor: colors.accentWash },
+  bagShort: { color: colors.cream, fontWeight: '900', fontSize: type.chip },
+  bagShortOn: { color: colors.lime },
   bagName: { color: colors.cream, fontSize: 10, fontWeight: '700' },
-});
+  });
+}
