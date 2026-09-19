@@ -130,6 +130,11 @@ export function courseCardCameraWaitsForPhoneFix(): false {
   return false;
 }
 
+/** No tee or green → empty state. Do not wait on a phone fix to invent a frame. */
+export function courseCardMissingCameraWaitsForPhone(): false {
+  return false;
+}
+
 /** Phone GPS never enters the course-card frame. */
 export function courseCardCameraUsesPhone(): false {
   return false;

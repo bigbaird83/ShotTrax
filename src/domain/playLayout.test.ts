@@ -688,4 +688,11 @@ test('P0: full-bleed MapView has real height under the glass dock; Add shot keep
   assert.doesNotMatch(userLoc, /true/);
   assert.match(map, /scrollEnabled=\{framedForGestures\}/);
   assert.match(map, /zoomEnabled=\{framedForGestures\}/);
+  const fallback = map.slice(map.indexOf('function TrailFallback'), map.indexOf('function NativeHoleMap'));
+  assert.match(fallback, /frameMiss/);
+  assert.match(fallback, /COPY\.courseCardMissingFrame/);
+  assert.doesNotMatch(
+    fallback.slice(fallback.indexOf('frameMiss'), fallback.indexOf('YardsToGreenBadge')),
+    /COPY\.waitingOnLocation/,
+  );
 });

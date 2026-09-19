@@ -9,6 +9,7 @@ import {
   courseCardCameraFramesLonePin,
   courseCardCameraUsesPhone,
   courseCardCameraWaitsForPhoneFix,
+  courseCardMissingCameraWaitsForPhone,
   applyHoleMapCamera,
   holeCameraFramedAfterApply,
   holeCameraHeading,
@@ -80,6 +81,7 @@ test('planCourseCardCamera is tee+green only; phone, house, and a lone pin never
   assert.equal(planCourseCardCamera({ tee: null, green: null, phone: home }), null);
   assert.equal(addShotFramePoints({ tee: null, green: greenNorth, phone: home }), null);
   assert.equal(courseCardCameraWaitsForPhoneFix(), false);
+  assert.equal(courseCardMissingCameraWaitsForPhone(), false);
   assert.equal(courseCardCameraUsesPhone(), false);
   assert.equal(courseCardCameraFramesLonePin(), false);
   assert.equal(addShotRemountsCamera(), false);
@@ -399,4 +401,36 @@ test('missing green keeps the last hole frame and never centers on the phone', (
   assert.equal(lockHoleCamera({ tee, green: null, shotPins: [], phone: home }), null);
   assert.deepEqual(keepLastGoodHoleCamera(null, good), good);
   assert.equal(keepLastGoodHoleCamera(null, null), null);
+});
+
+test('Magnolia CC and Cypress Creek hole 1 frame tee+green; missing either is an empty state, not a phone wait', () => {
+  const phone = { lat: 40.7128, lng: -74.006 };
+  const magnoliaH1 = {
+    tee: { lat: 33.2708, lng: -93.2412 },
+    green: { lat: 33.2741, lng: -93.2396 },
+  };
+  const cypressCreekH1 = {
+    tee: { lat: 34.9732, lng: -92.0184 },
+    green: { lat: 34.9764, lng: -92.0151 },
+  };
+
+  for (const hole of [magnoliaH1, cypressCreekH1]) {
+    const start = planCourseCardCamera({ tee: hole.tee, green: hole.green, phone: null });
+    const addShot = planCourseCardCamera({ tee: hole.tee, green: hole.green, phone: null });
+    const fromHouse = planCourseCardCamera({ tee: hole.tee, green: hole.green, phone });
+    assert.ok(start);
+    assert.deepEqual(start, addShot);
+    assert.deepEqual(start, fromHouse);
+    assert.deepEqual(start.points, [hole.tee, hole.green]);
+    assert.equal(holeCameraTeeBelowGreenOnScreen(hole.tee, hole.green, start.heading), true);
+    assert.equal(
+      openingHoleRegionContainsTeeAndGreen(holeFrameRegion(start.points), hole.tee, hole.green),
+      true,
+    );
+    assert.equal(planCourseCardCamera({ tee: null, green: hole.green, phone }), null);
+    assert.equal(planCourseCardCamera({ tee: hole.tee, green: null, phone }), null);
+  }
+
+  assert.equal(courseCardCameraWaitsForPhoneFix(), false);
+  assert.equal(courseCardMissingCameraWaitsForPhone(), false);
 });

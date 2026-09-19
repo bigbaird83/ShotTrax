@@ -18,6 +18,7 @@ import {
   yardsToGreenPlayerLabel,
   showWaitingOnLocationLine,
   waitingOnLocationWhenYardsShown,
+  lockFrameEmptyStateWaitsForPhone,
   yardsAreOnTheCard,
 } from './playerCopy';
 
@@ -34,6 +35,9 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.homeLede, 'Find a course, pick your tee, start the round.');
   assert.equal(COPY.nearbyHint, 'Courses near you — pull to refresh.');
   assert.equal(COPY.waitingOnGreen, 'Waiting on green location.');
+  assert.equal(COPY.courseCardMissingFrame, 'Need the course tee and green for this hole.');
+  assert.equal(lockFrameEmptyStateWaitsForPhone(), false);
+  assert.doesNotMatch(COPY.courseCardMissingFrame, /location|GPS|phone|fix/i);
   assert.equal(COPY.longPressGreen, 'Long-press to set the green');
   assert.equal(COPY.pickClub, 'Pick a club');
   assert.equal(COPY.pickClubLede, 'Picking a club marks where you hit from.');
@@ -77,6 +81,9 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.home, 'Home');
   assert.equal(COPY.back, 'Back');
   assert.equal(COPY.addShot, 'Add shot');
+  assert.equal(COPY.courseCardMissingFrame, 'Need the course tee and green for this hole.');
+  assert.equal(lockFrameEmptyStateWaitsForPhone(), false);
+  assert.doesNotMatch(COPY.courseCardMissingFrame, /location|GPS|phone|fix/i);
   assert.equal(COPY.shot, 'Shot');
   assert.equal(COPY.placed, 'Placed');
   assert.equal(COPY.placeFromHint, 'Tap where you hit from.');

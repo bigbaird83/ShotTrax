@@ -112,15 +112,18 @@ function TrailFallback({
   hasFix,
   hasGreen,
   hideYardsOverlay,
+  frameMiss,
 }: {
   holeNumber: number;
   yardsToGreen?: YardsToGreenResult;
   hasFix?: boolean;
   hasGreen?: boolean;
   hideYardsOverlay?: boolean;
+  frameMiss?: boolean;
 }) {
   const yardsOnCard = Boolean(yardsToGreen && yardsToGreen.yards != null && Number.isFinite(yardsToGreen.yards));
   const waiting =
+    !frameMiss &&
     !hideYardsOverlay &&
     !yardsOnCard &&
     showWaitingOnLocationLine({
@@ -132,7 +135,8 @@ function TrailFallback({
   return (
     <View style={styles.fallback}>
       <Text style={styles.holeBadgeText}>Hole {holeNumber}</Text>
-      {yardsToGreen && !hideYardsOverlay ? (
+      {frameMiss ? <Text style={styles.fallbackMsg}>{COPY.courseCardMissingFrame}</Text> : null}
+      {yardsToGreen && !hideYardsOverlay && !frameMiss ? (
         <YardsToGreenBadge result={yardsToGreen} hasFix={hasFix} hasGreen={hasGreen} />
       ) : null}
       {waiting ? <Text style={styles.fallbackMsg}>{COPY.waitingOnLocation}</Text> : null}
@@ -393,6 +397,7 @@ function NativeHoleMap({
           hasFix={Boolean(userFix)}
           hasGreen={Boolean(green)}
           hideYardsOverlay={hideYardsOverlay}
+          frameMiss={Boolean(lockFrame)}
         />
       </View>
     );
