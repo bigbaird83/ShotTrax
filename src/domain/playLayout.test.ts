@@ -70,6 +70,15 @@ import {
   playMenuIsButton,
   homeMenuIsButton,
   homeMenuOpensSettings,
+  playDockIsGlass,
+  playDockOverlaysMap,
+  playLimeOnlyOnSelectedAndCta,
+  playHeaderSecondaryIsMuted,
+  playHapticsOnShotLock,
+  playHapticsOnHoleChange,
+  playDockPassesTwoFingerPan,
+  playDockGlassIgnoresTouches,
+  PLAY_GLASS_DOCK_LIFT,
   playScorecardWraps,
   playSameClubHiddenUntilShot,
   playMapMountsWhenYardsShown,
@@ -283,7 +292,7 @@ test('after a shot lands the next suggested club is already the primary chip', (
   assert.match(hole, /planClubStrip/);
   assert.match(hole, /target\?\.dYards/);
   assert.match(hole, /applyWheelSelection/);
-  assert.doesNotMatch(hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.stickyClub')), /void markClub\(full\)/);
+  assert.match(hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.stickyClub')), /void markClub\(full\)/);
   assert.match(hole, /resolveNextShotDistanceTarget/);
   assert.match(hole, /lastLandingMark/);
   assert.doesNotMatch(hole, /nextClub|Next club|suggestedButton/);
@@ -491,7 +500,7 @@ test('build 32 cook-gate: Menu is a button, All clubs floats, dock matches 31 pi
     /styles\.back[^A-Za-z]/,
   );
 
-  const dock = hole.slice(hole.indexOf('<View style={[styles.dock'), hole.indexOf('<FullSheet'));
+  const dock = hole.slice(hole.indexOf('style={[styles.dock'), hole.indexOf('<FullSheet'));
   assert.doesNotMatch(dock, /COPY\.allClubs/);
   assert.doesNotMatch(dock, /COPY\.sayClub/);
   assert.match(dock, /COPY\.stickyClub/);
@@ -533,4 +542,94 @@ test('build 33 cook-gate: play stays on hole, three themes, history row fields',
   assert.match(home, /row\.relative/);
   assert.equal(playHidesMapsLegal(), true);
   assert.equal(playHidesMapsCompass(), true);
+});
+
+test('build 35 cook-gate: glass dock, one accent, trails, type, cards, empty, haptics, scorecard, one-press', () => {
+  assert.equal(playDockIsGlass(), true);
+  assert.equal(playDockOverlaysMap(), true);
+  assert.equal(playLimeOnlyOnSelectedAndCta(), true);
+  assert.equal(playHeaderSecondaryIsMuted(), true);
+  assert.equal(playHapticsOnShotLock(), true);
+  assert.equal(playHapticsOnHoleChange(), true);
+  assert.equal(playDockPassesTwoFingerPan(), true);
+  assert.equal(playDockGlassIgnoresTouches(), true);
+  assert.ok(PLAY_GLASS_DOCK_LIFT > PLAY_DOCK_ACTION_MIN_HEIGHT);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const phone = readFileSync(new URL('../ui/ClubStrip.tsx', import.meta.url), 'utf8');
+  const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
+  const home = readFileSync(new URL('../../app/(tabs)/index.tsx', import.meta.url), 'utf8');
+  const score = readFileSync(new URL('../ui/ScorecardBody.tsx', import.meta.url), 'utf8');
+  const icon = readFileSync(new URL('./appIcon.test.ts', import.meta.url), 'utf8');
+  const strip = hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.stickyClub'));
+  const mark = hole.slice(hole.indexOf('const markClub'), hole.indexOf('const onMark'));
+
+  assert.match(hole, /colors\.glass/);
+  assert.match(hole, /pointerEvents="box-none"/);
+  assert.match(hole, /styles\.dockGlass/);
+  assert.match(hole, /pointerEvents="none" style=\{styles\.dockGlass\}/);
+  assert.match(hole, /pointerEvents="box-none" style=\{styles\.dockRow\}/);
+  assert.match(hole, /touches\.length >= 2/);
+  assert.match(hole, /dockPassMap \? 'none' : 'box-none'/);
+  assert.match(phone, /touches\.length >= 2/);
+  assert.match(phone, /passMap \? 'none' : 'box-none'/);
+  assert.match(hole, /position: 'absolute'/);
+  assert.match(hole, /PLAY_GLASS_DOCK_LIFT/);
+  assert.match(hole, /formatPlayHeaderPrimary/);
+  assert.match(hole, /formatPlayHeaderSecondary/);
+  assert.match(hole, /styles\.holeMeta/);
+  assert.match(mark, /hapticMark/);
+  assert.match(mark, /hapticLight/);
+  assert.match(hole, /hapticLight\(\);\s*\n\s*router\.replace\(playHrefAfterHoleChange/);
+
+  assert.match(map, /planShotTrail/);
+  assert.match(map, /lineDashPattern/);
+  assert.doesNotMatch(map, /colors\.lime/);
+
+  assert.match(home, /EmptyPanel/);
+  assert.match(home, /lastPlayedAtByCourse/);
+  assert.match(home, /planCourseCard|formatLastPlayedChip/);
+
+  assert.match(score, /styles\.card/);
+  assert.match(score, /scorecardDiffLabel/);
+  assert.match(score, /colors\.good/);
+  assert.match(score, /colors\.red/);
+
+  assert.match(strip, /void markClub\(full\)/);
+  assert.match(strip, /applyWheelSelection/);
+  assert.match(mark, /markShotWithClub/);
+  assert.match(mark, /tee: holeTee/);
+  assert.doesNotMatch(hole, /confirmWheelClub|onConfirm=\{confirmWheelClub\}/);
+  assert.doesNotMatch(phone, /onConfirm|PanResponder|clubStripSlideUpConfirmed/);
+  assert.match(phone, /onPress=\{\(\) => onPick\(item\.id\)\}/);
+  assert.doesNotMatch(phone, /onScroll=\{/);
+  assert.match(watch, /session\.pick\(clubId: club.id\)/);
+  assert.doesNotMatch(watch, /DragGesture|clubStripSlideUpConfirmed|session\.select\(club.id\)/);
+  assert.match(icon, /locked Build 35 neon-arc Shot\/Traxx/);
+});
+
+test('Signal Lab: trail chip is logged yards, soft/forced keep a badge, glass dock passes two-finger pan', () => {
+  assert.equal(playDockPassesTwoFingerPan(), true);
+  assert.equal(playDockGlassIgnoresTouches(), true);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const phone = readFileSync(new URL('../ui/ClubStrip.tsx', import.meta.url), 'utf8');
+  const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
+  const badge = readFileSync(new URL('../ui/Badge.tsx', import.meta.url), 'utf8');
+  const dock = hole.slice(hole.indexOf('dockPassMap ?'), hole.indexOf('<FullSheet'));
+  const trailBlock = map.slice(map.indexOf('{closed.map((shot, index)'), map.indexOf('{shots.filter(hasGpsStart)'));
+
+  assert.match(dock, /pointerEvents="none" style=\{styles\.dockGlass\}/);
+  assert.match(dock, /pointerEvents="box-none" style=\{styles\.dockRow\}/);
+  assert.match(dock, /dockPassMap \? 'none' : 'box-none'/);
+  assert.match(hole, /touches\.length >= 2/);
+  assert.match(phone, /touches\.length >= 2/);
+  assert.doesNotMatch(dock, /backgroundColor: colors\.glass/);
+
+  assert.match(trailBlock, /distanceYards: shot\.distanceYards/);
+  assert.match(trailBlock, /fixQuality: shot\.fixQuality/);
+  assert.match(trailBlock, /QualityBadge/);
+  assert.doesNotMatch(trailBlock, /playHeaderYards|hole\.yards|yardsToGreen/);
+  assert.match(badge, /quality === 'soft' \|\| quality === 'forced'/);
 });

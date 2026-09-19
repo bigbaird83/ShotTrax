@@ -26,7 +26,7 @@ function ThemedNavigation() {
         ...(themeId === 'light' ? DefaultTheme.colors : DarkTheme.colors),
         background: colors.bg,
         card: colors.bg,
-        primary: colors.lime,
+        primary: colors.cream,
         text: colors.cream,
         border: colors.line,
       },

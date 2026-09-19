@@ -14,6 +14,8 @@ export type ColorPalette = {
   good: string;
   accentWash: string;
   overlay: string;
+  /** Translucent glass over the map. Map stays visible behind the dock. */
+  glass: string;
   onAccent: string;
   statusBar: 'light' | 'dark';
 };
@@ -32,6 +34,7 @@ export const COLOR_THEMES: Record<ColorThemeId, ColorPalette> = {
     good: '#7DCF7A',
     accentWash: '#1C3A24',
     overlay: 'rgba(11,26,18,0.88)',
+    glass: 'rgba(11,26,18,0.58)',
     onAccent: '#0B1A12',
     statusBar: 'light',
   },
@@ -48,6 +51,7 @@ export const COLOR_THEMES: Record<ColorThemeId, ColorPalette> = {
     good: '#2E7D32',
     accentWash: '#E7F4C8',
     overlay: 'rgba(246,243,234,0.92)',
+    glass: 'rgba(246,243,234,0.62)',
     onAccent: '#122018',
     statusBar: 'dark',
   },
@@ -64,6 +68,7 @@ export const COLOR_THEMES: Record<ColorThemeId, ColorPalette> = {
     good: '#00FF6A',
     accentWash: '#1A1A00',
     overlay: 'rgba(0,0,0,0.92)',
+    glass: 'rgba(0,0,0,0.55)',
     onAccent: '#000000',
     statusBar: 'light',
   },
@@ -78,15 +83,15 @@ export function paletteForTheme(id: ColorThemeId): ColorPalette {
 
 /** Layout L — type scale. Keep in sync across home, hole, sheets. */
 export const type = {
-  kicker: 12,
-  title: 34,
-  hole: 28,
-  yards: 44,
-  body: 16,
-  meta: 14,
-  tiny: 12,
-  button: 20,
-  chip: 16,
+  kicker: 11,
+  title: 28,
+  hole: 18,
+  yards: 32,
+  body: 15,
+  meta: 13,
+  tiny: 11,
+  button: 16,
+  chip: 15,
 } as const;
 
 export const tapTarget = 64;

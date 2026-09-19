@@ -26,6 +26,8 @@ import { planDragShotLines } from '@/src/domain/placeToDrag';
 import { COPY, showWaitingOnLocationLine } from '@/src/domain/playerCopy';
 import { isValidLatLng } from '@/src/domain/latLng';
 import { hasClosedGpsTrail, hasGpsStart } from '@/src/domain/shotSource';
+import { planShotTrail, shotTrailDash } from '@/src/domain/shotTrail';
+import { QualityBadge } from './Badge';
 import { FmbRow } from './FmbRow';
 import { YardsToGreenBadge } from './YardsToGreenBadge';
 import { colors, type } from './theme';
@@ -90,7 +92,7 @@ function toCoord(lat: number, lng: number): Coord {
 const OSM_DRAW_ORDER: OsmGolfKind[] = ['fairway', 'tee', 'green', 'hole'];
 
 const OSM_STYLE: Record<OsmGolfKind, { fill?: string; stroke: string; width: number }> = {
-  fairway: { fill: 'transparent', stroke: 'rgba(200, 245, 66, 0.85)', width: 2 },
+  fairway: { fill: 'transparent', stroke: 'rgba(125, 207, 122, 0.55)', width: 2 },
   green: { fill: 'transparent', stroke: '#7DCF7A', width: 3 },
   tee: { fill: 'transparent', stroke: '#F5C542', width: 2 },
   hole: { stroke: '#F4F1E8', width: 2 },
@@ -468,23 +470,58 @@ function NativeHoleMap({
             />
           );
         })}
-        {closed.map((shot, index) => (
-          <Polyline
-            key={shot.id}
-            coordinates={[
-              toCoord(shot.startLat, shot.startLng),
-              toCoord(shot.endLat, shot.endLng),
-            ]}
-            strokeColor={index === closed.length - 1 ? colors.lime : '#F4F1E8'}
-            strokeWidth={index === closed.length - 1 ? 5 : 3}
-          />
-        ))}
+        {closed.map((shot, index) => {
+          const trail = planShotTrail({
+            start: { lat: shot.startLat, lng: shot.startLng },
+            end: { lat: shot.endLat, lng: shot.endLng },
+            clubId: shot.clubId,
+            distanceYards: shot.distanceYards,
+            fixQuality: shot.fixQuality,
+            last: index === closed.length - 1,
+          });
+          if (!trail) return null;
+          return (
+            <Polyline
+              key={shot.id}
+              coordinates={[toCoord(trail.from.lat, trail.from.lng), toCoord(trail.to.lat, trail.to.lng)]}
+              strokeColor={trail.tint}
+              strokeWidth={trail.width}
+              lineDashPattern={[...shotTrailDash()]}
+            />
+          );
+        })}
+        {closed.map((shot, index) => {
+          const trail = planShotTrail({
+            start: { lat: shot.startLat, lng: shot.startLng },
+            end: { lat: shot.endLat, lng: shot.endLng },
+            clubId: shot.clubId,
+            distanceYards: shot.distanceYards,
+            fixQuality: shot.fixQuality,
+            last: index === closed.length - 1,
+          });
+          if (!trail?.chip && !trail?.showQualityBadge) return null;
+          return (
+            <Marker
+              key={`chip-${shot.id}`}
+              coordinate={toCoord(trail.mid.lat, trail.mid.lng)}
+              anchor={{ x: 0.5, y: 0.5 }}
+              tappable={false}
+              tracksViewChanges>
+              <View pointerEvents="none" style={styles.lineChip}>
+                {trail.chip ? <Text style={styles.lineChipValue}>{trail.chip}</Text> : null}
+                {trail.showQualityBadge ? (
+                  <QualityBadge quality={shot.fixQuality} source={shot.source} />
+                ) : null}
+              </View>
+            </Marker>
+          );
+        })}
         {shots.filter(hasGpsStart).map((shot) => (
           <Marker
             key={`start-${shot.id}`}
             coordinate={toCoord(shot.startLat, shot.startLng)}
             title={`Shot ${shot.seq}`}
-            description={shot.endedAt ? `${shot.distanceYards ?? '—'} yd` : 'In play'}
+            description={shot.endedAt ? undefined : 'In play'}
             pinColor={shot.endedAt ? 'tomato' : 'yellow'}
             anchor={{ x: 0.5, y: 1 }}
             onPress={() => onShotPress?.(shot.id)}
@@ -495,7 +532,6 @@ function NativeHoleMap({
             key={`end-${shot.id}`}
             coordinate={toCoord(shot.endLat, shot.endLng)}
             title={`Shot ${shot.seq}`}
-            description={`${shot.distanceYards ?? '—'} yd`}
             pinColor="green"
             anchor={{ x: 0.5, y: 1 }}
             onPress={() => onShotPress?.(shot.id)}
@@ -563,7 +599,7 @@ function NativeHoleMap({
               toCoord(dragLines.toGreen.from.lat, dragLines.toGreen.from.lng),
               toCoord(dragLines.toGreen.to.lat, dragLines.toGreen.to.lng),
             ]}
-            strokeColor={colors.lime}
+            strokeColor={colors.cream}
             strokeWidth={3}
             lineDashPattern={[8, 6]}
           />
@@ -711,8 +747,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     alignItems: 'center',
+    gap: 2,
   },
-  lineChipGreen: { borderWidth: 1, borderColor: colors.lime },
+  lineChipGreen: { borderWidth: 1, borderColor: colors.cream },
   lineChipValue: { color: colors.cream, fontSize: 14, fontWeight: '900' },
   legalCover: {
     position: 'absolute',

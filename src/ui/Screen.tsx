@@ -25,7 +25,7 @@ export function Screen({
   const pad = padded ? styles.pad : styles.bare;
   const refresh =
     onRefresh != null ? (
-      <RefreshControl refreshing={Boolean(refreshing)} onRefresh={onRefresh} tintColor={colors.lime} />
+      <RefreshControl refreshing={Boolean(refreshing)} onRefresh={onRefresh} tintColor={colors.cream} />
     ) : undefined;
   if (!scroll) {
     return (

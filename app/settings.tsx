@@ -88,8 +88,8 @@ function makeStyles(colors: ColorPalette) {
       paddingHorizontal: 12,
       paddingVertical: 10,
     },
-    chipOn: { borderColor: colors.lime, backgroundColor: colors.accentWash },
+    chipOn: { borderColor: colors.cream, backgroundColor: colors.accentWash },
     chipText: { color: colors.cream, fontSize: type.button, fontWeight: '800' },
-    chipTextOn: { color: colors.lime },
+    chipTextOn: { color: colors.cream },
   });
 }

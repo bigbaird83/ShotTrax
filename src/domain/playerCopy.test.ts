@@ -6,6 +6,8 @@ import {
   finishShotChip,
   formatHoleHeader,
   formatPlayHeader,
+  formatPlayHeaderPrimary,
+  formatPlayHeaderSecondary,
   formatParLabel,
   formatPickerLeftYards,
   formatSiLabel,
@@ -92,6 +94,11 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.miles, 'Miles');
   assert.equal(COPY.kilometers, 'Kilometers');
   assert.equal(COPY.noRounds, 'Your first round will show up here.');
+  assert.equal(COPY.firstRoundHint, 'Pick a course nearby and start 9 or 18.');
+  assert.equal(COPY.nearbyEmptyHint, 'Pull to refresh, or type a course name to start.');
+  assert.equal(formatPlayHeaderPrimary(1), 'Hole 1');
+  assert.equal(formatPlayHeaderSecondary(4, 'Gold'), 'Par 4 · Gold');
+  assert.equal(formatPlayHeaderSecondary(null), 'Par unknown');
   assert.equal(COPY.noShots, 'No shots yet. Pick a club after you hit.');
   assert.equal(finishPuttsChip(4), 'Finish putts · Hole 4');
   assert.equal(finishShotChip(2), 'Finish shot · Hole 2');

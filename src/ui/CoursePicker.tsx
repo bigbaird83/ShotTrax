@@ -5,11 +5,13 @@ import { getCourseDataClient } from '@/src/course/client';
 import { formatTeeHoleYards, formatTeeMeta } from '@/src/course/layout';
 import type { CourseDetail, CourseSummary, TeeSet } from '@/src/course/types';
 import { COPY } from '@/src/domain/playerCopy';
-import { formatCourseDistance, type CourseDistanceUnit } from '@/src/domain/courseDistance';
+import { planCourseCard } from '@/src/domain/courseCard';
+import { type CourseDistanceUnit } from '@/src/domain/courseDistance';
 import { getCurrentFix } from '@/src/services/location';
 import { BigButton } from './BigButton';
+import { EmptyPanel } from './EmptyPanel';
 import { useColors } from './ColorThemeProvider';
-import { tapTarget, type, type ColorPalette } from './theme';
+import { thumbZoneMin, type, type ColorPalette } from './theme';
 
 export type CoursePick = {
   course: CourseSummary;
@@ -25,16 +27,11 @@ type Props = {
   autoFind?: boolean;
   onRefreshReady?: (refresh: () => Promise<void>) => void;
   courseDistanceUnit?: CourseDistanceUnit;
+  lastPlayedAtByCourse?: Record<string, string | null | undefined>;
 };
 
-function formatDistance(meters: number | null, unit: CourseDistanceUnit): string | null {
-  return formatCourseDistance(meters, unit);
-}
-
-function placeLine(course: CourseSummary, unit: CourseDistanceUnit): string {
-  const place = [course.city, course.state].filter(Boolean).join(', ');
-  const dist = formatDistance(course.distanceMeters, unit);
-  return [place || course.club || 'Course', dist].filter(Boolean).join(' · ');
+function placeLine(course: CourseSummary): string {
+  return [course.city, course.state].filter(Boolean).join(', ') || course.club || 'Course';
 }
 
 export function CoursePicker({
@@ -44,6 +41,7 @@ export function CoursePicker({
   autoFind = true,
   onRefreshReady,
   courseDistanceUnit = 'mi',
+  lastPlayedAtByCourse,
 }: Props) {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -106,16 +104,19 @@ export function CoursePicker({
     }
   };
 
+  const emptyNearby = configured && results != null && results.length === 0 && !busy;
+
   return (
     <View style={styles.box}>
       <Text style={styles.label}>{COPY.nearbyHint}</Text>
       {!configured ? <Text style={styles.meta}>{COPY.nearbyUnavailable}</Text> : null}
-      {error ? <Text style={styles.warn}>{error}</Text> : null}
+      {error && !emptyNearby ? <Text style={styles.warn}>{error}</Text> : null}
       {busy ? <Text style={styles.meta}>{COPY.nearbyBusy}</Text> : null}
+      {emptyNearby ? <EmptyPanel title={COPY.nearbyEmpty} hint={COPY.nearbyEmptyHint} /> : null}
       {selected ? (
         <View style={styles.selected}>
           <Text style={styles.selectedName}>{selected.name}</Text>
-          <Text style={styles.meta}>{placeLine(selected, courseDistanceUnit)}</Text>
+          <Text style={styles.meta}>{placeLine(selected)}</Text>
           {selectedTee ? (
             <>
               <Text style={styles.meta}>{formatTeeMeta(selectedTee)}</Text>
@@ -136,15 +137,27 @@ export function CoursePicker({
         </View>
       ) : null}
       <ScrollView style={styles.list} keyboardShouldPersistTaps="handled">
-        {results?.map((course) => (
-          <Pressable
-            key={course.id}
-            onPress={() => void pickCourse(course)}
-            style={[styles.row, selected?.id === course.id && styles.rowOn]}>
-            <Text style={styles.rowTitle}>{course.name}</Text>
-            <Text style={styles.meta}>{placeLine(course, courseDistanceUnit)}</Text>
-          </Pressable>
-        ))}
+        {results?.map((course) => {
+          const card = planCourseCard({
+            name: course.name,
+            distanceMeters: course.distanceMeters,
+            unit: courseDistanceUnit,
+            lastPlayedAt: lastPlayedAtByCourse?.[course.id] ?? lastPlayedAtByCourse?.[course.name],
+          });
+          return (
+            <Pressable
+              key={course.id}
+              onPress={() => void pickCourse(course)}
+              style={[styles.row, selected?.id === course.id && styles.rowOn]}>
+              <Text style={styles.rowTitle}>{card.name}</Text>
+              <View style={styles.chips}>
+                {card.distance ? <Text style={styles.chip}>{card.distance}</Text> : null}
+                {card.lastPlayed ? <Text style={styles.chip}>{card.lastPlayed}</Text> : null}
+              </View>
+              <Text style={styles.meta}>{placeLine(course)}</Text>
+            </Pressable>
+          );
+        })}
         {teeBusy ? <Text style={styles.meta}>Loading tees…</Text> : null}
         {selected && tees && tees.length === 0 ? (
           <Text style={styles.meta}>No tees listed for this course.</Text>
@@ -179,18 +192,30 @@ function makeStyles(colors: ColorPalette) {
   meta: { color: colors.muted, fontSize: type.meta, lineHeight: 20 },
   warn: { color: colors.orange, fontSize: type.meta, fontWeight: '700' },
   selected: { gap: 6 },
-  selectedName: { color: colors.lime, fontSize: 18, fontWeight: '800' },
+  selectedName: { color: colors.cream, fontSize: 18, fontWeight: '800' },
   row: {
-    minHeight: tapTarget,
-    borderRadius: 12,
+    minHeight: thumbZoneMin,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.line,
-    padding: 12,
+    padding: 14,
     backgroundColor: colors.bgElevated,
-    marginBottom: 8,
+    marginBottom: 10,
+    gap: 6,
   },
-  rowOn: { borderColor: colors.lime },
-  rowTitle: { color: colors.cream, fontSize: type.body, fontWeight: '700' },
+  rowOn: { borderColor: colors.cream },
+  rowTitle: { color: colors.cream, fontSize: type.body, fontWeight: '800' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  chip: {
+    color: colors.cream,
+    fontSize: type.tiny,
+    fontWeight: '800',
+    backgroundColor: colors.accentWash,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    overflow: 'hidden',
+  },
   teeBox: { gap: 8, marginTop: 8 },
   });
 }
