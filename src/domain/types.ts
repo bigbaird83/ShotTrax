@@ -80,8 +80,10 @@ export type Hole = {
   putts: number;
   /** One length bucket per putt, same order. Stats only — no green GPS. */
   puttLengths: string[];
-  /** True only after Made it. Walking off the green never sets this. */
+  /** True only after Made it or Finish hole. Walking off the green never sets this. */
   puttsDone: boolean;
+  /** Stored after Finish hole. Null until set. Never invented from a missing green. */
+  gir: boolean | null;
 };
 
 export type Shot = {

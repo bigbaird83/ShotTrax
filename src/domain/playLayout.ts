@@ -7,7 +7,7 @@ import { PHONE_WHEEL_STRIP_HEIGHT } from './clubStrip';
 
 export const PLAY_MAP_MIN_RATIO = 0.6;
 
-export const PLAY_DOCK_ACTIONS = ['same_club', 'add_shot', 'scorecard', 'prev', 'next'] as const;
+export const PLAY_DOCK_ACTIONS = ['same_club', 'finish_hole', 'add_shot', 'scorecard', 'prev', 'next'] as const;
 export type PlayDockAction = (typeof PLAY_DOCK_ACTIONS)[number];
 
 export type PlayLayout = {

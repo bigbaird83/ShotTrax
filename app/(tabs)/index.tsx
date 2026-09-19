@@ -39,6 +39,7 @@ import { formatHistoryRow } from '@/src/domain/roundHistory';
 import { describeGpsSource } from '@/src/services/location';
 import { BagCarryList, BagCustomizeActions } from '@/src/ui/BagCarryList';
 import { BigButton } from '@/src/ui/BigButton';
+import { HowToBody } from '@/src/ui/HowToBody';
 import { CoursePicker, type CoursePick } from '@/src/ui/CoursePicker';
 import { EmptyPanel } from '@/src/ui/EmptyPanel';
 import { GpsBanner } from '@/src/ui/GpsBanner';
@@ -82,6 +83,7 @@ export default function HomeScreen() {
   const [pickedDetail, setPickedDetail] = useState<CourseDetail | null>(null);
   const [starting, setStarting] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [howToOpen, setHowToOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [simMessage, setSimMessage] = useState<string | null>(
     Device.isDevice === false ? COPY.simulator : null,
@@ -221,6 +223,7 @@ export default function HomeScreen() {
         </Pressable>
       </View>
       <Text style={styles.lede}>{COPY.homeLede}</Text>
+      <BigButton label={COPY.howTo} variant="ghost" onPress={() => setHowToOpen(true)} />
 
       <FullSheet
         visible={bagPromptOpen}
@@ -272,6 +275,10 @@ export default function HomeScreen() {
           ) : null}
         </View>
       ) : null}
+
+      <FullSheet visible={howToOpen} title={COPY.howTo} onClose={() => setHowToOpen(false)}>
+        <HowToBody />
+      </FullSheet>
 
       <FullSheet visible={sheetOpen} title={COPY.selectCourse} onClose={() => setSheetOpen(false)}>
         <CoursePicker

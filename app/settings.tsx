@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
 import { getColorTheme, getCourseDistanceUnit, setColorTheme, setCourseDistanceUnit } from '@/src/db/repo';
@@ -7,14 +7,17 @@ import { COPY } from '@/src/domain/playerCopy';
 import type { CourseDistanceUnit } from '@/src/domain/courseDistance';
 import { COLOR_THEME_IDS, type ColorThemeId } from '@/src/domain/colorTheme';
 import { BigButton } from '@/src/ui/BigButton';
+import { HowToBody } from '@/src/ui/HowToBody';
 import { useColors } from '@/src/ui/ColorThemeProvider';
 import { Screen } from '@/src/ui/Screen';
+import { FullSheet } from '@/src/ui/Sheet';
 import { tapTarget, type, type ColorPalette } from '@/src/ui/theme';
 
 export default function SettingsScreen() {
   const { db, bump } = useDb();
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const [howToOpen, setHowToOpen] = useState(false);
   const unit = getCourseDistanceUnit(db);
   const themeId = getColorTheme(db);
 
@@ -65,7 +68,11 @@ export default function SettingsScreen() {
           <Text style={styles.chipText}>{COPY.kilometers}</Text>
         </Pressable>
       </View>
+      <BigButton label={COPY.howTo} variant="secondary" onPress={() => setHowToOpen(true)} />
       <BigButton label={COPY.bag} variant="secondary" onPress={() => router.push('/bag')} />
+      <FullSheet visible={howToOpen} title={COPY.howTo} onClose={() => setHowToOpen(false)}>
+        <HowToBody />
+      </FullSheet>
     </Screen>
   );
 }

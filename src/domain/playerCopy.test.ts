@@ -43,6 +43,12 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.pickClubLede, 'Picking a club marks where you hit from.');
   assert.equal(COPY.firstLaunchTip, 'Pick a club → walk → press to mark');
   assert.equal(COPY.dismissFirstLaunchTip, 'Got it');
+  assert.equal(COPY.howTo, 'How to play');
+  assert.equal(COPY.howToMark, 'Pick a club → walk → press to mark');
+  assert.equal(COPY.howToFinish, 'Finish hole for a chip-in or hole-out off the green.');
+  assert.equal(COPY.finishHole, 'Finish hole');
+  assert.equal(COPY.holedOut, 'Holed out');
+  assert.equal(COPY.zipGeocodeMiss, 'Couldn’t find that zip.');
   assert.equal(COPY.sayClub, 'Say a club');
   assert.equal(COPY.allClubs, 'All clubs');
   assert.equal(COPY.top3Unlock, 'Top clubs unlock after a few shots');
