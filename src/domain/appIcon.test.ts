@@ -53,6 +53,6 @@ test('home-screen icon is the locked Build 35 neon-arc Shot/Traxx art; splash st
 
   const readme = readFileSync(new URL('../../assets/images/README.md', import.meta.url), 'utf8');
   assert.match(readme, /Build 35/);
-  assert.match(readme, /ShotTraxx/);
-  assert.doesNotMatch(readme, /ST-only|ST monogram/);
+  assert.match(readme, /neon lime radar arcs/);
+  assert.match(readme, /full wordmark \*\*ShotTraxx\*\*/);
 });

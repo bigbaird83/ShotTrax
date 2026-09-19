@@ -1,6 +1,6 @@
 # App icons (Build 35 locked)
 
-Night-green diorama, neon lime radar arcs with dots, staggered Shot (white) / Traxx (lime) lockup, no club, squircle-fitted. Home-screen icon is this Build 35 art. Splash / launch still uses the full wordmark **ShotTraxx** — not the stacked Shot/Traxx-only lockup and not an ST monogram.
+Night-green diorama, neon lime radar arcs with dots, staggered Shot (white) / Traxx (lime) lockup, no club, squircle-fitted. Home-screen icon is this Build 35 art. Splash / launch still uses the full wordmark **ShotTraxx** — not a two-letter mark.
 
 | File | Wired from |
 | --- | --- |
