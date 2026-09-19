@@ -28,6 +28,7 @@ export const COPY = {
   clearCourse: 'Clear course',
   waitingOnGreen: 'Waiting on green location.',
   waitingOnLocation: 'Waiting on your location.',
+  courseCardMissingFrame: 'Need the course tee and green for this hole.',
   approximate: 'Approximate',
   longPressGreen: 'Long-press to set the green',
   toGreen: 'To green',
@@ -217,6 +218,11 @@ export function formatTeeMeta(tee: {
 
 /** Card yards already on screen → never also say we are waiting on location. */
 export function waitingOnLocationWhenYardsShown(): false {
+  return false;
+}
+
+/** Lock-frame miss is a missing course tee/green. Never a GPS wait. */
+export function lockFrameEmptyStateWaitsForPhone(): false {
   return false;
 }
 

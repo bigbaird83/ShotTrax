@@ -337,6 +337,34 @@ export function addShotOpensOnPlayFrame(): true {
 }
 
 /**
+ * Glass dock is an overlay. It must not be the only in-flow sibling that
+ * gives the map column height — that zeroes MapView and kills Apple tiles.
+ */
+export function playGlassDockZeroesMapHeight(): false {
+  return false;
+}
+
+/** Play + Add shot map host is pinned to the screen under the glass dock. */
+export function playMapHostUsesAbsoluteFill(): true {
+  return true;
+}
+
+/** MapView itself fills that host. `flex: 1` alone collapses under overlays. */
+export function holeMapViewUsesAbsoluteFill(): true {
+  return true;
+}
+
+/** Opening Add shot keeps the same sized play map. No remount, no zero-height wrap. */
+export function addShotKeepsPlayMapHeight(): true {
+  return true;
+}
+
+/** Blank-map hotfix is layout + first-frame camera for every course, not one card. */
+export function playBlankMapFixIsCourseAgnostic(): true {
+  return true;
+}
+
+/**
  * Signal Lab build 36 — Add shot gesture lock.
  * 1. First frame is course tee + green center only.
  * 2. After that, do not reframe.

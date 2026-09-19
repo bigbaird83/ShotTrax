@@ -130,6 +130,11 @@ export function courseCardCameraWaitsForPhoneFix(): false {
   return false;
 }
 
+/** No tee or green → empty state. Do not wait on a phone fix to invent a frame. */
+export function courseCardMissingCameraWaitsForPhone(): false {
+  return false;
+}
+
 /** Phone GPS never enters the course-card frame. */
 export function courseCardCameraUsesPhone(): false {
   return false;
@@ -138,6 +143,45 @@ export function courseCardCameraUsesPhone(): false {
 /** A lone pin or house coordinate is not a course-card frame. */
 export function courseCardCameraFramesLonePin(): false {
   return false;
+}
+
+export type CourseCardFrameMiss = 'tee' | 'green' | 'both';
+
+export type CourseCardFrameDiagnosis =
+  | { ok: true; tee: LatLng; green: LatLng; missing: null }
+  | { ok: false; tee: LatLng | null; green: LatLng | null; missing: CourseCardFrameMiss };
+
+/**
+ * P0 check: does this course card hole actually have tee + green?
+ * Phone is ignored. Missing either → not ok. Never invents a point.
+ */
+export function diagnoseCourseCardFrame(args: {
+  tee: LatLng | null;
+  green: LatLng | null;
+  phone?: LatLng | null;
+}): CourseCardFrameDiagnosis {
+  void args.phone;
+  const tee = isValidLatLng(args.tee) ? args.tee : null;
+  const green = isValidLatLng(args.green) ? args.green : null;
+  if (tee && green) return { ok: true, tee, green, missing: null };
+  return {
+    ok: false,
+    tee,
+    green,
+    missing: !tee && !green ? 'both' : !tee ? 'tee' : 'green',
+  };
+}
+
+/** Scorecard hole shape: teeCentroid + greenCentroid from the course card. */
+export function diagnoseCourseCardHole(hole: {
+  teeCentroid?: LatLng | null;
+  greenCentroid?: LatLng | null;
+}): CourseCardFrameDiagnosis {
+  return diagnoseCourseCardFrame({
+    tee: hole.teeCentroid ?? null,
+    green: hole.greenCentroid ?? null,
+    phone: null,
+  });
 }
 
 /**
@@ -152,10 +196,11 @@ export function planCourseCardCamera(args: {
   phone?: LatLng | null;
 }): CourseCardCamera | null {
   void args.phone;
-  if (!isValidLatLng(args.tee) || !isValidLatLng(args.green)) return null;
-  const heading = holeCameraHeading(args.tee, args.green);
+  const card = diagnoseCourseCardFrame(args);
+  if (!card.ok) return null;
+  const heading = holeCameraHeading(card.tee, card.green);
   if (heading == null) return null;
-  return { points: [args.tee, args.green], heading };
+  return { points: [card.tee, card.green], heading };
 }
 
 /**
