@@ -274,6 +274,7 @@ test('Signal Lab: course-card first frame, then leave camera alone; scroll/zoom 
   assert.match(map, /zoomEnabled=\{framedForGestures\}/);
   assert.match(map, /\.\.\.StyleSheet\.absoluteFill/);
   assert.match(map, /style=\{\[styles\.map, mapBox,/);
+  assert.match(map, /key=\{mapPaintKey\}/);
   const settled = map.slice(map.indexOf('const onRegionSettled'), map.indexOf('if (!lockedRegion)'));
   const afterFrame = settled.slice(
     settled.indexOf('if (framedOnce.current)'),

@@ -55,7 +55,7 @@ import {
   everyHoleMapUsesLockFrame,
   holeMapInventPhonePoint,
 } from './holeCamera';
-import { CYPRESS_CREEK_CABOT, MAGNOLIA_CC, courseCardHoleHasTeeAndGreen } from './reproCourseCard';
+import { CYPRESS_CREEK_CABOT, MAGNOLIA_CC, MYSTIC_CREEK_EL_DORADO, courseCardHoleHasTeeAndGreen } from './reproCourseCard';
 
 const tee = { lat: 37.0, lng: -122.0 };
 const greenNorth = { lat: 37.01, lng: -122.0 };
@@ -441,7 +441,9 @@ test('Magnolia CC and Cypress Creek hole 1 frame tee+green; missing either is an
     'green',
   );
 
-  for (const course of [MAGNOLIA_CC, CYPRESS_CREEK_CABOT]) {
+  assert.equal(courseCardHoleHasTeeAndGreen(MYSTIC_CREEK_EL_DORADO.hole1), true);
+
+  for (const course of [MAGNOLIA_CC, CYPRESS_CREEK_CABOT, MYSTIC_CREEK_EL_DORADO]) {
     const hole = course.hole1;
     const start = planCourseCardCamera({ tee: hole.tee, green: hole.green, phone: null });
     const addShot = planCourseCardCamera({ tee: hole.tee, green: hole.green, phone: null });

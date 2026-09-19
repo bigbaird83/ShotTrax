@@ -365,6 +365,28 @@ export function playBlankMapFixIsCourseAgnostic(): true {
 }
 
 /**
+ * Height-only (#28) was not enough. A MapView that first mounts at 0 never
+ * paints tiles when later resized — remount once mapBox is real.
+ */
+export function holeMapRemountsWhenMapBoxSized(): true {
+  return true;
+}
+
+export function holeMapMountsBeforeMeasured(): false {
+  return false;
+}
+
+/** Location permission must not gate MapView. Course tee+green frame first. */
+export function holeMapRequiresLocationPermission(): false {
+  return false;
+}
+
+/** Green cover lifts when the host is sized. Missing tee+green is the miss card. */
+export function holeMapCoverLiftsWhenSized(): true {
+  return true;
+}
+
+/**
  * Signal Lab build 36 — Add shot gesture lock.
  * 1. First frame is course tee + green center only.
  * 2. After that, do not reframe.

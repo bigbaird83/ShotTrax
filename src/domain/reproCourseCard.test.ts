@@ -22,10 +22,12 @@ import {
 import {
   CYPRESS_CREEK_CABOT,
   MAGNOLIA_CC,
+  MYSTIC_CREEK_EL_DORADO,
   REPRO_COURSE_CARDS,
   courseCardHoleHasTeeAndGreen,
   cypressCreekHole1Card,
   magnoliaHole1Card,
+  mysticCreekHole1Card,
 } from './reproCourseCard';
 
 const phone = { lat: 40.7128, lng: -74.006 };
@@ -101,13 +103,18 @@ test('Magnolia CC hole 1 is the known Doc tee+green set for camera and layout', 
 test('repro cards are Magnolia plus Cypress Creek; missing tee or green never waits on the phone', () => {
   assert.deepEqual(
     REPRO_COURSE_CARDS.map((course) => course.name),
-    ['Magnolia Country Club', 'Cypress Creek'],
+    ['Magnolia Country Club', 'Cypress Creek', 'Mystic Creek'],
   );
   assert.equal(CYPRESS_CREEK_CABOT.city, 'Cabot');
   assert.equal(CYPRESS_CREEK_CABOT.state, 'AR');
+  assert.equal(MYSTIC_CREEK_EL_DORADO.city, 'El Dorado');
   assert.deepEqual(cypressCreekHole1Card(), {
     tee: CYPRESS_CREEK_CABOT.hole1.tee,
     green: CYPRESS_CREEK_CABOT.hole1.green,
+  });
+  assert.deepEqual(mysticCreekHole1Card(), {
+    tee: MYSTIC_CREEK_EL_DORADO.hole1.tee,
+    green: MYSTIC_CREEK_EL_DORADO.hole1.green,
   });
   assert.equal(playBlankMapFixIsCourseAgnostic(), true);
 
