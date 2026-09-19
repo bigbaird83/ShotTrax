@@ -68,10 +68,10 @@ export function clubToRankInput(
 
 /**
  * Yards used for Suggested top-3.
- * Live average after ≥5 shots allowed into the average (20% filter) fully
+ * Live average after ≥5 kept closed shots (existing avg rules: soft counts
+ * with badge, hard only if forced, 20% outliers out, putter never) fully
  * replaces the seed (no blend); else typed typical-carry; else STOCK_AVG_CARRY.
- * Estimated fills never enter ranking. Outliers do not count.
- * Putter is never rankable.
+ * Estimated fills never enter ranking. Watch top-3 reads this same table.
  */
 export function rankDistanceYards(club: RankClubInput): number | null {
   if (isPutterClubId(club.id)) return null;
