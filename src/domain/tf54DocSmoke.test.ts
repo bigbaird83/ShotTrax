@@ -40,24 +40,22 @@ test('TF 54 A/E: Watch Made it is reserved on the putt sheet — always enabled,
   assert.doesNotMatch(puttOpen, /statusHeader/);
   assert.match(watchSheet, /LazyVGrid/);
   assert.match(watchSheet, /HStack\(spacing: 4\)/);
-  assert.match(watchSheet, /Text\("Made it"\)/);
+  assert.match(watchSheet, /Text\("Made(?: it)?"\)/);
   assert.match(watchSheet, /layoutPriority\(1\)/);
-  assert.ok(watchSheet.indexOf('LazyVGrid') < watchSheet.indexOf('Text("Made it")'));
-  assert.ok(watchSheet.indexOf('Text("Made it")') < watchSheet.indexOf('if !session.putt.lengths'));
-  const actions = watchSheet.slice(watchSheet.indexOf('HStack(spacing: 4)'), watchSheet.indexOf('if !session.putt.lengths'));
+  assert.ok(watchSheet.indexOf('LazyVGrid') < watchSheet.search(/Text\("Made(?: it)?"\)/));
+  assert.ok(watchSheet.search(/Text\("Made(?: it)?"\)/) < watchSheet.indexOf('if !session.putt.lengths'));
+  const actions = watchSheet.slice(watchSheet.indexOf('HStack(spacing: 4)'), watchSheet.indexOf('session.madeIt()'));
   assert.ok(actions.indexOf('Text("Add putt")') >= 0);
   assert.ok(actions.indexOf('Text("Undo")') >= 0);
-  assert.ok(actions.indexOf('Text("Made it")') >= 0);
-  assert.ok(actions.indexOf('Text("Add putt")') < actions.indexOf('Text("Made it")'));
-  assert.ok(actions.indexOf('Text("Undo")') < actions.indexOf('Text("Made it")'));
+  assert.ok(actions.search(/Text\("Made(?: it)?"\)/) < 0);
   const madeBtn = watchSheet.slice(watchSheet.indexOf('session.madeIt()'), watchSheet.indexOf('if !session.putt.lengths'));
   assert.doesNotMatch(madeBtn, /\.disabled/);
   assert.doesNotMatch(watchSheet, /Text\("Hole Out"\)/);
   assert.match(clubPick, /Text\("Hole Out"\)/);
-  assert.doesNotMatch(clubPick, /Text\("Made it"\)/);
+  assert.doesNotMatch(clubPick, /Text\("Made(?: it)?"\)/);
 
   const applySheet = session.slice(session.indexOf('private func applyPuttSheet'), session.indexOf('private func persist'));
-  assert.match(applySheet, /incomingOpen \|\| \(putt\.open && list\.selectedClubId == "club_putter"\)/);
+  assert.match(applySheet, /incomingOpen \|\| putt\.open/);
   assert.match(applySheet, /next\.canMake = true/);
 
   const watchStart = hole.indexOf('const onWatchPuttPick');

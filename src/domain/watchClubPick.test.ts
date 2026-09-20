@@ -414,11 +414,11 @@ test('Watch putt chips use the Signal gate; Hole Out stays; no scorecard', () =>
   const holeOutAt = pick.indexOf('session.madeIt()');
   assert.ok(stripAt >= 0 && holeOutAt > stripAt);
   assert.match(pick, /Text\("Hole Out"\)/);
-  assert.doesNotMatch(pick, /Text\("Made it"\)/);
+  assert.doesNotMatch(pick, /Text\("Made(?: it)?"\)/);
   const watchSheet = watchUi.slice(watchUi.indexOf('private var puttSheet'), watchUi.indexOf('private var clubPick'));
-  assert.match(watchSheet, /Text\("Made it"\)/);
+  assert.match(watchSheet, /Text\("Made(?: it)?"\)/);
   assert.match(watchSheet, /Text\("0–3"\)|watchPuttBuckets/);
-  assert.ok(watchSheet.indexOf('LazyVGrid') < watchSheet.indexOf('Text("Made it")'));
+  assert.ok(watchSheet.indexOf('LazyVGrid') < watchSheet.search(/Text\("Made(?: it)?"\)/));
   assert.equal(watchPuttChipsShowMadeIt(), false);
 
   const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');

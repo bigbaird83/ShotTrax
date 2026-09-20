@@ -50,7 +50,7 @@ struct ContentView: View {
           .padding(.horizontal, 4)
         }
       } else if session.putt.open {
-        // Compact title only — header feedback was clipping Made it on small faces.
+        // Compact title only — header feedback was clipping Made on small faces.
         VStack(alignment: .leading, spacing: 4) {
           Text("Hole \(session.putt.holeNumber) · Putts")
             .font(.system(size: 12, weight: .heavy))
@@ -163,8 +163,8 @@ struct ContentView: View {
 
   @ViewBuilder
   private var puttSheet: some View {
-    // 2-col length pills only. Add / Undo / Made it share one reserved row
-    // so a small face cannot show pills + Add + Undo with Made it clipped.
+    // 2-col length pills. Add / Undo share one row. Made is a full-width
+    // row under them so a small face cannot clip it off next to Add/Undo.
     LazyVGrid(columns: [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4)], spacing: 4) {
       ForEach(watchPuttBuckets, id: \.id) { bucket in
         Button(action: { session.pickPuttLength(bucket.id) }) {
@@ -198,18 +198,18 @@ struct ContentView: View {
       }
       .buttonStyle(.bordered)
       .disabled(session.sending || session.putt.lengths.isEmpty)
-
-      Button(action: { session.madeIt() }) {
-        Text("Made it")
-          .font(.system(size: 12, weight: .black))
-          .lineLimit(1)
-          .minimumScaleFactor(0.7)
-          .frame(maxWidth: .infinity, minHeight: 36)
-      }
-      .buttonStyle(.borderedProminent)
-      .tint(Color("accent"))
-      .foregroundStyle(Color.black)
     }
+
+    Button(action: { session.madeIt() }) {
+      Text("Made")
+        .font(.system(size: 14, weight: .black))
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
+        .frame(maxWidth: .infinity, minHeight: 40)
+    }
+    .buttonStyle(.borderedProminent)
+    .tint(Color("accent"))
+    .foregroundStyle(Color.black)
     .layoutPriority(1)
     .fixedSize(horizontal: false, vertical: true)
 
@@ -315,6 +315,21 @@ struct ContentView: View {
           .frame(height: 52)
 
           HStack(spacing: 8) {
+            Button(action: { session.openPuttSheet() }) {
+              Text("Putt")
+                .font(.system(size: 15, weight: .heavy))
+                .foregroundStyle(Color("cream"))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity, minHeight: 40)
+                .overlay(
+                  RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color("cream"), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(session.sending)
+
             Button(action: { session.madeIt() }) {
               Text("Hole Out")
                 .font(.system(size: 15, weight: .heavy))
@@ -329,19 +344,19 @@ struct ContentView: View {
             }
             .buttonStyle(.plain)
             .disabled(session.sending)
-
-            Button(action: { showAllClubs.toggle() }) {
-              Text("All clubs")
-                .font(.system(size: 15, weight: .heavy))
-                .foregroundStyle(Color("cream"))
-                .frame(maxWidth: .infinity, minHeight: 40)
-                .overlay(
-                  RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color("cream"), lineWidth: 1)
-                )
-            }
-            .buttonStyle(.plain)
           }
+
+          Button(action: { showAllClubs.toggle() }) {
+            Text("All clubs")
+              .font(.system(size: 15, weight: .heavy))
+              .foregroundStyle(Color("cream"))
+              .frame(maxWidth: .infinity, minHeight: 40)
+              .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                  .stroke(Color("cream"), lineWidth: 1)
+              )
+          }
+          .buttonStyle(.plain)
 
           if showAllClubs {
             ScrollView {

@@ -240,7 +240,22 @@ async function handlePick(token: string, json: string): Promise<void> {
   }
 }
 
+let puttPickTail: Promise<void> = Promise.resolve();
+
+function enqueuePuttPick(work: () => Promise<void>): Promise<void> {
+  const run = puttPickTail.then(work, work);
+  puttPickTail = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
 async function handlePuttPick(token: string, json: string): Promise<void> {
+  return enqueuePuttPick(() => handlePuttPickNow(token, json));
+}
+
+async function handlePuttPickNow(token: string, json: string): Promise<void> {
   const pick = (() => {
     try {
       return parsePuttPick(JSON.parse(json) as unknown);

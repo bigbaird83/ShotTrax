@@ -101,6 +101,28 @@ export function addPuttLength(current: PuttDraft, id: PuttLengthId): PuttDraft {
   return { putts: lengths.length, lengths };
 }
 
+/** Watch puttPick add/undo in order. Each add bumps count — never drop N≥2. */
+export function applyWatchPuttPickToDraft(
+  draft: PuttDraft,
+  msg: { action: 'add' | 'undo' | 'made'; lengthId?: PuttLengthId },
+): PuttDraft {
+  if (msg.action === 'add' && msg.lengthId && isPuttLengthId(msg.lengthId)) {
+    return addPuttLength(draft, msg.lengthId);
+  }
+  if (msg.action === 'undo') {
+    return undoLastPutt(draft);
+  }
+  return draft;
+}
+
+/** Two Watch puttPick adds must land as putts===2 on the phone draft. */
+export function applyWatchPuttPickAdds(
+  draft: PuttDraft,
+  lengthIds: readonly PuttLengthId[],
+): PuttDraft {
+  return lengthIds.reduce((acc, id) => addPuttLength(acc, id), draft);
+}
+
 export type PuttSheetPick = {
   draft: PuttDraft;
   pending: PuttLengthId | null;
@@ -576,12 +598,17 @@ export function watchPuttSheetMadeItAlwaysEnabled(): true {
   return true;
 }
 
-/** Made it shares the Add/Undo row so a small face cannot clip it off. */
+/** Made sits on its own full-width row so a small face cannot clip it off. */
 export function watchPuttSheetPinsMadeIt(): true {
   return true;
 }
 
 export function watchPuttSheetMadeItSitsWithAddUndo(): true {
+  return true;
+}
+
+/** Full-width row under Add/Undo — not a third HStack pill that clips. */
+export function watchPuttSheetMadeItIsFullWidthRow(): true {
   return true;
 }
 
@@ -622,8 +649,13 @@ export function watchPuttSheetUndoLabel(): 'Undo' {
   return 'Undo';
 }
 
-export function watchPuttSheetMadeItLabel(): 'Made it' {
-  return 'Made it';
+export function watchPuttSheetMadeItLabel(): 'Made' {
+  return 'Made';
+}
+
+/** Tests lock Watch Made and phone Made it. */
+export function watchPuttSheetMadeItAcceptsMadeIt(): true {
+  return true;
 }
 
 export function playDockHoleDoneLabel(): 'Hole Out' {

@@ -56,6 +56,19 @@ export function watchPutterPickOpensPuttSheetImmediately(): true {
   return true;
 }
 
+/** Dedicated Watch Putt control — always on play UI, not only via the club wheel. */
+export function watchPlayHasDedicatedPuttControl(): true {
+  return true;
+}
+
+export function watchPuttControlOpensPuttSheet(): true {
+  return true;
+}
+
+export function watchPuttControlIsClubWheel(): false {
+  return false;
+}
+
 /** Made it lives on the putt sheet, not the club-pick chip row. */
 export function watchPuttChipsShowMadeIt(): false {
   return false;

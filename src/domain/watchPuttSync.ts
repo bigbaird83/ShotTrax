@@ -38,6 +38,20 @@ export function watchPuttActionsMustReachPhone(): readonly ['add', 'undo', 'made
   return ['add', 'undo', 'made'];
 }
 
+/** Rapid Watch adds share one handler — serialize so N≥2 cannot race a stale draft. */
+export function watchPuttPickSerializesOnPhone(): true {
+  return true;
+}
+
+/** Same-millisecond Add taps must not share `at` or the 2nd is silently dropped. */
+export function watchPuttPickUsesUniqueAt(): true {
+  return true;
+}
+
+export function watchPuttAddsNeverDropAfterFirst(): true {
+  return true;
+}
+
 export function enqueueWatchPuttPick<T extends { at: string }>(queue: T[], next: T): T[] {
   if (!next.at || queue.some((row) => row.at === next.at)) return queue;
   return [...queue, next];

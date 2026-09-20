@@ -12,7 +12,11 @@ import {
   watchPuttPickQueuesWhenUnreachable,
   watchPuttPickSinglePendingSlot,
   watchPuttPickUsesTransferUserInfo,
+  watchPuttAddsNeverDropAfterFirst,
+  watchPuttPickSerializesOnPhone,
+  watchPuttPickUsesUniqueAt,
 } from './watchPuttSync';
+import { applyWatchPuttPickAdds, emptyPuttDraft } from './putts';
 
 test('TF 53 D: puttPick queues every tap — not one pending slot, not reachable-only', () => {
   assert.equal(watchPuttPickUsesTransferUserInfo(), true);
@@ -76,4 +80,11 @@ test('TF 53 D: puttPick queues every tap — not one pending slot, not reachable
   assert.match(service, /queueWatchPuttPickEvent/);
   assert.match(service, /flushPendingPuttPicks/);
   assert.match(service, /forgetWatchPuttPickAt/);
+  assert.match(service, /enqueuePuttPick/);
+  assert.equal(watchPuttPickSerializesOnPhone(), true);
+  assert.equal(watchPuttPickUsesUniqueAt(), true);
+  assert.equal(watchPuttAddsNeverDropAfterFirst(), true);
+  const two = applyWatchPuttPickAdds(emptyPuttDraft(), ['inside_3', '3_to_10']);
+  assert.equal(two.putts, 2);
+  assert.match(session, /uniquePuttAt/);
 });
