@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { MIC_SHOT_ASSIST, PUTT_ASSIST, WATCH_ASSIST } from '../sensing/assists';
 import { SOFT_GPS_MAX_M, SOFT_GPS_MIN_M } from '../config/sensing';
@@ -266,6 +267,16 @@ test('Watch companion is club-pick only — no motion, mic, or auto-putt', () =>
   assert.equal(WATCH_ASSIST, false);
   assert.equal(MIC_SHOT_ASSIST, false);
   assert.equal(PUTT_ASSIST, false);
+
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+  const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  const service = readFileSync(new URL('../services/watchClub.ts', import.meta.url), 'utf8');
+  assert.match(session, /No motion detection, no mic/);
+  assert.match(session, /import CoreLocation/);
+  assert.match(session, /attachWatchFix/);
+  assert.doesNotMatch(session, /CoreMotion|CMMotion|AVAudio|microphone|CMPedometer|WKExtendedRuntime/);
+  assert.doesNotMatch(watchUi, /CoreMotion|CMMotion|AVAudio|microphone|CMPedometer/);
+  assert.doesNotMatch(service, /CoreMotion|CMMotion|AVAudio|getMotionActivity|DeviceMotion/);
 });
 
 test('puttSheet is buckets plus Made it — never GPS and never invented putts', () => {
