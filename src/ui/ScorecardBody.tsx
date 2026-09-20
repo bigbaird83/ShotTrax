@@ -18,6 +18,9 @@ type HoleIn = {
   par: number | null;
   score: number | null;
   putts: number;
+  puttsDone?: boolean;
+  shotCount?: number;
+  penaltyStrokes?: number;
 };
 
 export function ScorecardBody({

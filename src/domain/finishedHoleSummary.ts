@@ -3,6 +3,7 @@
  * Floating chip only. Never a modal. Never invent putt GPS or yards.
  */
 
+import { finishedHoleDisplayScore } from './holeScore';
 import { COPY, formatPuttCount, formatShotCount, holeOutClosedOnShot } from './playerCopy';
 import { holeClosedByShot } from './putts';
 import {
@@ -11,6 +12,8 @@ import {
   scorecardDiffTone,
   type ScorecardDiffTone,
 } from './scorecard';
+
+export { finishedHoleDisplayScore };
 
 export type FinishedHoleMiniSummary = {
   visible: boolean;
@@ -28,21 +31,6 @@ export type FinishedHoleMiniSummary = {
   line: string;
   accessibilityLabel: string;
 };
-
-/** Posted score wins. Unset score falls back to logged strokes — never invented GPS. */
-export function finishedHoleDisplayScore(args: {
-  score: number | null;
-  shotCount: number;
-  putts: number;
-  penaltyStrokes?: number;
-}): number | null {
-  if (args.score != null && Number.isFinite(args.score) && Number.isInteger(args.score) && args.score >= 1) {
-    return args.score;
-  }
-  const logged =
-    Math.max(0, args.shotCount) + Math.max(0, args.putts) + Math.max(0, args.penaltyStrokes ?? 0);
-  return logged > 0 ? logged : null;
-}
 
 export { formatPuttCount, formatShotCount };
 

@@ -147,6 +147,24 @@ test('Signal Lab: TF 48 finished-hole revisit is a thin chip — score vs par, s
   assert.equal(finishedHoleDisplayScore({ score: null, shotCount: 3, putts: 1, penaltyStrokes: 1 }), 5);
   assert.equal(finishedHoleDisplayScore({ score: 6, shotCount: 3, putts: 1 }), 6);
 
+  const cypress = planFinishedHoleMiniSummary({
+    puttsDone: true,
+    score: null,
+    par: 4,
+    shotCount: 2,
+    putts: 2,
+    shots: [
+      { seq: 1, holeOut: false },
+      { seq: 2, holeOut: false },
+    ],
+  });
+  assert.equal(cypress.visible, true);
+  assert.equal(cypress.score, 4);
+  assert.equal(cypress.putts, 2);
+  assert.equal(cypress.vsPar, 'E');
+  assert.equal(cypress.flag, COPY.madeIt);
+  assert.equal(cypress.line, '4 · E · 2 shots · 2 putts · Made it');
+
   const noPar = planFinishedHoleMiniSummary({
     puttsDone: true,
     score: 4,

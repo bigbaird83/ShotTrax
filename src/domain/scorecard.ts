@@ -1,3 +1,5 @@
+import { finishedHoleDisplayScore } from './holeScore';
+
 export type ScorecardMark = 'eagle' | 'birdie' | 'par' | 'bogey' | 'double' | null;
 
 export type ScorecardHole = {
@@ -41,16 +43,29 @@ export function planScorecard(holes: {
   par: number | null;
   score: number | null;
   putts: number;
+  puttsDone?: boolean;
+  shotCount?: number;
+  penaltyStrokes?: number;
 }[]): ScorecardHole[] {
   return [...holes]
     .sort((a, b) => a.number - b.number)
-    .map((hole) => ({
-      number: hole.number,
-      par: hole.par,
-      score: hole.score,
-      putts: hole.putts,
-      mark: scorecardMark(hole.score, hole.par),
-    }));
+    .map((hole) => {
+      const score = hole.puttsDone
+        ? finishedHoleDisplayScore({
+            score: hole.score,
+            shotCount: hole.shotCount ?? 0,
+            putts: hole.putts,
+            penaltyStrokes: hole.penaltyStrokes,
+          })
+        : hole.score;
+      return {
+        number: hole.number,
+        par: hole.par,
+        score,
+        putts: hole.putts,
+        mark: scorecardMark(score, hole.par),
+      };
+    });
 }
 
 /** Back / Done: view only. Never marks or closes a shot, never leaves the hole, never finishes the round. */

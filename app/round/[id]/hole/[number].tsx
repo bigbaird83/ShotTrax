@@ -1619,6 +1619,9 @@ export default function HoleScreen() {
               par: row.par,
               score: row.score,
               putts: row.putts,
+              puttsDone: row.puttsDone,
+              shotCount: listShotsForHole(db, row.id).length,
+              penaltyStrokes: totalPenaltyStrokes(listPenaltiesForHole(db, row.id)),
             }))}
             onBack={dismissScorecard}
           />

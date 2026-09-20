@@ -61,6 +61,18 @@ test('scorecard rows keep stored par/score/putts and never invent par', () => {
   assert.equal(scorecardMarkGlyph(rows[4]!.mark), '');
 });
 
+test('scorecard never blanks a finished hole — posted or logged strokes', () => {
+  const rows = planScorecard([
+    { number: 1, par: 4, score: null, putts: 2, puttsDone: true, shotCount: 2 },
+    { number: 2, par: 4, score: null, putts: 0, puttsDone: false, shotCount: 2 },
+  ]);
+  assert.equal(rows[0]!.score, 4);
+  assert.equal(rows[0]!.putts, 2);
+  assert.equal(rows[0]!.mark, 'par');
+  assert.equal(rows[1]!.score, null);
+  assert.equal(rows[1]!.mark, null);
+});
+
 test('opening scorecard and Back never mark or close a shot', () => {
   const back = planScorecardDismiss();
   assert.deepEqual(back, {

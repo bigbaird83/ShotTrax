@@ -119,11 +119,13 @@ test('Signal Lab: Hole Out closes on the last real mark — no invented putt GPS
   const finishOut = repo.slice(repo.indexOf('export function finishHoleOut'), repo.indexOf('export function sealOpenShotWithoutGps'));
   assert.match(finishOut, /planFinishHoleOut/);
   assert.match(finishOut, /updateHolePutts/);
+  assert.match(finishOut, /persistCloseHoleScore/);
   assert.match(finishOut, /planFlagLastRealShot/);
   assert.match(finishOut, /hole_out/);
   assert.doesNotMatch(finishOut, /INSERT INTO shots|insertShot|lat|lng|accuracy|acceptFix|addPlacedShot|club_putter/);
   const finishPutts = repo.slice(repo.indexOf('export function finishHolePutts'), repo.indexOf('export function finishHoleOut'));
   assert.match(finishPutts, /planMadeIt/);
+  assert.match(finishPutts, /persistCloseHoleScore/);
   assert.doesNotMatch(finishPutts, /lat|lng|acceptFix|insertShot/);
 
   const close = readFileSync(new URL('../services/shotActions.ts', import.meta.url), 'utf8');
