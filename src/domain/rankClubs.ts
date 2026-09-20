@@ -265,6 +265,44 @@ export function lastClosedShotYards(
   return null;
 }
 
+/** Suggested 3 is lowest |carry − D| — never sort-by-carry-desc (longest 3) or shortest 3. */
+export function top3RanksByAbsCarryMinusD(): true {
+  return true;
+}
+
+export function top3SortsByCarryDescending(): false {
+  return false;
+}
+
+export function top3SortsByCarryAscending(): false {
+  return false;
+}
+
+export function playAndAddShotShareClosestCarryRanker(): true {
+  return true;
+}
+
+/**
+ * Shared closest-carry ranker (play strip AND Add-shot).
+ * Lowest |carry − D| first. Putter never ranks. Ties prefer the shorter carry.
+ */
+export function rankClosestCarryIds(
+  clubs: { id: string; carry: number }[],
+  dYards: number,
+  limit = 3,
+): string[] {
+  if (!Number.isFinite(dYards)) return [];
+  return clubs
+    .filter((club) => !isPutterClubId(club.id) && Number.isFinite(club.carry) && club.carry > 0)
+    .map((club) => ({ id: club.id, carry: club.carry, delta: Math.abs(club.carry - dYards) }))
+    .sort((a, b) => {
+      if (a.delta !== b.delta) return a.delta - b.delta;
+      return a.carry - b.carry;
+    })
+    .slice(0, limit)
+    .map((club) => club.id);
+}
+
 /**
  * Surface up to 3 clubs with the lowest |rank yards − D|.
  * Rank yards = live average after ≥5 closed shots (replaces seed, no blend),

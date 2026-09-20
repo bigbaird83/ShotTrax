@@ -20,9 +20,14 @@ import {
   rankCatchUpClubs,
   rankDistanceYards,
   rankTopClubs,
+  playAndAddShotShareClosestCarryRanker,
+  rankClosestCarryIds,
   remainingPinRanksLastClosedShot,
   remainingPinUsesPhoneGps,
   resolveAddShotSuggestTarget,
+  top3RanksByAbsCarryMinusD,
+  top3SortsByCarryAscending,
+  top3SortsByCarryDescending,
   resolveDistanceTarget,
   resolveNextShotDistanceTarget,
   resolveRemainingPinTarget,
@@ -642,6 +647,10 @@ test('typical-carry seed ranks a stock club before 5 live shots; live avg takes 
 test('TF 53: top-3 is closest carry to remaining pin yards — not shortest or longest', () => {
   assert.equal(remainingPinRanksLastClosedShot(), false);
   assert.equal(remainingPinUsesPhoneGps(), false);
+  assert.equal(top3RanksByAbsCarryMinusD(), true);
+  assert.equal(top3SortsByCarryDescending(), false);
+  assert.equal(top3SortsByCarryAscending(), false);
+  assert.equal(playAndAddShotShareClosestCarryRanker(), true);
 
   const cypress6Tee = { lat: 35.0349146, lng: -92.0203523 };
   const cypress6Green = { lat: 35.0332467, lng: -92.0234644 };
@@ -726,6 +735,23 @@ test('TF 53: top-3 is closest carry to remaining pin yards — not shortest or l
   assert.doesNotMatch(watchPush, /yardsToGreen: liveToGreen\.yards/);
   assert.match(pick, /yardsToGreen: target\?\.dYards/);
   assert.doesNotMatch(pick, /yardsToGreen\(fix, green\)/);
+
+  const withBomb = [
+    { id: 'club_lw', carry: 75 },
+    { id: 'club_7i', carry: 150 },
+    { id: 'club_5i', carry: 170 },
+    { id: 'club_2i', carry: 239 },
+    { id: 'club_3w', carry: 254 },
+    { id: 'club_driver', carry: 280 },
+    { id: 'club_bomb', carry: 400 },
+  ];
+  const longest3 = [...withBomb].sort((a, b) => b.carry - a.carry).slice(0, 3).map((row) => row.id);
+  assert.deepEqual(longest3, ['club_bomb', 'club_driver', 'club_3w']);
+  assert.deepEqual(rankClosestCarryIds(withBomb, 155), ['club_7i', 'club_5i', 'club_lw']);
+  assert.deepEqual(rankClosestCarryIds(withBomb, 281), ['club_driver', 'club_3w', 'club_2i']);
+  assert.ok(!rankClosestCarryIds(withBomb, 281).includes('club_bomb'));
+  const strip = readFileSync(new URL('./clubStrip.ts', import.meta.url), 'utf8');
+  assert.match(strip, /rankClosestCarryIds/);
 
   const header281 = planClubStrip({
     clubs: docBag.map((row) => ({ id: row.id, carry: row.typicalCarryYards })),

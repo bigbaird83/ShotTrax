@@ -1,7 +1,7 @@
 import { fillEstimatedCarries, type CarryClub } from './carryFill';
 import { isPutterClubId, stockAvgCarryForSuggestion, typicalCarrySeedForClub } from './defaultBag';
 import { formatSuggestedClubChip } from './playerCopy';
-import { MIN_CLOSED_SHOTS_FOR_RANK } from './rankClubs';
+import { MIN_CLOSED_SHOTS_FOR_RANK, rankClosestCarryIds } from './rankClubs';
 
 /** Build 31 club-pill height. Dock actions stay this tall. */
 export const BUILD_31_CLUB_PILL_HEIGHT = 52;
@@ -390,16 +390,12 @@ export function clubStripThreeClosestIds(
   if (yards == null || !Number.isFinite(yards)) {
     return usable.slice(0, CLUB_STRIP_VISIBLE_PILLS).map((club) => club.id);
   }
-  return [...usable]
-    .sort((a, b) => {
-      const da = Math.abs(a.carry - yards);
-      const db = Math.abs(b.carry - yards);
-      if (da !== db) return da - db;
-      return a.carry - b.carry;
-    })
-    .slice(0, CLUB_STRIP_VISIBLE_PILLS)
-    .sort((a, b) => a.carry - b.carry)
-    .map((club) => club.id);
+  const closest = rankClosestCarryIds(usable, yards, CLUB_STRIP_VISIBLE_PILLS);
+  return [...closest].sort((a, b) => {
+    const ca = usable.find((club) => club.id === a)?.carry ?? 0;
+    const cb = usable.find((club) => club.id === b)?.carry ?? 0;
+    return ca - cb;
+  });
 }
 
 /** End of bag / after wedges — matches DEFAULT_BAG sortOrder. Never invents a putter carry. */
