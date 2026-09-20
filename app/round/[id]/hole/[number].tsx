@@ -96,6 +96,7 @@ import type { LatLng } from '@/src/domain/latLng';
 import { formatPenaltyRow, PENALTY_REASONS, totalPenaltyStrokes } from '@/src/domain/penalty';
 import {
   addPuttLength,
+  applyWatchPuttPickToDraft,
   emptyPuttDraft,
   holeAfterDone,
   holesNeedingPutts,
@@ -625,12 +626,22 @@ export default function HoleScreen() {
       if (!row) return;
       const lengths = row.puttLengths.filter(isPuttLengthId);
       const draft: PuttDraft = { putts: lengths.length, lengths };
+      const live = puttDraftRef.current;
+      const nextDraft =
+        live.putts > draft.putts || live.lengths.length > draft.lengths.length ? live : draft;
       setPuttSheetHole(targetHole);
-      setPuttDraft(draft);
+      setPuttDraft(nextDraft);
+      puttDraftRef.current = nextDraft;
       setPuttOpen(true);
+      puttOpenRef.current = true;
       await closeApproachBeforePutts(db, { roundId: id, holeNumber: targetHole });
       bump();
-      void pushWatchPuttSheet({ open: true, holeNumber: targetHole, lengths: draft.lengths });
+      const latest = puttDraftRef.current;
+      const pushDraft =
+        latest.putts > nextDraft.putts || latest.lengths.length > nextDraft.lengths.length
+          ? latest
+          : nextDraft;
+      void pushWatchPuttSheet({ open: true, holeNumber: targetHole, lengths: pushDraft.lengths });
     },
     [readOnly, db, id, bump],
   );
@@ -708,15 +719,21 @@ export default function HoleScreen() {
       const target = puttOpenRef.current ? puttSheetHoleRef.current || holeNumber : holeNumber;
       if (!puttOpenRef.current) setPuttSheetHole(target);
       if (msg.action === 'add' && msg.lengthId) {
-        const next = addPuttLength(puttDraftRef.current, msg.lengthId);
+        const next = applyWatchPuttPickToDraft(puttDraftRef.current, msg);
+        puttDraftRef.current = next;
+        puttOpenRef.current = true;
         setPuttDraft(next);
+        setPuttOpen(true);
         saveDraft(target, next, false);
         void pushWatchPuttSheet({ open: true, holeNumber: target, lengths: next.lengths });
         return { ok: true, feedback: COPY.putts };
       }
       if (msg.action === 'undo') {
-        const next = undoLastPutt(puttDraftRef.current);
+        const next = applyWatchPuttPickToDraft(puttDraftRef.current, msg);
+        puttDraftRef.current = next;
+        puttOpenRef.current = true;
         setPuttDraft(next);
+        setPuttOpen(true);
         saveDraft(target, next, false);
         void pushWatchPuttSheet({ open: true, holeNumber: target, lengths: next.lengths });
         return { ok: true, feedback: COPY.undoPutt };

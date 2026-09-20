@@ -177,8 +177,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     next.selectedClubId = clubId
     list = next
     persist(next)
-    // Putter opens the putt sheet locally so Made it is on-screen without
-    // waiting on a phone push (TF 53: Doc never saw Made it).
+    // Putter opens the putt sheet locally so Made is on-screen without
+    // waiting on a phone push (TF 53/56: Doc never saw Made).
     if clubId == "club_putter" {
       var sheet = putt
       sheet.open = true
@@ -211,6 +211,24 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     ], keepPending: false)
   }
 
+  /// Dedicated Putt control — opens the sheet without selecting putter on the wheel.
+  func openPuttSheet() {
+    var sheet = putt
+    sheet.open = true
+    if sheet.holeNumber < 1 {
+      sheet.holeNumber = list.holeNumber
+    }
+    sheet.canMake = true
+    sheet.canAdd = sheet.lengths.count < 5
+    putt = sheet
+    syncRoundStay()
+    sendPick([
+      "type": "clubPick",
+      "clubId": "club_putter",
+      "at": isoNow(),
+    ], keepPending: false)
+  }
+
   func pickPuttLength(_ lengthId: String) {
     guard putt.canAdd else { return }
     var next = putt
@@ -235,7 +253,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       "type": "puttPick",
       "action": "add",
       "lengthId": lengthId,
-      "at": isoNow(),
+      "at": uniquePuttAt(),
     ])
   }
 
@@ -245,7 +263,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     sendPick([
       "type": "puttPick",
       "action": "undo",
-      "at": isoNow(),
+      "at": uniquePuttAt(),
     ])
   }
 
@@ -255,7 +273,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     var payload: [String: Any] = [
       "type": "puttPick",
       "action": "made",
-      "at": isoNow(),
+      "at": uniquePuttAt(),
     ]
     if let pending = putt.pending {
       payload["lengthId"] = pending
@@ -315,6 +333,19 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     let fmt = ISO8601DateFormatter()
     fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     return fmt.string(from: Date())
+  }
+
+  /// Distinct `at` per puttPick so a 2nd Add in the same ms is not deduped.
+  private var lastPuttAt = Date.distantPast
+  private func uniquePuttAt() -> String {
+    var now = Date()
+    if now.timeIntervalSince(lastPuttAt) < 0.002 {
+      now = lastPuttAt.addingTimeInterval(0.002)
+    }
+    lastPuttAt = now
+    let fmt = ISO8601DateFormatter()
+    fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return fmt.string(from: now)
   }
 
   private func isPuttPick(_ payload: [String: Any]) -> Bool {
@@ -569,9 +600,9 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     next.canAdd = message["canAdd"] as? Bool ?? (next.lengths.count < 5)
     next.canMake = true
     let incomingOpen = message["open"] as? Bool ?? false
-    // Phone add/undo can race puttOpen=false and close a Watch-opened sheet.
-    // Keep the putt sheet up while putter still owns it (Made it stays on-screen).
-    next.open = incomingOpen || (putt.open && list.selectedClubId == "club_putter")
+    // Phone add/undo can race puttOpen=false and close a Watch-opened sheet
+    // (dedicated Putt does not select putter on the wheel). Keep it up.
+    next.open = incomingOpen || putt.open
     if next.canAdd, next.lengths == priorLengths {
       next.pending = priorPending
     }

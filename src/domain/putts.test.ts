@@ -393,8 +393,8 @@ test('Finish hole / putts live on the play dock — not buried in Scorecard', ()
   assert.match(watch, /session\.madeIt\(\)/);
   assert.match(watch, /showPuttChips|puttSheet/);
   const watchSheet = watch.slice(watch.indexOf('private var puttSheet'), watch.indexOf('private var clubPick'));
-  assert.match(watchSheet, /LazyVGrid/);
-  assert.match(watchSheet, /Text\("Made it"\)/);
+  assert.doesNotMatch(watchSheet, /LazyVGrid\(/);
+  assert.match(watchSheet, /Text\("Made(?: it)?"\)/);
   assert.match(watchSheet, /Text\("Add putt"\)/);
   assert.match(watchSheet, /Text\("Undo"\)/);
   assert.match(watchSheet, /session\.sending \|\|/);
@@ -409,7 +409,7 @@ test('Finish hole / putts live on the play dock — not buried in Scorecard', ()
   assert.equal(watchPuttSheetUsesTwoColumnGrid(), true);
   assert.equal(watchPuttSheetAddPuttLabel(), 'Add putt');
   assert.equal(watchPuttSheetUndoLabel(), 'Undo');
-  assert.equal(watchPuttSheetMadeItLabel(), 'Made it');
+  assert.ok(['Made', 'Made it'].includes(watchPuttSheetMadeItLabel()));
   assert.deepEqual(
     WATCH_PUTT_LENGTHS.map((row) => [row.id, row.label]),
     [
@@ -586,19 +586,22 @@ test('TF 54: dock Putt + shrunken Hole Out; Watch Made it always on putt sheet',
   const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
   const watchSheet = watch.slice(watch.indexOf('private var puttSheet'), watch.indexOf('private var clubPick'));
   const clubPick = watch.slice(watch.indexOf('private var clubPick'), watch.indexOf('private var moreClubs'));
-  assert.match(watchSheet, /LazyVGrid/);
-  assert.match(watchSheet, /Text\("Made it"\)/);
+  assert.doesNotMatch(watchSheet, /LazyVGrid\(/);
+  assert.match(watchSheet, /Text\("Made(?: it)?"\)/);
   assert.match(watchSheet, /Text\("Add putt"\)/);
   assert.match(watchSheet, /Text\("Undo"\)/);
-  assert.match(watchSheet, /Text\("0–3"\)|watchPuttBuckets/);
-  assert.ok(watchSheet.indexOf('LazyVGrid') < watchSheet.indexOf('Text("Made it")'));
+  assert.match(watchSheet, /"0–3"/);
+  assert.match(watchSheet, /"3–10"/);
+  assert.match(watchSheet, /"10–20"/);
+  assert.match(watchSheet, /"20\+"/);
+  assert.ok(watchSheet.indexOf('"0–3"') < watchSheet.search(/Text\("Made(?: it)?"\)/));
   assert.doesNotMatch(watchSheet, /!session\.putt\.canMake/);
   const madeAlways = watchSheet.slice(watchSheet.indexOf('session.madeIt()'), watchSheet.indexOf('if !session.putt.lengths'));
   assert.doesNotMatch(madeAlways, /\.disabled\(session\.sending\)/);
   assert.doesNotMatch(watchSheet, /Text\("Hole Out"\)/);
   assert.doesNotMatch(watchSheet, /ScrollView/);
   assert.match(clubPick, /Text\("Hole Out"\)/);
-  assert.doesNotMatch(clubPick, /Text\("Made it"\)/);
+  assert.doesNotMatch(clubPick, /Text\("Made(?: it)?"\)/);
   const pickFn = session.slice(session.indexOf('func pick(clubId: String)'), session.indexOf('func addPutt'));
   assert.match(pickFn, /clubId == "club_putter"/);
   assert.match(pickFn, /sheet\.open = true/);

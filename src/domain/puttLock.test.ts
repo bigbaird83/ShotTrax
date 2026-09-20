@@ -299,14 +299,16 @@ test('Signal Lab: TF 49 putt sheet is pick → Made it on putt N≥1; Add putt i
   assert.doesNotMatch(puttOpen, /ScrollView/);
   assert.match(puttOpen, /puttSheet/);
   const watchSheet = watch.slice(watch.indexOf('private var puttSheet'), watch.indexOf('private var clubPick'));
-  assert.match(watchSheet, /LazyVGrid/);
-  assert.match(watchSheet, /GridItem\(\.flexible/);
-  assert.match(watchSheet, /session\.pickPuttLength\(bucket\.id\)/);
+  assert.doesNotMatch(watchSheet, /LazyVGrid\(/);
+  assert.match(watchSheet, /session\.pickPuttLength/);
   assert.doesNotMatch(watchSheet, /session\.addPutt\(lengthId: bucket\.id\)/);
-  assert.match(watchSheet, /Text\("0–3"\)|watchPuttBuckets/);
+  assert.match(watchSheet, /"0–3"/);
+  assert.match(watchSheet, /"3–10"/);
+  assert.match(watchSheet, /"10–20"/);
+  assert.match(watchSheet, /"20\+"/);
   assert.match(watchSheet, /Text\("Add putt"\)/);
   assert.match(watchSheet, /session\.addPutt\(\)/);
-  assert.match(watchSheet, /Text\("Made it"\)/);
+  assert.match(watchSheet, /Text\("Made(?: it)?"\)/);
   assert.match(watchSheet, /session\.sending \|\|/);
   assert.doesNotMatch(watchSheet, /!session\.putt\.canMake/);
   const madeBtn = watchSheet.slice(watchSheet.indexOf('session.madeIt()'), watchSheet.indexOf('if !session.putt.lengths'));
@@ -323,7 +325,7 @@ test('Signal Lab: TF 49 putt sheet is pick → Made it on putt N≥1; Add putt i
   assert.equal(watchPuttSheetUsesTwoColumnGrid(), true);
   assert.equal(watchPuttSheetAddPuttLabel(), 'Add putt');
   assert.equal(watchPuttSheetUndoLabel(), 'Undo');
-  assert.equal(watchPuttSheetMadeItLabel(), 'Made it');
+  assert.ok(['Made', 'Made it'].includes(watchPuttSheetMadeItLabel()));
   assert.deepEqual(
     WATCH_PUTT_LENGTHS.map((row) => row.label),
     ['0–3', '3–10', '10–20', '20+'],
@@ -460,7 +462,7 @@ test('Signal Lab: Made it enabled with empty length; soft cue present; pending s
   const watchSheet = watch.slice(watch.indexOf('private var puttSheet'), watch.indexOf('private var clubPick'));
   assert.match(watchSheet, /Text\("No length — pick a distance"\)/);
   assert.match(watchSheet, /session\.putt\.pending == nil/);
-  assert.match(watchSheet, /Text\("Made it"\)/);
+  assert.match(watchSheet, /Text\("Made(?: it)?"\)/);
   assert.match(watchSheet, /session\.sending \|\|/);
   assert.doesNotMatch(watchSheet, /!session\.putt\.canMake/);
   const madeAlways = watchSheet.slice(watchSheet.indexOf('session.madeIt()'), watchSheet.indexOf('if !session.putt.lengths'));
@@ -496,7 +498,7 @@ test('Signal Lab: soft No length cue is inline when Made it is off for missing l
   const watchSheet = watch.slice(watch.indexOf('private var puttSheet'), watch.indexOf('private var clubPick'));
   assert.match(watchSheet, /Text\("No length — pick a distance"\)/);
   assert.match(watchSheet, /session\.putt\.pending == nil/);
-  assert.match(watchSheet, /Text\("Made it"\)/);
+  assert.match(watchSheet, /Text\("Made(?: it)?"\)/);
   assert.match(watchSheet, /session\.sending \|\|/);
   assert.doesNotMatch(watchSheet, /!session\.putt\.canMake/);
   const madeAlways = watchSheet.slice(watchSheet.indexOf('session.madeIt()'), watchSheet.indexOf('if !session.putt.lengths'));
