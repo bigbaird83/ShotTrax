@@ -5,6 +5,11 @@ import { PUTTER_CLUB_ID } from './defaultBag';
 import { includeInDistanceAverages, includeInTop3Samples } from './shotSource';
 import { COPY } from './playerCopy';
 import {
+  attachPuttLengthInventGps,
+  attachPuttLengthInventYards,
+  attachPuttLengthIsStatsOnly,
+  attachPuttLengthReopensHole,
+  attachPuttLengthWritesScore,
   canMakeCurrentPutt,
   canMakePutt,
   commitPuttLength,
@@ -22,7 +27,9 @@ import {
   NEAR_GREEN_YD,
   onGreenPuttsAreScoreOnly,
   pickPuttLength,
+  planAttachPuttLength,
   planFinishHoleOut,
+  planFinishedPuttAttachRows,
   madeItEnabledWithEmptyLength,
   madeItRequiresLengthPick,
   planMadeIt,
@@ -482,4 +489,91 @@ test('Signal Lab: next hole stays on play — All clubs does not auto-open', () 
   assert.equal(shouldAutoOpenClubPick({ readOnly: false, shotCount: 0, openingPutts: true }), false);
   assert.equal(COPY.pickClub, 'Pick a club');
   assert.equal(COPY.pickClubLede, 'Picking a club marks where you hit from.');
+});
+
+test('Signal Lab: TF 51.x attach putt length after no-length Made it — stats only', () => {
+  assert.equal(madeItEnabledWithEmptyLength(), true);
+  assert.equal(madeItRequiresLengthPick(), false);
+  assert.equal(canMakeCurrentPutt(emptyPuttSheetPick()), true);
+  const emptyClose = planMadeIt(emptyPuttDraft());
+  assert.equal(emptyClose.ok, true);
+  assert.equal(emptyClose.putts, 1);
+  assert.deepEqual(emptyClose.lengths, []);
+  assert.equal(attachPuttLengthIsStatsOnly(), true);
+  assert.equal(attachPuttLengthReopensHole(), false);
+  assert.equal(attachPuttLengthWritesScore(), false);
+  assert.equal(attachPuttLengthInventGps(), false);
+  assert.equal(attachPuttLengthInventYards(), false);
+
+  const rows = planFinishedPuttAttachRows({
+    puttsDone: true,
+    putts: emptyClose.putts,
+    lengths: emptyClose.lengths,
+  });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.missingLength, true);
+  const attached = planAttachPuttLength(
+    { puttsDone: true, putts: emptyClose.putts, lengths: emptyClose.lengths },
+    0,
+    '3_to_10',
+  );
+  assert.equal(attached.ok, true);
+  if (attached.ok) {
+    assert.equal(attached.putts, 1);
+    assert.deepEqual(attached.lengths, ['3_to_10']);
+    assert.equal(attached.reopen, false);
+    assert.equal(attached.writeScore, false);
+  }
+  assert.doesNotMatch(JSON.stringify(attached), /yd|lat|lng|GPS/i);
+
+  const sheet = readFileSync(new URL('../ui/PuttSheetBody.tsx', import.meta.url), 'utf8');
+  assert.match(sheet, /const canMake = !disabled/);
+  assert.match(sheet, /showPuttNoLengthCue\(pick\)/);
+  assert.match(sheet, /COPY\.addPutt/);
+  assert.match(sheet, /COPY\.madeIt/);
+  assert.doesNotMatch(sheet, /attachHolePuttLength|FinishedPuttRows/);
+
+  const rowsUi = readFileSync(new URL('../ui/FinishedPuttRows.tsx', import.meta.url), 'utf8');
+  assert.match(rowsUi, /testID="finished-putt-rows"/);
+  assert.match(rowsUi, /testID=\{`finished-putt-row-\$\{row\.n\}`\}/);
+  assert.match(rowsUi, /PUTT_LENGTHS\.map/);
+  assert.match(rowsUi, /onAttach\(row\.index, bucket\.id\)/);
+  assert.doesNotMatch(rowsUi, /setPuttOpen|finishHolePutts|persistCloseHoleScore|Alert\.alert|Modal/);
+  assert.doesNotMatch(rowsUi, /lat|lng|acceptFix|insertShot|invent/);
+
+  const repo = readFileSync(new URL('../db/repo.ts', import.meta.url), 'utf8');
+  const attach = repo.slice(
+    repo.indexOf('export function attachHolePuttLength'),
+    repo.indexOf('export function setHoleGreen'),
+  );
+  assert.match(attach, /planAttachPuttLength/);
+  assert.match(attach, /UPDATE holes SET putt_lengths = \?/);
+  assert.doesNotMatch(attach, /putts_done|updateHoleScore|persistCloseHoleScore|finishHolePutts/);
+  assert.doesNotMatch(attach, /lat|lng|acceptFix|insertShot/);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const chip = hole.slice(hole.indexOf('finishedMini.visible'), hole.indexOf('simBanner ?'));
+  assert.match(chip, /testID="finished-hole-chip"/);
+  assert.match(chip, /setScorecardOpen\(true\)/);
+  assert.match(chip, /<FinishedPuttRows/);
+  assert.match(chip, /onAttach=\{onAttachFinishedPuttLength\}/);
+  assert.doesNotMatch(chip, /setPuttOpen\(true\)|finishHolePutts|router\.replace/);
+  const attachFn = hole.slice(
+    hole.indexOf('const onAttachFinishedPuttLength'),
+    hole.indexOf('useEffect(() => {\n    setAttachPuttIndex(null)'),
+  );
+  assert.match(attachFn, /attachHolePuttLength\(db, hole\.id, index, lengthId\)/);
+  assert.doesNotMatch(attachFn, /setPuttOpen|finishHolePutts|persistCloseHoleScore|router\.replace/);
+
+  const apply = hole.slice(hole.indexOf('const applyMadeIt'), hole.indexOf('const dest = holeAfterDone(targetHole'));
+  assert.match(apply, /planMadeIt\(draft, pending\)/);
+  assert.match(apply, /madeItAdvancesHole/);
+
+  const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
+  assert.match(map, /scrollEnabled=\{framedForGestures\}/);
+  assert.match(map, /zoomEnabled=\{framedForGestures\}/);
+
+  const scorecard = readFileSync(new URL('./scorecard.ts', import.meta.url), 'utf8');
+  assert.match(scorecard, /puttsDone === false/);
+  assert.match(scorecard, /scorecardShowsIncompleteCue/);
 });

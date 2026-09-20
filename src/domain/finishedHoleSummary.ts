@@ -5,7 +5,15 @@
 
 import { finishedHoleDisplayScore } from './holeScore';
 import { COPY, formatPuttCount, formatShotCount, holeOutClosedOnShot } from './playerCopy';
-import { holeClosedByShot } from './putts';
+import {
+  attachPuttLengthInventGps,
+  attachPuttLengthInventYards,
+  attachPuttLengthReopensHole,
+  attachPuttLengthWritesScore,
+  holeClosedByShot,
+  planFinishedPuttAttachRows,
+  type FinishedPuttRow,
+} from './putts';
 import {
   scorecardDiff,
   scorecardDiffLabel,
@@ -30,6 +38,7 @@ export type FinishedHoleMiniSummary = {
   flag: string | null;
   line: string;
   accessibilityLabel: string;
+  puttRows: FinishedPuttRow[];
 };
 
 export { formatPuttCount, formatShotCount };
@@ -69,6 +78,7 @@ export function planFinishedHoleMiniSummary(args: {
   par: number | null;
   shotCount: number;
   putts: number;
+  lengths?: readonly (string | null | undefined)[];
   penaltyStrokes?: number;
   shots: { seq: number; holeOut?: boolean | null }[];
 }): FinishedHoleMiniSummary {
@@ -91,6 +101,7 @@ export function planFinishedHoleMiniSummary(args: {
     flag: null,
     line: '',
     accessibilityLabel: '',
+    puttRows: [],
   });
 
   if (!args.puttsDone || args.placing || args.catchUpFullScreen) return hidden();
@@ -116,8 +127,31 @@ export function planFinishedHoleMiniSummary(args: {
     flag,
     line,
     accessibilityLabel: `Finished hole · ${line}`,
+    puttRows: planFinishedPuttAttachRows({
+      puttsDone: true,
+      putts,
+      lengths: args.lengths ?? [],
+    }),
   };
 }
+
+export function finishedHoleAttachPuttLengthReopensHole(): false {
+  return attachPuttLengthReopensHole();
+}
+
+export function finishedHoleAttachPuttLengthWritesScore(): false {
+  return attachPuttLengthWritesScore();
+}
+
+export function finishedHoleAttachPuttLengthInventGps(): false {
+  return attachPuttLengthInventGps();
+}
+
+export function finishedHoleAttachPuttLengthInventYards(): false {
+  return attachPuttLengthInventYards();
+}
+
+export { planFinishedPuttAttachRows, type FinishedPuttRow };
 
 export function finishedHoleMiniSummaryIsChip(): true {
   return true;

@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
+  finishedHoleAttachPuttLengthInventGps,
+  finishedHoleAttachPuttLengthInventYards,
+  finishedHoleAttachPuttLengthReopensHole,
+  finishedHoleAttachPuttLengthWritesScore,
   finishedHoleCloserFlag,
   finishedHoleDisplayScore,
   finishedHoleMiniSummaryInventPuttGps,
@@ -240,4 +244,76 @@ test('Signal Lab: TF 48 chip sits in play header chrome; putt sheet / dock / Add
   assert.match(assists, /MIC_SHOT_ASSIST = false/);
   assert.match(assists, /PUTT_ASSIST = false/);
   assert.doesNotMatch(assists, /CoreMotion/);
+});
+
+test('Signal Lab: TF 51.x finished-hole chip exposes no-length putt rows without reopening', () => {
+  assert.equal(finishedHoleAttachPuttLengthReopensHole(), false);
+  assert.equal(finishedHoleAttachPuttLengthWritesScore(), false);
+  assert.equal(finishedHoleAttachPuttLengthInventGps(), false);
+  assert.equal(finishedHoleAttachPuttLengthInventYards(), false);
+  assert.equal(finishedHoleMiniSummaryWritesScore(), false);
+  assert.equal(finishedHoleMiniSummaryIsChip(), true);
+  assert.equal(finishedHoleMiniSummaryIsModal(), false);
+
+  const noLength = planFinishedHoleMiniSummary({
+    puttsDone: true,
+    score: 4,
+    par: 4,
+    shotCount: 3,
+    putts: 1,
+    lengths: [],
+    shots: [{ seq: 1, holeOut: false }],
+  });
+  assert.equal(noLength.visible, true);
+  assert.equal(noLength.kind, 'chip');
+  assert.equal(noLength.modal, false);
+  assert.equal(noLength.putts, 1);
+  assert.equal(noLength.flag, COPY.madeIt);
+  assert.equal(noLength.puttRows.length, 1);
+  assert.equal(noLength.puttRows[0]?.missingLength, true);
+  assert.equal(noLength.puttRows[0]?.label, COPY.noLength);
+  assert.equal(noLength.puttRows[0]?.n, 1);
+
+  const filled = planFinishedHoleMiniSummary({
+    puttsDone: true,
+    score: 4,
+    par: 4,
+    shotCount: 2,
+    putts: 2,
+    lengths: ['over_20', 'inside_3'],
+    shots: [],
+  });
+  assert.equal(filled.visible, true);
+  assert.deepEqual(filled.puttRows, []);
+
+  const missThenEmpty = planFinishedHoleMiniSummary({
+    puttsDone: true,
+    score: 5,
+    par: 4,
+    shotCount: 3,
+    putts: 2,
+    lengths: ['over_20'],
+    shots: [],
+  });
+  assert.equal(missThenEmpty.puttRows.length, 2);
+  assert.equal(missThenEmpty.puttRows[0]?.missingLength, false);
+  assert.equal(missThenEmpty.puttRows[0]?.label, '20+');
+  assert.equal(missThenEmpty.puttRows[1]?.missingLength, true);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const header = hole.slice(hole.indexOf('styles.stickyInner'), hole.indexOf('!hideHoleButtons'));
+  assert.match(header, /testID="finished-hole-chip"/);
+  assert.match(header, /setScorecardOpen\(true\)/);
+  assert.match(header, /<FinishedPuttRows/);
+  assert.match(header, /finishedMini\.puttRows/);
+  assert.match(header, /lengths: hole\.puttLengths/);
+  assert.doesNotMatch(header, /setPuttOpen\(true\)|finishHolePutts|Alert\.alert|Modal/);
+  assert.doesNotMatch(header, /puttGps|inventPutt|greenEdge|centroid/i);
+
+  const attachFn = hole.slice(
+    hole.indexOf('const onAttachFinishedPuttLength'),
+    hole.indexOf('useEffect(() => {\n    setAttachPuttIndex(null)'),
+  );
+  assert.match(attachFn, /attachHolePuttLength/);
+  assert.doesNotMatch(attachFn, /setPuttOpen|finishHolePutts|updateHoleScore|router\.replace/);
 });

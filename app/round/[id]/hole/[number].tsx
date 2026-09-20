@@ -35,6 +35,7 @@ import {
   updateHolePutts,
   finishHolePutts,
   finishHoleOut,
+  attachHolePuttLength,
   updateHoleScore,
 } from '@/src/db/repo';
 import { pinOrNull, formatFmbRow, hasApiFmb, yardsToGreenDepth } from '@/src/domain/greenDepth';
@@ -129,6 +130,7 @@ import { playThemeId } from '@/src/domain/playTheme';
 import { formatShotLockChip } from '@/src/domain/shotLock';
 import { HoleMap } from '@/src/ui/HoleMap';
 import { FullSheet } from '@/src/ui/Sheet';
+import { FinishedPuttRows } from '@/src/ui/FinishedPuttRows';
 import { PuttDock } from '@/src/ui/PuttDock';
 import { PuttSheetBody } from '@/src/ui/PuttSheetBody';
 import { ScorecardBody } from '@/src/ui/ScorecardBody';
@@ -178,6 +180,7 @@ export default function HoleScreen() {
   const [puttOpen, setPuttOpen] = useState(false);
   const [puttSheetHole, setPuttSheetHole] = useState(holeNumber);
   const [puttDraft, setPuttDraft] = useState<PuttDraft>(emptyPuttDraft());
+  const [attachPuttIndex, setAttachPuttIndex] = useState<number | null>(null);
   const [penaltyStrokes, setPenaltyStrokes] = useState(1);
   const [penaltyReason, setPenaltyReason] = useState<PenaltyReason>('water');
   const [penaltyNote, setPenaltyNote] = useState('');
@@ -636,6 +639,17 @@ export default function HoleScreen() {
     [readOnly, round, saveDraft, holeNumber, id, celebrateHoleOut],
   );
 
+  const onAttachFinishedPuttLength = (index: number, lengthId: PuttLengthId) => {
+    if (readOnly || !hole) return;
+    if (!attachHolePuttLength(db, hole.id, index, lengthId)) return;
+    setAttachPuttIndex(null);
+    bump();
+  };
+
+  useEffect(() => {
+    setAttachPuttIndex(null);
+  }, [holeNumber]);
+
   useEffect(() => {
     if (puttsParam !== '1' || readOnly) return;
     void openPuttSheet(holeNumber);
@@ -1083,6 +1097,7 @@ export default function HoleScreen() {
     par: hole.par,
     shotCount: shots.length,
     putts: hole.putts,
+    lengths: hole.puttLengths,
     penaltyStrokes: penaltyTotal,
     shots,
   });
@@ -1308,32 +1323,39 @@ export default function HoleScreen() {
                 </ScrollView>
               ) : null}
               {finishedMini.visible ? (
-                <Pressable
-                  testID="finished-hole-chip"
-                  accessibilityRole="button"
-                  accessibilityLabel={finishedMini.accessibilityLabel}
-                  onPress={() => setScorecardOpen(true)}
-                  style={styles.finishedHoleChip}>
-                  <Text style={styles.finishedHoleText} numberOfLines={1}>
-                    {finishedMini.score != null ? `${finishedMini.score}` : null}
-                    {finishedMini.vsPar ? (
-                      <Text
-                        style={[
-                          styles.finishedHoleVsPar,
-                          finishedMini.vsParTone === 'good' && styles.finishedHoleGood,
-                          finishedMini.vsParTone === 'bad' && styles.finishedHoleBad,
-                        ]}>
-                        {finishedMini.score != null ? ` · ${finishedMini.vsPar}` : finishedMini.vsPar}
-                      </Text>
-                    ) : null}
-                    {`${finishedMini.score != null || finishedMini.vsPar ? ' · ' : ''}${finishedMini.shotsLabel} · ${finishedMini.puttsLabel}`}
-                    {finishedMini.flag ? (
-                      <Text testID="finished-hole-flag" style={styles.finishedHoleFlag}>
-                        {` · ${finishedMini.flag}`}
-                      </Text>
-                    ) : null}
-                  </Text>
-                </Pressable>
+                <View testID="finished-hole-chip" style={styles.finishedHoleChip}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={finishedMini.accessibilityLabel}
+                    onPress={() => setScorecardOpen(true)}>
+                    <Text style={styles.finishedHoleText} numberOfLines={1}>
+                      {finishedMini.score != null ? `${finishedMini.score}` : null}
+                      {finishedMini.vsPar ? (
+                        <Text
+                          style={[
+                            styles.finishedHoleVsPar,
+                            finishedMini.vsParTone === 'good' && styles.finishedHoleGood,
+                            finishedMini.vsParTone === 'bad' && styles.finishedHoleBad,
+                          ]}>
+                          {finishedMini.score != null ? ` · ${finishedMini.vsPar}` : finishedMini.vsPar}
+                        </Text>
+                      ) : null}
+                      {`${finishedMini.score != null || finishedMini.vsPar ? ' · ' : ''}${finishedMini.shotsLabel} · ${finishedMini.puttsLabel}`}
+                      {finishedMini.flag ? (
+                        <Text testID="finished-hole-flag" style={styles.finishedHoleFlag}>
+                          {` · ${finishedMini.flag}`}
+                        </Text>
+                      ) : null}
+                    </Text>
+                  </Pressable>
+                  <FinishedPuttRows
+                    rows={finishedMini.puttRows}
+                    selectedIndex={attachPuttIndex}
+                    disabled={readOnly}
+                    onSelect={setAttachPuttIndex}
+                    onAttach={onAttachFinishedPuttLength}
+                  />
+                </View>
               ) : null}
               {simBanner ? <GpsBanner message={simBanner} /> : null}
               {showFirstLaunchTip ? (

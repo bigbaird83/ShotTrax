@@ -4,6 +4,12 @@ import { test } from 'node:test';
 import { PUTTER_CLUB_ID } from './defaultBag';
 import {
   addPuttLength,
+  attachPuttLengthInventGps,
+  attachPuttLengthInventYards,
+  attachPuttLengthIsStatsOnly,
+  attachPuttLengthReopensHole,
+  attachPuttLengthWritesScore,
+  canAttachPuttLength,
   canCommitPutt,
   canMakeCurrentPutt,
   canMakePutt,
@@ -30,8 +36,13 @@ import {
   madeItAdvancesHole,
   NEAR_GREEN_YD,
   parsePuttLengths,
+  parsePuttLengthSlots,
+  planAttachPuttLength,
   planFinishHoleOut,
+  planFinishedPuttAttachRows,
+  planFinishedPuttRows,
   planMadeIt,
+  planPuttLengthSlots,
   planPlayDockFinish,
   playDockHoleOutLabel,
   puttsLiveOnPlayDock,
@@ -56,6 +67,7 @@ import {
   puttPillsUseYardsToGreen,
   puttsFromWalkOff,
   serializePuttLengths,
+  serializePuttLengthSlots,
   setPuttCount,
   shouldAutoOpenClubPick,
   showPuttNoLengthCue,
@@ -349,6 +361,92 @@ test('Finish putts chip stays for holes you left without Made it', () => {
     holesNeedingPutts([{ number: 4, puttsDone: false, shotCount: 2, puttCount: 0 }], 4).length,
     0,
   );
+});
+
+test('TF 51.x: attach putt length after no-length Made it — stats only, never reopens', () => {
+  assert.equal(attachPuttLengthIsStatsOnly(), true);
+  assert.equal(attachPuttLengthReopensHole(), false);
+  assert.equal(attachPuttLengthWritesScore(), false);
+  assert.equal(attachPuttLengthInventGps(), false);
+  assert.equal(attachPuttLengthInventYards(), false);
+
+  const emptyClose = planMadeIt(emptyPuttDraft());
+  assert.equal(emptyClose.ok, true);
+  assert.equal(emptyClose.putts, 1);
+  assert.deepEqual(emptyClose.lengths, []);
+
+  const slots = planPuttLengthSlots(emptyClose.putts, emptyClose.lengths);
+  assert.deepEqual(slots, [null]);
+  assert.deepEqual(parsePuttLengthSlots('', 1), [null]);
+  assert.deepEqual(parsePuttLengthSlots('inside_3', 2), ['inside_3', null]);
+  assert.deepEqual(parsePuttLengthSlots(',inside_3', 2), [null, 'inside_3']);
+  assert.equal(serializePuttLengthSlots(['inside_3', null]), 'inside_3');
+  assert.equal(serializePuttLengthSlots([null, 'inside_3']), ',inside_3');
+
+  const blockedOpen = planAttachPuttLength(
+    { puttsDone: false, putts: 1, lengths: [] },
+    0,
+    'inside_3',
+  );
+  assert.equal(blockedOpen.ok, false);
+
+  const attached = planAttachPuttLength(
+    { puttsDone: true, putts: emptyClose.putts, lengths: emptyClose.lengths },
+    0,
+    'inside_3',
+  );
+  assert.equal(attached.ok, true);
+  if (attached.ok) {
+    assert.equal(attached.putts, 1);
+    assert.deepEqual(attached.lengths, ['inside_3']);
+    assert.deepEqual(attached.slots, ['inside_3']);
+    assert.equal(attached.puttsDone, true);
+    assert.equal(attached.reopen, false);
+    assert.equal(attached.writeScore, false);
+  }
+  assert.equal(
+    canAttachPuttLength({ puttsDone: true, putts: 1, lengths: ['inside_3'] }, 0, '3_to_10'),
+    false,
+  );
+
+  const missThenEmpty = planAttachPuttLength(
+    { puttsDone: true, putts: 2, lengths: ['over_20'] },
+    1,
+    '3_to_10',
+  );
+  assert.equal(missThenEmpty.ok, true);
+  if (missThenEmpty.ok) {
+    assert.equal(missThenEmpty.putts, 2);
+    assert.deepEqual(missThenEmpty.lengths, ['over_20', '3_to_10']);
+    assert.equal(missThenEmpty.reopen, false);
+  }
+
+  const secondFirst = planAttachPuttLength(
+    { puttsDone: true, putts: 2, lengths: [] },
+    1,
+    'over_20',
+  );
+  assert.equal(secondFirst.ok, true);
+  if (secondFirst.ok) {
+    assert.equal(secondFirst.putts, 2);
+    assert.deepEqual(secondFirst.slots, [null, 'over_20']);
+    assert.deepEqual(secondFirst.lengths, ['over_20']);
+  }
+
+  const rows = planFinishedPuttAttachRows({
+    puttsDone: true,
+    putts: 1,
+    lengths: [],
+  });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.n, 1);
+  assert.equal(rows[0]?.missingLength, true);
+  assert.equal(rows[0]?.label, 'No length');
+  assert.deepEqual(
+    planFinishedPuttAttachRows({ puttsDone: true, putts: 2, lengths: ['over_20', 'inside_3'] }),
+    [],
+  );
+  assert.deepEqual(planFinishedPuttRows({ puttsDone: false, putts: 1, lengths: [] }), []);
 });
 
 test('selecting Putter opens the putt sheet — not a GPS mark; change-club does not', () => {
