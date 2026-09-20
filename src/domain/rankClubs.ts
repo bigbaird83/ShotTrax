@@ -96,6 +96,29 @@ export function addShotSuggestYardsLeft(args: {
 }
 
 /**
+ * Add-shot club *sheet* D is the header number (e.g. 281 yd · Pick a club).
+ * TF 53: remaining-pin-only left the strip on shortest wedges while the
+ * title showed 281. Same |carry − D| ranker as the play wheel; D is the
+ * yards on the sheet. No GPS invent.
+ */
+export function addShotSheetRankYards(args: {
+  headerYards: number | null | undefined;
+  remainingPin?: number | null;
+}): number | null {
+  if (args.headerYards != null && Number.isFinite(args.headerYards) && args.headerYards > 0) {
+    return Math.round(args.headerYards);
+  }
+  if (args.remainingPin != null && Number.isFinite(args.remainingPin) && args.remainingPin > 0) {
+    return Math.round(args.remainingPin);
+  }
+  return null;
+}
+
+export function addShotSheetUsesHeaderYards(): true {
+  return true;
+}
+
+/**
  * Edit / change-club picker: top-3 vs **that shot’s yards**, never yards-to-green.
  * Add shot uses `resolveAddShotSuggestTarget` instead. Same seed → ≥5 live rule.
  * Putter is never eligible. Empty → caller shows All clubs.

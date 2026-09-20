@@ -110,7 +110,7 @@ import {
   type PuttLengthId,
 } from '@/src/domain/putts';
 import { canMoveFromPin, canMoveToPin, type ShotEditSnapshot } from '@/src/domain/shotEdit';
-import { addShotSuggestYardsLeft, clubToRankInput, lastClosedShotYards, rankDistanceYards, rankTopClubs, resolveAddShotSuggestTarget, resolveNextShotDistanceTarget } from '@/src/domain/rankClubs';
+import { addShotSheetRankYards, addShotSuggestYardsLeft, clubToRankInput, lastClosedShotYards, rankDistanceYards, rankTopClubs, resolveAddShotSuggestTarget, resolveNextShotDistanceTarget } from '@/src/domain/rankClubs';
 import { planFinishedHoleMiniSummary } from '@/src/domain/finishedHoleSummary';
 import { planRunningParBadge } from '@/src/domain/runningPar';
 import { planScorecardDismiss } from '@/src/domain/scorecard';
@@ -497,10 +497,12 @@ export default function HoleScreen() {
     courseToGreen: toGreen,
     lastClosedYards: lastClosedShotYards(shots),
   });
-  const placeSuggestYards = editClubOpen
-    ? pickerYards
-    : addShotSuggestYardsLeft({ playTarget: addShotSuggestTarget, courseYards: toGreen.yards }) ??
-      pickerYards;
+  const placeSuggestYards = addShotSheetRankYards({
+    headerYards: pickerYards,
+    remainingPin: editClubOpen
+      ? null
+      : addShotSuggestYardsLeft({ playTarget: addShotSuggestTarget, courseYards: toGreen.yards }),
+  });
   const placeStripPlan = planClubStrip({
     clubs: clubs.map((club) => {
       const row = averages.find((item) => item.club.id === club.id);

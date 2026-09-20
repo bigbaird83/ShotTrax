@@ -8,6 +8,8 @@ import type { Club } from './types';
 import {
   addShotAfterMarksSuggestsFromLastLanding,
   addShotEmptyHoleSuggestsFromTee,
+  addShotSheetRankYards,
+  addShotSheetUsesHeaderYards,
   addShotSuggestIncludesPutter,
   addShotSuggestPutterHasCarry,
   addShotSuggestRanksShotYards,
@@ -529,10 +531,16 @@ test('Add shot suggested clubs use the same remaining-yards D as the play wheel'
   assert.match(placeStrip, /tee: holeTee/);
   assert.match(placeStrip, /courseToGreen: toGreen/);
   assert.match(placeStrip, /playTarget: addShotSuggestTarget/);
+  assert.match(placeStrip, /addShotSheetRankYards/);
+  assert.match(placeStrip, /headerYards: pickerYards/);
   assert.match(placeStrip, /yardsLeft: placeSuggestYards/);
   assert.doesNotMatch(placeStrip, /yardsLeft: pickerYards;/);
   assert.doesNotMatch(placeStrip, /yardsLeft: placedYards/);
   assert.match(hole, /windowStart=\{placeStripPlan\.windowStart\}/);
+  assert.equal(addShotSheetUsesHeaderYards(), true);
+  assert.equal(addShotSheetRankYards({ headerYards: 281, remainingPin: 371 }), 281);
+  assert.equal(addShotSheetRankYards({ headerYards: 281, remainingPin: null }), 281);
+  assert.equal(addShotSheetRankYards({ headerYards: null, remainingPin: 371 }), 371);
   assert.match(placeStrip, /editClubOpen/);
   assert.doesNotMatch(placeStrip, /phone|fix\?\.lat|house/);
   assert.match(hole, /const placeStripItems[\s\S]*?filter\(\(id\) => !isPutterClubId/);
@@ -755,8 +763,9 @@ test('TF 53: top-3 is closest carry to remaining pin yards — not shortest or l
 
   const header281 = planClubStrip({
     clubs: docBag.map((row) => ({ id: row.id, carry: row.typicalCarryYards })),
-    yardsLeft: addShotSuggestYardsLeft({ playTarget: empty, courseYards: null }) ?? 281,
+    yardsLeft: addShotSheetRankYards({ headerYards: 281, remainingPin: empty?.dYards ?? null }),
   });
+  assert.equal(addShotSheetRankYards({ headerYards: 281, remainingPin: empty?.dYards ?? null }), 281);
   assert.deepEqual(clubStripOpeningIds(header281.ids, header281.windowStart), [
     'club_2i',
     'club_3w',
@@ -768,4 +777,38 @@ test('TF 53: top-3 is closest carry to remaining pin yards — not shortest or l
     'club_5i',
   ]);
   assert.equal(header281.windowStart > 0, true);
+
+  const smoking = planClubStrip({
+    clubs: [
+      { id: 'club_sw', carry: 101 },
+      { id: 'club_gw', carry: 120 },
+      { id: 'club_48', carry: 136 },
+      { id: 'club_7i', carry: 150 },
+      { id: 'club_2i', carry: 239 },
+      { id: 'club_3w', carry: 254 },
+      { id: 'club_driver', carry: 280 },
+    ],
+    yardsLeft: addShotSheetRankYards({ headerYards: 281, remainingPin: 40 }),
+  });
+  assert.deepEqual(rankClosestCarryIds(
+    [
+      { id: 'club_sw', carry: 101 },
+      { id: 'club_gw', carry: 120 },
+      { id: 'club_48', carry: 136 },
+      { id: 'club_2i', carry: 239 },
+      { id: 'club_3w', carry: 254 },
+      { id: 'club_driver', carry: 280 },
+    ],
+    281,
+  ), ['club_driver', 'club_3w', 'club_2i']);
+  assert.deepEqual(clubStripOpeningIds(smoking.ids, smoking.windowStart), [
+    'club_2i',
+    'club_3w',
+    'club_driver',
+  ]);
+  assert.deepEqual(clubStripOpeningIds(smoking.ids, 0), [
+    'club_sw',
+    'club_gw',
+    'club_48',
+  ]);
 });
