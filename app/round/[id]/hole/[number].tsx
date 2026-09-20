@@ -102,7 +102,7 @@ import {
   type PuttLengthId,
 } from '@/src/domain/putts';
 import { canMoveFromPin, canMoveToPin, type ShotEditSnapshot } from '@/src/domain/shotEdit';
-import { clubToRankInput, lastClosedShotYards, rankDistanceYards, rankTopClubs, resolveNextShotDistanceTarget } from '@/src/domain/rankClubs';
+import { addShotSuggestYardsLeft, clubToRankInput, lastClosedShotYards, rankDistanceYards, rankTopClubs, resolveAddShotSuggestTarget, resolveNextShotDistanceTarget } from '@/src/domain/rankClubs';
 import { planFinishedHoleMiniSummary } from '@/src/domain/finishedHoleSummary';
 import { planScorecardDismiss } from '@/src/domain/scorecard';
 import { reconcileHoleScore, scoreMismatchMessage } from '@/src/domain/scoreReconcile';
@@ -251,19 +251,6 @@ export default function HoleScreen() {
   const placedYards = placedPlan && placedPlan.ok ? placedPlan.distanceYards : null;
   const editingShot = editShotId ? shots.find((shot) => shot.id === editShotId) ?? null : null;
   const pickerYards = editClubOpen ? (editingShot?.distanceYards ?? null) : placedYards;
-  const placeStripPlan = planClubStrip({
-    clubs: clubs.map((club) => {
-      const row = averages.find((item) => item.club.id === club.id);
-      return toWheelFillClub(club, row);
-    }),
-    yardsLeft: pickerYards,
-  });
-  const placeStripItems = placeStripPlan.ids
-    .filter((id) => !isPutterClubId(id))
-    .map((id) => {
-      const club = clubs.find((row) => row.id === id);
-      return { id, label: formatClubStripLabel({ id, shortName: club?.shortName ?? id, carry: placeStripPlan.carries[id] }) };
-    });
   const placeBag = clubs.filter((club) => !isPutterClubId(club.id));
 
   const resetPlace = () => {
@@ -489,6 +476,28 @@ export default function HoleScreen() {
     const club = clubs.find((row) => row.id === id);
     return { id, label: formatClubStripLabel({ id, shortName: club?.shortName ?? id, carry: stripPlan.carries[id] }) };
   });
+  const addShotSuggestTarget = resolveAddShotSuggestTarget({
+    lastLanding: lastLandingMark(shots),
+    green,
+    courseToGreen: toGreen,
+    lastClosedYards: lastClosedShotYards(shots),
+  });
+  const placeSuggestYards = editClubOpen
+    ? pickerYards
+    : addShotSuggestYardsLeft({ playTarget: addShotSuggestTarget, courseYards: toGreen.yards });
+  const placeStripPlan = planClubStrip({
+    clubs: clubs.map((club) => {
+      const row = averages.find((item) => item.club.id === club.id);
+      return toWheelFillClub(club, row);
+    }),
+    yardsLeft: placeSuggestYards,
+  });
+  const placeStripItems = placeStripPlan.ids
+    .filter((id) => !isPutterClubId(id))
+    .map((id) => {
+      const club = clubs.find((row) => row.id === id);
+      return { id, label: formatClubStripLabel({ id, shortName: club?.shortName ?? id, carry: placeStripPlan.carries[id] }) };
+    });
   const wheelSelectedId = resolveWheelHighlightId(selectedClubId);
   if (holeTee) {
     rememberResolvedTee({ courseId: round?.courseApiId, holeNumber, green }, holeTee);
