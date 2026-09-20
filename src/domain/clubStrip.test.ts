@@ -630,6 +630,7 @@ test('282-yard hole opens 2i, 3W, Dr with no wedge; 100-yard hole centers the cl
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   assert.match(hole, /windowStart=\{stripPlan\.windowStart\}/);
+  assert.match(hole, /windowStart=\{placeStripPlan\.windowStart\}/);
   const phone = readFileSync(new URL('../ui/ClubStrip.tsx', import.meta.url), 'utf8');
   assert.match(phone, /windowStart/);
   assert.match(phone, /clubStripWindowKey/);

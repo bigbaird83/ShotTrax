@@ -499,7 +499,8 @@ export default function HoleScreen() {
   });
   const placeSuggestYards = editClubOpen
     ? pickerYards
-    : addShotSuggestYardsLeft({ playTarget: addShotSuggestTarget, courseYards: toGreen.yards });
+    : addShotSuggestYardsLeft({ playTarget: addShotSuggestTarget, courseYards: toGreen.yards }) ??
+      pickerYards;
   const placeStripPlan = planClubStrip({
     clubs: clubs.map((club) => {
       const row = averages.find((item) => item.club.id === club.id);
@@ -1760,6 +1761,7 @@ export default function HoleScreen() {
             <ClubStrip
               items={placeStripItems}
               pickId={placeStripPlan.pickId}
+              windowStart={placeStripPlan.windowStart}
               onPick={(id) => {
                 const full = clubs.find((row) => row.id === id);
                 if (!full) return;

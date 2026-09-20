@@ -525,8 +525,9 @@ test('Add shot suggested clubs use the same remaining-yards D as the play wheel'
   assert.match(placeStrip, /courseToGreen: toGreen/);
   assert.match(placeStrip, /playTarget: addShotSuggestTarget/);
   assert.match(placeStrip, /yardsLeft: placeSuggestYards/);
-  assert.doesNotMatch(placeStrip, /yardsLeft: pickerYards/);
+  assert.doesNotMatch(placeStrip, /yardsLeft: pickerYards;/);
   assert.doesNotMatch(placeStrip, /yardsLeft: placedYards/);
+  assert.match(hole, /windowStart=\{placeStripPlan\.windowStart\}/);
   assert.match(placeStrip, /editClubOpen/);
   assert.doesNotMatch(placeStrip, /phone|fix\?\.lat|house/);
   assert.match(hole, /const placeStripItems[\s\S]*?filter\(\(id\) => !isPutterClubId/);
@@ -725,4 +726,20 @@ test('TF 53: top-3 is closest carry to remaining pin yards — not shortest or l
   assert.doesNotMatch(watchPush, /yardsToGreen: liveToGreen\.yards/);
   assert.match(pick, /yardsToGreen: target\?\.dYards/);
   assert.doesNotMatch(pick, /yardsToGreen\(fix, green\)/);
+
+  const header281 = planClubStrip({
+    clubs: docBag.map((row) => ({ id: row.id, carry: row.typicalCarryYards })),
+    yardsLeft: addShotSuggestYardsLeft({ playTarget: empty, courseYards: null }) ?? 281,
+  });
+  assert.deepEqual(clubStripOpeningIds(header281.ids, header281.windowStart), [
+    'club_2i',
+    'club_3w',
+    'club_driver',
+  ]);
+  assert.notDeepEqual(clubStripOpeningIds(header281.ids, header281.windowStart), [
+    'club_lw',
+    'club_7i',
+    'club_5i',
+  ]);
+  assert.equal(header281.windowStart > 0, true);
 });
