@@ -7,16 +7,23 @@ import {
   canMakePutt,
   clampPutts,
   emptyPuttDraft,
+  finishHoleBuriedInScorecard,
+  finishHoleLivesOnPlayDock,
   finishPuttsChipLabel,
   holeAfterDone,
+  holeOutInventPutts,
+  holeOutSetsGirFromOffGreen,
   holesNeedingPutts,
   isLivePuttProximityQuality,
   isNearOrOnGreen,
   madeItAdvancesHole,
   NEAR_GREEN_YD,
   parsePuttLengths,
+  planFinishHoleOut,
   planMadeIt,
   planPlayDockFinish,
+  playDockHoleOutLabel,
+  puttsLiveOnPlayDock,
   PUTT_LENGTHS,
   PUTT_MAX,
   putterOpensPuttSheet,
@@ -33,6 +40,7 @@ import {
   showPuttPills,
   undoLastPutt,
 } from './putts';
+import { playScorecardIsDockAction, playScorecardIsHeaderChip } from './playLayout';
 
 test('putts clamp to 0–5', () => {
   assert.equal(clampPutts(-1), 0);
@@ -150,6 +158,38 @@ test('Signal: putt pills when putter or ≤40 yd good/soft; Hole Out stays eithe
   assert.doesNotMatch(dock, /onGreen:/);
   assert.match(hole, /testID="play-dock-putts"|PuttDock/);
   assert.match(hole, /testID=\{toast === COPY\.holeOut \? 'hole-out-chip'/);
+});
+
+test('Finish hole / putts live on the play dock — not buried in Scorecard', () => {
+  assert.equal(finishHoleLivesOnPlayDock(), true);
+  assert.equal(puttsLiveOnPlayDock(), true);
+  assert.equal(finishHoleBuriedInScorecard(), false);
+  assert.equal(playScorecardIsHeaderChip(), true);
+  assert.equal(playScorecardIsDockAction(), false);
+  assert.equal(playDockHoleOutLabel(), 'Hole Out');
+  assert.equal(holeOutInventPutts(), false);
+  assert.equal(holeOutSetsGirFromOffGreen(), false);
+  const offGreen = planFinishHoleOut();
+  assert.equal(offGreen.ok, true);
+  assert.equal(offGreen.putts, 0);
+  assert.deepEqual(offGreen.lengths, []);
+  assert.equal(offGreen.gir, false);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const play = hole.slice(0, hole.indexOf('<FullSheet'));
+  const dock = hole.slice(hole.indexOf('style={[styles.dock'), hole.indexOf('<FullSheet'));
+  assert.match(dock, /<PuttDock/);
+  assert.match(dock, /COPY\.holeOut/);
+  assert.match(dock, /onFinishHole|onMadeIt/);
+  assert.match(play, /styles\.scorecardChip/);
+  assert.doesNotMatch(dock, /COPY\.scorecard/);
+  assert.match(hole, /finishHoleOut/);
+
+  const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  assert.match(watch, /Text\("Hole Out"\)/);
+  assert.match(watch, /session\.madeIt\(\)/);
+  assert.match(watch, /showPuttChips|puttSheet/);
+  assert.doesNotMatch(watch, /Scorecard/);
 });
 
 test('walking off the green / to the next tee does not invent putts', () => {
