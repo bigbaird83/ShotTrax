@@ -24,6 +24,10 @@
   <string>ShotTraxx uses Watch location when you pick a club on the Watch to mark where you hit from.</string>
   <key>WKApplication</key>
   <true/>
+  <key>WKBackgroundModes</key>
+  <array>
+    <string>self-care</string>
+  </array>
   <key>WKCompanionAppBundleIdentifier</key>
   <string>com.shottrax.app</string>
 </dict>

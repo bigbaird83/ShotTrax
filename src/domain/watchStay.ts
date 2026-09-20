@@ -9,6 +9,15 @@ export function watchStayUsesExtendedRuntime(): true {
   return true;
 }
 
+/** Watch Info.plist WKBackgroundModes — without this, start() dies and idle dumps to clock. */
+export function watchStayBackgroundMode(): 'self-care' {
+  return 'self-care';
+}
+
+export function watchStayIdleDoesNotCountAsLeave(): true {
+  return true;
+}
+
 export function watchStayWhenIdleWithoutTaps(): true {
   return true;
 }

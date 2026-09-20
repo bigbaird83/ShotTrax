@@ -711,14 +711,14 @@ export default function HoleScreen() {
         const next = addPuttLength(puttDraftRef.current, msg.lengthId);
         setPuttDraft(next);
         saveDraft(target, next, false);
-        void pushWatchPuttSheet({ open: puttOpenRef.current, holeNumber: target, lengths: next.lengths });
+        void pushWatchPuttSheet({ open: true, holeNumber: target, lengths: next.lengths });
         return { ok: true, feedback: COPY.putts };
       }
       if (msg.action === 'undo') {
         const next = undoLastPutt(puttDraftRef.current);
         setPuttDraft(next);
         saveDraft(target, next, false);
-        void pushWatchPuttSheet({ open: puttOpenRef.current, holeNumber: target, lengths: next.lengths });
+        void pushWatchPuttSheet({ open: true, holeNumber: target, lengths: next.lengths });
         return { ok: true, feedback: COPY.undoPutt };
       }
       if (msg.action === 'made') {

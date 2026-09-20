@@ -282,6 +282,9 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   func leave(_ action: String) {
     sending = true
     feedback = ""
+    userLeftApp = true
+    putt.open = false
+    stopRoundStay()
     if action == "home", hasLiveHole {
       nearbyFromHome = true
       nearby.active = true
@@ -303,7 +306,9 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   func dismissNearbyToHole() {
     nearbyFromHome = false
     nearby.active = false
+    userLeftApp = false
     feedback = ""
+    syncRoundStay()
   }
 
   private func isoNow() -> String {
@@ -552,7 +557,6 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     let priorPending = putt.pending
     let priorLengths = putt.lengths
     var next = PuttSheetState()
-    next.open = message["open"] as? Bool ?? false
     if let hole = message["holeNumber"] as? Int {
       next.holeNumber = hole
     } else if let hole = message["holeNumber"] as? NSNumber {
@@ -564,6 +568,10 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
     next.canAdd = message["canAdd"] as? Bool ?? (next.lengths.count < 5)
     next.canMake = true
+    let incomingOpen = message["open"] as? Bool ?? false
+    // Phone add/undo can race puttOpen=false and close a Watch-opened sheet.
+    // Keep the putt sheet up while putter still owns it (Made it stays on-screen).
+    next.open = incomingOpen || (putt.open && list.selectedClubId == "club_putter")
     if next.canAdd, next.lengths == priorLengths {
       next.pending = priorPending
     }
@@ -679,15 +687,23 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
 
   func extendedRuntimeSessionDidStart(_ extendedRuntimeSession: WKExtendedRuntimeSession) {}
 
-  func extendedRuntimeSessionWillExpire(_ extendedRuntimeSession: WKExtendedRuntimeSession) {}
+  func extendedRuntimeSessionWillExpire(_ extendedRuntimeSession: WKExtendedRuntimeSession) {
+    // Chain a replacement before the current session dies so idle does not dump.
+    if wantsStay, !userLeftApp {
+      staySession = nil
+      startRoundStay()
+    }
+  }
 
   func extendedRuntimeSession(
     _ extendedRuntimeSession: WKExtendedRuntimeSession,
     didInvalidateWith reason: WKExtendedRuntimeSessionInvalidationReason,
     error: Error?
   ) {
-    staySession = nil
-    if wantsStay, reason == .expired {
+    if staySession === extendedRuntimeSession {
+      staySession = nil
+    }
+    if wantsStay, !userLeftApp, reason == .expired {
       DispatchQueue.main.async { self.startRoundStay() }
     }
   }
@@ -739,18 +755,31 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     lastFix = locations.last
   }
 
-  /// Crown / app switch is an explicit leave. Idle dim while the stay session
-  /// is running is not — keep ShotTraxx up for the round.
+  /// Crown / app switch is an explicit leave. Idle / wrist-down (.inactive)
+  /// is not — keep ShotTraxx up for the round.
   func noteScenePhase(_ phase: String) {
     if phase == "active" {
       userLeftApp = false
       syncRoundStay()
       return
     }
+    if phase == "inactive" {
+      // Wrist-down dim. Do not treat as leave. Restart stay if it never started.
+      if wantsStay || hasLiveHole || putt.open {
+        startRoundStay()
+      }
+      return
+    }
     if phase == "background" {
-      if staySession == nil || staySession?.state != .running {
+      // Session running → crown / app switch. Session not running → do not
+      // mark leave (idle used to dump here when start() failed without WKBackgroundModes).
+      if staySession?.state == .running || staySession?.state == .scheduled {
         userLeftApp = true
         stopRoundStay()
+        return
+      }
+      if !userLeftApp, hasLiveHole || putt.open {
+        startRoundStay()
       }
     }
   }
