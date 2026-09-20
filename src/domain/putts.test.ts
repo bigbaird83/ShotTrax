@@ -284,10 +284,13 @@ test('Signal: dock Putt when putter or ≤40 yd good/soft; Hole Out stays either
   assert.doesNotMatch(dock, /playHeaderYards|onGreen:/);
   assert.match(hole, /const liveToGreen = yardsToGreen\(fix, green\)/);
   assert.match(hole, /from '@\/src\/sensing\/yardsToGreen'/);
-  assert.match(hole, /testID="play-dock-putts"/);
   assert.match(hole, /<PuttDock/);
   assert.match(hole, /openPuttSheet\(holeNumber\)/);
   assert.match(hole, /styles\.dockHoleOutShrunk/);
+  const puttDock = readFileSync(new URL('../ui/PuttDock.tsx', import.meta.url), 'utf8');
+  assert.match(puttDock, /testID="play-dock-putts"/);
+  assert.match(puttDock, /COPY\.putt/);
+  assert.doesNotMatch(puttDock, /PUTT_LENGTHS|onAdd|onUndo/);
   assert.match(hole, /testID=\{toast === COPY\.holeOut \? 'hole-out-chip'/);
 });
 

@@ -848,9 +848,9 @@ test('Signal: dock Putt sits left of a shrunken Hole Out — not a third row', (
   assert.match(dock, /styles\.dockPuttHoleOutRow/);
   assert.match(dock, /styles\.dockPutt/);
   assert.match(dock, /styles\.dockHoleOutShrunk/);
-  assert.match(dock, /PLAY_DOCK_PUTT_FLEX/);
-  assert.match(dock, /PLAY_DOCK_HOLE_OUT_SHRINK_FLEX/);
-  assert.match(dock, /PLAY_CONTROL_MIN_TAP/);
+  assert.match(hole, /PLAY_DOCK_PUTT_FLEX/);
+  assert.match(hole, /PLAY_DOCK_HOLE_OUT_SHRINK_FLEX/);
+  assert.match(hole, /PLAY_CONTROL_MIN_TAP/);
   assert.doesNotMatch(dock, /onAdd=\{onAddPutt\}/);
   assert.doesNotMatch(dock, /onUndo=\{onUndoPutt\}/);
   assert.doesNotMatch(dock, /PUTT_LENGTHS/);
