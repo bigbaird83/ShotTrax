@@ -96,7 +96,8 @@ test('Signal Lab: close writes score; scorecard/revisit read posted or logged; c
   assert.doesNotMatch(finishOut, /INSERT INTO shots|insertShot|lat|lng|acceptFix/);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
-  const card = hole.slice(hole.indexOf('<ScorecardBody'), hole.indexOf('</ScorecardBody>'));
+  const cardStart = hole.indexOf('<ScorecardBody');
+  const card = hole.slice(cardStart, hole.indexOf('onBack={dismissScorecard}', cardStart));
   assert.match(card, /puttsDone: row\.puttsDone/);
   assert.match(card, /shotCount: listShotsForHole/);
   assert.match(card, /penaltyStrokes: totalPenaltyStrokes/);

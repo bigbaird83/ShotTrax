@@ -131,11 +131,13 @@ test('Signal Lab: incomplete scorecard cue is close-state only — red outline +
   assert.doesNotMatch(body, /pointerEvents="none"/);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
-  const card = hole.slice(hole.indexOf('<ScorecardBody'), hole.indexOf('</ScorecardBody>'));
+  const cardStart = hole.indexOf('<ScorecardBody');
+  const card = hole.slice(cardStart, hole.indexOf('onBack={dismissScorecard}', cardStart));
   assert.match(card, /currentHoleNumber=\{holeNumber\}/);
   assert.match(card, /onSelectHole/);
   assert.match(card, /goToHole\(nextNumber\)/);
-  assert.doesNotMatch(card, /lat|lng|acceptFix|invent/i);
+  assert.match(card, /puttsDone: row\.puttsDone/);
+  assert.doesNotMatch(card, /lat|lng|acceptFix|inventGps|greenEdge/i);
 });
 
 test('opening scorecard and Back never mark or close a shot', () => {
