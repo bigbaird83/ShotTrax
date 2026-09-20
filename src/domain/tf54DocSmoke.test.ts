@@ -85,11 +85,11 @@ test('TF 54 F: stay holds while live / idle — crown and Back/Home still end it
   assert.match(session, /syncRoundStay\(\)/);
 });
 
-test('TF 54 C: dock Putt is putter or ≤40 yd good/soft — left of shrunk Hole Out', () => {
-  assert.equal(playDockPuttAlwaysWhenUnfinished(), false);
-  assert.equal(playDockPuttUsesShowPuttPillsGate(), true);
+test('TF 54 C: dock Putt is always visible — left of shrunk Hole Out', () => {
+  assert.equal(playDockPuttAlwaysWhenUnfinished(), true);
+  assert.equal(playDockPuttUsesShowPuttPillsGate(), false);
   const tee = planPlayDockFinish({ putting: false, toGreen: { yards: 371, quality: 'none' } });
-  assert.equal(tee.showPutts, false);
+  assert.equal(tee.showPutts, true);
   assert.equal(tee.showHoleOut, true);
   const putter = planPlayDockFinish({ putting: true, toGreen: { yards: 371, quality: 'none' } });
   assert.equal(putter.showPutts, true);
@@ -98,7 +98,7 @@ test('TF 54 C: dock Putt is putter or ≤40 yd good/soft — left of shrunk Hole
   assert.equal(near.showPutts, true);
   assert.equal(near.showHoleOut, true);
   const hard = planPlayDockFinish({ putting: false, toGreen: { yards: 12, quality: 'hard' } });
-  assert.equal(hard.showPutts, false);
+  assert.equal(hard.showPutts, true);
   assert.equal(hard.showHoleOut, true);
   const placing = planPlayDockFinish({ placing: true });
   assert.equal(placing.showPutts, false);

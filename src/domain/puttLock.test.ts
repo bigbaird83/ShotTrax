@@ -88,7 +88,7 @@ import {
   WATCH_ASSIST,
 } from '../sensing/assists';
 
-test('TF 54: dock Putt is putter or ≤40 yd haversine to green centroid, good/soft only', () => {
+test('TF 54: dock Putt is always on while unfinished — not a GPS hide', () => {
   assert.equal(NEAR_GREEN_YD, 40);
   assert.equal(puttPillsUseYardsToGreen(), true);
   assert.equal(puttPillsUseHydratedGreenCentroid(), true);
@@ -104,16 +104,16 @@ test('TF 54: dock Putt is putter or ≤40 yd haversine to green centroid, good/s
   assert.equal(showPuttPills({ putting: true, toGreen: { yards: 12, quality: 'forced' } }), true);
   const far = planPlayDockFinish({ toGreen: { yards: 160, quality: 'good' } });
   assert.equal(far.showHoleOut, true);
-  assert.equal(far.showPutts, false);
+  assert.equal(far.showPutts, true);
   const tee = planPlayDockFinish({ putting: false, toGreen: { yards: 371, quality: 'good' } });
   assert.equal(tee.showHoleOut, true);
-  assert.equal(tee.showPutts, false);
+  assert.equal(tee.showPutts, true);
   const near = planPlayDockFinish({ toGreen: { yards: 36, quality: 'soft' } });
   assert.equal(near.showHoleOut, true);
   assert.equal(near.showPutts, true);
   const none = planPlayDockFinish({ putting: false, toGreen: { yards: 371, quality: 'none' } });
   assert.equal(none.showHoleOut, true);
-  assert.equal(none.showPutts, false);
+  assert.equal(none.showPutts, true);
   const done = planPlayDockFinish({ puttsDone: true, putting: true });
   assert.equal(done.showHoleOut, false);
   assert.equal(done.showPutts, false);
@@ -123,7 +123,8 @@ test('TF 54: dock Putt is putter or ≤40 yd haversine to green centroid, good/s
   const dock = hole.slice(hole.indexOf('const dockFinish'), hole.indexOf('const showFirstLaunchTip'));
   assert.match(dock, /toGreen: liveToGreen/);
   assert.doesNotMatch(dock, /playHeaderYards|polygon|greenEdge/);
-  assert.equal(playDockPuttUsesShowPuttPillsGate(), true);
+  assert.equal(playDockPuttUsesShowPuttPillsGate(), false);
+  assert.equal(playDockPuttAlwaysWhenUnfinished(), true);
   assert.equal(playDockPuttOpensExistingSheet(), true);
   const watchPush = hole.slice(hole.indexOf('useWatchClubList'), hole.indexOf('if (!round || !hole)'));
   assert.match(watchPush, /yardsToGreen: target\?\.dYards/);
@@ -582,8 +583,8 @@ test('Signal Lab: putter stays out of averages and top-3', () => {
 
 test('Signal: dock Putt opens sheet; Hole Out is chip-in only; no third dock row', () => {
   assert.equal(playDockPuttOpensExistingSheet(), true);
-  assert.equal(playDockPuttAlwaysWhenUnfinished(), false);
-  assert.equal(playDockPuttUsesShowPuttPillsGate(), true);
+  assert.equal(playDockPuttAlwaysWhenUnfinished(), true);
+  assert.equal(playDockPuttUsesShowPuttPillsGate(), false);
   assert.equal(showPuttPills({ putting: true }), true);
   assert.equal(showPuttPills({ toGreen: { yards: 40, quality: 'good' } }), true);
   assert.equal(showPuttPills({ toGreen: { yards: 40, quality: 'soft' } }), true);
