@@ -73,7 +73,7 @@ import { deleteShotPrompt } from '@/src/domain/deleteShot';
 import { planInsertSlots } from '@/src/domain/insertShot';
 import { confirmUndoIsLive, planConfirmUndo, type ConfirmUndoWindow } from '@/src/domain/confirmUndo';
 import { confirmPlaceToDraft, courseGreenCenterForLine, resolveAddShotFromPin } from '@/src/domain/placeToDrag';
-import { applyWheelSelection } from '@/src/domain/clubSelect';
+import { applyWheelSelection, resolveWheelHighlightId } from '@/src/domain/clubSelect';
 import { PHONE_WHEEL_PILL_HEIGHT, PHONE_WHEEL_STRIP_HEIGHT, planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
 import { PLAY_DOCK_ACTION_MIN_HEIGHT, PLAY_GLASS_DOCK_LIFT, planPlayLayout } from '@/src/domain/playLayout';
 import {
@@ -476,7 +476,7 @@ export default function HoleScreen() {
     const club = clubs.find((row) => row.id === id);
     return { id, label: formatSuggestedClubChip(club?.shortName ?? id, stripPlan.carries[id]) };
   });
-  const wheelSelectedId = selectedClubId ?? stripPlan.pickId;
+  const wheelSelectedId = resolveWheelHighlightId(selectedClubId);
   if (holeTee) {
     rememberResolvedTee({ courseId: round?.courseApiId, holeNumber, green }, holeTee);
   }

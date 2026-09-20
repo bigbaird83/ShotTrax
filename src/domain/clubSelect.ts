@@ -77,3 +77,17 @@ export function watchClubTapUpdatesPhoneSelection(): true {
 export function phoneSelectedClubAfterWatchTap(clubId: string): string {
   return applyWheelSelection(clubId);
 }
+
+/** Hole start never pre-selects Driver or any club. Top-3 may suggest only. */
+export function wheelAutoSelectsOnHoleStart(): false {
+  return false;
+}
+
+export function holeOpensWithEmptySelection(): true {
+  return true;
+}
+
+/** Highlight only a tapped club. Never fall back to the suggested pick. */
+export function resolveWheelHighlightId(selectedClubId: string | null | undefined): string | null {
+  return selectedClubId ?? null;
+}

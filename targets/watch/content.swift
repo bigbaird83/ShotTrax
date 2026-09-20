@@ -358,7 +358,7 @@ struct ContentView: View {
   }
 
   private var stripSelectedId: String? {
-    session.list.selectedClubId ?? stripPickId
+    session.list.selectedClubId
   }
 
   private var stripWindowStart: Int {

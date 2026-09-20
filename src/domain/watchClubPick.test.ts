@@ -617,7 +617,8 @@ test('P0: phone selected=Driver at 330 stays on Watch strip highlighted, not onl
   const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
   const windowFn = watchUi.slice(watchUi.indexOf('private var stripWindowStart'), watchUi.indexOf('private var stripWindowToken'));
   assert.match(windowFn, /selectedClubId/);
-  assert.match(watchUi, /selectedClubId \?\? stripPickId/);
+  assert.match(watchUi, /session\.list\.selectedClubId/);
+  assert.doesNotMatch(watchUi, /selectedClubId \?\? stripPickId/);
   const stripClubs = watchUi.slice(watchUi.indexOf('private var stripClubs'), watchUi.indexOf('private var wheelClubs'));
   assert.match(stripClubs, /selectedClubId/);
   assert.doesNotMatch(stripClubs, /filter \{ \$0 == selected|filter \{ \$0 != selected/);
