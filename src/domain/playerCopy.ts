@@ -72,12 +72,13 @@ export const COPY = {
   themeHighContrast: 'High contrast',
   miles: 'Miles',
   kilometers: 'Kilometers',
-  madeIt: 'Hole Out',
+  madeIt: 'Made it',
   holeDone: 'Hole Out',
   finishHole: 'Hole Out',
   holeOut: 'Hole Out',
   putts: 'Putts',
   puttSheetLede: 'How long was the putt?',
+  puttSheetHint: 'Pick a length, then Add putt.',
   addPutt: 'Add a putt',
   undoPutt: 'Undo putt',
   forgotShot: 'Log a missed shot',
@@ -149,6 +150,10 @@ export function formatPickerLeftYards(result: {
     return `${Math.round(result.yards)} left`;
   }
   return '—';
+}
+
+export function formatPuttN(n: number): string {
+  return `Putt ${n}`;
 }
 
 export function finishPuttsChip(holeNumber: number): string {

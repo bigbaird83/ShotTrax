@@ -1431,6 +1431,7 @@ export default function HoleScreen() {
                   <PuttDock draft={puttDraft} disabled={readOnly} onAdd={onAddPutt} onUndo={onUndoPutt} />
                 ) : null}
                 <Pressable
+                  testID="play-dock-hole-out"
                   accessibilityRole="button"
                   accessibilityLabel={COPY.holeOut}
                   disabled={readOnly || placing || busy}

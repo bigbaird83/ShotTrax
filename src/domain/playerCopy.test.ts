@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   COPY,
   finishPuttsChip,
+  formatPuttN,
   finishShotChip,
   holeOutClosedOnShot,
   formatHoleHeader,
@@ -73,11 +74,14 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.nerdOutLede, 'Score, putts, and how far you hit each club.');
   assert.equal(COPY.scorecard, 'Scorecard');
   assert.equal(COPY.putts, 'Putts');
-  assert.equal(COPY.madeIt, 'Hole Out');
+  assert.equal(COPY.madeIt, 'Made it');
   assert.equal(COPY.holeOut, 'Hole Out');
   assert.equal(COPY.holeDone, 'Hole Out');
   assert.equal(COPY.finishHole, 'Hole Out');
   assert.equal(COPY.puttSheetLede, 'How long was the putt?');
+  assert.equal(COPY.puttSheetHint, 'Pick a length, then Add putt.');
+  assert.equal(COPY.addPutt, 'Add a putt');
+  assert.equal(formatPuttN(2), 'Putt 2');
   assert.equal(COPY.menu, 'Menu');
   assert.equal(COPY.previousHole, 'Previous hole');
   assert.equal(COPY.settings, 'Settings');

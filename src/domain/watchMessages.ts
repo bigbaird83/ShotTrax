@@ -4,7 +4,7 @@
  * Nearby course list uses the phone fix only. Watch never guesses a course.
  * Ranking/seeds/avgs stay on phone. Bag, settings, and scoring stay off the Watch.
  * Watch UI shows a carry-sorted bag strip by default; All clubs opens the bag menu.
- * Putter opens the putt sheet (buckets + Made it) — never a GPS mark.
+ * Putter opens the putt sheet (pick length → Add putt → Made it) — never a GPS mark.
  * Stretch: prefer a fresh Watch GPS fix; else phone GPS. Same acceptFix bands.
  * Watch never marks alone, never silent-forces, no motion/mic, no auto-detect putts.
  */
@@ -344,7 +344,7 @@ export const MADE_IT_FEEDBACK = 'Hole Out ✓';
 export const PUTT_PICK_ACTIONS = ['add', 'undo', 'made'] as const;
 export type PuttPickAction = (typeof PUTT_PICK_ACTIONS)[number];
 
-/** Phone → Watch. Putter selected: buckets + Made it. Never a GPS mark. */
+/** Phone → Watch. Putter selected: pick length, Add putt, Made it. Never a GPS mark. */
 export type PuttSheetMessage = {
   type: 'puttSheet';
   open: boolean;

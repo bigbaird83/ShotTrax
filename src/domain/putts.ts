@@ -56,11 +56,63 @@ export function setPuttCount(current: PuttDraft, next: number): PuttDraft {
   return { putts, lengths: current.lengths.slice(0, putts) };
 }
 
-/** One bucket tap adds one putt with that length (stats only). */
+/** Commit primitive: one chosen bucket becomes one putt. Stats only — never GPS. */
 export function addPuttLength(current: PuttDraft, id: PuttLengthId): PuttDraft {
   if (!isPuttLengthId(id) || current.lengths.length >= PUTT_MAX) return current;
   const lengths = [...current.lengths, id];
   return { putts: lengths.length, lengths };
+}
+
+export type PuttSheetPick = {
+  draft: PuttDraft;
+  pending: PuttLengthId | null;
+};
+
+export function emptyPuttSheetPick(): PuttSheetPick {
+  return { draft: emptyPuttDraft(), pending: null };
+}
+
+/** Length bucket only. Does not commit, advance, or invent yards. */
+export function pickPuttLength(current: PuttSheetPick, id: PuttLengthId): PuttSheetPick {
+  if (!isPuttLengthId(id) || current.draft.lengths.length >= PUTT_MAX) return current;
+  return { draft: current.draft, pending: id };
+}
+
+/** Add putt commits the picked length. No pick → no commit. */
+export function commitPuttLength(current: PuttSheetPick): PuttSheetPick {
+  if (!current.pending) return current;
+  return { draft: addPuttLength(current.draft, current.pending), pending: null };
+}
+
+export function canCommitPutt(pick: PuttSheetPick): boolean {
+  return pick.pending != null && pick.draft.lengths.length < PUTT_MAX;
+}
+
+/** Next putt after committed lengths. Null at the 5-putt cap. */
+export function nextPuttNumber(draft: PuttDraft): number | null {
+  if (draft.lengths.length >= PUTT_MAX) return null;
+  return draft.lengths.length + 1;
+}
+
+export function puttSheetDistanceTapCommits(): false {
+  return false;
+}
+
+export function puttSheetHasAddPuttControl(): true {
+  return true;
+}
+
+export function puttSheetCtaLabel(): 'Made it' {
+  return 'Made it';
+}
+
+/** Hole Out is not the putt-sheet closer. It stays on the play dock for off-green. */
+export function puttSheetShowsHoleOut(): false {
+  return false;
+}
+
+export function playDockKeepsHoleOutForOffGreen(): true {
+  return true;
 }
 
 export function undoLastPutt(current: PuttDraft): PuttDraft {

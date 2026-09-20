@@ -6,6 +6,7 @@ import { includeInDistanceAverages, includeInTop3Samples } from './shotSource';
 import { COPY } from './playerCopy';
 import {
   emptyPuttDraft,
+  emptyPuttSheetPick,
   finishPuttsChipLabel,
   holeAfterDone,
   holeOutClosesOnLastMark,
@@ -17,8 +18,14 @@ import {
   isNearOrOnGreen,
   NEAR_GREEN_YD,
   onGreenPuttsAreScoreOnly,
+  pickPuttLength,
   planFinishHoleOut,
   planMadeIt,
+  playDockKeepsHoleOutForOffGreen,
+  puttSheetCtaLabel,
+  puttSheetDistanceTapCommits,
+  puttSheetHasAddPuttControl,
+  puttSheetShowsHoleOut,
   planPlayDockFinish,
   puttPillsInventGreenEdge,
   puttPillsProximityQualities,
@@ -146,6 +153,60 @@ test('Signal Lab: Hole Out closes on the last real mark — no invented putt GPS
   assert.match(pickFn, /attachWatchFix/);
   assert.match(pickFn, /clubId != "club_putter"/);
   assert.ok(pickFn.indexOf('clubId != "club_putter"') < pickFn.indexOf('attachWatchFix'));
+});
+
+test('Signal Lab: TF 47 putt sheet is pick → Add putt → Made it; Hole Out stays on the dock', () => {
+  assert.equal(puttSheetDistanceTapCommits(), false);
+  assert.equal(puttSheetHasAddPuttControl(), true);
+  assert.equal(puttSheetCtaLabel(), 'Made it');
+  assert.equal(COPY.madeIt, 'Made it');
+  assert.equal(COPY.addPutt, 'Add a putt');
+  assert.equal(puttSheetShowsHoleOut(), false);
+  assert.equal(playDockKeepsHoleOutForOffGreen(), true);
+  assert.equal(COPY.holeOut, 'Hole Out');
+  assert.equal(onGreenPuttsAreScoreOnly(), true);
+
+  const picked = pickPuttLength(emptyPuttSheetPick(), '3_to_10');
+  assert.equal(picked.pending, '3_to_10');
+  assert.deepEqual(picked.draft.lengths, []);
+  assert.equal(planMadeIt(picked.draft).ok, false);
+
+  const sheet = readFileSync(new URL('../ui/PuttSheetBody.tsx', import.meta.url), 'utf8');
+  assert.match(sheet, /pickPuttLength\(\{ draft, pending \}, bucket\.id\)/);
+  assert.doesNotMatch(sheet, /onPress=\{\(\) => onAdd\(bucket\.id\)\}/);
+  assert.match(sheet, /label=\{COPY\.addPutt\}/);
+  assert.match(sheet, /commitPuttLength\(\{ draft, pending \}\)/);
+  assert.match(sheet, /onAdd\(added\)/);
+  assert.match(sheet, /label=\{COPY\.madeIt\}/);
+  assert.match(sheet, /label=\{COPY\.undoPutt\}/);
+  assert.doesNotMatch(sheet, /COPY\.holeOut/);
+  assert.doesNotMatch(sheet, /finishHoleOut/);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const body = hole.slice(hole.indexOf('<PuttSheetBody'), hole.indexOf('</PuttSheetBody>'));
+  assert.match(body, /onAdd=\{onAddPutt\}/);
+  assert.match(body, /onMadeIt=\{onMadeIt\}/);
+  assert.doesNotMatch(body, /COPY\.holeOut|finishHoleOut/);
+  const dock = hole.slice(hole.indexOf('style={[styles.dock'), hole.indexOf('<FullSheet'));
+  assert.match(dock, /testID="play-dock-hole-out"/);
+  assert.match(dock, /COPY\.holeOut/);
+  assert.match(dock, /onFinishHole/);
+  const finish = hole.slice(hole.indexOf('const onFinishHole'), hole.indexOf('const onAddPenalty'));
+  assert.match(finish, /finishHoleOut/);
+  assert.doesNotMatch(finish, /addPlacedShot|insertNoGpsShot|club_putter/);
+
+  const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  const watchSheet = watch.slice(watch.indexOf('private var puttSheet'), watch.indexOf('private var clubPick'));
+  assert.match(watchSheet, /session\.pickPuttLength\(bucket\.id\)/);
+  assert.doesNotMatch(watchSheet, /session\.addPutt\(lengthId: bucket\.id\)/);
+  assert.match(watchSheet, /Text\("Add a putt"\)/);
+  assert.match(watchSheet, /session\.addPutt\(\)/);
+  assert.match(watchSheet, /Text\("Made it"\)/);
+  assert.match(watchSheet, /Text\("Undo putt"\)/);
+  assert.doesNotMatch(watchSheet, /Text\("Hole Out"\)/);
+  const watchDock = watch.slice(watch.indexOf('private var clubPick'), watch.indexOf('private var moreClubs'));
+  assert.match(watchDock, /Text\("Hole Out"\)/);
+  assert.match(watchDock, /session\.madeIt\(\)/);
 });
 
 test('Signal Lab: Made it only stores user-chosen buckets and advances the hole', () => {

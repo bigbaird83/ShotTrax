@@ -4,9 +4,13 @@ import { test } from 'node:test';
 import { PUTTER_CLUB_ID } from './defaultBag';
 import {
   addPuttLength,
+  canCommitPutt,
   canMakePutt,
   clampPutts,
+  commitPuttLength,
   emptyPuttDraft,
+  emptyPuttSheetPick,
+  pickPuttLength,
   finishHoleBuriedInScorecard,
   finishHoleLivesOnPlayDock,
   finishPuttsChipLabel,
@@ -29,7 +33,12 @@ import {
   puttsLiveOnPlayDock,
   PUTT_LENGTHS,
   PUTT_MAX,
+  playDockKeepsHoleOutForOffGreen,
   putterOpensPuttSheet,
+  puttSheetCtaLabel,
+  puttSheetDistanceTapCommits,
+  puttSheetHasAddPuttControl,
+  puttSheetShowsHoleOut,
   puttPillsInventGreenEdge,
   puttPillsNearGreenYards,
   puttPillsProximityQualities,
@@ -68,7 +77,7 @@ test('putt lengths serialize and drop unknown ids', () => {
   assert.equal(serializePuttLengths(['3_to_10', '10_to_20']), '3_to_10,10_to_20');
 });
 
-test('each bucket tap adds its own putt; undo drops the last', () => {
+test('each committed bucket is its own putt; undo drops the last', () => {
   const trimmed = setPuttCount({ putts: 3, lengths: ['inside_3', '3_to_10', 'over_20'] }, 1);
   assert.deepEqual(trimmed, { putts: 1, lengths: ['inside_3'] });
   const first = addPuttLength(emptyPuttDraft(), 'over_20');
@@ -80,6 +89,33 @@ test('each bucket tap adds its own putt; undo drops the last', () => {
   assert.deepEqual(undoLastPutt(third), second);
   const full = addPuttLength({ putts: 5, lengths: ['inside_3', 'inside_3', 'inside_3', 'inside_3', 'inside_3'] }, 'over_20');
   assert.equal(full.putts, 5);
+});
+
+test('Signal: pick a length does not commit; Add putt commits; Made it needs logged putts', () => {
+  assert.equal(puttSheetDistanceTapCommits(), false);
+  assert.equal(puttSheetHasAddPuttControl(), true);
+  assert.equal(puttSheetCtaLabel(), 'Made it');
+  assert.equal(puttSheetShowsHoleOut(), false);
+  assert.equal(playDockKeepsHoleOutForOffGreen(), true);
+
+  const picked = pickPuttLength(emptyPuttSheetPick(), 'over_20');
+  assert.equal(picked.pending, 'over_20');
+  assert.deepEqual(picked.draft, emptyPuttDraft());
+  assert.equal(canCommitPutt(picked), true);
+  assert.equal(canMakePutt(picked.draft), false);
+  assert.equal(planMadeIt(picked.draft).ok, false);
+
+  const idle = commitPuttLength(emptyPuttSheetPick());
+  assert.deepEqual(idle.draft, emptyPuttDraft());
+  assert.equal(idle.pending, null);
+
+  const logged = commitPuttLength(picked);
+  assert.equal(logged.pending, null);
+  assert.deepEqual(logged.draft, { putts: 1, lengths: ['over_20'] });
+  assert.equal(canMakePutt(logged.draft), true);
+
+  const two = commitPuttLength(pickPuttLength({ draft: logged.draft, pending: null }, 'inside_3'));
+  assert.deepEqual(two.draft.lengths, ['over_20', 'inside_3']);
 });
 
 test('Made it needs at least one putt with a bucket', () => {
