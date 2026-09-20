@@ -80,6 +80,7 @@ final class PhoneWatchSession: NSObject, WCSessionDelegate {
     let safe = plistSafe(obj)
     guard WCSession.isSupported() else { return }
     let session = WCSession.default
+    session.transferUserInfo(safe)
     if session.isReachable {
       session.sendMessage(safe, replyHandler: nil, errorHandler: nil)
     }

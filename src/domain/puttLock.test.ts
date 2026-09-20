@@ -301,8 +301,10 @@ test('Signal Lab: TF 49 putt sheet is pick → Made it on putt N≥1; Add putt i
   assert.match(watchSheet, /Text\("Add putt"\)/);
   assert.match(watchSheet, /session\.addPutt\(\)/);
   assert.match(watchSheet, /Text\("Made it"\)/);
-  assert.match(watchSheet, /\.disabled\(session\.sending\)/);
+  assert.match(watchSheet, /session\.sending \|\|/);
   assert.doesNotMatch(watchSheet, /!session\.putt\.canMake/);
+  const madeBtn = watchSheet.slice(watchSheet.indexOf('session.madeIt()'), watchSheet.indexOf('if !session.putt.lengths'));
+  assert.doesNotMatch(madeBtn, /\.disabled\(session\.sending\)/);
   assert.match(watchSheet, /Text\("Undo"\)/);
   assert.match(watchSheet, /Text\("No length — pick a distance"\)/);
   assert.doesNotMatch(watchSheet, /Text\("Hole Out"\)/);
@@ -452,8 +454,10 @@ test('Signal Lab: Made it enabled with empty length; soft cue present; pending s
   assert.match(watchSheet, /Text\("No length — pick a distance"\)/);
   assert.match(watchSheet, /session\.putt\.pending == nil/);
   assert.match(watchSheet, /Text\("Made it"\)/);
-  assert.match(watchSheet, /\.disabled\(session\.sending\)/);
+  assert.match(watchSheet, /session\.sending \|\|/);
   assert.doesNotMatch(watchSheet, /!session\.putt\.canMake/);
+  const madeAlways = watchSheet.slice(watchSheet.indexOf('session.madeIt()'), watchSheet.indexOf('if !session.putt.lengths'));
+  assert.doesNotMatch(madeAlways, /\.disabled\(session\.sending\)/);
   assert.doesNotMatch(watchSheet, /alert|Alert/);
 });
 
@@ -486,8 +490,10 @@ test('Signal Lab: soft No length cue is inline when Made it is off for missing l
   assert.match(watchSheet, /Text\("No length — pick a distance"\)/);
   assert.match(watchSheet, /session\.putt\.pending == nil/);
   assert.match(watchSheet, /Text\("Made it"\)/);
-  assert.match(watchSheet, /\.disabled\(session\.sending\)/);
+  assert.match(watchSheet, /session\.sending \|\|/);
   assert.doesNotMatch(watchSheet, /!session\.putt\.canMake/);
+  const madeAlways = watchSheet.slice(watchSheet.indexOf('session.madeIt()'), watchSheet.indexOf('if !session.putt.lengths'));
+  assert.doesNotMatch(madeAlways, /\.disabled\(session\.sending\)/);
   assert.doesNotMatch(watchSheet, /alert|Alert/);
 });
 

@@ -72,7 +72,7 @@ struct PuttSheetState {
   }
 }
 
-final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLLocationManagerDelegate {
+final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLLocationManagerDelegate, WKExtendedRuntimeSessionDelegate {
   @Published var list = ClubListState()
   @Published var putt = PuttSheetState()
   @Published var nearby = NearbyState()
@@ -90,7 +90,12 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   private var pendingPick: [String: Any]?
+  private var pendingQueue: [[String: Any]] = []
   private let pendingKey = "pendingClubPick"
+  private let pendingQueueKey = "pendingWatchQueue"
+  private var staySession: WKExtendedRuntimeSession?
+  private var wantsStay = false
+  private var userLeftApp = false
   private let location = CLLocationManager()
   private var lastFix: CLLocation?
 
@@ -108,6 +113,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
     loadFromDefaults()
     loadPending()
+    syncRoundStay()
   }
 
   func requestNearby() {
@@ -182,6 +188,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       sheet.canMake = true
       sheet.canAdd = sheet.lengths.count < 5
       putt = sheet
+      syncRoundStay()
     }
     var payload: [String: Any] = [
       "type": "clubPick",
@@ -305,7 +312,15 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     return fmt.string(from: Date())
   }
 
+  private func isPuttPick(_ payload: [String: Any]) -> Bool {
+    payload["type"] as? String == "puttPick"
+  }
+
   private func sendPick(_ payload: [String: Any], keepPending: Bool = true) {
+    if isPuttPick(payload) {
+      sendPuttPickReliable(payload)
+      return
+    }
     guard WCSession.isSupported() else {
       failUnavailable(payload, keepPending: keepPending)
       return
@@ -328,6 +343,26 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       })
     } else {
       failUnavailable(payload, keepPending: keepPending)
+    }
+  }
+
+  /// TF 53 D: puttPick must not depend on isReachable / one pendingClubPick slot.
+  /// transferUserInfo queues in order; sendMessage is extra when the phone is awake.
+  private func sendPuttPickReliable(_ payload: [String: Any]) {
+    enqueuePending(payload)
+    sending = false
+    guard WCSession.isSupported() else { return }
+    let session = WCSession.default
+    session.transferUserInfo(payload)
+    if session.isReachable {
+      session.sendMessage(payload, replyHandler: { [weak self] reply in
+        DispatchQueue.main.async {
+          self?.dequeuePending(at: payload["at"] as? String)
+          self?.handleReply(reply, fallbackClubId: nil, type: "puttPick")
+        }
+      }, errorHandler: { _ in
+        // userInfo already queued — do not wipe later taps
+      })
     }
   }
 
@@ -356,6 +391,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       putt.canMake = true
       putt.canAdd = true
       putt.pending = nil
+      syncRoundStay()
     }
   }
 
@@ -371,6 +407,26 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   private func storePending(_ payload: [String: Any]) {
     pendingPick = payload
     UserDefaults.standard.set(payload, forKey: pendingKey)
+    enqueuePending(payload)
+  }
+
+  private func enqueuePending(_ payload: [String: Any]) {
+    if let at = payload["at"] as? String,
+       pendingQueue.contains(where: { $0["at"] as? String == at }) {
+      return
+    }
+    pendingQueue.append(payload)
+    savePendingQueue()
+  }
+
+  private func dequeuePending(at: String?) {
+    guard let at, !at.isEmpty else { return }
+    pendingQueue.removeAll { $0["at"] as? String == at }
+    savePendingQueue()
+  }
+
+  private func savePendingQueue() {
+    UserDefaults.standard.set(pendingQueue, forKey: pendingQueueKey)
   }
 
   private func clearPending() {
@@ -379,7 +435,14 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   private func loadPending() {
-    pendingPick = UserDefaults.standard.dictionary(forKey: pendingKey)
+    if let rows = UserDefaults.standard.array(forKey: pendingQueueKey) as? [[String: Any]] {
+      pendingQueue = rows
+    }
+    if let legacy = UserDefaults.standard.dictionary(forKey: pendingKey) {
+      enqueuePending(legacy)
+      pendingPick = nil
+      UserDefaults.standard.removeObject(forKey: pendingKey)
+    }
   }
 
   private func haptic(_ type: WKHapticType) {
@@ -482,6 +545,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
     list = next
     persist(next)
+    syncRoundStay()
   }
 
   private func applyPuttSheet(_ message: [String: Any]) {
@@ -504,6 +568,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       next.pending = priorPending
     }
     putt = next
+    syncRoundStay()
   }
 
   private func persist(_ state: ClubListState) {
@@ -575,11 +640,56 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   private func flushPending() {
-    guard let pendingPick, WCSession.default.isReachable else { return }
-    let payload = pendingPick
-    clearPending()
+    guard WCSession.isSupported(), WCSession.default.isReachable else { return }
+    if let legacy = pendingPick {
+      clearPending()
+      enqueuePending(legacy)
+    }
+    let batch = pendingQueue
+    guard !batch.isEmpty else { return }
     sending = true
-    sendPick(payload)
+    for payload in batch {
+      sendPick(payload, keepPending: true)
+    }
+  }
+
+  private func syncRoundStay() {
+    wantsStay = !userLeftApp && (hasLiveHole || putt.open)
+    if wantsStay {
+      startRoundStay()
+    } else {
+      stopRoundStay()
+    }
+  }
+
+  private func startRoundStay() {
+    if let staySession, staySession.state == .running || staySession.state == .scheduled {
+      return
+    }
+    let next = WKExtendedRuntimeSession()
+    next.delegate = self
+    staySession = next
+    next.start()
+  }
+
+  private func stopRoundStay() {
+    staySession?.invalidate()
+    staySession = nil
+  }
+
+  func extendedRuntimeSessionDidStart(_ extendedRuntimeSession: WKExtendedRuntimeSession) {}
+
+  func extendedRuntimeSessionWillExpire(_ extendedRuntimeSession: WKExtendedRuntimeSession) {}
+
+  func extendedRuntimeSession(
+    _ extendedRuntimeSession: WKExtendedRuntimeSession,
+    didInvalidateWith reason: WKExtendedRuntimeSessionInvalidationReason,
+    error: Error?
+  ) {
+    staySession = nil
+    if wantsStay, reason == .expired {
+      DispatchQueue.main.async { self.startRoundStay() }
+    }
   }
 
   func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
@@ -587,6 +697,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     if activationState == .activated {
       flushPending()
       DispatchQueue.main.async {
+        self.syncRoundStay()
         if self.hasLiveHole && !self.nearbyFromHome {
           self.nearby.active = false
           return
@@ -610,6 +721,12 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
   }
 
+  func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
+    DispatchQueue.main.async {
+      self.applyClubList(userInfo)
+    }
+  }
+
   func sessionReachabilityDidChange(_ session: WCSession) {
     if session.isReachable {
       DispatchQueue.main.async {
@@ -620,5 +737,21 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
 
   func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
     lastFix = locations.last
+  }
+
+  /// Crown / app switch is an explicit leave. Idle dim while the stay session
+  /// is running is not — keep ShotTraxx up for the round.
+  func noteScenePhase(_ phase: String) {
+    if phase == "active" {
+      userLeftApp = false
+      syncRoundStay()
+      return
+    }
+    if phase == "background" {
+      if staySession == nil || staySession?.state != .running {
+        userLeftApp = true
+        stopRoundStay()
+      }
+    }
   }
 }

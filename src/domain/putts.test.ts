@@ -395,8 +395,10 @@ test('Finish hole / putts live on the play dock — not buried in Scorecard', ()
   assert.match(watchSheet, /Text\("Made it"\)/);
   assert.match(watchSheet, /Text\("Add putt"\)/);
   assert.match(watchSheet, /Text\("Undo"\)/);
-  assert.match(watchSheet, /\.disabled\(session\.sending\)/);
+  assert.match(watchSheet, /session\.sending \|\|/);
   assert.doesNotMatch(watchSheet, /!session\.putt\.canMake/);
+  const madeBtn = watchSheet.slice(watchSheet.indexOf('session.madeIt()'), watchSheet.indexOf('if !session.putt.lengths'));
+  assert.doesNotMatch(madeBtn, /\.disabled\(session\.sending\)/);
   assert.doesNotMatch(watchSheet, /Text\("Hole Out"\)/);
   assert.equal(watchPuttSheetMadeItAlwaysEnabled(), true);
   assert.equal(watchPuttSheetMadeItRequiresLength(), false);
@@ -588,6 +590,8 @@ test('TF 53: dock Putt + shrunken Hole Out; Watch Made it always on putt sheet',
   assert.match(watchSheet, /Text\("0–3"\)|watchPuttBuckets/);
   assert.ok(watchSheet.indexOf('LazyVGrid') < watchSheet.indexOf('Text("Made it")'));
   assert.doesNotMatch(watchSheet, /!session\.putt\.canMake/);
+  const madeAlways = watchSheet.slice(watchSheet.indexOf('session.madeIt()'), watchSheet.indexOf('if !session.putt.lengths'));
+  assert.doesNotMatch(madeAlways, /\.disabled\(session\.sending\)/);
   assert.doesNotMatch(watchSheet, /Text\("Hole Out"\)/);
   assert.doesNotMatch(watchSheet, /ScrollView/);
   assert.match(clubPick, /Text\("Hole Out"\)/);

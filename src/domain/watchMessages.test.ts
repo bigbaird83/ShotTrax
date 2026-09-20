@@ -274,7 +274,8 @@ test('Watch companion is club-pick only — no motion, mic, or auto-putt', () =>
   assert.match(session, /No motion detection, no mic/);
   assert.match(session, /import CoreLocation/);
   assert.match(session, /attachWatchFix/);
-  assert.doesNotMatch(session, /CoreMotion|CMMotion|AVAudio|microphone|CMPedometer|WKExtendedRuntime/);
+  assert.doesNotMatch(session, /CoreMotion|CMMotion|AVAudio|microphone|CMPedometer/);
+  assert.match(session, /WKExtendedRuntimeSession/);
   assert.doesNotMatch(watchUi, /CoreMotion|CMMotion|AVAudio|microphone|CMPedometer/);
   assert.doesNotMatch(service, /CoreMotion|CMMotion|AVAudio|getMotionActivity|DeviceMotion/);
 });
@@ -308,6 +309,14 @@ test('puttPick add needs a bucket; Made it finishes; undo drops the last', () =>
     at: '2026-09-17T22:00:00.000Z',
   });
   assert.equal(made?.action, 'made');
+  const madeLen = parsePuttPick({
+    type: 'puttPick',
+    action: 'made',
+    at: '2026-09-17T22:00:01.000Z',
+    lengthId: '3_to_10',
+  });
+  assert.equal(madeLen?.action, 'made');
+  assert.equal(madeLen?.lengthId, '3_to_10');
   assert.equal(MADE_IT_FEEDBACK, 'Hole Out ✓');
   assert.equal(PUTTS_ON_WATCH, 'Putts');
 });

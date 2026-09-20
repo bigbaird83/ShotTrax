@@ -431,11 +431,18 @@ export function parsePuttPick(raw: unknown): PuttPickMessage | null {
   if (row.type !== 'puttPick') return null;
   if (row.action !== 'add' && row.action !== 'undo' && row.action !== 'made') return null;
   if (typeof row.at !== 'string' || !isIso8601(row.at)) return null;
+  const lengthId =
+    typeof row.lengthId === 'string' && isPuttLengthId(row.lengthId) ? row.lengthId : undefined;
   if (row.action === 'add') {
-    if (typeof row.lengthId !== 'string' || !isPuttLengthId(row.lengthId)) return null;
-    return { type: 'puttPick', action: 'add', at: row.at, lengthId: row.lengthId };
+    if (!lengthId) return null;
+    return { type: 'puttPick', action: 'add', at: row.at, lengthId };
   }
-  return { type: 'puttPick', action: row.action, at: row.at };
+  return {
+    type: 'puttPick',
+    action: row.action,
+    at: row.at,
+    ...(lengthId ? { lengthId } : {}),
+  };
 }
 
 export type NearbyCourseRow = {

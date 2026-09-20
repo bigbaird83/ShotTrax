@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
   @EnvironmentObject private var session: WatchClubSession
+  @Environment(\.scenePhase) private var scenePhase
   @State private var showAllClubs = false
 
   private let watchPuttBuckets: [(id: String, label: String)] = [
@@ -59,6 +60,10 @@ struct ContentView: View {
       }
     }
     .background(Color("bg").ignoresSafeArea())
+    .onChange(of: scenePhase) { phase in
+      if phase == .active { session.noteScenePhase("active") }
+      if phase == .background { session.noteScenePhase("background") }
+    }
   }
 
   @ViewBuilder
@@ -160,7 +165,7 @@ struct ContentView: View {
         }
         .buttonStyle(.bordered)
         .tint(session.putt.pending == bucket.id ? Color("accent") : Color("cream"))
-        .disabled(session.sending || !session.putt.canAdd)
+        .disabled(!session.putt.canAdd)
       }
 
       Button(action: { session.addPutt() }) {
@@ -187,7 +192,6 @@ struct ContentView: View {
       .buttonStyle(.borderedProminent)
       .tint(Color("accent"))
       .foregroundStyle(Color.black)
-      .disabled(session.sending)
       .gridCellColumns(2)
     }
 
