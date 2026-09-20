@@ -82,12 +82,12 @@ export function playMapFrameEpoch(args: { holeNumber: number; nonce: number }): 
   return `play-${args.holeNumber}-${args.nonce}`;
 }
 
-/** After the first tee→green apply, pan and pinch stay on. */
-export function holeMapScrollZoomAfterFrame(args: {
+/** MapView is born with scroll/zoom on. Never bounce them off — iOS will not reattach. */
+export function holeMapScrollZoomAfterFrame(_args?: {
   lockFrame?: boolean;
-  holeCameraReady: boolean;
-}): boolean {
-  return !args.lockFrame || args.holeCameraReady;
+  holeCameraReady?: boolean;
+}): true {
+  return true;
 }
 
 /** Host is box-none after frame so yielded two-finger hits MapView, not the wrap. */

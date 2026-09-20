@@ -56,7 +56,11 @@ import {
   dragLineReusesVisiblePinSpan,
   dragLineStartsAtHousePin,
   addShotFollowsUser,
+  addShotAlwaysFirstShotStyle,
+  addShotChainsFromLastMark,
+  addShotClubSelectChainsPins,
   addShotFromUsesHousePin,
+  addShotFromUsesLastLanding,
   addShotFromUsesPhone,
   addShotShowsMapsCompass,
   addShotShowsMapsLegal,
@@ -111,8 +115,7 @@ test('preview is this shot from pin to the finger, not the prior shot', () => {
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const fromPin = hole.slice(hole.indexOf('const addShotFrom = resolveAddShotFromPin'), hole.indexOf('const insertSlots'));
   assert.match(fromPin, /tee: holeTee/);
-  assert.match(fromPin, /lastLanding: lastLandingMark\(shots\)/);
-  assert.doesNotMatch(fromPin, /phone:/);
+  assert.doesNotMatch(fromPin, /lastLanding|selectedClubId|phone:/);
 });
 
 test('preview to-green is fingertip to green center; over 600 or no green is a dash', () => {
@@ -411,7 +414,7 @@ test('to pin follows the finger; live yards are this shot only; nothing stores b
   assert.equal(editToOneFingerMovesToPin(), true);
   assert.equal(editToTwoFingersPanAndZoom(), true);
   assert.equal(confirmPlaceIsInTopBar(), false);
-  assert.match(map, /const framedForGestures = !lockFrame \|\| holeCameraReady/);
+  assert.match(map, /const framedForGestures = holeMapKeepsScrollZoomOnceMounted\(\)/);
   assert.match(map, /scrollEnabled=\{framedForGestures\}/);
   assert.match(map, /zoomEnabled=\{framedForGestures\}/);
   assert.doesNotMatch(map, /scrollEnabled=\{mapOwnsGesture \|\| !toPinLive\}/);
@@ -445,9 +448,17 @@ test('to pin follows the finger; live yards are this shot only; nothing stores b
   assert.doesNotMatch(dragCall, /previousFrom|phone:/);
 });
 
-test('Add shot from-pin is tee or last landing, never the house, phone, or puck', () => {
+test('Add shot from-pin is always the tee, never last landing, house, phone, or puck', () => {
   assert.deepEqual(resolveAddShotFromPin({ tee: from, lastLanding: null, phone }), from);
-  assert.deepEqual(resolveAddShotFromPin({ tee: from, lastLanding: drag, phone }), drag);
+  assert.deepEqual(resolveAddShotFromPin({ tee: from, lastLanding: drag, phone }), from);
+  assert.deepEqual(
+    resolveAddShotFromPin({ tee: from, lastLanding: drag, selectedClubId: 'club_driver' }),
+    from,
+  );
+  assert.equal(addShotAlwaysFirstShotStyle(), true);
+  assert.equal(addShotChainsFromLastMark(), false);
+  assert.equal(addShotFromUsesLastLanding(), false);
+  assert.equal(addShotClubSelectChainsPins(), false);
   assert.equal(resolveAddShotFromPin({ tee: null, lastLanding: null, phone }), null);
   assert.notEqual(resolveAddShotFromPin({ tee: from, lastLanding: null, phone })?.lat, phone.lat);
   assert.notEqual(resolveAddShotFromPin({ tee: from, lastLanding: null, phone })?.lat, house.lat);
@@ -476,6 +487,19 @@ test('Add shot from-pin is tee or last landing, never the house, phone, or puck'
   assert.deepEqual(courseGreenCenterForLine({ green, source: null }), green);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const startCatchUp = hole.slice(hole.indexOf('const startCatchUp'), hole.indexOf('const closeEdit'));
+  assert.match(startCatchUp, /addShotFromRef\.current/);
+  assert.doesNotMatch(startCatchUp, /lastLanding|selectedClubId|selectedClub/);
+  const addShotCall = hole.slice(hole.indexOf('const addShotFrom = resolveAddShotFromPin'), hole.indexOf('const insertSlots'));
+  assert.match(addShotCall, /tee: holeTee/);
+  assert.doesNotMatch(addShotCall, /lastLanding|selectedClubId|phone:/);
+  const src = readFileSync(new URL('./placeToDrag.ts', import.meta.url), 'utf8');
+  const resolveFn = src.slice(
+    src.indexOf('export function resolveAddShotFromPin'),
+    src.indexOf('export function midpointLatLng'),
+  );
+  assert.match(resolveFn, /void args\.lastLanding/);
+  assert.match(resolveFn, /void args\.selectedClubId/);
   assert.match(hole, /showPhonePin=\{!catchUpFullScreen\}/);
   assert.match(hole, /allowMapsChrome=\{!catchUpFullScreen\}/);
   assert.match(hole, /addShotFromRef\.current/);

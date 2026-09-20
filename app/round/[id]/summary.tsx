@@ -10,7 +10,8 @@ import { getRound, listClubAverages, listHoles, listPenaltiesForHole, listShotsF
 import { lockHoleCamera, resolveHoleTee, shotPinsForHoleCamera } from '@/src/domain/holeCamera';
 import { planNerdOut } from '@/src/domain/nerdOut';
 import { formatPenaltyRow, totalPenaltyStrokes } from '@/src/domain/penalty';
-import { COPY } from '@/src/domain/playerCopy';
+import { COPY, holeOutClosedOnShot } from '@/src/domain/playerCopy';
+import { holeClosedByShot } from '@/src/domain/putts';
 import { shareRoundSnapshot } from '@/src/services/shareRound';
 import { reconcileHoleScore } from '@/src/domain/scoreReconcile';
 import { useLiveFix } from '@/src/services/useLiveFix';
@@ -133,6 +134,7 @@ export default function RoundSummaryScreen() {
           puttCount: hole.putts,
           penaltyStrokes: penStrokes,
         }).mismatch;
+        const closer = holeClosedByShot(shots);
         const shotBits = [
           `${shots.length} shot${shots.length === 1 ? '' : 's'}`,
           hole.putts ? `${hole.putts} putt${hole.putts === 1 ? '' : 's'}` : null,
@@ -150,6 +152,11 @@ export default function RoundSummaryScreen() {
                 {hole.yards != null ? ` · ${hole.yards} yd` : ''}
               </Text>
               <Text style={styles.muted}>{shotBits.join(' · ')}</Text>
+              {closer ? (
+                <Text style={styles.holeOutLine} testID="hole-out-summary">
+                  {holeOutClosedOnShot(closer.seq)}
+                </Text>
+              ) : null}
               {penalties.length > 0 ? (
                 <Text style={styles.penalty}>
                   {penalties.map((p) => formatPenaltyRow(p)).join(' · ')}
@@ -254,6 +261,7 @@ function makeStyles(colors: ColorPalette) {
   total: { color: colors.cream, fontSize: 48, fontWeight: '900' },
   toPar: { color: colors.cream, fontSize: 28, fontWeight: '800' },
   muted: { color: colors.muted, fontSize: 16 },
+  holeOutLine: { color: colors.lime, fontSize: 13, fontWeight: '800' },
   penalty: { color: colors.amber, fontSize: 14, fontWeight: '700' },
   warn: { color: colors.orange, fontSize: 13, fontWeight: '700' },
   row: {

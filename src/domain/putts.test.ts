@@ -11,8 +11,11 @@ import {
   finishHoleLivesOnPlayDock,
   finishPuttsChipLabel,
   holeAfterDone,
+  holeOutFlagsLastRealShot,
+  holeOutInsertsShot,
   holeOutInventPutts,
   holeOutSetsGirFromOffGreen,
+  planFlagLastRealShot,
   holesNeedingPutts,
   isLivePuttProximityQuality,
   isNearOrOnGreen,
@@ -169,6 +172,9 @@ test('Finish hole / putts live on the play dock — not buried in Scorecard', ()
   assert.equal(playDockHoleOutLabel(), 'Hole Out');
   assert.equal(holeOutInventPutts(), false);
   assert.equal(holeOutSetsGirFromOffGreen(), false);
+  assert.equal(holeOutFlagsLastRealShot(), true);
+  assert.equal(holeOutInsertsShot(), false);
+  assert.equal(planFlagLastRealShot([]).shotId, null);
   const offGreen = planFinishHoleOut();
   assert.equal(offGreen.ok, true);
   assert.equal(offGreen.putts, 0);

@@ -18,7 +18,10 @@ import {
   planCourseCardCamera,
 } from './holeCamera';
 import {
+  addShotAlwaysFirstShotStyle,
+  addShotChainsFromLastMark,
   addShotFollowsUser,
+  addShotFromUsesLastLanding,
   addShotGestureYardsUseFingerPixel,
   addShotGestureYardsUsePinHaversine,
   addShotGestureYardsUseReframe,
@@ -71,6 +74,9 @@ const green = { lat: 37.003, lng: -122.0 };
 const phone = { lat: 40.7128, lng: -74.006 };
 
 test('Signal Lab: Add shot two-finger pan/pinch after frame leave the camera and user puck alone', () => {
+  assert.equal(addShotAlwaysFirstShotStyle(), true);
+  assert.equal(addShotChainsFromLastMark(), false);
+  assert.equal(addShotFromUsesLastLanding(), false);
   assert.equal(addShotGesturesWorkOnFirstOpen(), true);
   assert.equal(addShotGesturesWorkAfterEdit(), true);
   assert.equal(addShotGesturesRequireRemount(), false);
@@ -118,7 +124,7 @@ test('Signal Lab: Add shot two-finger pan/pinch after frame leave the camera and
     heading: 0,
   });
   assert.equal(holeMapScrollZoomAfterFrame({ lockFrame: true, holeCameraReady: true }), true);
-  assert.equal(holeMapScrollZoomAfterFrame({ lockFrame: true, holeCameraReady: false }), false);
+  assert.equal(holeMapScrollZoomAfterFrame({ lockFrame: true, holeCameraReady: false }), true);
   assert.equal(twoFingerOwnsMap(2), true);
   assert.equal(twoFingerOwnsMap(1), false);
   assert.equal(dragOverlayPointerEvents(true), 'none');
@@ -170,11 +176,11 @@ test('Signal Lab: Add shot two-finger pan/pinch after frame leave the camera and
   assert.equal(panned.toGreenYards, roundYards(haversineYards(pin, green)));
 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
-  assert.match(map, /const framedForGestures = !lockFrame \|\| holeCameraReady/);
+  assert.match(map, /const framedForGestures = holeMapKeepsScrollZoomOnceMounted\(\)/);
   assert.match(map, /scrollEnabled=\{framedForGestures\}/);
   assert.match(map, /zoomEnabled=\{framedForGestures\}/);
   assert.doesNotMatch(map, /scrollEnabled=\{mapOwnsGesture \|\| !toPinLive\}/);
-  assert.match(map, /pointerEvents=\{lockFrame && !holeCameraReady \? 'none' : 'box-none'\}/);
+  assert.match(map, /pointerEvents="box-none"/);
   const lockFx = map.slice(
     map.indexOf('}, [lockFrame, lockKey, heading, frameEpoch]);') - 280,
     map.indexOf('}, [lockFrame, lockKey, heading, frameEpoch]);') + 10,
@@ -214,6 +220,12 @@ test('Signal Lab: Add shot two-finger pan/pinch after frame leave the camera and
 
   assert.match(map, /to-pin-drag-layer/);
   assert.match(map, /touches\.length >= 2/);
+  const dragStart = map.slice(
+    map.indexOf('onStartShouldSetResponder={(event) => {'),
+    map.indexOf('onMoveShouldSetResponder'),
+  );
+  assert.match(dragStart, /return false;/);
+  assert.doesNotMatch(dragStart, /return true;/);
   assert.match(map, /pointerEvents=\{mapOwnsGesture \? 'none' : 'auto'\}/);
   assert.match(map, /if \(!onPlaceToDrag \|\| mapOwnsGesture\) return/);
   const dragLines = map.slice(map.indexOf('const dragLines = useMemo'), map.indexOf('const lockedCameraRef'));

@@ -35,6 +35,7 @@ import { clampPenaltyStrokes, scoreAfterPenalty } from '../domain/penalty';
 import {
   clampPutts,
   planFinishHoleOut,
+  planFlagLastRealShot,
   planMadeIt,
   parsePuttLengths,
   serializePuttLengths,
@@ -140,6 +141,7 @@ type ShotRow = {
   source: string | null;
   suggested: number | null;
   average_eligible_at: string | null;
+  hole_out: number | null;
 };
 
 type PenaltyRow = {
@@ -256,6 +258,7 @@ function mapShot(row: ShotRow): Shot {
     endedAt: row.ended_at,
     source,
     suggested: row.suggested === 1,
+    holeOut: (row.hole_out ?? 0) === 1,
     averageEligibleAt: row.average_eligible_at ?? null,
   };
 }
@@ -678,6 +681,15 @@ export function finishHolePutts(
 export function finishHoleOut(db: SQLiteDatabase, holeId: string): void {
   const planned = planFinishHoleOut();
   updateHolePutts(db, holeId, planned.putts, planned.lengths, true);
+  const flag = planFlagLastRealShot(
+    db.getAllSync<{ id: string; seq: number }>(
+      'SELECT id, seq FROM shots WHERE hole_id = ? ORDER BY seq ASC',
+      [holeId],
+    ),
+  );
+  if (!flag.shotId) return;
+  db.runSync('UPDATE shots SET hole_out = 0 WHERE hole_id = ?', [holeId]);
+  db.runSync('UPDATE shots SET hole_out = 1 WHERE id = ?', [flag.shotId]);
 }
 
 /** Close an open GPS shot without an end pin — never invents coordinates. */

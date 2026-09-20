@@ -257,6 +257,11 @@ export function watchHoleOutInventPutts(): false {
   return false;
 }
 
+/** Watch Hole Out / madeIt flags the last real mark the same way as phone Hole Out. */
+export function watchHoleOutFlagsLastRealShot(): true {
+  return true;
+}
+
 export function watchBackHomeAreTinyText(): false {
   return false;
 }

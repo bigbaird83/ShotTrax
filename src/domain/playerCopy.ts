@@ -159,6 +159,11 @@ export function finishShotChip(holeNumber: number): string {
   return `Finish shot · Hole ${holeNumber}`;
 }
 
+/** Hole summary: which real shot closed the hole. Never invented yards. */
+export function holeOutClosedOnShot(seq: number): string {
+  return `Hole Out · shot ${seq}`;
+}
+
 export function markedSuggestedMessage(shortName: string): string {
   return `Marked ${shortName} (suggested) · Change club.`;
 }

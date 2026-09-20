@@ -111,6 +111,11 @@ export type Shot = {
   /** Walk-away auto-mark with the #1 suggested club. */
   suggested: boolean;
   /**
+   * True when Hole Out / madeIt closed the hole on this real mark.
+   * Never a phantom putt row and never invented GPS / yards.
+   */
+  holeOut: boolean;
+  /**
    * ISO time after which this shot may enter club averages / the seed-five.
    * Null on live GPS and older rows — already eligible. Set on Confirm so the
    * 5s Undo window never moves the average.
