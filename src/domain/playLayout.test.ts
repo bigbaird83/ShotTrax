@@ -454,7 +454,10 @@ test('play map still mounts; waiting line is off when 282 is on the card; Scorec
   assert.doesNotMatch(hole, /'Scoreca'|"Scoreca"/);
 
   const header = hole.slice(hole.indexOf('styles.stickyInner'), hole.indexOf('styles.shotLine'));
-  const scorecard = header.slice(header.indexOf('COPY.scorecard') - 160, header.indexOf('COPY.scorecard') + 40);
+  const scorecard = header.slice(
+    header.indexOf('style={styles.scorecardChip}'),
+    header.indexOf('styles.scorecardChipText') + 80,
+  );
   assert.match(scorecard, /numberOfLines=\{1\}/);
   assert.match(scorecard, /scorecardChip/);
   assert.doesNotMatch(scorecard, /styles\.dock/);

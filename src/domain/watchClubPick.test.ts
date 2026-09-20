@@ -307,7 +307,8 @@ test('Watch suggested strip shows carry, opens on the pick, and is not stacked r
   );
 
   const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
-  const stripUi = watchUi.slice(watchUi.indexOf('ScrollView(.horizontal'), watchUi.indexOf('session.madeIt()'));
+  const pickUi = watchUi.slice(watchUi.indexOf('private var clubPick'), watchUi.indexOf('private var moreClubs'));
+  const stripUi = pickUi.slice(pickUi.indexOf('ScrollView(.horizontal'), pickUi.indexOf('session.madeIt()'));
   assert.match(stripUi, /onTapGesture/);
   assert.match(stripUi, /scrollTo\(stripWindowToken/);
   assert.match(stripUi, /anchor: \.leading/);

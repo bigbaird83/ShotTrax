@@ -74,7 +74,7 @@ test('play shows the tip once, persists seen on dismiss, and mark stays live', (
   assert.match(strip, /disabled=\{readOnly \|\| placing\}/);
   assert.doesNotMatch(strip, /[Tt]ip/);
   assert.match(hole, /void markClub\(full\)/);
-  assert.match(hole, /disabled=\{busy \|\| readOnly \|\| placing\}/);
+  assert.match(hole, /disabled=\{readOnly \|\| placing \|\| busy\}/);
 
   const mark = hole.slice(hole.indexOf('const markClub'), hole.indexOf('const onMark'));
   assert.match(mark, /if \(readOnly \|\| placing\) return;/);
