@@ -336,20 +336,44 @@ export function showPuttNoLengthCue(pick: PuttSheetPick): boolean {
 }
 
 /**
- * Made it always closes. Pending / logged buckets persist when the player
- * chose them. No bucket → putt may log without a length. Never invent GPS.
+ * Made it always closes the current putt N (with or without a bucket).
+ * After Add putt, pending-null Made it is N = committed + 1 and leaves
+ * putt N with no length (attach later). Never invent GPS.
  */
 export function planMadeIt(
   draft: PuttDraft,
   pending: PuttLengthId | null = null,
 ): { ok: true; putts: number; lengths: PuttLengthId[] } {
-  const lengths = draft.lengths.filter(isPuttLengthId).slice(0, PUTT_MAX);
+  const committed = draft.lengths.filter(isPuttLengthId).slice(0, PUTT_MAX);
+  const lengths = [...committed];
   if (pending && isPuttLengthId(pending) && lengths.length < PUTT_MAX) {
     lengths.push(pending);
   }
-  const putts =
-    lengths.length > 0 ? lengths.length : Math.max(1, clampPutts(draft.putts));
+  const logged = clampPutts(draft.putts);
+  const addedPending = lengths.length > committed.length;
+  let putts: number;
+  if (addedPending) {
+    putts = lengths.length;
+  } else if (logged > committed.length) {
+    // Already-counted empty-length slots (persist / attach-later).
+    putts = Math.max(logged, 1);
+  } else {
+    // Current putt has no bucket — count it. Empty one-putt → 1.
+    putts = Math.min(PUTT_MAX, Math.max(1, committed.length + 1));
+  }
   return { ok: true, putts: clampPutts(putts), lengths };
+}
+
+/**
+ * Persist a planned Made it. Counts already include the current putt —
+ * do not add another empty slot (that is sheet planMadeIt).
+ */
+export function planPersistMadeIt(
+  draft: PuttDraft,
+): { ok: true; putts: number; lengths: PuttLengthId[] } {
+  const lengths = draft.lengths.filter(isPuttLengthId).slice(0, PUTT_MAX);
+  const putts = clampPutts(Math.max(1, clampPutts(draft.putts), lengths.length));
+  return { ok: true, putts, lengths };
 }
 
 export function isLivePuttProximityQuality(quality: string): boolean {
@@ -541,6 +565,52 @@ export function playDockHoleOutIsChipInOnly(): true {
 
 export function playDockHoleOutCallsMadeIt(): false {
   return false;
+}
+
+/** Watch putt-sheet Made it is always on. Empty length never gates it. */
+export function watchPuttSheetMadeItAlwaysEnabled(): true {
+  return true;
+}
+
+export function watchPuttSheetMadeItRequiresLength(): false {
+  return false;
+}
+
+/** Watch Add putt stays a miss. Hole Out on the club dock is chip-in only. */
+export function watchPuttSheetAddPuttIsMissOnly(): true {
+  return true;
+}
+
+export function watchClubPickHoleOutIsChipInOnly(): true {
+  return true;
+}
+
+/** Watch putt menu is a compact 2-column grid. Phone copy stays long-form. */
+export const WATCH_PUTT_LENGTHS: { id: PuttLengthId; label: string }[] = [
+  { id: 'inside_3', label: '0–3' },
+  { id: '3_to_10', label: '3–10' },
+  { id: '10_to_20', label: '10–20' },
+  { id: 'over_20', label: '20+' },
+];
+
+export function watchPuttSheetLengthLabel(id: PuttLengthId): string {
+  return WATCH_PUTT_LENGTHS.find((row) => row.id === id)?.label ?? id;
+}
+
+export function watchPuttSheetUsesTwoColumnGrid(): true {
+  return true;
+}
+
+export function watchPuttSheetAddPuttLabel(): 'Add putt' {
+  return 'Add putt';
+}
+
+export function watchPuttSheetUndoLabel(): 'Undo' {
+  return 'Undo';
+}
+
+export function watchPuttSheetMadeItLabel(): 'Made it' {
+  return 'Made it';
 }
 
 export function playDockHoleDoneLabel(): 'Hole Out' {

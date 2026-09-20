@@ -86,6 +86,7 @@ test('Signal Lab: close writes score; scorecard/revisit read posted or logged; c
 
   const finishPutts = repo.slice(repo.indexOf('export function finishHolePutts'), repo.indexOf('export function finishHoleOut'));
   assert.match(finishPutts, /planMadeIt/);
+  assert.match(finishPutts, /planPersistMadeIt/);
   assert.match(finishPutts, /persistCloseHoleScore/);
   assert.doesNotMatch(finishPutts, /lat|lng|acceptFix|insertShot/);
 

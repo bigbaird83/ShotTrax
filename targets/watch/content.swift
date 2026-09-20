@@ -11,6 +11,13 @@ struct ContentView: View {
     ("over_20", "20+"),
   ]
 
+  private let watchPuttBuckets: [(id: String, label: String)] = [
+    ("inside_3", "0–3"),
+    ("3_to_10", "3–10"),
+    ("10_to_20", "10–20"),
+    ("over_20", "20+"),
+  ]
+
   var body: some View {
     Group {
       if session.showsNearby, session.nearby.awaitingSelect {
@@ -49,13 +56,11 @@ struct ContentView: View {
           .padding(.horizontal, 4)
         }
       } else if session.putt.open {
-        ScrollView {
-          VStack(alignment: .leading, spacing: 8) {
-            statusHeader
-            puttSheet
-          }
-          .padding(.horizontal, 4)
+        VStack(alignment: .leading, spacing: 6) {
+          statusHeader
+          puttSheet
         }
+        .padding(.horizontal, 4)
       } else {
         clubPick
       }
@@ -153,65 +158,66 @@ struct ContentView: View {
   @ViewBuilder
   private var puttSheet: some View {
     Text("How long was the putt?")
-      .font(.footnote.weight(.bold))
+      .font(.system(size: 12, weight: .bold))
       .foregroundStyle(Color("cream"))
 
     ForEach(Array(session.putt.lengths.enumerated()), id: \.offset) { index, lengthId in
       Text("Putt \(index + 1) · \(session.putt.label(for: lengthId))")
-        .font(.caption.weight(.heavy))
+        .font(.system(size: 11, weight: .heavy))
         .foregroundStyle(Color("cream"))
     }
 
     if session.putt.canAdd {
       Text("Putt \(session.putt.lengths.count + 1)")
-        .font(.caption.weight(.heavy))
+        .font(.system(size: 11, weight: .heavy))
         .foregroundStyle(Color("cream"))
     }
 
-    ForEach(buckets, id: \.id) { bucket in
-      Button(action: { session.pickPuttLength(bucket.id) }) {
-        Text(session.putt.label(for: bucket.id))
-          .font(.headline.weight(.heavy))
-          .frame(maxWidth: .infinity, minHeight: 40)
+    LazyVGrid(columns: [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)], spacing: 6) {
+      ForEach(watchPuttBuckets, id: \.id) { bucket in
+        Button(action: { session.pickPuttLength(bucket.id) }) {
+          Text(bucket.label)
+            .font(.system(size: 14, weight: .heavy))
+            .frame(maxWidth: .infinity, minHeight: 36)
+        }
+        .buttonStyle(.bordered)
+        .tint(session.putt.pending == bucket.id ? Color("accent") : Color("cream"))
+        .disabled(session.sending || !session.putt.canAdd)
       }
-      .buttonStyle(.bordered)
-      .tint(session.putt.pending == bucket.id ? Color("accent") : Color("cream"))
-      .disabled(session.sending || !session.putt.canAdd)
-    }
 
-    Button(action: { session.addPutt() }) {
-      Text("Add a putt")
-        .font(.headline.weight(.heavy))
-        .frame(maxWidth: .infinity, minHeight: 40)
-    }
-    .buttonStyle(.bordered)
-    .disabled(session.sending || session.putt.pending == nil || !session.putt.canAdd)
-
-    if !session.putt.lengths.isEmpty {
-      Button(action: { session.undoPutt() }) {
-        Text("Undo putt")
-          .font(.caption.weight(.heavy))
+      Button(action: { session.addPutt() }) {
+        Text("Add putt")
+          .font(.system(size: 13, weight: .heavy))
           .frame(maxWidth: .infinity, minHeight: 36)
       }
       .buttonStyle(.bordered)
+      .disabled(session.sending || session.putt.pending == nil || !session.putt.canAdd)
+
+      Button(action: { session.undoPutt() }) {
+        Text("Undo")
+          .font(.system(size: 13, weight: .heavy))
+          .frame(maxWidth: .infinity, minHeight: 36)
+      }
+      .buttonStyle(.bordered)
+      .disabled(session.sending || session.putt.lengths.isEmpty)
+
+      Button(action: { session.madeIt() }) {
+        Text("Made it")
+          .font(.system(size: 15, weight: .black))
+          .frame(maxWidth: .infinity, minHeight: 40)
+      }
+      .buttonStyle(.borderedProminent)
+      .tint(Color("accent"))
+      .foregroundStyle(Color.black)
       .disabled(session.sending)
+      .gridCellColumns(2)
     }
 
     if session.putt.pending == nil && session.putt.lengths.count < 5 {
       Text("No length — pick a distance")
-        .font(.caption.weight(.bold))
+        .font(.system(size: 10, weight: .bold))
         .foregroundStyle(Color("cream"))
     }
-
-    Button(action: { session.madeIt() }) {
-      Text("Made it")
-        .font(.headline.weight(.black))
-        .frame(maxWidth: .infinity, minHeight: 44)
-    }
-    .buttonStyle(.borderedProminent)
-    .tint(Color("accent"))
-    .foregroundStyle(Color.black)
-    .disabled(session.sending || !session.putt.canMake)
   }
 
   @ViewBuilder
