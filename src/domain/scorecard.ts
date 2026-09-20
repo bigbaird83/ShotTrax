@@ -8,6 +8,8 @@ export type ScorecardHole = {
   score: number | null;
   putts: number;
   mark: ScorecardMark;
+  /** Close-state only. True when Made it / Hole Out never ran. */
+  incomplete: boolean;
 };
 
 export type ScorecardDismiss = {
@@ -37,16 +39,59 @@ export function scorecardMark(score: number | null, par: number | null): Scoreca
   return 'double';
 }
 
-/** In-round card: stored holes, par, score, putts. Missing par stays blank. No GIR / SG. */
-export function planScorecard(holes: {
-  number: number;
-  par: number | null;
-  score: number | null;
-  putts: number;
+/** Close-state only. Never GPS, yards, or shot invent. */
+export function scorecardHoleIncomplete(puttsDone?: boolean): boolean {
+  return puttsDone === false;
+}
+
+/** `!` in the score column when the hole was moved past without close. */
+export function scorecardIncompleteMark(): '!' {
+  return '!';
+}
+
+/**
+ * Red outline + `!` after you leave a hole without Made it / Hole Out.
+ * Close-state only; current and future holes stay quiet.
+ */
+export function scorecardShowsIncompleteCue(args: {
   puttsDone?: boolean;
-  shotCount?: number;
-  penaltyStrokes?: number;
-}[]): ScorecardHole[] {
+  number: number;
+  currentHoleNumber?: number;
+}): boolean {
+  if (!scorecardHoleIncomplete(args.puttsDone)) return false;
+  if (args.currentHoleNumber == null) return true;
+  return args.number < args.currentHoleNumber;
+}
+
+export function scorecardIncompleteUsesCloseStateOnly(): true {
+  return true;
+}
+
+export function scorecardIncompleteInventGps(): false {
+  return false;
+}
+
+export function scorecardIncompleteInventYards(): false {
+  return false;
+}
+
+export function scorecardRowOpensHole(): true {
+  return true;
+}
+
+/** In-round card: stored holes, par, score, putts. Missing par stays blank. No GIR / SG. */
+export function planScorecard(
+  holes: {
+    number: number;
+    par: number | null;
+    score: number | null;
+    putts: number;
+    puttsDone?: boolean;
+    shotCount?: number;
+    penaltyStrokes?: number;
+  }[],
+  opts?: { currentHoleNumber?: number },
+): ScorecardHole[] {
   return [...holes]
     .sort((a, b) => a.number - b.number)
     .map((hole) => {
@@ -64,6 +109,11 @@ export function planScorecard(holes: {
         score,
         putts: hole.putts,
         mark: scorecardMark(score, hole.par),
+        incomplete: scorecardShowsIncompleteCue({
+          puttsDone: hole.puttsDone,
+          number: hole.number,
+          currentHoleNumber: opts?.currentHoleNumber,
+        }),
       };
     });
 }

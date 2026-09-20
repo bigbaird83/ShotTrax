@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { COPY } from '@/src/domain/playerCopy';
 import {
   planScorecard,
   scorecardDiff,
   scorecardDiffLabel,
   scorecardDiffTone,
+  scorecardIncompleteMark,
   scorecardMarkGlyph,
   type ScorecardHole,
 } from '@/src/domain/scorecard';
@@ -25,17 +26,21 @@ type HoleIn = {
 
 export function ScorecardBody({
   holes,
+  currentHoleNumber,
   onBack,
+  onSelectHole,
 }: {
   holes: HoleIn[];
+  currentHoleNumber?: number;
   onBack: () => void;
+  onSelectHole?: (holeNumber: number) => void;
 }) {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const rows: ScorecardHole[] = planScorecard(holes);
+  const rows: ScorecardHole[] = planScorecard(holes, { currentHoleNumber });
   return (
     <View style={styles.wrap}>
-      <View pointerEvents="none" style={styles.card}>
+      <View style={styles.card}>
         <View style={styles.head}>
           <Text style={[styles.cell, styles.num]}>#</Text>
           <Text style={styles.cell}>{COPY.scorecardPar}</Text>
@@ -47,11 +52,27 @@ export function ScorecardBody({
           const diff = scorecardDiff(row.score, row.par);
           const tone = scorecardDiffTone(diff);
           const plus = scorecardDiffLabel(diff);
+          const mark = row.incomplete ? scorecardIncompleteMark() : (row.score ?? '');
           return (
-            <View key={row.number} style={styles.row}>
+            <Pressable
+              key={row.number}
+              testID={`scorecard-hole-${row.number}`}
+              accessibilityRole="button"
+              accessibilityLabel={
+                row.incomplete
+                  ? `Hole ${row.number} incomplete`
+                  : `Hole ${row.number}`
+              }
+              disabled={!onSelectHole}
+              onPress={() => onSelectHole?.(row.number)}
+              style={[styles.row, row.incomplete && styles.rowIncomplete]}>
               <Text style={[styles.val, styles.num]}>{row.number}</Text>
               <Text style={[styles.val, styles.par]}>{row.par ?? ''}</Text>
-              <Text style={[styles.val, styles.score]}>{row.score ?? ''}</Text>
+              <Text
+                testID={row.incomplete ? `scorecard-incomplete-${row.number}` : undefined}
+                style={[styles.val, styles.score, row.incomplete && styles.incompleteScore]}>
+                {mark}
+              </Text>
               <Text style={styles.val}>{row.putts}</Text>
               <Text
                 style={[
@@ -60,9 +81,9 @@ export function ScorecardBody({
                   tone === 'good' && styles.diffGood,
                   tone === 'bad' && styles.diffBad,
                 ]}>
-                {plus ?? scorecardMarkGlyph(row.mark)}
+                {row.incomplete ? '' : plus ?? scorecardMarkGlyph(row.mark)}
               </Text>
-            </View>
+            </Pressable>
           );
         })}
       </View>
@@ -90,11 +111,17 @@ function makeStyles(colors: ColorPalette) {
       borderRadius: 12,
       minHeight: 48,
       paddingHorizontal: 8,
+      borderWidth: 2,
+      borderColor: 'transparent',
+    },
+    rowIncomplete: {
+      borderColor: colors.red,
     },
     cell: { flex: 1, color: colors.muted, fontSize: type.tiny, fontWeight: '800' },
     val: { flex: 1, color: colors.cream, fontSize: type.body, fontWeight: '800' },
     par: { color: colors.muted, fontWeight: '700' },
     score: { color: colors.cream, fontWeight: '900', fontSize: type.button },
+    incompleteScore: { color: colors.red, fontWeight: '900' },
     num: { flex: 0.6 },
     mark: { flex: 0.7, textAlign: 'right', color: colors.cream },
     diffGood: { color: colors.good, fontWeight: '900' },

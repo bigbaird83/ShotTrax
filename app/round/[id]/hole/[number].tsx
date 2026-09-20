@@ -1623,6 +1623,15 @@ export default function HoleScreen() {
               shotCount: listShotsForHole(db, row.id).length,
               penaltyStrokes: totalPenaltyStrokes(listPenaltiesForHole(db, row.id)),
             }))}
+            currentHoleNumber={holeNumber}
+            onSelectHole={(nextNumber) => {
+              setScorecardOpen(false);
+              if (nextNumber === holeNumber) {
+                bumpPlayFrame();
+                return;
+              }
+              goToHole(nextNumber);
+            }}
             onBack={dismissScorecard}
           />
         </ScrollView>
