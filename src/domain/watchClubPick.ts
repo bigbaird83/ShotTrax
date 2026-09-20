@@ -51,6 +51,11 @@ export function watchPutterOpensPuttSheet(): true {
   return true;
 }
 
+/** Watch putter tap never attaches lat/lng. Domain plan is marks:false / opensPuttSheet. */
+export function watchPutterSkipsAttachWatchFix(): true {
+  return true;
+}
+
 export function watchSameClubSitsAboveTop3(): false {
   return false;
 }

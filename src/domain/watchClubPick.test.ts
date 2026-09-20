@@ -21,6 +21,7 @@ import {
   watchClubPickRestOfBag,
   watchPutterInTop3,
   watchPutterOpensPuttSheet,
+  watchPutterSkipsAttachWatchFix,
   watchRestOfBagBelowAllClubs,
   watchSameClubSitsAboveTop3,
   watchSameClubSitsOnFirstScreen,
@@ -418,6 +419,8 @@ test('Watch putt chips use the Signal gate; Hole Out stays; no scorecard', () =>
   const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
   const pickFn = session.slice(session.indexOf('func pick(clubId: String)'), session.indexOf('func addPutt'));
   assert.match(pickFn, /attachWatchFix/);
+  assert.match(pickFn, /clubId != "club_putter"/);
+  assert.ok(pickFn.indexOf('clubId != "club_putter"') < pickFn.indexOf('attachWatchFix'));
   const madeFn = session.slice(session.indexOf('func madeIt()'), session.indexOf('func madeIt()') + 220);
   assert.doesNotMatch(madeFn, /attachWatchFix/);
   assert.match(session, /"Hole Out"/);
@@ -426,6 +429,10 @@ test('Watch putt chips use the Signal gate; Hole Out stays; no scorecard', () =>
 test('Watch putter opens the putt sheet and stays out of the top 3', () => {
   assert.equal(watchPutterInTop3(), false);
   assert.equal(watchPutterOpensPuttSheet(), true);
+  assert.equal(watchPutterSkipsAttachWatchFix(), true);
+  const stripPutter = planWatchClubTap({ action: 'club', clubId: PUTTER_CLUB_ID, from: 'top3' });
+  assert.equal(stripPutter.marks, false);
+  assert.equal(stripPutter.opensPuttSheet, true);
   assert.deepEqual(watchClubListTop3([PUTTER_CLUB_ID, 'club_7i', 'club_8i', 'club_6i']), [
     'club_7i',
     'club_8i',
@@ -450,6 +457,17 @@ test('Watch putter opens the putt sheet and stays out of the top 3', () => {
   const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
   assert.match(watchUi, /session\.putt\.open/);
   assert.match(watchUi, /puttSheet/);
+  const stripPick = watchUi.slice(watchUi.indexOf('ScrollView(.horizontal'), watchUi.indexOf('Text("All clubs")'));
+  const allClubsPick = watchUi.slice(watchUi.indexOf('ForEach(moreClubs'), watchUi.indexOf('private var moreClubs'));
+  assert.match(stripPick, /session\.pick\(clubId: club.id\)/);
+  assert.match(allClubsPick, /session\.pick\(clubId: clubId\)/);
+
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+  const pickFn = session.slice(session.indexOf('func pick(clubId: String)'), session.indexOf('func addPutt'));
+  assert.match(pickFn, /clubId != "club_putter"/);
+  assert.match(pickFn, /attachWatchFix/);
+  assert.ok(pickFn.indexOf('clubId != "club_putter"') < pickFn.indexOf('attachWatchFix(&payload)'));
+  assert.doesNotMatch(pickFn.slice(0, pickFn.indexOf('if clubId != "club_putter"')), /attachWatchFix/);
 });
 
 test('a bag club under All clubs marks with the same rules as a top-3 tap', () => {
@@ -498,6 +516,8 @@ test('a bag club under All clubs marks with the same rules as a top-3 tap', () =
   const pickFn = session.slice(session.indexOf('func pick(clubId: String)'), session.indexOf('func addPutt'));
   assert.match(pickFn, /"type": "clubPick"/);
   assert.match(pickFn, /attachWatchFix/);
+  assert.match(pickFn, /clubId != "club_putter"/);
+  assert.ok(pickFn.indexOf('clubId != "club_putter"') < pickFn.indexOf('attachWatchFix'));
   const leaveFn = session.slice(session.indexOf('func leave('), session.indexOf('private func isoNow'));
   assert.match(leaveFn, /"type": "clubNav"/);
   assert.doesNotMatch(leaveFn, /clubPick|attachWatchFix/);
