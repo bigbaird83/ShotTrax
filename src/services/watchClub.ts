@@ -22,8 +22,8 @@ import {
 } from '../domain/watchMessages';
 import type { PuttLengthId } from '../domain/putts';
 import {
-  drainWatchClubPickQueue,
-  forgetWatchClubPickAt,
+  drainWatchClubPickQueueForHole,
+  gateWatchClubPick,
   queueWatchClubPickEvent,
   watchClubPickShouldApply,
 } from '../domain/watchClubQueue';
@@ -56,6 +56,7 @@ let context: WatchClubContext | null = null;
 let started = false;
 let lastJson = '';
 let lastPuttJson = '';
+let lastClubMark: { clubId: string; appliedAtMs: number } | null = null;
 
 function native() {
   return getWatchBridgeNative();
@@ -68,7 +69,7 @@ export function watchBridgeAvailable(): boolean {
 export function setWatchClubContext(next: WatchClubContext | null): void {
   context = next;
   if (next) {
-    void flushPendingClubPicks();
+    void flushPendingClubPicks(next.holeNumber);
     void flushPendingPuttPicks();
   }
 }
@@ -169,7 +170,12 @@ async function handlePick(token: string, json: string): Promise<void> {
   const ctx = context;
   if (!ctx || ctx.readOnly) {
     if (!ctx && intent.kind === 'club') {
-      queueWatchClubPickEvent({ token, json, at: intent.pick.at });
+      queueWatchClubPickEvent({
+        token,
+        json,
+        at: intent.pick.at,
+        holeNumber: intent.pick.holeNumber ?? null,
+      });
       return;
     }
     await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
@@ -199,7 +205,17 @@ async function handlePick(token: string, json: string): Promise<void> {
   }
 
   const pick = intent.pick;
-  if (!watchClubPickShouldApply(pick.at)) {
+  const alreadyApplied = !watchClubPickShouldApply(pick.at);
+  const gate = gateWatchClubPick({
+    at: pick.at,
+    clubId: pick.clubId,
+    holeNumber: pick.holeNumber ?? null,
+    currentHole: ctx.holeNumber,
+    last: lastClubMark,
+    nowMs: Date.now(),
+    alreadyApplied,
+  });
+  if (!gate.apply) {
     const label = ctx.labelForClub(pick.clubId) ?? pick.clubId;
     await replyToken(token, { ok: true, feedback: formatClubMarkedFeedback(label) });
     return;
@@ -207,12 +223,13 @@ async function handlePick(token: string, json: string): Promise<void> {
   ctx.onSelectClub?.(pick.clubId);
   const label = ctx.labelForClub(pick.clubId) ?? pick.clubId;
   const watchFix = watchFixFromPick(pick);
+  const markHole = pick.holeNumber ?? ctx.holeNumber;
   try {
     // Top-3 and bag taps share this mark. Same 600-yard tee check.
     // Watch GPS when fresh and within 15/25 m; phone fallback otherwise.
     const { plan } = await markShotWithClub(ctx.db, {
       roundId: ctx.roundId,
-      holeNumber: ctx.holeNumber,
+      holeNumber: markHole,
       clubId: pick.clubId,
       watchFix,
       tee: ctx.tee ?? null,
@@ -220,18 +237,21 @@ async function handlePick(token: string, json: string): Promise<void> {
     const waiting = promptForPlan(plan, () => {
       void (async () => {
         try {
-          const forced = await markShotWithClub(ctx.db, {
-            roundId: ctx.roundId,
-            holeNumber: ctx.holeNumber,
+          const live = context;
+          if (!live || live.holeNumber !== markHole) return;
+          const forced = await markShotWithClub(live.db, {
+            roundId: live.roundId,
+            holeNumber: markHole,
             clubId: pick.clubId,
             force: true,
             watchFix,
-            tee: ctx.tee ?? null,
+            tee: live.tee ?? null,
           });
           if (forced.plan.status === 'commit') {
+            lastClubMark = { clubId: pick.clubId, appliedAtMs: Date.now() };
             hapticMark();
-            ctx.bump();
-            ctx.onMarked?.();
+            live.bump();
+            live.onMarked?.();
           }
         } catch {
           hapticWarn();
@@ -239,30 +259,29 @@ async function handlePick(token: string, json: string): Promise<void> {
       })();
     });
     if (waiting) {
-      forgetWatchClubPickAt(pick.at);
+      lastClubMark = { clubId: pick.clubId, appliedAtMs: Date.now() };
       hapticWarn();
       await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
       return;
     }
     if (plan.status === 'commit') {
+      lastClubMark = { clubId: pick.clubId, appliedAtMs: Date.now() };
       hapticMark();
       ctx.bump();
       ctx.onMarked?.();
       await replyToken(token, { ok: true, feedback: formatClubMarkedFeedback(label) });
       return;
     }
-    forgetWatchClubPickAt(pick.at);
     await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
   } catch {
-    forgetWatchClubPickAt(pick.at);
     hapticWarn();
     Alert.alert(COPY.waitingOnLocation, COPY.locationOff, [{ text: COPY.cancel, style: 'cancel' }]);
     await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
   }
 }
 
-async function flushPendingClubPicks(): Promise<void> {
-  const rows = drainWatchClubPickQueue();
+async function flushPendingClubPicks(holeNumber: number): Promise<void> {
+  const rows = drainWatchClubPickQueueForHole(holeNumber);
   for (const row of rows) {
     await handlePick(row.token, row.json);
   }

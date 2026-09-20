@@ -4,7 +4,15 @@ import { test } from 'node:test';
 import { clubPickPayload } from './watchMessages';
 import {
   QUEUED_WILL_SYNC,
+  WATCH_CLUB_MARK_DEBOUNCE_MS,
   enqueueWatchClubPick,
+  gateWatchClubPick,
+  retainWatchClubPicksForHole,
+  watchHoleAdvanceFlushesMarksToNextHole,
+  watchIdleWalkInventsShots,
+  watchMarkRequiresExplicitTap,
+  watchClubPickReplayCreatesShot,
+  watchSelectAloneMarksShot,
   watchAllPicksUseTransferUserInfo,
   watchClubMarkAttachWatchFixOnPutter,
   watchClubMarkDropsWhenUnreachable,
@@ -75,9 +83,87 @@ test('TF 58: unreachable phone queues club mark with Watch fix — UI not frozen
 
   const service = readFileSync(new URL('../services/watchClub.ts', import.meta.url), 'utf8');
   assert.match(service, /watchClubPickShouldApply/);
+  assert.match(service, /gateWatchClubPick/);
   assert.match(service, /queueWatchClubPickEvent/);
   assert.match(service, /flushPendingClubPicks/);
-  assert.match(service, /forgetWatchClubPickAt/);
+  assert.match(service, /drainWatchClubPickQueueForHole/);
+});
+
+test('TF 58: ghost Watch marks — replay, debounce, and hole-advance never invent shots', () => {
+  assert.equal(watchMarkRequiresExplicitTap(), true);
+  assert.equal(watchSelectAloneMarksShot(), false);
+  assert.equal(watchClubPickReplayCreatesShot(), false);
+  assert.equal(watchHoleAdvanceFlushesMarksToNextHole(), false);
+  assert.equal(watchIdleWalkInventsShots(), false);
+  assert.equal(WATCH_CLUB_MARK_DEBOUNCE_MS, 300);
+
+  const tap = {
+    at: '2026-09-20T22:10:00.000Z',
+    clubId: 'club_50',
+    holeNumber: 10,
+    currentHole: 10,
+    nowMs: 1_000_000,
+  };
+  assert.equal(gateWatchClubPick(tap).apply, true);
+  assert.equal(gateWatchClubPick({ ...tap, alreadyApplied: true }).reason, 'replay');
+  assert.equal(gateWatchClubPick({ ...tap, at: '' }).reason, 'replay');
+  assert.equal(gateWatchClubPick({ ...tap, currentHole: 11 }).reason, 'wrong_hole');
+  assert.equal(
+    gateWatchClubPick({
+      ...tap,
+      last: { clubId: 'club_50', appliedAtMs: 1_000_000 - 200 },
+    }).reason,
+    'debounce',
+  );
+  assert.equal(
+    gateWatchClubPick({
+      ...tap,
+      at: '2026-09-20T22:10:01.000Z',
+      last: { clubId: 'club_50', appliedAtMs: 1_000_000 - 400 },
+    }).apply,
+    true,
+  );
+  assert.deepEqual(
+    retainWatchClubPicksForHole(
+      [
+        { at: 'a', holeNumber: 10 },
+        { at: 'b', holeNumber: 11 },
+        { at: 'c' },
+      ],
+      11,
+    ).map((row) => row.at),
+    ['b'],
+  );
+
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+  const pickFn = session.slice(session.indexOf('func pick(clubId: String)'), session.indexOf('func select('));
+  assert.match(pickFn, /clubTapDebounce/);
+  assert.match(session, /clubTapDebounce: TimeInterval = 0\.3/);
+  assert.match(pickFn, /"holeNumber": list\.holeNumber/);
+  assert.match(pickFn, /uniqueClubAt\(\)/);
+  assert.match(session, /dropStaleClubPicks/);
+  const flushFn = session.slice(session.indexOf('private func flushPending()'), session.indexOf('private func syncRoundStay'));
+  assert.match(flushFn, /dropStaleClubPicks\(liveHole: list\.holeNumber\)/);
+  assert.match(flushFn, /sendReliableQueued\(payload, transfer: false\)/);
+  const applyFn = session.slice(session.indexOf('private func applyClubList'), session.indexOf('private func applyPuttSheet'));
+  assert.match(applyFn, /holeChanged/);
+  assert.match(applyFn, /dropStaleClubPicks\(liveHole: next\.holeNumber\)/);
+  const madeFn = session.slice(session.indexOf('func madeIt()'), session.indexOf('/// Stretch: attach Watch GPS'));
+  assert.match(madeFn, /dropStaleClubPicks\(liveHole: -1\)/);
+  assert.doesNotMatch(pickFn, /func select/);
+
+  const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  const strip = watch.slice(watch.indexOf('ScrollView(.horizontal'), watch.indexOf('Text("All clubs")'));
+  assert.match(strip, /session\.pick\(clubId: club.id\)/);
+  assert.doesNotMatch(strip, /onTapGesture/);
+  assert.doesNotMatch(strip, /session\.select\(/);
+
+  const service = readFileSync(new URL('../services/watchClub.ts', import.meta.url), 'utf8');
+  assert.match(service, /gateWatchClubPick/);
+  assert.match(service, /drainWatchClubPickQueueForHole/);
+  assert.match(service, /pick\.holeNumber/);
+  assert.match(service, /live\.holeNumber !== markHole/);
+  assert.doesNotMatch(service, /forgetWatchClubPickAt/);
 });
 
 test('TF 58: selected Watch putt bucket and club pill stay visible with lime highlight', () => {

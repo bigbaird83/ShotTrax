@@ -326,7 +326,7 @@ test('phone and Watch strip UIs peek neighbors; press marks, swipe does not', ()
   assert.doesNotMatch(watch, /clubStripSlideUpConfirmed/);
   assert.match(watch, /session\.pick\(clubId: club.id\)/);
   assert.match(watch, /ScrollView\(\.horizontal/);
-  assert.match(watch, /onTapGesture/);
+  assert.match(watch, /Button\(action: \{ session\.pick\(clubId: club.id\) \}\)/);
   assert.match(watch, /scrollTo\(stripWindowToken/);
   assert.match(watch, /anchor: \.leading/);
   assert.match(watch, /sorted \{ \$0\.carry < \$1\.carry \}/);

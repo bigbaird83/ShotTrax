@@ -170,9 +170,22 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     sendPick(payload, keepPending: false)
   }
 
+  private var lastClubTapAt = Date.distantPast
+  private var lastClubTapId: String?
+  private let clubTapDebounce: TimeInterval = 0.3
+
   func pick(clubId: String) {
     sending = false
     feedback = ""
+    if clubId != "club_putter",
+       clubId == lastClubTapId,
+       Date().timeIntervalSince(lastClubTapAt) < clubTapDebounce {
+      return
+    }
+    if clubId != "club_putter" {
+      lastClubTapId = clubId
+      lastClubTapAt = Date()
+    }
     var next = list
     next.selectedClubId = clubId
     list = next
@@ -193,7 +206,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     var payload: [String: Any] = [
       "type": "clubPick",
       "clubId": clubId,
-      "at": isoNow(),
+      "at": uniqueClubAt(),
+      "holeNumber": list.holeNumber,
     ]
     // Putter opens the putt sheet / select only — never attach Watch GPS.
     if clubId != "club_putter" {
@@ -268,6 +282,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   func madeIt() {
+    dropStaleClubPicks(liveHole: -1)
     sending = false
     feedback = ""
     var payload: [String: Any] = [
@@ -335,8 +350,11 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     return fmt.string(from: Date())
   }
 
-  /// Distinct `at` per puttPick so a 2nd Add in the same ms is not deduped.
+  /// Distinct `at` per club / putt tap so WCSession replay cannot share a stamp.
   private var lastPuttAt = Date.distantPast
+  private func uniqueClubAt() -> String {
+    uniquePuttAt()
+  }
   private func uniquePuttAt() -> String {
     var now = Date()
     if now.timeIntervalSince(lastPuttAt) < 0.002 {
@@ -402,7 +420,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     sendReliableQueued(payload)
   }
 
-  private func sendReliableQueued(_ payload: [String: Any]) {
+  private func sendReliableQueued(_ payload: [String: Any], transfer: Bool = true) {
     enqueuePending(payload)
     sending = false
     guard WCSession.isSupported() else {
@@ -410,7 +428,9 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       return
     }
     let session = WCSession.default
-    session.transferUserInfo(payload)
+    if transfer {
+      session.transferUserInfo(payload)
+    }
     if session.isReachable {
       session.sendMessage(payload, replyHandler: { [weak self] reply in
         DispatchQueue.main.async {
@@ -614,8 +634,12 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     } else {
       next.selectedClubId = nil
     }
+    let holeChanged = list.holeNumber > 0 && next.holeNumber != list.holeNumber
     list = next
     persist(next)
+    if holeChanged {
+      dropStaleClubPicks(liveHole: next.holeNumber)
+    }
     syncRoundStay()
   }
 
@@ -713,8 +737,21 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
   }
 
+  private func dropStaleClubPicks(liveHole: Int) {
+    pendingQueue.removeAll { payload in
+      guard payload["type"] as? String == "clubPick" else { return false }
+      if (payload["clubId"] as? String) == "club_putter" { return liveHole < 1 }
+      var hole: Int?
+      if let value = payload["holeNumber"] as? Int { hole = value }
+      else if let value = payload["holeNumber"] as? NSNumber { hole = value.intValue }
+      return hole != liveHole
+    }
+    savePendingQueue()
+  }
+
   private func flushPending() {
     guard WCSession.isSupported(), WCSession.default.isReachable else { return }
+    dropStaleClubPicks(liveHole: list.holeNumber)
     if let legacy = pendingPick {
       clearPending()
       enqueuePending(legacy)
@@ -723,7 +760,11 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     guard !batch.isEmpty else { return }
     sending = false
     for payload in batch {
-      sendPick(payload, keepPending: true)
+      if isPuttPick(payload) || isClubPick(payload) {
+        sendReliableQueued(payload, transfer: false)
+      } else {
+        sendPick(payload, keepPending: true)
+      }
     }
   }
 

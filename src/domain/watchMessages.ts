@@ -89,6 +89,8 @@ export type ClubPickMessage = {
   type: 'clubPick';
   clubId: string;
   at: string;
+  /** Hole at tap time. Phone must not apply this mark after hole advance. */
+  holeNumber?: number;
   /** Stretch: Watch GPS when age ≤ 3s and accuracy > 0. Phone prefers it if ≤ phone accuracy. */
   lat?: number;
   lng?: number;
@@ -197,6 +199,12 @@ export function parseClubPick(raw: unknown): ClubPickMessage | null {
     clubId: row.clubId.trim(),
     at: row.at,
   };
+  if (typeof row.holeNumber === 'number' && Number.isFinite(row.holeNumber) && row.holeNumber >= 1) {
+    pick.holeNumber = Math.round(row.holeNumber);
+  } else if (typeof row.holeNumber === 'string' && /^\d+$/.test(row.holeNumber)) {
+    const hole = Number(row.holeNumber);
+    if (hole >= 1) pick.holeNumber = hole;
+  }
   if (typeof row.lat === 'number' && Number.isFinite(row.lat)) pick.lat = row.lat;
   if (typeof row.lng === 'number' && Number.isFinite(row.lng)) pick.lng = row.lng;
   if (row.accuracyM == null) {
@@ -324,11 +332,12 @@ export function clubListPushKey(msg: ClubListMessage): string {
   });
 }
 
-export function clubPickPayload(args: { clubId: string; at?: string }): ClubPickMessage {
+export function clubPickPayload(args: { clubId: string; at?: string; holeNumber?: number }): ClubPickMessage {
   return {
     type: 'clubPick',
     clubId: args.clubId,
     at: args.at ?? new Date().toISOString(),
+    ...(args.holeNumber != null && args.holeNumber >= 1 ? { holeNumber: Math.round(args.holeNumber) } : {}),
   };
 }
 

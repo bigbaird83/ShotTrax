@@ -98,7 +98,7 @@ export function forgetWatchClubPickAt(at: string): void {
   appliedAts = appliedAts.filter((row) => row !== at);
 }
 
-type QueuedClubPick = { token: string; json: string; at: string };
+type QueuedClubPick = { token: string; json: string; at: string; holeNumber?: number | null };
 
 let queued: QueuedClubPick[] = [];
 
@@ -112,10 +112,70 @@ export function drainWatchClubPickQueue(): QueuedClubPick[] {
   return rows;
 }
 
+export function drainWatchClubPickQueueForHole(holeNumber: number): QueuedClubPick[] {
+  const rows = retainWatchClubPicksForHole(queued, holeNumber);
+  queued = [];
+  return rows;
+}
+
 export function enqueueWatchClubPick<T extends { at: string }>(queue: T[], next: T): T[] {
   return enqueueWatchPuttPick(queue, next);
 }
 
 export function watchClubPickDedupMax(): number {
   return CLUB_DEDUP_MAX;
+}
+
+/** Repeat club taps under this window are the same press — not a new shot. */
+export const WATCH_CLUB_MARK_DEBOUNCE_MS = 300;
+
+export function watchMarkRequiresExplicitTap(): true {
+  return true;
+}
+
+export function watchSelectAloneMarksShot(): false {
+  return false;
+}
+
+export function watchClubPickReplayCreatesShot(): false {
+  return false;
+}
+
+export function watchHoleAdvanceFlushesMarksToNextHole(): false {
+  return false;
+}
+
+export function watchIdleWalkInventsShots(): false {
+  return false;
+}
+
+export type WatchClubPickGateReason = 'ok' | 'replay' | 'debounce' | 'wrong_hole';
+
+export function gateWatchClubPick(args: {
+  at: string;
+  clubId: string;
+  holeNumber?: number | null;
+  currentHole: number;
+  last?: { clubId: string; appliedAtMs: number } | null;
+  nowMs?: number;
+  alreadyApplied?: boolean;
+}): { apply: boolean; reason: WatchClubPickGateReason } {
+  if (args.alreadyApplied || !args.at) return { apply: false, reason: 'replay' };
+  if (args.holeNumber != null && args.holeNumber !== args.currentHole) {
+    return { apply: false, reason: 'wrong_hole' };
+  }
+  if (args.last && args.last.clubId === args.clubId) {
+    const dt = (args.nowMs ?? Date.now()) - args.last.appliedAtMs;
+    if (dt >= 0 && dt < WATCH_CLUB_MARK_DEBOUNCE_MS) {
+      return { apply: false, reason: 'debounce' };
+    }
+  }
+  return { apply: true, reason: 'ok' };
+}
+
+export function retainWatchClubPicksForHole<T extends { holeNumber?: number | null }>(
+  queue: T[],
+  holeNumber: number,
+): T[] {
+  return queue.filter((row) => row.holeNumber === holeNumber);
 }

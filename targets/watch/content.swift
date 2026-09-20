@@ -334,22 +334,22 @@ struct ContentView: View {
                 HStack(spacing: 8) {
                   ForEach(wheelClubs, id: \.token) { club in
                     let selected = club.id == stripSelectedId
-                    Text(session.list.label(for: club.id))
-                      .font(.system(size: 16, weight: .black))
-                      .foregroundStyle(selected ? Color("bg") : Color("cream"))
-                      .lineLimit(1)
-                      .minimumScaleFactor(0.65)
-                      .frame(width: pillWidth, height: 44)
-                      .background(selected ? outdoorLime : Color("bg"))
-                      .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                          .stroke(selected ? outdoorLime : Color("cream"), lineWidth: selected ? 3 : 1)
-                      )
-                      .padding(.trailing, club.seamAfter ? 24 : 0)
-                      .id(club.token)
-                      .onTapGesture {
-                        session.pick(clubId: club.id)
-                      }
+                    Button(action: { session.pick(clubId: club.id) }) {
+                      Text(session.list.label(for: club.id))
+                        .font(.system(size: 16, weight: .black))
+                        .foregroundStyle(selected ? Color("bg") : Color("cream"))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.65)
+                        .frame(width: pillWidth, height: 44)
+                        .background(selected ? outdoorLime : Color("bg"))
+                        .overlay(
+                          RoundedRectangle(cornerRadius: 10)
+                            .stroke(selected ? outdoorLime : Color("cream"), lineWidth: selected ? 3 : 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.trailing, club.seamAfter ? 24 : 0)
+                    .id(club.token)
                   }
                 }
                 .padding(.horizontal, 0)

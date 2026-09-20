@@ -192,6 +192,14 @@ test('clubPick may carry Watch GPS; Watch tap uses it when fresh, else phone', (
   assert.equal(parsed?.lat, 37.1);
   assert.equal(parsed?.lng, -122.2);
   assert.equal(parsed?.accuracyM, 4);
+  const stamped = parseClubPick({
+    type: 'clubPick',
+    clubId: 'club_50',
+    at: '2026-09-20T22:10:00.000Z',
+    holeNumber: 10,
+  });
+  assert.equal(stamped?.holeNumber, 10);
+  assert.equal(clubPickPayload({ clubId: 'club_50', at: '2026-09-20T22:10:00.000Z', holeNumber: 10 }).holeNumber, 10);
 });
 
 test('Watch Connectivity this cut is clubList, clubPick, puttSheet, puttPick, clubNav, and nearby start', () => {
