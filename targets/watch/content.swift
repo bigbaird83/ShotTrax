@@ -163,8 +163,8 @@ struct ContentView: View {
 
   @ViewBuilder
   private var puttSheet: some View {
-    // 2-col pills first. Made it is reserved below the grid (not a 4th grid
-    // row) so small faces cannot clip it. Extra copy may clip; Made it cannot.
+    // 2-col length pills only. Add / Undo / Made it share one reserved row
+    // so a small face cannot show pills + Add + Undo with Made it clipped.
     LazyVGrid(columns: [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4)], spacing: 4) {
       ForEach(watchPuttBuckets, id: \.id) { bucket in
         Button(action: { session.pickPuttLength(bucket.id) }) {
@@ -176,32 +176,40 @@ struct ContentView: View {
         .tint(session.putt.pending == bucket.id ? Color("accent") : Color("cream"))
         .disabled(!session.putt.canAdd)
       }
+    }
 
+    HStack(spacing: 4) {
       Button(action: { session.addPutt() }) {
         Text("Add putt")
-          .font(.system(size: 12, weight: .heavy))
-          .frame(maxWidth: .infinity, minHeight: 30)
+          .font(.system(size: 11, weight: .heavy))
+          .lineLimit(1)
+          .minimumScaleFactor(0.7)
+          .frame(maxWidth: .infinity, minHeight: 36)
       }
       .buttonStyle(.bordered)
       .disabled(session.sending || session.putt.pending == nil || !session.putt.canAdd)
 
       Button(action: { session.undoPutt() }) {
         Text("Undo")
-          .font(.system(size: 12, weight: .heavy))
-          .frame(maxWidth: .infinity, minHeight: 30)
+          .font(.system(size: 11, weight: .heavy))
+          .lineLimit(1)
+          .minimumScaleFactor(0.7)
+          .frame(maxWidth: .infinity, minHeight: 36)
       }
       .buttonStyle(.bordered)
       .disabled(session.sending || session.putt.lengths.isEmpty)
-    }
 
-    Button(action: { session.madeIt() }) {
-      Text("Made it")
-        .font(.system(size: 15, weight: .black))
-        .frame(maxWidth: .infinity, minHeight: 40)
+      Button(action: { session.madeIt() }) {
+        Text("Made it")
+          .font(.system(size: 12, weight: .black))
+          .lineLimit(1)
+          .minimumScaleFactor(0.7)
+          .frame(maxWidth: .infinity, minHeight: 36)
+      }
+      .buttonStyle(.borderedProminent)
+      .tint(Color("accent"))
+      .foregroundStyle(Color.black)
     }
-    .buttonStyle(.borderedProminent)
-    .tint(Color("accent"))
-    .foregroundStyle(Color.black)
     .layoutPriority(1)
     .fixedSize(horizontal: false, vertical: true)
 

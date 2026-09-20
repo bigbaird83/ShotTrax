@@ -484,12 +484,12 @@ export type PlayDockFinishKind = 'hole_out' | 'hidden';
 
 /**
  * Same club slot is always Hole Out. A Putt button sits to its left
- * while the hole is unfinished (not puttsDone / placing / read-only).
- * TF 54: do not hide Putt behind putter-selected or ≤40 yd good/soft —
- * those gates left Putt off the dock on device (no club selected, GPS
- * none/hard). Putt opens the existing putt sheet. Hole Out stays for
- * off-green chip-ins. Never a third dock row. Never invent putt GPS
- * or green-edge polygons.
+ * whenever the hole is unfinished (not puttsDone / placing / read-only).
+ * TF 54 Doc+Lead: not gated to putter-selected or ≤40 yd good/soft —
+ * that hide left Putt off the dock on device. Putt always opens the
+ * existing putt sheet. Hole Out stays for off-green chip-ins and flags
+ * the last real mark only. Never a third dock row. Never invent putt
+ * GPS or green-edge polygons.
  */
 export function showPuttPills(args: {
   putting?: boolean;
@@ -553,7 +553,7 @@ export function playDockPuttUsesShowPuttPillsGate(): false {
   return false;
 }
 
-/** TF 54: Putt sits left of Hole Out whenever the hole is unfinished. */
+/** TF 54 Doc+Lead: Putt is always on the dock while the hole is unfinished. */
 export function playDockPuttAlwaysWhenUnfinished(): true {
   return true;
 }
@@ -576,8 +576,12 @@ export function watchPuttSheetMadeItAlwaysEnabled(): true {
   return true;
 }
 
-/** Made it is reserved below the 2-col pills so a small face cannot clip it. */
+/** Made it shares the Add/Undo row so a small face cannot clip it off. */
 export function watchPuttSheetPinsMadeIt(): true {
+  return true;
+}
+
+export function watchPuttSheetMadeItSitsWithAddUndo(): true {
   return true;
 }
 

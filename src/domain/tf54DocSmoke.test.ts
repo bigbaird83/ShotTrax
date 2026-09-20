@@ -4,10 +4,14 @@ import { test } from 'node:test';
 import {
   canMakeCurrentPutt,
   emptyPuttSheetPick,
+  holeOutFlagsLastRealShot,
+  holeOutInventPutts,
   planPlayDockFinish,
+  playDockHoleOutIsChipInOnly,
   playDockPuttAlwaysWhenUnfinished,
   playDockPuttUsesShowPuttPillsGate,
   watchPuttSheetMadeItAlwaysEnabled,
+  watchPuttSheetMadeItSitsWithAddUndo,
   watchPuttSheetPinsMadeIt,
 } from './putts';
 import {
@@ -20,6 +24,7 @@ import {
 test('TF 54 A/E: Watch Made it is reserved on the putt sheet — always enabled, never clipped off', () => {
   assert.equal(watchPuttSheetMadeItAlwaysEnabled(), true);
   assert.equal(watchPuttSheetPinsMadeIt(), true);
+  assert.equal(watchPuttSheetMadeItSitsWithAddUndo(), true);
   assert.equal(canMakeCurrentPutt(emptyPuttSheetPick()), true);
 
   const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
@@ -34,10 +39,17 @@ test('TF 54 A/E: Watch Made it is reserved on the putt sheet — always enabled,
   assert.doesNotMatch(puttOpen, /ScrollView/);
   assert.doesNotMatch(puttOpen, /statusHeader/);
   assert.match(watchSheet, /LazyVGrid/);
+  assert.match(watchSheet, /HStack\(spacing: 4\)/);
   assert.match(watchSheet, /Text\("Made it"\)/);
   assert.match(watchSheet, /layoutPriority\(1\)/);
   assert.ok(watchSheet.indexOf('LazyVGrid') < watchSheet.indexOf('Text("Made it")'));
   assert.ok(watchSheet.indexOf('Text("Made it")') < watchSheet.indexOf('if !session.putt.lengths'));
+  const actions = watchSheet.slice(watchSheet.indexOf('HStack(spacing: 4)'), watchSheet.indexOf('if !session.putt.lengths'));
+  assert.ok(actions.indexOf('Text("Add putt")') >= 0);
+  assert.ok(actions.indexOf('Text("Undo")') >= 0);
+  assert.ok(actions.indexOf('Text("Made it")') >= 0);
+  assert.ok(actions.indexOf('Text("Add putt")') < actions.indexOf('Text("Made it")'));
+  assert.ok(actions.indexOf('Text("Undo")') < actions.indexOf('Text("Made it")'));
   const madeBtn = watchSheet.slice(watchSheet.indexOf('session.madeIt()'), watchSheet.indexOf('if !session.putt.lengths'));
   assert.doesNotMatch(madeBtn, /\.disabled/);
   assert.doesNotMatch(watchSheet, /Text\("Hole Out"\)/);
@@ -73,18 +85,30 @@ test('TF 54 F: stay holds while live / idle — crown and Back/Home still end it
   assert.match(session, /syncRoundStay\(\)/);
 });
 
-test('TF 54 C: dock shows Putt left of shrunk Hole Out when the hole is not finished', () => {
+test('TF 54 C: dock Putt is always visible — left of shrunk Hole Out', () => {
   assert.equal(playDockPuttAlwaysWhenUnfinished(), true);
   assert.equal(playDockPuttUsesShowPuttPillsGate(), false);
   const tee = planPlayDockFinish({ putting: false, toGreen: { yards: 371, quality: 'none' } });
   assert.equal(tee.showPutts, true);
   assert.equal(tee.showHoleOut, true);
+  const putter = planPlayDockFinish({ putting: true, toGreen: { yards: 371, quality: 'none' } });
+  assert.equal(putter.showPutts, true);
+  assert.equal(putter.showHoleOut, true);
+  const near = planPlayDockFinish({ putting: false, toGreen: { yards: 36, quality: 'soft' } });
+  assert.equal(near.showPutts, true);
+  assert.equal(near.showHoleOut, true);
+  const hard = planPlayDockFinish({ putting: false, toGreen: { yards: 12, quality: 'hard' } });
+  assert.equal(hard.showPutts, true);
+  assert.equal(hard.showHoleOut, true);
   const placing = planPlayDockFinish({ placing: true });
   assert.equal(placing.showPutts, false);
   assert.equal(placing.showHoleOut, false);
   const done = planPlayDockFinish({ puttsDone: true });
   assert.equal(done.showPutts, false);
   assert.equal(done.showHoleOut, false);
+  assert.equal(playDockHoleOutIsChipInOnly(), true);
+  assert.equal(holeOutFlagsLastRealShot(), true);
+  assert.equal(holeOutInventPutts(), false);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const dock = hole.slice(hole.indexOf('style={[styles.dock'), hole.indexOf('<FullSheet'));

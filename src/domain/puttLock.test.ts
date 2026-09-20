@@ -88,7 +88,7 @@ import {
   WATCH_ASSIST,
 } from '../sensing/assists';
 
-test('TF 54: dock Putt + Hole Out whenever the hole is unfinished — not a GPS hide', () => {
+test('TF 54: dock Putt is always on while unfinished — not a GPS hide', () => {
   assert.equal(NEAR_GREEN_YD, 40);
   assert.equal(puttPillsUseYardsToGreen(), true);
   assert.equal(puttPillsUseHydratedGreenCentroid(), true);
@@ -124,6 +124,7 @@ test('TF 54: dock Putt + Hole Out whenever the hole is unfinished — not a GPS 
   assert.match(dock, /toGreen: liveToGreen/);
   assert.doesNotMatch(dock, /playHeaderYards|polygon|greenEdge/);
   assert.equal(playDockPuttUsesShowPuttPillsGate(), false);
+  assert.equal(playDockPuttAlwaysWhenUnfinished(), true);
   assert.equal(playDockPuttOpensExistingSheet(), true);
   const watchPush = hole.slice(hole.indexOf('useWatchClubList'), hole.indexOf('if (!round || !hole)'));
   assert.match(watchPush, /yardsToGreen: target\?\.dYards/);
