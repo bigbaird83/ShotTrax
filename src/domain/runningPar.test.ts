@@ -110,7 +110,7 @@ test('Signal Lab: blank and in-play holes do not invent strokes for the running 
   const loggedOnly = planRunningParBadge({
     holes: [
       { number: 1, par: 4, score: null, puttsDone: true, shotCount: 2, putts: 2 },
-      { number: 2, par: 3, score: null, puttsDone: true, shotCount: 1, putts: 1, penaltyStrokes: 1 },
+      { number: 2, par: 3, score: null, puttsDone: true, shotCount: 2, putts: 2, penaltyStrokes: 1 },
     ],
   });
   assert.equal(loggedOnly.visible, true);
@@ -154,11 +154,11 @@ test('Signal Lab: running ±par badge hides for Add-shot / catch-up / putt sheet
   assert.match(hole, /pointerEvents="none"/);
   assert.match(hole, /catchUpFullScreen/);
   assert.match(hole, /puttOpen/);
-  const badge = hole.slice(
-    hole.indexOf('runningPar.visible'),
-    hole.indexOf("placeMode === 'to' || placeMode === 'edit-to'"),
-  );
+  const badgeAt = hole.indexOf('runningPar.visible');
+  assert.ok(badgeAt > 0);
+  const badge = hole.slice(badgeAt, hole.indexOf('styles.runningParGood'));
   assert.match(badge, /pointerEvents="none"/);
+  assert.match(badge, /testID="running-par-badge"/);
   assert.match(badge, /thru \$\{runningPar\.thru\}/);
   assert.doesNotMatch(badge, /Pressable|onPress/);
   assert.doesNotMatch(badge, /acceptFix|yardsToGreen|start_lat/);
