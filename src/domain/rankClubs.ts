@@ -1,5 +1,7 @@
 import { isPutterClubId, stockAvgCarryForSuggestion, typicalCarrySeedForClub } from './defaultBag';
+import { isValidLatLng, type LatLng } from './latLng';
 import type { Club, ShotFixQuality } from './types';
+import { markToGreen } from './yardsToGreen';
 
 /** Live average replaces the typical-carry seed after this many closed shots. */
 export const MIN_CLOSED_SHOTS_FOR_RANK = 5;
@@ -21,7 +23,8 @@ export type DistanceTarget = {
 };
 
 /**
- * Catch-up / edit club picker D: this shot's haversine yards, never yards-to-green.
+ * Edit / change-club picker D: this shot's haversine yards, never yards-to-green.
+ * Add shot uses `resolveAddShotSuggestTarget` — the same remaining-yards D as the play wheel.
  * Live play uses `resolveNextShotDistanceTarget` (landing → green).
  */
 export function shotYardsDistanceTarget(dYards: number | null | undefined): DistanceTarget | null {
@@ -29,10 +32,71 @@ export function shotYardsDistanceTarget(dYards: number | null | undefined): Dist
   return { source: 'shot_yards', dYards };
 }
 
+export type AddShotSuggestSource = 'tee' | 'from_pin';
+
+/** Empty hole / tee shot → tee-to-pin. After a closed landing → that from-pin to the course pin. */
+export function addShotSuggestSource(lastLanding: LatLng | null | undefined): AddShotSuggestSource {
+  return isValidLatLng(lastLanding) ? 'from_pin' : 'tee';
+}
+
+export function addShotSuggestUsesPlayWheelTarget(): true {
+  return true;
+}
+
+export function addShotSuggestRanksShotYards(): false {
+  return false;
+}
+
+export function addShotEmptyHoleSuggestsFromTee(): true {
+  return true;
+}
+
+export function addShotAfterMarksSuggestsFromLastLanding(): true {
+  return true;
+}
+
+/** Same as the play wheel: putter sits at the end of the strip with null carry and is never in the suggested 3. */
+export function addShotSuggestIncludesPutter(): false {
+  return false;
+}
+
+export function addShotSuggestPutterHasCarry(): false {
+  return false;
+}
+
 /**
- * Catch-up / edit club picker: top-3 vs **that shot’s yards**, never yards-to-green.
- * Same seed → ≥5 live rule as live Suggested. Putter is never eligible.
- * Empty → caller shows All clubs.
+ * Add-shot suggested clubs: same remaining-yards D as the play club wheel.
+ * Empty hole / tee: course pin from the tee (card / tee-to-pin). After marks:
+ * last landing (from-pin) → course pin. Never that shot's placed haversine,
+ * never phone GPS, never an invented pin.
+ */
+export function resolveAddShotSuggestTarget(args: {
+  lastLanding: LatLng | null;
+  green: LatLng | null;
+  courseToGreen: { yards: number | null; quality: ShotFixQuality };
+  lastClosedYards: number | null;
+}): DistanceTarget | null {
+  return resolveNextShotDistanceTarget({
+    landingToGreen: markToGreen(args.lastLanding, args.green),
+    courseToGreen: args.courseToGreen,
+    lastClosedYards: args.lastClosedYards,
+  });
+}
+
+/** Yards-left input for the Add-shot club strip — same ranking D as the play wheel. */
+export function addShotSuggestYardsLeft(args: {
+  playTarget: DistanceTarget | null;
+  courseYards: number | null | undefined;
+}): number | null {
+  if (args.playTarget && Number.isFinite(args.playTarget.dYards)) return args.playTarget.dYards;
+  if (args.courseYards != null && Number.isFinite(args.courseYards)) return args.courseYards;
+  return null;
+}
+
+/**
+ * Edit / change-club picker: top-3 vs **that shot’s yards**, never yards-to-green.
+ * Add shot uses `resolveAddShotSuggestTarget` instead. Same seed → ≥5 live rule.
+ * Putter is never eligible. Empty → caller shows All clubs.
  */
 export function rankCatchUpClubs(
   clubs: RankClubInput[],

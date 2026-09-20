@@ -1,15 +1,26 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { DEFAULT_BAG } from './defaultBag';
+import { DEFAULT_BAG, PUTTER_CLUB_ID } from './defaultBag';
+import { clubStripOpeningIds, planClubStrip } from './clubStrip';
 import { haversineYards, roundYards } from './haversine';
 import type { Club } from './types';
 import {
+  addShotAfterMarksSuggestsFromLastLanding,
+  addShotEmptyHoleSuggestsFromTee,
+  addShotSuggestIncludesPutter,
+  addShotSuggestPutterHasCarry,
+  addShotSuggestRanksShotYards,
+  addShotSuggestSource,
+  addShotSuggestUsesPlayWheelTarget,
+  addShotSuggestYardsLeft,
   clubToRankInput,
   lastClosedShotYards,
   MIN_CLOSED_SHOTS_FOR_RANK,
   rankCatchUpClubs,
   rankDistanceYards,
   rankTopClubs,
+  resolveAddShotSuggestTarget,
   resolveDistanceTarget,
   resolveNextShotDistanceTarget,
   shotYardsDistanceTarget,
@@ -385,6 +396,136 @@ test('bag-edited typical carry is the seed until 5 GPS shots; live avg then repl
   const cleared = clubToRankInput({ ...seven, typicalCarryYards: null }, { avgYards: 150, count: 3 });
   assert.equal(cleared.typicalCarryYards, null);
   assert.equal(rankDistanceYards(cleared), 150);
+});
+
+test('Add shot suggested clubs use the same remaining-yards D as the play wheel', () => {
+  assert.equal(addShotSuggestUsesPlayWheelTarget(), true);
+  assert.equal(addShotSuggestRanksShotYards(), false);
+  assert.equal(addShotEmptyHoleSuggestsFromTee(), true);
+  assert.equal(addShotAfterMarksSuggestsFromLastLanding(), true);
+  assert.equal(addShotSuggestIncludesPutter(), false);
+  assert.equal(addShotSuggestPutterHasCarry(), false);
+  assert.equal(addShotSuggestSource(null), 'tee');
+  assert.equal(addShotSuggestSource(undefined), 'tee');
+
+  const tee = { lat: 37.0, lng: -122.0 };
+  const landing = { lat: 37.0 + (200 * 0.9144) / 111_320, lng: -122.0 };
+  const green = { lat: 37.0 + (371 * 0.9144) / 111_320, lng: -122.0 };
+  const course = toGreenDisplayFromHole({
+    courseYards: 371,
+    green,
+    shots: [],
+  });
+  const emptyPlay = resolveNextShotDistanceTarget({
+    landingToGreen: markToGreen(lastLandingMark([]), green),
+    courseToGreen: { yards: course.yards, quality: course.quality },
+    lastClosedYards: lastClosedShotYards([]),
+  });
+  const emptyAdd = resolveAddShotSuggestTarget({
+    lastLanding: lastLandingMark([]),
+    green,
+    courseToGreen: { yards: course.yards, quality: course.quality },
+    lastClosedYards: lastClosedShotYards([]),
+  });
+  assert.deepEqual(emptyAdd, emptyPlay);
+  assert.deepEqual(emptyAdd, { source: 'yards_to_green', dYards: 371 });
+  assert.equal(addShotSuggestYardsLeft({ playTarget: emptyAdd, courseYards: course.yards }), 371);
+  assert.notEqual(emptyAdd?.dYards, 200);
+
+  const shots = [
+    {
+      seq: 1,
+      startLat: tee.lat,
+      startLng: tee.lng,
+      endLat: landing.lat,
+      endLng: landing.lng,
+      endedAt: 'a',
+      source: 'placed' as const,
+      fixQuality: null,
+      distanceYards: 200,
+    },
+  ];
+  const afterLanding = lastLandingMark(shots);
+  assert.deepEqual(afterLanding, landing);
+  assert.equal(addShotSuggestSource(afterLanding), 'from_pin');
+  const landingToGreen = markToGreen(afterLanding, green);
+  const afterPlay = resolveNextShotDistanceTarget({
+    landingToGreen,
+    courseToGreen: { yards: 371, quality: 'good' },
+    lastClosedYards: 200,
+  });
+  const afterAdd = resolveAddShotSuggestTarget({
+    lastLanding: afterLanding,
+    green,
+    courseToGreen: { yards: 371, quality: 'good' },
+    lastClosedYards: 200,
+  });
+  assert.deepEqual(afterAdd, afterPlay);
+  assert.equal(afterAdd?.source, 'yards_to_green');
+  assert.equal(afterAdd?.dYards, landingToGreen.yards);
+  assert.notEqual(afterAdd?.dYards, 371);
+  assert.notEqual(afterAdd?.dYards, 200);
+  assert.deepEqual(rankCatchUpClubs(bag, 200).map((c) => c.id), ['5i', '6i', '7i']);
+  assert.deepEqual(rankTopClubs(bag, afterAdd).map((c) => c.id), ['6i', '5i', '7i']);
+  assert.notDeepEqual(
+    rankTopClubs(bag, afterAdd).map((c) => c.id),
+    rankCatchUpClubs(bag, 200).map((c) => c.id),
+  );
+  const withPutter = [
+    ...bag,
+    club({
+      id: PUTTER_CLUB_ID,
+      name: 'Putter',
+      shortName: 'Pt',
+      loftRank: 16,
+      avgYards: 8,
+      count: 20,
+      typicalCarryYards: 8,
+    }),
+  ];
+  const emptyIds = rankTopClubs(withPutter, emptyAdd).map((c) => c.id);
+  const afterIds = rankTopClubs(withPutter, afterAdd).map((c) => c.id);
+  assert.equal(emptyIds.length, 3);
+  assert.equal(afterIds.length, 3);
+  assert.ok(!emptyIds.includes(PUTTER_CLUB_ID));
+  assert.ok(!afterIds.includes(PUTTER_CLUB_ID));
+  const strip = planClubStrip({
+    clubs: [
+      { id: 'club_driver', carry: 230 },
+      { id: 'club_5i', carry: 170 },
+      { id: 'club_7i', carry: 150 },
+      { id: PUTTER_CLUB_ID, carry: 8 },
+    ],
+    yardsLeft: addShotSuggestYardsLeft({ playTarget: afterAdd, courseYards: 371 }),
+  });
+  assert.equal(strip.ids[strip.ids.length - 1], PUTTER_CLUB_ID);
+  assert.equal(strip.carries[PUTTER_CLUB_ID], undefined);
+  assert.ok(!clubStripOpeningIds(strip.ids, strip.windowStart).includes(PUTTER_CLUB_ID));
+  assert.notEqual(strip.pickId, PUTTER_CLUB_ID);
+
+  const noInvent = resolveAddShotSuggestTarget({
+    lastLanding: null,
+    green: null,
+    courseToGreen: { yards: null, quality: 'none' },
+    lastClosedYards: null,
+  });
+  assert.equal(noInvent, null);
+  assert.equal(addShotSuggestYardsLeft({ playTarget: null, courseYards: 371 }), 371);
+  assert.equal(addShotSuggestYardsLeft({ playTarget: null, courseYards: null }), null);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const placeStrip = hole.slice(hole.indexOf('const addShotSuggestTarget'), hole.indexOf('const placeStripItems'));
+  assert.match(hole, /resolveAddShotSuggestTarget/);
+  assert.match(hole, /addShotSuggestYardsLeft/);
+  assert.match(placeStrip, /lastLanding: lastLandingMark\(shots\)/);
+  assert.match(placeStrip, /courseToGreen: toGreen/);
+  assert.match(placeStrip, /playTarget: addShotSuggestTarget/);
+  assert.match(placeStrip, /yardsLeft: placeSuggestYards/);
+  assert.doesNotMatch(placeStrip, /yardsLeft: pickerYards/);
+  assert.doesNotMatch(placeStrip, /yardsLeft: placedYards/);
+  assert.match(placeStrip, /editClubOpen/);
+  assert.doesNotMatch(placeStrip, /phone|fix\?\.lat|house/);
+  assert.match(hole, /const placeStripItems[\s\S]*?filter\(\(id\) => !isPutterClubId/);
 });
 
 test('next suggested ranks from the new landing, not the card tee number', () => {
