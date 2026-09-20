@@ -4,7 +4,10 @@ import { test } from 'node:test';
 import {
   canMakeCurrentPutt,
   emptyPuttSheetPick,
+  holeOutFlagsLastRealShot,
+  holeOutInventPutts,
   planPlayDockFinish,
+  playDockHoleOutIsChipInOnly,
   playDockPuttAlwaysWhenUnfinished,
   playDockPuttUsesShowPuttPillsGate,
   watchPuttSheetMadeItAlwaysEnabled,
@@ -73,18 +76,30 @@ test('TF 54 F: stay holds while live / idle — crown and Back/Home still end it
   assert.match(session, /syncRoundStay\(\)/);
 });
 
-test('TF 54 C: dock shows Putt left of shrunk Hole Out when the hole is not finished', () => {
-  assert.equal(playDockPuttAlwaysWhenUnfinished(), true);
-  assert.equal(playDockPuttUsesShowPuttPillsGate(), false);
+test('TF 54 C: dock Putt is putter or ≤40 yd good/soft — left of shrunk Hole Out', () => {
+  assert.equal(playDockPuttAlwaysWhenUnfinished(), false);
+  assert.equal(playDockPuttUsesShowPuttPillsGate(), true);
   const tee = planPlayDockFinish({ putting: false, toGreen: { yards: 371, quality: 'none' } });
-  assert.equal(tee.showPutts, true);
+  assert.equal(tee.showPutts, false);
   assert.equal(tee.showHoleOut, true);
+  const putter = planPlayDockFinish({ putting: true, toGreen: { yards: 371, quality: 'none' } });
+  assert.equal(putter.showPutts, true);
+  assert.equal(putter.showHoleOut, true);
+  const near = planPlayDockFinish({ putting: false, toGreen: { yards: 36, quality: 'soft' } });
+  assert.equal(near.showPutts, true);
+  assert.equal(near.showHoleOut, true);
+  const hard = planPlayDockFinish({ putting: false, toGreen: { yards: 12, quality: 'hard' } });
+  assert.equal(hard.showPutts, false);
+  assert.equal(hard.showHoleOut, true);
   const placing = planPlayDockFinish({ placing: true });
   assert.equal(placing.showPutts, false);
   assert.equal(placing.showHoleOut, false);
   const done = planPlayDockFinish({ puttsDone: true });
   assert.equal(done.showPutts, false);
   assert.equal(done.showHoleOut, false);
+  assert.equal(playDockHoleOutIsChipInOnly(), true);
+  assert.equal(holeOutFlagsLastRealShot(), true);
+  assert.equal(holeOutInventPutts(), false);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const dock = hole.slice(hole.indexOf('style={[styles.dock'), hole.indexOf('<FullSheet'));

@@ -316,17 +316,17 @@ test('Signal: dock Putt when putter or ≤40 yd good/soft; Hole Out stays either
   const far = planPlayDockFinish({ putting: false, toGreen: { yards: 160, quality: 'good' } });
   assert.equal(far.kind, 'hole_out');
   assert.equal(far.showHoleOut, true);
-  assert.equal(far.showPutts, true);
+  assert.equal(far.showPutts, false);
   const fringe = planPlayDockFinish({ putting: false, toGreen: { yards: 36, quality: 'soft' } });
   assert.equal(fringe.showHoleOut, true);
   assert.equal(fringe.showPutts, true);
   const junk = planPlayDockFinish({ putting: false, toGreen: { yards: 10, quality: 'forced' } });
   assert.equal(junk.showHoleOut, true);
-  assert.equal(junk.showPutts, true);
+  assert.equal(junk.showPutts, false);
   const putter = planPlayDockFinish({ putting: true, toGreen: { yards: 180, quality: 'good' } });
   assert.equal(putter.showHoleOut, true);
   assert.equal(putter.showPutts, true);
-  assert.equal(playDockPuttAlwaysWhenUnfinished(), true);
+  assert.equal(playDockPuttAlwaysWhenUnfinished(), false);
   const hidden = planPlayDockFinish({ readOnly: true, putting: true });
   assert.equal(hidden.showHoleOut, false);
   assert.equal(hidden.showPutts, false);
@@ -378,8 +378,8 @@ test('Finish hole / putts live on the play dock — not buried in Scorecard', ()
   const holeOutAt = dock.indexOf('testID="play-dock-hole-out"');
   assert.ok(puttAt >= 0 && holeOutAt > puttAt);
   assert.equal(playDockPuttOpensExistingSheet(), true);
-  assert.equal(playDockPuttUsesShowPuttPillsGate(), false);
-  assert.equal(playDockPuttAlwaysWhenUnfinished(), true);
+  assert.equal(playDockPuttUsesShowPuttPillsGate(), true);
+  assert.equal(playDockPuttAlwaysWhenUnfinished(), false);
   assert.equal(playDockPuttLabel(), 'Putt');
   assert.equal(playDockHoleOutIsChipInOnly(), true);
   assert.equal(playDockHoleOutCallsMadeIt(), false);
@@ -560,10 +560,10 @@ test('selecting Putter opens the putt sheet — not a GPS mark; change-club does
 });
 
 test('TF 54: dock Putt + shrunken Hole Out; Watch Made it always on putt sheet', () => {
-  assert.equal(playDockPuttAlwaysWhenUnfinished(), true);
-  assert.equal(playDockPuttUsesShowPuttPillsGate(), false);
-  assert.equal(planPlayDockFinish({ putting: false, toGreen: { yards: 371, quality: 'good' } }).showPutts, true);
-  assert.equal(planPlayDockFinish({ putting: false, toGreen: { yards: 371, quality: 'none' } }).showPutts, true);
+  assert.equal(playDockPuttAlwaysWhenUnfinished(), false);
+  assert.equal(playDockPuttUsesShowPuttPillsGate(), true);
+  assert.equal(planPlayDockFinish({ putting: false, toGreen: { yards: 371, quality: 'good' } }).showPutts, false);
+  assert.equal(planPlayDockFinish({ putting: false, toGreen: { yards: 371, quality: 'none' } }).showPutts, false);
   assert.equal(planPlayDockFinish({ putting: true, toGreen: { yards: 371, quality: 'good' } }).showPutts, true);
   assert.equal(planPlayDockFinish({ putting: false, toGreen: { yards: 36, quality: 'soft' } }).showPutts, true);
   assert.equal(planPlayDockFinish({ readOnly: true }).showPutts, false);

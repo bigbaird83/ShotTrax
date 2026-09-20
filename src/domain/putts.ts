@@ -484,12 +484,11 @@ export type PlayDockFinishKind = 'hole_out' | 'hidden';
 
 /**
  * Same club slot is always Hole Out. A Putt button sits to its left
- * while the hole is unfinished (not puttsDone / placing / read-only).
- * TF 54: do not hide Putt behind putter-selected or ≤40 yd good/soft —
- * those gates left Putt off the dock on device (no club selected, GPS
- * none/hard). Putt opens the existing putt sheet. Hole Out stays for
- * off-green chip-ins. Never a third dock row. Never invent putt GPS
- * or green-edge polygons.
+ * when putter is selected or GPS is within ~40 yd of the hydrated green
+ * centroid (haversine yards-to-green, good/soft only). Hard/forced →
+ * putter-selected only. Putt opens the existing putt sheet. Hole Out
+ * stays for off-green chip-ins and flags the last real mark only.
+ * Never a third dock row. Never invent putt GPS or green-edge polygons.
  */
 export function showPuttPills(args: {
   putting?: boolean;
@@ -535,10 +534,12 @@ export function planPlayDockFinish(args: {
   if (args.readOnly || args.placing || args.puttsDone) {
     return { kind: 'hidden', showPutts: false, showHoleOut: false };
   }
-  void args.putting;
-  void args.toGreen;
+  const showPutts = showPuttPills({
+    putting: args.putting,
+    toGreen: args.toGreen,
+  });
   void args.shotCount;
-  return { kind: 'hole_out', showPutts: true, showHoleOut: true };
+  return { kind: 'hole_out', showPutts, showHoleOut: true };
 }
 
 export function playDockStacksFinishAndHoleDone(): false {
@@ -549,13 +550,13 @@ export function playDockPuttOpensExistingSheet(): true {
   return true;
 }
 
-export function playDockPuttUsesShowPuttPillsGate(): false {
-  return false;
+export function playDockPuttUsesShowPuttPillsGate(): true {
+  return true;
 }
 
-/** TF 54: Putt sits left of Hole Out whenever the hole is unfinished. */
-export function playDockPuttAlwaysWhenUnfinished(): true {
-  return true;
+/** Signal: Putt is putter or ≤40 yd good/soft — not always-on. */
+export function playDockPuttAlwaysWhenUnfinished(): false {
+  return false;
 }
 
 export function playDockPuttLabel(): 'Putt' {
