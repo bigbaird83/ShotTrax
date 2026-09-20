@@ -23,7 +23,17 @@ import { acceptFix } from '../sensing/gates';
 import { preferWatchFix, watchTapUsesAccuracyGates } from './preferWatchFix';
 import {
   QUEUED_WILL_SYNC,
+  WATCH_CLUB_MARK_DEBOUNCE_MS,
   enqueueWatchClubPick,
+  gateWatchClubPick,
+  watchHighlightLogsShot,
+  watchHoleAdvanceFlushesMarksToNextHole,
+  watchIdleWalkInventsShots,
+  watchMarkRequiresExplicitTap,
+  watchClubPickReplayCreatesShot,
+  watchSelectAloneMarksShot,
+  watchSelectAttachWatchFix,
+  watchUnstampedClubPickApplies,
   watchAllPicksUseTransferUserInfo,
   watchClubMarkFeedbackWhenQueued,
   watchClubMarkHardOver25mStillForcePrompts,
@@ -282,4 +292,58 @@ test('TF 58 P0: selected 0–3 and selected club stay on-screen with lime highli
   const phonePutt = readFileSync(new URL('../ui/PuttSheetBody.tsx', import.meta.url), 'utf8');
   assert.match(phonePutt, /PUTT_LENGTHS\.map/);
   assert.match(phonePutt, /pending === bucket\.id && styles\.bucketOn/);
+});
+
+test('Signal: Cypress ghost 56° — highlight never marks; debounce; no hole-advance replay', () => {
+  assert.equal(watchMarkRequiresExplicitTap(), true);
+  assert.equal(watchSelectAloneMarksShot(), false);
+  assert.equal(watchSelectAttachWatchFix(), false);
+  assert.equal(watchHighlightLogsShot(), false);
+  assert.equal(watchClubPickReplayCreatesShot(), false);
+  assert.equal(watchUnstampedClubPickApplies(), false);
+  assert.equal(watchHoleAdvanceFlushesMarksToNextHole(), false);
+  assert.equal(watchIdleWalkInventsShots(), false);
+  assert.equal(WATCH_CLUB_MARK_DEBOUNCE_MS, 300);
+
+  const h10 = {
+    at: '2026-09-20T16:42:00.000Z',
+    clubId: 'club_50',
+    holeNumber: 10,
+    currentHole: 10,
+    nowMs: 2_000_000,
+  };
+  assert.equal(gateWatchClubPick(h10).apply, true);
+  assert.equal(gateWatchClubPick({ ...h10, alreadyApplied: true }).reason, 'replay');
+  assert.equal(gateWatchClubPick({ ...h10, currentHole: 11 }).reason, 'wrong_hole');
+  assert.equal(gateWatchClubPick({ ...h10, holeNumber: null }).reason, 'wrong_hole');
+  assert.equal(
+    gateWatchClubPick({
+      ...h10,
+      last: { clubId: 'club_50', appliedAtMs: 2_000_000 - 120 },
+    }).reason,
+    'debounce',
+  );
+
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+  const selectFn = session.slice(session.indexOf('func select('), session.indexOf('func openPuttSheet'));
+  assert.doesNotMatch(selectFn, /attachWatchFix|clubPick|lat|lng/);
+  assert.match(selectFn, /"type": "clubSelect"/);
+  const applyFn = session.slice(session.indexOf('private func applyClubList'), session.indexOf('private func applyPuttSheet'));
+  assert.doesNotMatch(applyFn, /attachWatchFix|sendPick|func pick\(/);
+  const pickFn = session.slice(session.indexOf('func pick(clubId: String)'), session.indexOf('func select('));
+  assert.ok(pickFn.indexOf('clubId != "club_putter"') < pickFn.indexOf('attachWatchFix'));
+  const flushFn = session.slice(session.indexOf('private func flushPending()'), session.indexOf('private func syncRoundStay'));
+  assert.match(flushFn, /transfer: false/);
+  assert.match(flushFn, /dropStaleClubPicks/);
+
+  const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  const strip = watch.slice(watch.indexOf('ScrollView(.horizontal'), watch.indexOf('Text("All clubs")'));
+  assert.doesNotMatch(strip, /session\.select\(/);
+  assert.doesNotMatch(strip, /onTapGesture/);
+  assert.match(strip, /session\.pick\(clubId: club.id\)/);
+
+  const service = readFileSync(new URL('../services/watchClub.ts', import.meta.url), 'utf8');
+  assert.match(service, /gateWatchClubPick/);
+  assert.match(service, /drainWatchClubPickQueueForHole/);
+  assert.doesNotMatch(service, /forgetWatchClubPickAt/);
 });

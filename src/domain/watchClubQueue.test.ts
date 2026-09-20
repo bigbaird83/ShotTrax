@@ -12,7 +12,10 @@ import {
   watchIdleWalkInventsShots,
   watchMarkRequiresExplicitTap,
   watchClubPickReplayCreatesShot,
+  watchHighlightLogsShot,
   watchSelectAloneMarksShot,
+  watchSelectAttachWatchFix,
+  watchUnstampedClubPickApplies,
   watchAllPicksUseTransferUserInfo,
   watchClubMarkAttachWatchFixOnPutter,
   watchClubMarkDropsWhenUnreachable,
@@ -92,6 +95,9 @@ test('TF 58: unreachable phone queues club mark with Watch fix — UI not frozen
 test('TF 58: ghost Watch marks — replay, debounce, and hole-advance never invent shots', () => {
   assert.equal(watchMarkRequiresExplicitTap(), true);
   assert.equal(watchSelectAloneMarksShot(), false);
+  assert.equal(watchSelectAttachWatchFix(), false);
+  assert.equal(watchHighlightLogsShot(), false);
+  assert.equal(watchUnstampedClubPickApplies(), false);
   assert.equal(watchClubPickReplayCreatesShot(), false);
   assert.equal(watchHoleAdvanceFlushesMarksToNextHole(), false);
   assert.equal(watchIdleWalkInventsShots(), false);
@@ -108,6 +114,8 @@ test('TF 58: ghost Watch marks — replay, debounce, and hole-advance never inve
   assert.equal(gateWatchClubPick({ ...tap, alreadyApplied: true }).reason, 'replay');
   assert.equal(gateWatchClubPick({ ...tap, at: '' }).reason, 'replay');
   assert.equal(gateWatchClubPick({ ...tap, currentHole: 11 }).reason, 'wrong_hole');
+  assert.equal(gateWatchClubPick({ ...tap, holeNumber: null }).reason, 'wrong_hole');
+  assert.equal(gateWatchClubPick({ ...tap, holeNumber: undefined }).reason, 'wrong_hole');
   assert.equal(
     gateWatchClubPick({
       ...tap,

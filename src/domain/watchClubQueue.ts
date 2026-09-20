@@ -149,6 +149,20 @@ export function watchIdleWalkInventsShots(): false {
   return false;
 }
 
+/** Highlight / clubSelect never attaches Watch GPS or logs a shot. */
+export function watchSelectAttachWatchFix(): false {
+  return false;
+}
+
+export function watchHighlightLogsShot(): false {
+  return false;
+}
+
+/** Unstamped clubPick (no hole) is a replay risk after hole advance — drop it. */
+export function watchUnstampedClubPickApplies(): false {
+  return false;
+}
+
 export type WatchClubPickGateReason = 'ok' | 'replay' | 'debounce' | 'wrong_hole';
 
 export function gateWatchClubPick(args: {
@@ -161,7 +175,7 @@ export function gateWatchClubPick(args: {
   alreadyApplied?: boolean;
 }): { apply: boolean; reason: WatchClubPickGateReason } {
   if (args.alreadyApplied || !args.at) return { apply: false, reason: 'replay' };
-  if (args.holeNumber != null && args.holeNumber !== args.currentHole) {
+  if (args.holeNumber == null || args.holeNumber !== args.currentHole) {
     return { apply: false, reason: 'wrong_hole' };
   }
   if (args.last && args.last.clubId === args.clubId) {
