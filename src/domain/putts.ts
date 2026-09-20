@@ -232,6 +232,16 @@ export function holeOutClosesOnLastMark(): true {
   return true;
 }
 
+/** Off-green hole-out keeps the club that was tapped. No swap to putter. */
+export function holeOutKeepsTappedClub(): true {
+  return true;
+}
+
+/** On-green putt count is score-only — buckets, never a GPS mark. */
+export function onGreenPuttsAreScoreOnly(): true {
+  return true;
+}
+
 /** After Made it on the hole you are finishing: next hole, or summary after the last. */
 export function holeAfterDone(
   holeNumber: number,
