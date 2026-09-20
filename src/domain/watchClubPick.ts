@@ -61,6 +61,16 @@ export function watchPlayHasDedicatedPuttControl(): true {
   return true;
 }
 
+/** Putt sits above the club strip so Ultra cannot clip it below the face. */
+export function watchPuttControlSitsAboveClubStrip(): true {
+  return true;
+}
+
+/** Putt shares the Back / Home row — first control band row, no scroll. */
+export function watchPuttControlSitsBesideBackHome(): true {
+  return true;
+}
+
 export function watchPuttControlOpensPuttSheet(): true {
   return true;
 }

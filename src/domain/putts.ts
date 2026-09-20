@@ -612,6 +612,20 @@ export function watchPuttSheetMadeItIsFullWidthRow(): true {
   return true;
 }
 
+/** Ultra painted borderedProminent Made as dark-on-dark. Explicit cream-stroke pill. */
+export function watchPuttSheetMadeItUsesSystemProminent(): false {
+  return false;
+}
+
+export function watchPuttSheetMadeItIsHighContrastPill(): true {
+  return true;
+}
+
+/** All four Watch buckets stay on the 2×2 — inside_3 is never an empty cell. */
+export function watchPuttSheetShowsInside3(): true {
+  return true;
+}
+
 export function watchPuttSheetMadeItRequiresLength(): false {
   return false;
 }

@@ -23,6 +23,8 @@ import {
   watchPuttControlInventYards,
   watchPuttControlIsClubWheel,
   watchPuttControlOpensPuttSheet,
+  watchPuttControlSitsAboveClubStrip,
+  watchPuttControlSitsBesideBackHome,
 } from './watchClubPick';
 import {
   watchPuttActionsMustReachPhone,
@@ -138,6 +140,8 @@ test('Fairway: every Watch puttPick add/Made/N≥2 reaches phone via transferUse
 
 test('Fairway: dedicated Watch Putt opens the sheet only — no attachWatchFix, no invent yards/GPS', () => {
   assert.equal(watchPlayHasDedicatedPuttControl(), true);
+  assert.equal(watchPuttControlSitsAboveClubStrip(), true);
+  assert.equal(watchPuttControlSitsBesideBackHome(), true);
   assert.equal(watchPuttControlOpensPuttSheet(), true);
   assert.equal(watchPuttControlIsClubWheel(), false);
   assert.equal(watchPuttControlAttachWatchFix(), false);
@@ -151,7 +155,7 @@ test('Fairway: dedicated Watch Putt opens the sheet only — no attachWatchFix, 
   assert.match(clubPick, /Text\("Hole Out"\)/);
   assert.doesNotMatch(clubPick, WATCH_MADE);
   assert.ok(clubPick.indexOf('session.openPuttSheet()') < clubPick.indexOf('Text("Hole Out")'));
-  assert.ok(clubPick.indexOf('Text("Putt")') > clubPick.indexOf('ScrollView(.horizontal'));
+  assert.ok(clubPick.indexOf('Text("Putt")') < clubPick.indexOf('ScrollView(.horizontal'));
 
   const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
   const openFn = session.slice(session.indexOf('func openPuttSheet'), session.indexOf('func pickPuttLength'));

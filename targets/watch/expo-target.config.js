@@ -8,6 +8,8 @@ module.exports = (config) => ({
   icon: '../../assets/images/icon.png',
   colors: {
     $accent: '#C8F542',
+    // Named asset — Color("accent") is not $accent. Missing name went dark-on-dark on Ultra.
+    accent: '#C8F542',
     cream: '#F4F1E8',
     muted: '#8A9A8E',
     bg: '#0B1A12',

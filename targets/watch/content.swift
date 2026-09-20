@@ -190,16 +190,21 @@ struct ContentView: View {
         .disabled(session.sending || session.putt.lengths.isEmpty)
       }
 
+      // Ultra ignored borderedProminent + Color.black (dark-on-dark). Explicit lime fill / cream stroke.
       Button(action: { session.madeIt() }) {
         Text("Made")
-          .font(.system(size: 14, weight: .black))
+          .font(.system(size: 16, weight: .black))
+          .foregroundStyle(Color("bg"))
           .lineLimit(1)
           .minimumScaleFactor(0.8)
-          .frame(maxWidth: .infinity, minHeight: 40)
+          .frame(maxWidth: .infinity, minHeight: 48)
+          .background(Color.accentColor)
+          .overlay(
+            RoundedRectangle(cornerRadius: 12)
+              .stroke(Color("cream"), lineWidth: 2)
+          )
       }
-      .buttonStyle(.borderedProminent)
-      .tint(Color("accent"))
-      .foregroundStyle(Color.black)
+      .buttonStyle(.plain)
       .layoutPriority(1)
       .fixedSize(horizontal: false, vertical: true)
 
@@ -221,16 +226,25 @@ struct ContentView: View {
 
   @ViewBuilder
   private func puttLengthButton(id: String, label: String) -> some View {
+    // Literal labels — phone long-form inside_3 copy overflows a Watch pill to a blank Ultra cell.
+    // Do not disable the control: a dimmed system pill emptied the top-left 0–3 cell.
+    let selected = session.putt.pending == id
     Button(action: { session.pickPuttLength(id) }) {
       Text(label)
         .font(.system(size: 13, weight: .heavy))
+        .foregroundStyle(selected ? Color("bg") : Color("cream"))
         .lineLimit(1)
         .minimumScaleFactor(0.7)
-        .frame(maxWidth: .infinity, minHeight: 32)
+        .frame(maxWidth: .infinity, minHeight: 36)
+        .background(selected ? Color.accentColor : Color("bg"))
+        .overlay(
+          RoundedRectangle(cornerRadius: 10)
+            .stroke(Color("cream"), lineWidth: 1)
+        )
     }
-    .buttonStyle(.bordered)
-    .tint(session.putt.pending == id ? Color("accent") : Color("cream"))
-    .disabled(!session.putt.canAdd)
+    .buttonStyle(.plain)
+    .opacity(session.putt.canAdd ? 1 : 0.45)
+    .allowsHitTesting(session.putt.canAdd)
   }
 
   @ViewBuilder
@@ -281,6 +295,21 @@ struct ContentView: View {
             }
             .buttonStyle(.plain)
             .disabled(session.sending)
+            // Above the club strip / next to Back·Home — Ultra clipped the row under the wheel.
+            Button(action: { session.openPuttSheet() }) {
+              Text("Putt")
+                .font(.system(size: 16, weight: .heavy))
+                .foregroundStyle(Color("cream"))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .overlay(
+                  RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color("cream"), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(session.sending)
           }
 
           GeometryReader { wheelGeo in
@@ -320,21 +349,6 @@ struct ContentView: View {
           .frame(height: 52)
 
           HStack(spacing: 8) {
-            Button(action: { session.openPuttSheet() }) {
-              Text("Putt")
-                .font(.system(size: 15, weight: .heavy))
-                .foregroundStyle(Color("cream"))
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .frame(maxWidth: .infinity, minHeight: 40)
-                .overlay(
-                  RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color("cream"), lineWidth: 1)
-                )
-            }
-            .buttonStyle(.plain)
-            .disabled(session.sending)
-
             Button(action: { session.madeIt() }) {
               Text("Hole Out")
                 .font(.system(size: 15, weight: .heavy))
