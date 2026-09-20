@@ -100,6 +100,9 @@ import {
   playScorecardWraps,
   playFinishedHoleMiniSummaryIsChip,
   playFinishedHoleMiniSummaryIsModal,
+  playRunningParBadgeHidesDuringCatchUp,
+  playRunningParBadgeIsCorner,
+  playRunningParBadgeIsModal,
   playScorecardIsHeaderChip,
   playScorecardIsDockAction,
   playShowsSameClub,
@@ -449,6 +452,9 @@ test('play map still mounts; waiting line is off when 282 is on the card; Scorec
   assert.equal(playScorecardWraps(), false);
   assert.equal(playFinishedHoleMiniSummaryIsChip(), true);
   assert.equal(playFinishedHoleMiniSummaryIsModal(), false);
+  assert.equal(playRunningParBadgeIsCorner(), true);
+  assert.equal(playRunningParBadgeIsModal(), false);
+  assert.equal(playRunningParBadgeHidesDuringCatchUp(), true);
   assert.equal(playSameClubHiddenUntilShot(), true);
   assert.ok(playMapMinRatio() >= 0.6);
 
@@ -465,6 +471,9 @@ test('play map still mounts; waiting line is off when 282 is on the card; Scorec
   assert.match(play, /numberOfLines=\{1\}/);
   assert.match(play, /COPY\.scorecard/);
   assert.doesNotMatch(hole, /'Scoreca'|"Scoreca"/);
+  assert.match(hole, /planRunningParBadge/);
+  assert.match(hole, /testID="running-par-badge"/);
+  assert.match(hole, /pointerEvents="none"/);
 
   const header = hole.slice(hole.indexOf('styles.stickyInner'), hole.indexOf('styles.shotLine'));
   const scorecard = header.slice(
