@@ -13,6 +13,7 @@ import {
 } from './clubStrip';
 import { isPutterClubId, stockAvgCarryForSuggestion } from './defaultBag';
 import { COPY, formatSuggestedClubChip } from './playerCopy';
+import { showPuttPills } from './putts';
 
 /** Watch club pick opens on the same top-3 the phone ranked. */
 export function watchClubPickOpensOnTop3(): true {
@@ -53,8 +54,12 @@ export function watchSameClubSitsAboveTop3(): false {
   return false;
 }
 
-export function watchSameClubSitsOnFirstScreen(): true {
-  return true;
+export function watchSameClubSitsOnFirstScreen(): false {
+  return false;
+}
+
+export function watchShowsSameClub(): false {
+  return false;
 }
 
 /** First screen is Hole · yards, top 3, Same club, All clubs — no scroll. */
@@ -201,8 +206,49 @@ export function watchOneHomeOnly(): true {
   return true;
 }
 
-export function watchSameClubSharesRowWithAllClubs(): true {
+export function watchSameClubSharesRowWithAllClubs(): false {
+  return false;
+}
+
+/** Freed Same-club slot is Hole Out. No Watch scorecard this cook. */
+export function watchShowsHoleOut(): true {
   return true;
+}
+
+export function watchShowsScorecard(): false {
+  return false;
+}
+
+/** Same Signal gate as phone: putter, or ≤40 yd haversine to green (good/soft). */
+export function watchPuttChipsUseSignalGate(): true {
+  return true;
+}
+
+export function watchShowPuttPills(args: {
+  selectedClubId?: string | null;
+  yardsToGreen?: number | null;
+  yardsQuality?: string;
+}): boolean {
+  return showPuttPills({
+    putting: isPutterClubId(args.selectedClubId),
+    toGreen: {
+      yards: args.yardsToGreen ?? null,
+      quality: args.yardsQuality ?? 'none',
+    },
+  });
+}
+
+/** Watch tap attaches Watch GPS. Hole Out is not a GPS mark. */
+export function watchTapUsesWatchGps(): true {
+  return true;
+}
+
+export function watchHoleOutClosesOnLastMark(): true {
+  return true;
+}
+
+export function watchHoleOutInventPutts(): false {
+  return false;
 }
 
 export function watchBackHomeAreTinyText(): false {

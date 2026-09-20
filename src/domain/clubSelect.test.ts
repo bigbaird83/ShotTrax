@@ -77,7 +77,7 @@ test('a wheel press marks that club and does not reopen the window', () => {
   assert.equal(applyWheelSelection('club_3w'), 'club_3w');
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
-  const strip = hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.stickyClub'));
+  const strip = hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.addShot'));
   assert.match(strip, /pickId=\{wheelSelectedId\}/);
   assert.match(strip, /applyWheelSelection/);
   assert.match(strip, /void markClub\(full\)/);
@@ -196,10 +196,13 @@ test('Watch selection is the phone selection; strip press marks', () => {
   assert.match(session, /func select\(_ clubId: String\)/);
   const service = readFileSync(new URL('../services/watchClub.ts', import.meta.url), 'utf8');
   assert.match(service, /intent\.kind === 'select'/);
-  assert.doesNotMatch(
-    service.slice(service.indexOf("if (intent.kind === 'select')"), service.indexOf("if (intent.kind === 'leave')")),
-    /markShotWithClub/,
+  const selectPath = service.slice(
+    service.indexOf("if (intent.kind === 'select')"),
+    service.indexOf("if (intent.kind === 'leave')"),
   );
+  assert.match(selectPath, /onSelectClub/);
+  assert.match(selectPath, /hapticSelect/);
+  assert.doesNotMatch(selectPath, /markShotWithClub/);
 });
 
 test('Watch tap club X updates phone selectedClub to X and still marks', () => {
@@ -242,7 +245,7 @@ test('one press marks; swipe and scroll never mark', () => {
   assert.deepEqual(planClubStripGesture('scroll'), { selects: false, marks: false, usesHomeClubTap: false });
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
-  const strip = hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.stickyClub'));
+  const strip = hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.addShot'));
   assert.match(strip, /void markClub\(full\)/);
   assert.match(strip, /applyWheelSelection/);
   assert.doesNotMatch(strip, /onConfirm/);

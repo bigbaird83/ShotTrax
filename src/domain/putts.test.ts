@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { PUTTER_CLUB_ID } from './defaultBag';
 import {
@@ -6,23 +7,40 @@ import {
   canMakePutt,
   clampPutts,
   emptyPuttDraft,
+  finishHoleBuriedInScorecard,
+  finishHoleLivesOnPlayDock,
   finishPuttsChipLabel,
   holeAfterDone,
+  holeOutInventPutts,
+  holeOutSetsGirFromOffGreen,
   holesNeedingPutts,
+  isLivePuttProximityQuality,
   isNearOrOnGreen,
   madeItAdvancesHole,
   NEAR_GREEN_YD,
   parsePuttLengths,
+  planFinishHoleOut,
   planMadeIt,
+  planPlayDockFinish,
+  playDockHoleOutLabel,
+  puttsLiveOnPlayDock,
   PUTT_LENGTHS,
   PUTT_MAX,
   putterOpensPuttSheet,
+  puttPillsInventGreenEdge,
+  puttPillsNearGreenYards,
+  puttPillsProximityQualities,
+  puttPillsProximityUsesHardOrForced,
+  puttPillsUseHydratedGreenCentroid,
+  puttPillsUseYardsToGreen,
   puttsFromWalkOff,
   serializePuttLengths,
   setPuttCount,
   shouldAutoOpenClubPick,
+  showPuttPills,
   undoLastPutt,
 } from './putts';
+import { playScorecardIsDockAction, playScorecardIsHeaderChip } from './playLayout';
 
 test('putts clamp to 0–5', () => {
   assert.equal(clampPutts(-1), 0);
@@ -87,6 +105,91 @@ test('near / on green is live yards-to-green within 40 yd — never a putt recor
   assert.equal(isNearOrOnGreen({ yards: 41, quality: 'good' }), false);
   assert.equal(isNearOrOnGreen({ yards: 12, quality: 'none' }), false);
   assert.equal(isNearOrOnGreen({ yards: null, quality: 'good' }), false);
+  assert.equal(isNearOrOnGreen({ yards: 8, quality: 'forced' }), false);
+  assert.equal(isNearOrOnGreen({ yards: 8, quality: 'hard' }), false);
+  assert.equal(isLivePuttProximityQuality('good'), true);
+  assert.equal(isLivePuttProximityQuality('soft'), true);
+  assert.equal(isLivePuttProximityQuality('forced'), false);
+  assert.equal(isLivePuttProximityQuality('hard'), false);
+  assert.equal(isLivePuttProximityQuality('none'), false);
+});
+
+test('Signal: putt pills when putter or ≤40 yd good/soft; Hole Out stays either way', () => {
+  assert.equal(puttPillsNearGreenYards(), 40);
+  assert.equal(puttPillsUseYardsToGreen(), true);
+  assert.deepEqual([...puttPillsProximityQualities()], ['good', 'soft']);
+  assert.equal(puttPillsProximityUsesHardOrForced(), false);
+  assert.equal(puttPillsUseHydratedGreenCentroid(), true);
+  assert.equal(puttPillsInventGreenEdge(), false);
+  assert.equal(showPuttPills({ putting: true }), true);
+  assert.equal(showPuttPills({ putting: true, toGreen: { yards: 180, quality: 'good' } }), true);
+  assert.equal(showPuttPills({ toGreen: { yards: 40, quality: 'good' } }), true);
+  assert.equal(showPuttPills({ toGreen: { yards: 32, quality: 'soft' } }), true);
+  assert.equal(showPuttPills({ toGreen: { yards: 41, quality: 'good' } }), false);
+  assert.equal(showPuttPills({ toGreen: { yards: 12, quality: 'forced' } }), false);
+  assert.equal(showPuttPills({ toGreen: { yards: 12, quality: 'hard' } }), false);
+  assert.equal(showPuttPills({ putting: true, toGreen: { yards: 12, quality: 'forced' } }), true);
+  assert.equal(showPuttPills({ toGreen: { yards: 8, quality: 'none' } }), false);
+  assert.equal(showPuttPills({}), false);
+
+  const far = planPlayDockFinish({ putting: false, toGreen: { yards: 160, quality: 'good' } });
+  assert.equal(far.kind, 'hole_out');
+  assert.equal(far.showHoleOut, true);
+  assert.equal(far.showPutts, false);
+  const fringe = planPlayDockFinish({ putting: false, toGreen: { yards: 36, quality: 'soft' } });
+  assert.equal(fringe.showHoleOut, true);
+  assert.equal(fringe.showPutts, true);
+  const junk = planPlayDockFinish({ putting: false, toGreen: { yards: 10, quality: 'forced' } });
+  assert.equal(junk.showHoleOut, true);
+  assert.equal(junk.showPutts, false);
+  const putter = planPlayDockFinish({ putting: true, toGreen: { yards: 180, quality: 'good' } });
+  assert.equal(putter.showHoleOut, true);
+  assert.equal(putter.showPutts, true);
+  const hidden = planPlayDockFinish({ readOnly: true, putting: true });
+  assert.equal(hidden.showHoleOut, false);
+  assert.equal(hidden.showPutts, false);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const dock = hole.slice(hole.indexOf('const dockFinish'), hole.indexOf('const showFirstLaunchTip'));
+  assert.match(dock, /planPlayDockFinish/);
+  assert.match(dock, /toGreen: liveToGreen/);
+  assert.doesNotMatch(dock, /playHeaderYards|onGreen:/);
+  assert.match(hole, /const liveToGreen = yardsToGreen\(fix, green\)/);
+  assert.match(hole, /from '@\/src\/sensing\/yardsToGreen'/);
+  assert.match(hole, /testID="play-dock-putts"|PuttDock/);
+  assert.match(hole, /testID=\{toast === COPY\.holeOut \? 'hole-out-chip'/);
+});
+
+test('Finish hole / putts live on the play dock — not buried in Scorecard', () => {
+  assert.equal(finishHoleLivesOnPlayDock(), true);
+  assert.equal(puttsLiveOnPlayDock(), true);
+  assert.equal(finishHoleBuriedInScorecard(), false);
+  assert.equal(playScorecardIsHeaderChip(), true);
+  assert.equal(playScorecardIsDockAction(), false);
+  assert.equal(playDockHoleOutLabel(), 'Hole Out');
+  assert.equal(holeOutInventPutts(), false);
+  assert.equal(holeOutSetsGirFromOffGreen(), false);
+  const offGreen = planFinishHoleOut();
+  assert.equal(offGreen.ok, true);
+  assert.equal(offGreen.putts, 0);
+  assert.deepEqual(offGreen.lengths, []);
+  assert.equal(offGreen.gir, false);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const play = hole.slice(0, hole.indexOf('<FullSheet'));
+  const dock = hole.slice(hole.indexOf('style={[styles.dock'), hole.indexOf('<FullSheet'));
+  assert.match(dock, /<PuttDock/);
+  assert.match(dock, /COPY\.holeOut/);
+  assert.match(dock, /onFinishHole|onMadeIt/);
+  assert.match(play, /styles\.scorecardChip/);
+  assert.doesNotMatch(dock, /COPY\.scorecard/);
+  assert.match(hole, /finishHoleOut/);
+
+  const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  assert.match(watch, /Text\("Hole Out"\)/);
+  assert.match(watch, /session\.madeIt\(\)/);
+  assert.match(watch, /showPuttChips|puttSheet/);
+  assert.doesNotMatch(watch, /Scorecard/);
 });
 
 test('walking off the green / to the next tee does not invent putts', () => {

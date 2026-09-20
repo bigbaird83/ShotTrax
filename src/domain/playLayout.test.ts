@@ -89,6 +89,10 @@ import {
   signalLabBlankMapBuild38,
   PLAY_GLASS_DOCK_LIFT,
   playScorecardWraps,
+  playScorecardIsHeaderChip,
+  playScorecardIsDockAction,
+  playShowsSameClub,
+  watchShowsSameClub,
   playSameClubHiddenUntilShot,
   playMapMountsWhenYardsShown,
   playRoundStartSecondCameraPath,
@@ -131,7 +135,7 @@ test('play map fills at least 60% down to a two-row dock; header is overlay', ()
   assert.deepEqual(layout.dockRows, ['chips', 'actions']);
   assert.equal(playDockRowCount(), 2);
   assert.deepEqual(layout.dockActions, PLAY_DOCK_ACTIONS);
-  assert.deepEqual([...layout.dockActions], ['same_club', 'add_shot', 'scorecard', 'prev', 'next']);
+  assert.deepEqual([...layout.dockActions], ['hole_out', 'add_shot', 'prev', 'next']);
   assert.equal(layout.emptyMiddle, false);
   assert.equal(playEmptyMiddle(), false);
   assert.equal(playHeaderEatsMap(), false);
@@ -143,10 +147,14 @@ test('dock is not fat All clubs, Say a club, or a tall Same club', () => {
   const layout = planPlayLayout();
   assert.equal(layout.allClubs, 'float');
   assert.equal(layout.sayClub, 'off');
-  assert.equal(layout.sameClub, 'short');
+  assert.equal(layout.sameClub, 'off');
+  assert.equal(playShowsSameClub(), false);
+  assert.equal(watchShowsSameClub(), false);
+  assert.equal(playScorecardIsHeaderChip(), true);
+  assert.equal(playScorecardIsDockAction(), false);
   assert.deepEqual(playChipRowIncludes(), ['suggested']);
-  assert.deepEqual(playUnderWheelIncludes(), ['same_club']);
-  assert.equal(playSameClubSitsUnderWheel(), true);
+  assert.deepEqual(playUnderWheelIncludes(), ['hole_out']);
+  assert.equal(playSameClubSitsUnderWheel(), false);
   assert.equal(playAllClubsSitsUnderWheel(), false);
   assert.equal(playAllClubsSitsAboveWheel(), true);
   assert.equal(playAllClubsSitsInDockRow(), false);
@@ -221,7 +229,7 @@ test('play hole screen uses the fill layout and does not keep the empty middle',
 test('All clubs floats above the wheel; edit is tap a shot, not a dock row', () => {
   assert.equal(playDockRowCount(), 2);
   assert.deepEqual(playChipRowIncludes(), ['suggested']);
-  assert.deepEqual(playUnderWheelIncludes(), ['same_club']);
+  assert.deepEqual(playUnderWheelIncludes(), ['hole_out']);
   assert.equal(playAllClubsSitsInDockRow(), false);
   assert.equal(playEditIsDockRow(), false);
   assert.equal(anyEarlierShotCanOpenEdit(), true);
@@ -232,9 +240,9 @@ test('All clubs floats above the wheel; edit is tap a shot, not a dock row', () 
   assert.doesNotMatch(dock, /COPY\.allClubs/);
   assert.doesNotMatch(dock, /COPY\.sayClub/);
   const wheelAt = dock.indexOf('<ClubStrip');
-  const sameAt = dock.indexOf('COPY.stickyClub');
+  const holeOutAt = dock.indexOf('COPY.holeOut');
   const allAt = hole.indexOf('styles.allClubsFloat');
-  assert.ok(wheelAt >= 0 && sameAt > wheelAt);
+  assert.ok(wheelAt >= 0 && holeOutAt > wheelAt);
   assert.ok(allAt >= 0 && allAt < hole.indexOf('styles.dock'));
   assert.doesNotMatch(dock, /COPY\.editShot|COPY\.changeClub|COPY\.moveFrom|COPY\.moveTo/);
   assert.match(hole, /shots\.map\(\(shot\) => \{[\s\S]*openEdit\(shot\.id\)/);
@@ -333,7 +341,7 @@ test('after a shot lands the next suggested club is already the primary chip', (
   assert.match(hole, /planClubStrip/);
   assert.match(hole, /target\?\.dYards/);
   assert.match(hole, /applyWheelSelection/);
-  assert.match(hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.stickyClub')), /void markClub\(full\)/);
+  assert.match(hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.addShot')), /void markClub\(full\)/);
   assert.match(hole, /resolveNextShotDistanceTarget/);
   assert.match(hole, /lastLandingMark/);
   assert.doesNotMatch(hole, /nextClub|Next club|suggestedButton/);
@@ -373,7 +381,7 @@ test('play header is one line; shot list is one overlay row with + and In play o
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const play = hole.slice(0, hole.indexOf('<FullSheet'));
   assert.match(play, /formatPlayHeader\(hole\.number, hole\.par, playHeaderYards\.yards\)/);
-  assert.match(play, /yardsToGreen: playHeaderYards\.yards/);
+  assert.match(play, /yardsToGreen: liveToGreen\.yards/);
   assert.match(hole, /planPlayHeaderYards\(\{[\s\S]*?shots,/);
   assert.match(play, /numberOfLines=\{1\}/);
   assert.doesNotMatch(play, /formatSiLabel|SI unknown/);
@@ -436,16 +444,23 @@ test('play map still mounts; waiting line is off when 282 is on the card; Scorec
   assert.match(play, /<HoleMap/);
   assert.match(play, /styles\.mapFill/);
   assert.match(hole, /minHeight: 0/);
-  assert.match(play, /\{sticky \? \(/);
-  assert.match(hole, /styles\.dockScorecard/);
+  assert.match(play, /COPY\.holeOut/);
+  assert.doesNotMatch(play, /COPY\.stickyClub/);
+  assert.match(hole, /styles\.scorecardChip/);
+  assert.equal(playScorecardIsHeaderChip(), true);
+  assert.equal(playScorecardIsDockAction(), false);
   assert.match(play, /numberOfLines=\{1\}/);
   assert.match(play, /COPY\.scorecard/);
   assert.doesNotMatch(hole, /'Scoreca'|"Scoreca"/);
 
-  const dock = hole.slice(hole.indexOf('styles.dock'), hole.indexOf('<FullSheet'));
-  const scorecard = dock.slice(dock.indexOf('COPY.scorecard') - 120, dock.indexOf('COPY.scorecard') + 40);
+  const header = hole.slice(hole.indexOf('styles.stickyInner'), hole.indexOf('styles.shotLine'));
+  const scorecard = header.slice(
+    header.indexOf('style={styles.scorecardChip}'),
+    header.indexOf('styles.scorecardChipText') + 80,
+  );
   assert.match(scorecard, /numberOfLines=\{1\}/);
-  assert.match(scorecard, /dockScorecard/);
+  assert.match(scorecard, /scorecardChip/);
+  assert.doesNotMatch(scorecard, /styles\.dock/);
 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   assert.match(map, /MapView/);
@@ -544,9 +559,11 @@ test('build 32 cook-gate: Menu is a button, All clubs floats, dock matches 31 pi
   const dock = hole.slice(hole.indexOf('style={[styles.dock'), hole.indexOf('<FullSheet'));
   assert.doesNotMatch(dock, /COPY\.allClubs/);
   assert.doesNotMatch(dock, /COPY\.sayClub/);
-  assert.match(dock, /COPY\.stickyClub/);
+  assert.match(dock, /COPY\.holeOut/);
+  assert.doesNotMatch(dock, /COPY\.stickyClub/);
   assert.match(dock, /COPY\.addShot/);
-  assert.match(dock, /COPY\.scorecard/);
+  assert.doesNotMatch(dock, /COPY\.scorecard/);
+  assert.match(hole, /styles\.scorecardChip/);
   assert.match(dock, /COPY\.prevHole/);
   assert.match(dock, /COPY\.nextHole/);
   assert.match(hole, /styles\.allClubsFloat/);
@@ -603,7 +620,7 @@ test('build 35 cook-gate: glass dock, one accent, trails, type, cards, empty, ha
   const home = readFileSync(new URL('../../app/(tabs)/index.tsx', import.meta.url), 'utf8');
   const score = readFileSync(new URL('../ui/ScorecardBody.tsx', import.meta.url), 'utf8');
   const icon = readFileSync(new URL('./appIcon.test.ts', import.meta.url), 'utf8');
-  const strip = hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.stickyClub'));
+  const strip = hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.addShot'));
   const mark = hole.slice(hole.indexOf('const markClub'), hole.indexOf('const onMark'));
 
   assert.match(hole, /colors\.glass/);

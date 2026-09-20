@@ -18,6 +18,7 @@ import { selectClubForMark } from '@/src/domain/stickyClub';
 import { emptyWalkAway, stepWalkAway, walkAwayEligible } from '@/src/domain/walkAway';
 import type { Club, GpsFix } from '@/src/domain/types';
 import { lastLandingMark, markToGreen, toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
+import { yardsToGreen } from '@/src/sensing/yardsToGreen';
 import { addNoGpsShot, changeShotClub, markShotWithClub, promptForPlan } from '@/src/services/shotActions';
 import { useLiveFix } from '@/src/services/useLiveFix';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
@@ -239,8 +240,8 @@ export default function ClubPickScreen() {
         shortName: formatSuggestedClubChip(club.shortName, stripPlan.carries[club.id] ?? null),
       })),
       holeNumber,
-      yardsToGreen: target?.dYards ?? toGreen.yards,
-      yardsQuality: toGreen.quality,
+      yardsToGreen: yardsToGreen(fix, green).yards,
+      yardsQuality: yardsToGreen(fix, green).quality,
       lastClubId: selected?.id ?? null,
       selectedClubId: selected?.id ?? null,
     },

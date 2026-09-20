@@ -185,7 +185,7 @@ struct ContentView: View {
     }
 
     Button(action: { session.madeIt() }) {
-      Text("Made it")
+      Text("Hole Out")
         .font(.headline.weight(.black))
         .frame(maxWidth: .infinity, minHeight: 44)
     }
@@ -281,19 +281,42 @@ struct ContentView: View {
           }
           .frame(height: 52)
 
-          HStack(spacing: 8) {
-            if session.list.lastClubId != nil {
-              Button(action: { session.pickSameClub() }) {
-                Text(sameClubTitle)
-                  .font(.system(size: 15, weight: .heavy))
-                  .foregroundStyle(Color("cream"))
-                  .lineLimit(1)
-                  .minimumScaleFactor(0.7)
-                  .frame(maxWidth: .infinity, minHeight: 40)
+          if showPuttChips {
+            HStack(spacing: 4) {
+              ForEach(buckets, id: \.id) { bucket in
+                Button(action: { session.addPutt(lengthId: bucket.id) }) {
+                  Text(session.putt.label(for: bucket.id))
+                    .font(.system(size: 11, weight: .heavy))
+                    .foregroundStyle(Color("cream"))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .frame(maxWidth: .infinity, minHeight: 32)
+                    .overlay(
+                      RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color("cream"), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(session.sending || !session.putt.canAdd)
               }
-              .buttonStyle(.plain)
-              .disabled(session.sending)
             }
+          }
+
+          HStack(spacing: 8) {
+            Button(action: { session.madeIt() }) {
+              Text("Hole Out")
+                .font(.system(size: 15, weight: .heavy))
+                .foregroundStyle(Color("cream"))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity, minHeight: 40)
+                .overlay(
+                  RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color("cream"), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(session.sending)
 
             Button(action: { showAllClubs.toggle() }) {
               Text("All clubs")
@@ -333,12 +356,13 @@ struct ContentView: View {
     .padding(.horizontal, 4)
   }
 
-  private var sameClubTitle: String {
-    guard let id = session.list.lastClubId else { return "Same club" }
-    let raw = session.list.label(for: id)
-    let name = raw.components(separatedBy: " · ").first ?? raw
-    if name.isEmpty { return "Same club" }
-    return "Same club · \(name)"
+  /// Putter selected, or haversine ≤ 40 yd to hydrated green (good/soft only).
+  /// Hard / forced quality never opens chips — putter-selected only.
+  private var showPuttChips: Bool {
+    if session.list.selectedClubId == "club_putter" { return true }
+    guard session.list.yardsQuality == "good" || session.list.yardsQuality == "soft" else { return false }
+    guard let yards = session.list.yardsToGreen else { return false }
+    return yards <= 40
   }
 
   private var moreClubs: [String] {

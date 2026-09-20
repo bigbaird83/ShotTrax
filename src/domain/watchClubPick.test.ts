@@ -68,6 +68,13 @@ import {
   watchOneHomeOnly,
   watchSameClubSharesRowWithAllClubs,
   watchSameClubVisibleWithoutShot,
+  watchShowPuttPills,
+  watchShowsHoleOut,
+  watchShowsScorecard,
+  watchPuttChipsUseSignalGate,
+  watchTapUsesWatchGps,
+  watchHoleOutClosesOnLastMark,
+  watchHoleOutInventPutts,
   watchBackHomeAreTinyText,
   wrapWatchClubStripIndex,
 } from './watchClubPick';
@@ -86,8 +93,10 @@ test('Watch opens on the same top 3 as the phone; no scroll to hit one', () => {
   assert.equal(COPY.allClubs, 'All clubs');
   assert.equal(watchRestOfBagBelowAllClubs(), true);
   assert.equal(watchSameClubSitsAboveTop3(), false);
-  assert.equal(watchSameClubSitsOnFirstScreen(), true);
+  assert.equal(watchSameClubSitsOnFirstScreen(), false);
   assert.equal(watchSameClubVisibleWithoutShot(), false);
+  assert.equal(watchShowsHoleOut(), true);
+  assert.equal(watchShowsScorecard(), false);
   assert.equal(watchFirstScreenFitsWithoutScroll(), true);
   assert.equal(watchBackHomeDarkensRows(), false);
   assert.equal(watchSameClubIsLightOnDark(), true);
@@ -117,28 +126,30 @@ test('Watch opens on the same top 3 as the phone; no scroll to hit one', () => {
   assert.match(pick, /ScrollView\(\.horizontal/);
   assert.match(pick, /wheelClubs|stripClubs/);
   assert.match(pick, /session\.list\.label\(for: club\.id\)/);
-  assert.match(pick, /pickSameClub/);
-  assert.match(pick, /sameClubTitle/);
+  assert.match(pick, /session\.madeIt\(\)/);
+  assert.match(pick, /Text\("Hole Out"\)/);
+  assert.doesNotMatch(pick, /pickSameClub|sameClubTitle/);
+  assert.doesNotMatch(watchUi, /Scorecard/);
   assert.match(pick, /Text\("All clubs"\)/);
   const headerAt = pick.indexOf('session.list.statusLine');
   const backHomeAt = pick.indexOf('session.leave("back")');
   const stripAt = pick.indexOf('ScrollView(.horizontal');
-  const sameAt = pick.indexOf('pickSameClub');
+  const holeOutAt = pick.indexOf('session.madeIt()');
   const allClubsAt = pick.indexOf('Text("All clubs")');
-  assert.ok(headerAt >= 0 && backHomeAt > headerAt && stripAt > backHomeAt && sameAt > stripAt && allClubsAt > sameAt);
+  assert.ok(headerAt >= 0 && backHomeAt > headerAt && stripAt > backHomeAt && holeOutAt > stripAt && allClubsAt > holeOutAt);
   assert.equal(watchOneHomeOnly(), true);
-  assert.equal(watchSameClubSharesRowWithAllClubs(), true);
+  assert.equal(watchSameClubSharesRowWithAllClubs(), false);
   assert.equal(watchBackHomeAreTinyText(), false);
   assert.equal((pick.match(/Text\("Home"\)/g) ?? []).length, 1);
   assert.match(pick, /minHeight: 44/);
   assert.doesNotMatch(pick, /top3\.enumerated\(\)|TabView|tabViewStyle/);
-  const sameClub = pick.slice(sameAt, allClubsAt);
-  assert.match(sameClub, /Color\("cream"\)/);
-  assert.doesNotMatch(sameClub, /Color\.black|borderedProminent/);
-  assert.match(pick.slice(pick.indexOf('HStack(spacing: 8)'), pick.indexOf('if showAllClubs')), /lastClubId/);
-  assert.match(pick.slice(pick.indexOf('HStack(spacing: 8)'), pick.indexOf('if showAllClubs')), /pickSameClub/);
+  const holeOut = pick.slice(holeOutAt, allClubsAt);
+  assert.match(holeOut, /Color\("cream"\)/);
+  assert.doesNotMatch(holeOut, /Color\.black|borderedProminent/);
+  assert.match(pick.slice(pick.indexOf('HStack(spacing: 8)'), pick.indexOf('if showAllClubs')), /session\.madeIt\(\)/);
+  assert.match(pick.slice(pick.indexOf('HStack(spacing: 8)'), pick.indexOf('if showAllClubs')), /Text\("Hole Out"\)/);
   assert.match(pick.slice(pick.indexOf('HStack(spacing: 8)'), pick.indexOf('if showAllClubs')), /Text\("All clubs"\)/);
-  assert.match(watchUi, /"Same club · \\\(name\)"/);
+  assert.doesNotMatch(watchUi, /"Same club · \\\(name\)"/);
   assert.match(pick, /moreClubs/);
   assert.match(watchUi, /session\.list\.bag/);
   assert.match(pick.slice(0, allClubsAt), /ScrollView\(\.horizontal/);
@@ -296,7 +307,8 @@ test('Watch suggested strip shows carry, opens on the pick, and is not stacked r
   );
 
   const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
-  const stripUi = watchUi.slice(watchUi.indexOf('ScrollView(.horizontal'), watchUi.indexOf('pickSameClub'));
+  const pickUi = watchUi.slice(watchUi.indexOf('private var clubPick'), watchUi.indexOf('private var moreClubs'));
+  const stripUi = pickUi.slice(pickUi.indexOf('ScrollView(.horizontal'), pickUi.indexOf('session.madeIt()'));
   assert.match(stripUi, /onTapGesture/);
   assert.match(stripUi, /scrollTo\(stripWindowToken/);
   assert.match(stripUi, /anchor: \.leading/);
@@ -360,6 +372,44 @@ test('Watch Back returns to the hole and does not mark; Home opens the in-round 
   const watchLeave = clubPick.slice(clubPick.indexOf('onLeave: (action)'), clubPick.indexOf('labelForClub'));
   assert.match(watchLeave, /hole\/\$\{holeNumber\}\?menu=1/);
   assert.match(watchLeave, /leavePicker\(action\)/);
+});
+
+test('Watch putt chips use the Signal gate; Hole Out stays; no scorecard', () => {
+  assert.equal(watchPuttChipsUseSignalGate(), true);
+  assert.equal(watchShowsHoleOut(), true);
+  assert.equal(watchShowsScorecard(), false);
+  assert.equal(watchTapUsesWatchGps(), true);
+  assert.equal(watchHoleOutClosesOnLastMark(), true);
+  assert.equal(watchHoleOutInventPutts(), false);
+  assert.equal(watchShowPuttPills({ selectedClubId: PUTTER_CLUB_ID, yardsToGreen: 180, yardsQuality: 'good' }), true);
+  assert.equal(watchShowPuttPills({ selectedClubId: 'club_7i', yardsToGreen: 36, yardsQuality: 'soft' }), true);
+  assert.equal(watchShowPuttPills({ selectedClubId: 'club_7i', yardsToGreen: 40, yardsQuality: 'good' }), true);
+  assert.equal(watchShowPuttPills({ selectedClubId: 'club_7i', yardsToGreen: 41, yardsQuality: 'good' }), false);
+  assert.equal(watchShowPuttPills({ selectedClubId: 'club_7i', yardsToGreen: 12, yardsQuality: 'forced' }), false);
+  assert.equal(watchShowPuttPills({ selectedClubId: 'club_7i', yardsToGreen: 12, yardsQuality: 'hard' }), false);
+  assert.equal(watchShowPuttPills({ selectedClubId: PUTTER_CLUB_ID, yardsToGreen: 12, yardsQuality: 'forced' }), true);
+  assert.equal(watchShowPuttPills({ selectedClubId: 'club_7i', yardsToGreen: 20, yardsQuality: 'none' }), false);
+
+  const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  assert.match(watchUi, /showPuttChips/);
+  assert.match(watchUi, /yardsQuality == "good" \|\| session\.list\.yardsQuality == "soft"/);
+  assert.match(watchUi, /yards <= 40/);
+  assert.match(watchUi, /selectedClubId == "club_putter"/);
+  assert.match(watchUi, /session\.addPutt\(lengthId: bucket\.id\)/);
+  assert.match(watchUi, /session\.madeIt\(\)/);
+  assert.doesNotMatch(watchUi, /Scorecard/);
+  const pick = watchUi.slice(watchUi.indexOf('private var clubPick'), watchUi.indexOf('private var moreClubs'));
+  const stripAt = pick.indexOf('ScrollView(.horizontal');
+  const chipsAt = pick.indexOf('showPuttChips');
+  const holeOutAt = pick.indexOf('session.madeIt()');
+  assert.ok(stripAt >= 0 && chipsAt > stripAt && holeOutAt > chipsAt);
+
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+  const pickFn = session.slice(session.indexOf('func pick(clubId: String)'), session.indexOf('func addPutt'));
+  assert.match(pickFn, /attachWatchFix/);
+  const madeFn = session.slice(session.indexOf('func madeIt()'), session.indexOf('func madeIt()') + 220);
+  assert.doesNotMatch(madeFn, /attachWatchFix/);
+  assert.match(session, /"Hole Out"/);
 });
 
 test('Watch putter opens the putt sheet and stays out of the top 3', () => {

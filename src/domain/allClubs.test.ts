@@ -38,7 +38,7 @@ test('phone wheel pill is taller than the Watch pill; map host fills under the g
   assert.equal(PLAY_DOCK_ACTION_MIN_HEIGHT, BUILD_31_CLUB_PILL_HEIGHT);
   assert.equal(WATCH_WHEEL_PILL_HEIGHT, 44);
   assert.ok(playMapMinRatio() >= 0.6);
-  assert.equal(playSameClubSitsUnderWheel(), true);
+  assert.equal(playSameClubSitsUnderWheel(), false);
   assert.equal(playAllClubsSitsUnderWheel(), false);
   assert.equal(playAllClubsSitsAboveWheel(), true);
   assert.equal(playAllClubsSitsInDockRow(), false);
@@ -52,14 +52,14 @@ test('phone wheel pill is taller than the Watch pill; map host fills under the g
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const dock = hole.slice(hole.indexOf('style={[styles.dock'), hole.indexOf('<FullSheet'));
-  const strip = dock.slice(dock.indexOf('<ClubStrip'), dock.indexOf('COPY.stickyClub'));
+  const strip = dock.slice(dock.indexOf('<ClubStrip'), dock.indexOf('COPY.addShot'));
   assert.doesNotMatch(strip, /compact/);
   assert.match(hole, /minHeight: 0/);
   assert.match(hole, /alignSelf: 'stretch'/);
-  const sameAt = dock.indexOf('COPY.stickyClub');
+  const holeOutAt = dock.indexOf('COPY.holeOut');
   const allAt = dock.indexOf('COPY.allClubs');
   const wheelAt = dock.indexOf('<ClubStrip');
-  assert.ok(wheelAt >= 0 && sameAt > wheelAt);
+  assert.ok(wheelAt >= 0 && holeOutAt > wheelAt);
   assert.equal(allAt, -1);
   assert.match(hole, /styles\.allClubsFloat/);
 });

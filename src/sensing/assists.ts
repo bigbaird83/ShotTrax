@@ -2,6 +2,7 @@
  * Watch motion and mic-based shot detect stay out of scope.
  * Voice club pick is not in this IPA.
  * Putts are never auto-detected from GPS or leaving the green.
+ * TF 44: detection stays v0 manual. Watch = club select + Watch GPS only.
  */
 export const WATCH_ASSIST = false;
 export const MIC_SHOT_ASSIST = false;

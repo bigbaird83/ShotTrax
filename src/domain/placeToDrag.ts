@@ -98,6 +98,25 @@ export function addShotMapScrollEnabledAfterFrame(): true {
   return true;
 }
 
+/** First Add shot open and after edit — not only after a MapView remount. */
+export function addShotGesturesWorkOnFirstOpen(): true {
+  return true;
+}
+
+export function addShotGesturesWorkAfterEdit(): true {
+  return true;
+}
+
+/** Delete-shot + add-again remounted MapView and unstuck iOS. Do not require that. */
+export function addShotGesturesRequireRemount(): false {
+  return false;
+}
+
+/** Once MapView mounts sized, never bounce scroll/zoom off. iOS will not reattach. */
+export function holeMapKeepsScrollZoomOnceMounted(): true {
+  return true;
+}
+
 export function addShotMapZoomEnabledAfterFrame(): true {
   return true;
 }

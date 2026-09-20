@@ -3,11 +3,13 @@ import { PHONE_WHEEL_STRIP_HEIGHT } from './clubStrip';
 /**
  * Play screen: map fills the hole. A frosted two-row dock sits over the map.
  * Header is a thin overlay. Add shot still takes the full screen.
+ * Same club is gone — that slot is Hole Out. Scorecard is a header chip.
+ * Putt pills sit above Hole Out only when putter or ≤40 yd green (good/soft) — not a third dock row.
  */
 
 export const PLAY_MAP_MIN_RATIO = 0.6;
 
-export const PLAY_DOCK_ACTIONS = ['same_club', 'add_shot', 'scorecard', 'prev', 'next'] as const;
+export const PLAY_DOCK_ACTIONS = ['hole_out', 'add_shot', 'prev', 'next'] as const;
 export type PlayDockAction = (typeof PLAY_DOCK_ACTIONS)[number];
 
 export type PlayLayout = {
@@ -20,7 +22,7 @@ export type PlayLayout = {
   dockActions: readonly PlayDockAction[];
   allClubs: 'float';
   sayClub: 'off';
-  sameClub: 'short';
+  sameClub: 'off';
   shotLine: 'header';
   insertPlus: 'header';
   emptyMiddle: false;
@@ -37,7 +39,7 @@ export function planPlayLayout(): PlayLayout {
     dockActions: PLAY_DOCK_ACTIONS,
     allClubs: 'float',
     sayClub: 'off',
-    sameClub: 'short',
+    sameClub: 'off',
     shotLine: 'header',
     insertPlus: 'header',
     emptyMiddle: false,
@@ -64,16 +66,40 @@ export function playShowsFatSayClub(): false {
   return false;
 }
 
-/** Wheel is the first dock row. Same club sits under it. All clubs floats above. */
+/** Wheel is the first dock row. Hole Out sits under it. All clubs floats above. */
 export function playChipRowIncludes(): readonly ['suggested'] {
   return ['suggested'];
 }
 
-export function playUnderWheelIncludes(): readonly ['same_club'] {
-  return ['same_club'];
+export function playUnderWheelIncludes(): readonly ['hole_out'] {
+  return ['hole_out'];
 }
 
-export function playSameClubSitsUnderWheel(): true {
+export function playScorecardIsHeaderChip(): true {
+  return true;
+}
+
+export function playScorecardIsDockAction(): false {
+  return false;
+}
+
+export function playInventThirdDock(): false {
+  return false;
+}
+
+export function playSameClubSitsUnderWheel(): false {
+  return false;
+}
+
+export function playShowsSameClub(): false {
+  return false;
+}
+
+export function watchShowsSameClub(): false {
+  return false;
+}
+
+export function playFinishHoleReplacesSameClub(): true {
   return true;
 }
 

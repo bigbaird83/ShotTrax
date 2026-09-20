@@ -347,7 +347,10 @@ function NativeHoleMap({
   useEffect(() => {
     framedOnce.current = false;
     pendingLocked.current = true;
-    if (lockFrame) setHoleCameraReady(false);
+    // Never flip holeCameraReady false on a live MapView. iOS will not
+    // reattach pan/pinch after scrollEnabled/zoomEnabled bounce off→on.
+    // First Add shot and after edit must keep the recognizers that attached
+    // on the first sized mount — remount (delete+re-add) is not required.
   }, [lockFrame, lockKey, heading, frameEpoch]);
 
   const courseCardMiss = Boolean(
@@ -393,6 +396,9 @@ function NativeHoleMap({
       setMapBox((prev) =>
         prev && prev.width === width && prev.height === height ? prev : next,
       );
+      // Same event as the first sized mount so MapView is born with
+      // scrollEnabled/zoomEnabled on. A later ready=true does not reattach.
+      setHoleCameraReady(true);
     }
     if (!lockFrame) return;
     if (!holeMapBoxIsPaintable(next)) return;
@@ -485,7 +491,7 @@ function NativeHoleMap({
       collapsable={false}
       style={[fullBleed ? styles.bleed : styles.wrap, style]}
       onLayout={onMapLayout}
-      pointerEvents={lockFrame && !holeCameraReady ? 'none' : 'auto'}
+      pointerEvents={lockFrame && !holeCameraReady ? 'none' : 'box-none'}
       onStartShouldSetResponderCapture={(event) => {
         if (event.nativeEvent.touches.length >= 2) yieldToMapGesture();
         return false;

@@ -57,7 +57,7 @@ export function PuttSheetBody({
       {draft.lengths.length > 0 ? (
         <BigButton label={COPY.undoPutt} variant="ghost" disabled={disabled} onPress={onUndo} />
       ) : null}
-      <BigButton label={COPY.madeIt} disabled={!canMake} onPress={onMadeIt} />
+      <BigButton label={COPY.holeOut} disabled={!canMake} onPress={onMadeIt} />
       <Text style={styles.meta}>Hole {holeNumber}</Text>
     </View>
   );

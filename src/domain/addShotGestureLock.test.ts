@@ -10,6 +10,7 @@ import {
   holeCameraReframesOnPinch,
   holeCameraReframesOnPinDrag,
   holeCameraReframesOnTwoFingerPan,
+  holeMapHostPointerEventsAfterFrame,
   holeMapScrollZoomAfterFrame,
   holeMapUserLocationVisible,
   playAndAddShotShareFrameEpoch,
@@ -22,8 +23,12 @@ import {
   addShotGestureYardsUsePinHaversine,
   addShotGestureYardsUseReframe,
   addShotGesturesLeaveCameraAloneAfterFrame,
+  addShotGesturesRequireRemount,
   addShotGesturesRerunCourseCardCamera,
   addShotGesturesShowUserLocation,
+  addShotGesturesWorkAfterEdit,
+  addShotGesturesWorkOnFirstOpen,
+  holeMapKeepsScrollZoomOnceMounted,
   addShotMapFrozenWhilePinLive,
   addShotMapScrollEnabledAfterFrame,
   addShotMapZoomEnabledAfterFrame,
@@ -66,6 +71,11 @@ const green = { lat: 37.003, lng: -122.0 };
 const phone = { lat: 40.7128, lng: -74.006 };
 
 test('Signal Lab: Add shot two-finger pan/pinch after frame leave the camera and user puck alone', () => {
+  assert.equal(addShotGesturesWorkOnFirstOpen(), true);
+  assert.equal(addShotGesturesWorkAfterEdit(), true);
+  assert.equal(addShotGesturesRequireRemount(), false);
+  assert.equal(holeMapKeepsScrollZoomOnceMounted(), true);
+  assert.equal(holeMapHostPointerEventsAfterFrame(), 'box-none');
   assert.equal(addShotTwoFingerPanAfterFrame(), true);
   assert.equal(addShotPinchZoomAfterFrame(), true);
   assert.equal(addShotMapScrollEnabledAfterFrame(), true);
@@ -164,6 +174,14 @@ test('Signal Lab: Add shot two-finger pan/pinch after frame leave the camera and
   assert.match(map, /scrollEnabled=\{framedForGestures\}/);
   assert.match(map, /zoomEnabled=\{framedForGestures\}/);
   assert.doesNotMatch(map, /scrollEnabled=\{mapOwnsGesture \|\| !toPinLive\}/);
+  assert.match(map, /pointerEvents=\{lockFrame && !holeCameraReady \? 'none' : 'box-none'\}/);
+  const lockFx = map.slice(
+    map.indexOf('}, [lockFrame, lockKey, heading, frameEpoch]);') - 280,
+    map.indexOf('}, [lockFrame, lockKey, heading, frameEpoch]);') + 10,
+  );
+  assert.doesNotMatch(lockFx, /setHoleCameraReady\(false\)/);
+  assert.match(map, /setHoleCameraReady\(true\)/);
+  assert.match(map, /Never flip holeCameraReady false/);
 
   const userLoc = map.slice(map.indexOf('showsUserLocation='), map.indexOf('showsMyLocationButton'));
   assert.match(userLoc, /holeMapUserLocationVisible\(\{/);

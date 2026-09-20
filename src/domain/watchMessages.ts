@@ -339,7 +339,7 @@ export function formatClubMarkedFeedback(shortName: string): string {
 export const PHONE_UNAVAILABLE = 'Phone unavailable';
 export const CHECK_PHONE = 'Check phone';
 export const PUTTS_ON_WATCH = 'Putts';
-export const MADE_IT_FEEDBACK = 'Made it ✓';
+export const MADE_IT_FEEDBACK = 'Hole Out ✓';
 
 export const PUTT_PICK_ACTIONS = ['add', 'undo', 'made'] as const;
 export type PuttPickAction = (typeof PUTT_PICK_ACTIONS)[number];

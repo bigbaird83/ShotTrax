@@ -7,6 +7,9 @@ export const PUTT_MAX = 5;
 /** Inside this many yards-to-green (live quality) counts as near / on the green — display only. */
 export const NEAR_GREEN_YD = 40;
 
+/** Proximity arm for putt pills. Hard / forced / none never opens pills. */
+export const PUTT_PILL_PROXIMITY_QUALITIES = ['good', 'soft'] as const;
+
 export const PUTT_LENGTH_IDS = ['inside_3', '3_to_10', '10_to_20', 'over_20'] as const;
 export type PuttLengthId = (typeof PUTT_LENGTH_IDS)[number];
 
@@ -83,9 +86,17 @@ export function planMadeIt(
   return { ok: true, putts: lengths.length, lengths };
 }
 
+export function isLivePuttProximityQuality(quality: string): boolean {
+  return quality === 'good' || quality === 'soft';
+}
+
+/**
+ * Haversine yards-to-green centroid ≤ 40 yd, good/soft fix only.
+ * Hard / forced GPS never arms pills (no flicker on junk). Never a putt record.
+ */
 export function isNearOrOnGreen(toGreen: { yards: number | null; quality: string }): boolean {
   return (
-    toGreen.quality !== 'none' &&
+    isLivePuttProximityQuality(toGreen.quality) &&
     toGreen.yards != null &&
     Number.isFinite(toGreen.yards) &&
     toGreen.yards <= NEAR_GREEN_YD
@@ -98,6 +109,133 @@ export function isNearOrOnGreen(toGreen: { yards: number | null; quality: string
  */
 export function puttsFromWalkOff(_toGreen?: { yards: number | null; quality: string }): null {
   return null;
+}
+
+/** Putts + Finish hole sit on the play dock — not buried in Scorecard. */
+export function finishHoleLivesOnPlayDock(): true {
+  return true;
+}
+
+export function puttsLiveOnPlayDock(): true {
+  return true;
+}
+
+export function finishHoleBuriedInScorecard(): false {
+  return false;
+}
+
+/** Off-green hole-out: current club is the shot. No invented putt yards. No GIR. */
+export function holeOutInventPutts(): false {
+  return false;
+}
+
+export function holeOutSetsGirFromOffGreen(): false {
+  return false;
+}
+
+export function planFinishHoleOut(): { ok: true; putts: 0; lengths: []; gir: false } {
+  return { ok: true, putts: 0, lengths: [], gir: false };
+}
+
+export type PlayDockFinishKind = 'hole_out' | 'hidden';
+
+/**
+ * Same club slot is always Hole Out. Putt pills sit just above it only
+ * when putter is selected or GPS is within ~40 yd of the hydrated green
+ * centroid (haversine yards-to-green, good/soft only). Hard/forced →
+ * putter-selected only. Never a third dock row. Never invent putt GPS
+ * or green-edge polygons.
+ */
+export function showPuttPills(args: {
+  putting?: boolean;
+  toGreen?: { yards: number | null; quality: string };
+}): boolean {
+  if (args.putting) return true;
+  if (args.toGreen) return isNearOrOnGreen(args.toGreen);
+  return false;
+}
+
+export function puttPillsNearGreenYards(): number {
+  return NEAR_GREEN_YD;
+}
+
+export function puttPillsUseYardsToGreen(): true {
+  return true;
+}
+
+export function puttPillsProximityQualities(): readonly ['good', 'soft'] {
+  return PUTT_PILL_PROXIMITY_QUALITIES;
+}
+
+export function puttPillsProximityUsesHardOrForced(): false {
+  return false;
+}
+
+export function puttPillsUseHydratedGreenCentroid(): true {
+  return true;
+}
+
+export function puttPillsInventGreenEdge(): false {
+  return false;
+}
+
+export function planPlayDockFinish(args: {
+  readOnly?: boolean;
+  placing?: boolean;
+  puttsDone?: boolean;
+  putting?: boolean;
+  toGreen?: { yards: number | null; quality: string };
+  shotCount?: number;
+}): { kind: PlayDockFinishKind; showPutts: boolean; showHoleOut: boolean } {
+  if (args.readOnly || args.placing || args.puttsDone) {
+    return { kind: 'hidden', showPutts: false, showHoleOut: false };
+  }
+  const showPutts = showPuttPills({
+    putting: args.putting,
+    toGreen: args.toGreen,
+  });
+  void args.shotCount;
+  return { kind: 'hole_out', showPutts, showHoleOut: true };
+}
+
+export function playDockStacksFinishAndHoleDone(): false {
+  return false;
+}
+
+export function playDockHoleDoneLabel(): 'Hole Out' {
+  return 'Hole Out';
+}
+
+export function playDockHoleOutLabel(): 'Hole Out' {
+  return 'Hole Out';
+}
+
+/** Quiet Hole Out: lime check + short haptic + brief chip. No modal, no confetti. */
+export function holeOutCelebrationIsQuiet(): true {
+  return true;
+}
+
+export function holeOutShowsModal(): false {
+  return false;
+}
+
+export function holeOutShowsConfetti(): false {
+  return false;
+}
+
+/** Close on the last real mark. Never invent putt GPS or yards. */
+export function holeOutClosesOnLastMark(): true {
+  return true;
+}
+
+/** Off-green hole-out keeps the club that was tapped. No swap to putter. */
+export function holeOutKeepsTappedClub(): true {
+  return true;
+}
+
+/** On-green putt count is score-only — buckets, never a GPS mark. */
+export function onGreenPuttsAreScoreOnly(): true {
+  return true;
 }
 
 /** After Made it on the hole you are finishing: next hole, or summary after the last. */

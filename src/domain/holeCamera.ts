@@ -90,6 +90,11 @@ export function holeMapScrollZoomAfterFrame(args: {
   return !args.lockFrame || args.holeCameraReady;
 }
 
+/** Host is box-none after frame so yielded two-finger hits MapView, not the wrap. */
+export function holeMapHostPointerEventsAfterFrame(): 'box-none' {
+  return 'box-none';
+}
+
 export function holeCameraReframesOnGps(): false {
   return false;
 }
