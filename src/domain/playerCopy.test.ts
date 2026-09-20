@@ -43,6 +43,7 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(lockFrameEmptyStateWaitsForPhone(), false);
   assert.doesNotMatch(COPY.courseCardMissingFrame, /location|GPS|phone|fix/i);
   assert.equal(COPY.share, 'Share');
+  assert.equal(COPY.shareFail, "Couldn't open share");
   assert.equal(COPY.longPressGreen, 'Long-press to set the green');
   assert.equal(COPY.pickClub, 'Pick a club');
   assert.equal(COPY.pickClubLede, 'Picking a club marks where you hit from.');
@@ -125,7 +126,7 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(formatPlayHeaderPrimary(1), 'Hole 1');
   assert.equal(formatPlayHeaderSecondary(4, 'Gold'), 'Par 4 · Gold');
   assert.equal(formatPlayHeaderSecondary(null), 'Par unknown');
-  assert.equal(COPY.noShots, 'No shots yet. Pick a club after you hit.');
+  assert.equal(COPY.noShots, 'Hit, then tap a club to mark.');
   assert.equal(finishPuttsChip(4), 'Finish putts · Hole 4');
   assert.equal(finishShotChip(2), 'Finish shot · Hole 2');
   assert.equal(holeOutClosedOnShot(3), 'Hole Out · shot 3');
