@@ -122,7 +122,7 @@ export function undoLastPutt(current: PuttDraft): PuttDraft {
 }
 
 /**
- * Made it is on after a distance pick — including putt 1 with zero putts logged.
+ * Made it is always available to close — a missing bucket never disables it.
  * GPS counts do not count. Distance tap still does not commit.
  */
 export function canMakePutt(
@@ -132,16 +132,17 @@ export function canMakePutt(
   return planMadeIt(draft, pending).ok;
 }
 
-/**
- * Sheet Made it: the current putt (N≥1) has a selected/pending bucket.
- * Logged misses alone do not enable it — pick the holing putt, then Made it.
- * At the 5-putt cap there is no next pick, so logged buckets can close.
- */
-export function canMakeCurrentPutt(pick: PuttSheetPick): boolean {
-  if (pick.pending && isPuttLengthId(pick.pending)) {
-    return planMadeIt(pick.draft, pick.pending).ok;
-  }
-  return pick.draft.lengths.length >= PUTT_MAX && planMadeIt(pick.draft).ok;
+/** Sheet Made it stays on with or without a selected length. Soft cue is not a gate. */
+export function canMakeCurrentPutt(_pick: PuttSheetPick): true {
+  return true;
+}
+
+export function madeItRequiresLengthPick(): false {
+  return false;
+}
+
+export function madeItEnabledWithEmptyLength(): true {
+  return true;
 }
 
 export function planMadeItFromPick(pick: PuttSheetPick) {
@@ -171,28 +172,30 @@ export function puttLoggedWithoutLength(draft: PuttDraft): boolean {
 }
 
 /**
- * Show the soft cue when Made it is off for a missing current bucket,
- * or when a logged putt has no length. Informational — does not gate close.
+ * Soft cue when the current putt has no selected bucket, or a logged putt
+ * has no length. Informational — does not disable Made it or invent GPS.
  */
 export function showPuttNoLengthCue(pick: PuttSheetPick): boolean {
   if (puttLoggedWithoutLength(pick.draft)) return true;
-  return !canMakeCurrentPutt(pick);
+  if (pick.pending && isPuttLengthId(pick.pending)) return false;
+  return pick.draft.lengths.length < PUTT_MAX;
 }
 
 /**
- * Made it persists user-chosen buckets only — logged misses plus the pending
- * holing putt. Never a GPS-invented putt count or fabricated distance.
+ * Made it always closes. Pending / logged buckets persist when the player
+ * chose them. No bucket → putt may log without a length. Never invent GPS.
  */
 export function planMadeIt(
   draft: PuttDraft,
   pending: PuttLengthId | null = null,
-): { ok: false } | { ok: true; putts: number; lengths: PuttLengthId[] } {
+): { ok: true; putts: number; lengths: PuttLengthId[] } {
   const lengths = draft.lengths.filter(isPuttLengthId).slice(0, PUTT_MAX);
   if (pending && isPuttLengthId(pending) && lengths.length < PUTT_MAX) {
     lengths.push(pending);
   }
-  if (lengths.length === 0) return { ok: false };
-  return { ok: true, putts: lengths.length, lengths };
+  const putts =
+    lengths.length > 0 ? lengths.length : Math.max(1, clampPutts(draft.putts));
+  return { ok: true, putts: clampPutts(putts), lengths };
 }
 
 export function isLivePuttProximityQuality(quality: string): boolean {

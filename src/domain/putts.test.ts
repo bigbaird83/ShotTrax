@@ -7,6 +7,8 @@ import {
   canCommitPutt,
   canMakeCurrentPutt,
   canMakePutt,
+  madeItEnabledWithEmptyLength,
+  madeItRequiresLengthPick,
   clampPutts,
   commitPuttLength,
   emptyPuttDraft,
@@ -119,7 +121,10 @@ test('Signal: pick a length does not commit; Add putt commits a miss; Made it on
     assert.equal(onePutt.putts, 1);
     assert.deepEqual(onePutt.lengths, ['over_20']);
   }
-  assert.equal(planMadeIt(picked.draft).ok, false);
+  const emptyClose = planMadeIt(picked.draft);
+  assert.equal(emptyClose.ok, true);
+  assert.deepEqual(emptyClose.lengths, []);
+  assert.equal(canMakeCurrentPutt(emptyPuttSheetPick()), true);
 
   const idle = commitPuttLength(emptyPuttSheetPick());
   assert.deepEqual(idle.draft, emptyPuttDraft());
@@ -129,7 +134,8 @@ test('Signal: pick a length does not commit; Add putt commits a miss; Made it on
   assert.equal(logged.pending, null);
   assert.deepEqual(logged.draft, { putts: 1, lengths: ['over_20'] });
   assert.equal(canMakePutt(logged.draft), true);
-  assert.equal(canMakeCurrentPutt(logged), false);
+  assert.equal(canMakeCurrentPutt(logged), true);
+  assert.equal(showPuttNoLengthCue(logged), true);
 
   const putt2 = pickPuttLength({ draft: logged.draft, pending: null }, 'inside_3');
   assert.equal(putt2.pending, 'inside_3');
@@ -146,15 +152,21 @@ test('Signal: pick a length does not commit; Add putt commits a miss; Made it on
   assert.deepEqual(two.draft.lengths, ['over_20', 'inside_3']);
 });
 
-test('Made it needs at least one putt with a bucket', () => {
-  assert.equal(canMakePutt(emptyPuttDraft()), false);
-  assert.equal(canMakePutt({ putts: 0, lengths: [] }), false);
-  assert.equal(canMakePutt({ putts: 3, lengths: [] }), false);
+test('Made it stays enabled with empty length; pending still commits a bucket', () => {
+  assert.equal(madeItEnabledWithEmptyLength(), true);
+  assert.equal(madeItRequiresLengthPick(), false);
+  assert.equal(canMakePutt(emptyPuttDraft()), true);
+  assert.equal(canMakePutt({ putts: 0, lengths: [] }), true);
+  assert.equal(canMakePutt({ putts: 3, lengths: [] }), true);
+  const emptyClose = planMadeIt(emptyPuttDraft());
+  assert.equal(emptyClose.ok, true);
+  assert.equal(emptyClose.putts, 1);
+  assert.deepEqual(emptyClose.lengths, []);
   assert.equal(canMakePutt({ putts: 1, lengths: ['inside_3'] }), true);
   assert.equal(canMakePutt({ putts: 2, lengths: ['over_20', '3_to_10'] }), true);
   assert.equal(canMakePutt(emptyPuttDraft(), 'inside_3'), true);
   assert.equal(canMakeCurrentPutt({ draft: emptyPuttDraft(), pending: 'inside_3' }), true);
-  assert.equal(canMakeCurrentPutt({ draft: { putts: 1, lengths: ['over_20'] }, pending: null }), false);
+  assert.equal(canMakeCurrentPutt({ draft: { putts: 1, lengths: ['over_20'] }, pending: null }), true);
   assert.equal(canMakeCurrentPutt({ draft: { putts: 1, lengths: ['over_20'] }, pending: 'inside_3' }), true);
   const planned = planMadeIt({ putts: 99, lengths: ['3_to_10'] });
   assert.equal(planned.ok, true);
@@ -187,7 +199,7 @@ test('Signal: soft No length cue is inline stats-only — never blocks Made it o
   assert.equal(canMakeCurrentPutt(picked), true);
   assert.equal(showPuttNoLengthCue(picked), false);
   const miss = commitPuttLength(picked);
-  assert.equal(canMakeCurrentPutt(miss), false);
+  assert.equal(canMakeCurrentPutt(miss), true);
   assert.equal(showPuttNoLengthCue(miss), true);
   const putt2 = pickPuttLength(miss, 'inside_3');
   assert.equal(canMakeCurrentPutt(putt2), true);

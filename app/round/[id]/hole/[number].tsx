@@ -673,7 +673,7 @@ export default function HoleScreen() {
       if (msg.action === 'made') {
         const draft = puttDraftRef.current;
         const pending = msg.lengthId ?? null;
-        if (planMadeIt(draft, pending).ok) {
+        if (puttOpenRef.current || pending || draft.lengths.length > 0 || draft.putts > 0) {
           const ok = applyMadeIt(target, draft, pending);
           return ok ? { ok: true, feedback: MADE_IT_FEEDBACK } : { ok: false, feedback: COPY.puttSheetLede };
         }

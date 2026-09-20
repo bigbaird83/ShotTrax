@@ -23,6 +23,8 @@ import {
   onGreenPuttsAreScoreOnly,
   pickPuttLength,
   planFinishHoleOut,
+  madeItEnabledWithEmptyLength,
+  madeItRequiresLengthPick,
   planMadeIt,
   planMadeItFromPick,
   playDockKeepsHoleOutForOffGreen,
@@ -123,7 +125,10 @@ test('Signal Lab: Hole Out closes on the last real mark — no invented putt GPS
   assert.equal(offGreen.putts, 0);
   assert.deepEqual(offGreen.lengths, []);
   assert.equal(offGreen.gir, false);
-  assert.equal(planMadeIt(emptyPuttDraft()).ok, false);
+  const emptyMade = planMadeIt(emptyPuttDraft());
+  assert.equal(emptyMade.ok, true);
+  assert.deepEqual(emptyMade.lengths, []);
+  assert.doesNotMatch(JSON.stringify(emptyMade), /yd|lat|lng|GPS/i);
 
   const repo = readFileSync(new URL('../db/repo.ts', import.meta.url), 'utf8');
   const finishOut = repo.slice(repo.indexOf('export function finishHoleOut'), repo.indexOf('export function sealOpenShotWithoutGps'));
@@ -152,7 +157,8 @@ test('Signal Lab: Hole Out closes on the last real mark — no invented putt GPS
   assert.doesNotMatch(finish, /addPlacedShot|insertNoGpsShot|club_putter/);
   const watchStart = hole.indexOf('const onWatchPuttPick');
   const watchFn = hole.slice(watchStart, hole.indexOf('useWatchClubList', watchStart + 1));
-  assert.match(watchFn, /planMadeIt/);
+  assert.match(watchFn, /puttOpenRef\.current \|\| pending \|\| draft\.lengths\.length > 0/);
+  assert.match(watchFn, /applyMadeIt\(target, draft, pending\)/);
   assert.match(watchFn, /finishHoleOut/);
   assert.doesNotMatch(watchFn, /addPlacedShot|insertNoGpsShot/);
 
@@ -179,7 +185,12 @@ test('Signal Lab: TF 49 putt sheet is pick → Made it on putt N≥1; Add putt i
   const picked = pickPuttLength(emptyPuttSheetPick(), '3_to_10');
   assert.equal(picked.pending, '3_to_10');
   assert.deepEqual(picked.draft.lengths, []);
-  assert.equal(planMadeIt(picked.draft).ok, false);
+  assert.equal(madeItEnabledWithEmptyLength(), true);
+  assert.equal(madeItRequiresLengthPick(), false);
+  assert.equal(canMakeCurrentPutt(emptyPuttSheetPick()), true);
+  const emptyClose = planMadeIt(picked.draft);
+  assert.equal(emptyClose.ok, true);
+  assert.deepEqual(emptyClose.lengths, []);
   assert.equal(canMakeCurrentPutt(picked), true);
   assert.equal(planMadeIt(picked.draft, picked.pending).ok, true);
   const madeOne = planMadeIt(picked.draft, picked.pending);
@@ -194,7 +205,7 @@ test('Signal Lab: TF 49 putt sheet is pick → Made it on putt N≥1; Add putt i
   assert.match(sheet, /label=\{COPY\.addPutt\}/);
   assert.match(sheet, /commitPuttLength\(\{ draft, pending \}\)/);
   assert.match(sheet, /onAdd\(added\)/);
-  assert.match(sheet, /canMakeCurrentPutt\(pick\)/);
+  assert.match(sheet, /const canMake = !disabled/);
   assert.match(sheet, /showPuttNoLengthCue\(pick\)/);
   assert.match(sheet, /COPY\.noLengthCue/);
   assert.match(sheet, /testID="putt-no-length-cue"/);
@@ -216,7 +227,7 @@ test('Signal Lab: TF 49 putt sheet is pick → Made it on putt N≥1; Add putt i
   assert.match(apply, /holeAfterDone/);
   const watchStart = hole.indexOf('const onWatchPuttPick');
   const watchFn = hole.slice(watchStart, hole.indexOf('useWatchClubList', watchStart + 1));
-  assert.match(watchFn, /planMadeIt\(draft, pending\)/);
+  assert.match(watchFn, /puttOpenRef\.current \|\| pending \|\| draft\.lengths\.length > 0/);
   assert.match(watchFn, /applyMadeIt\(target, draft, pending\)/);
   const dock = hole.slice(hole.indexOf('style={[styles.dock'), hole.indexOf('<FullSheet'));
   assert.match(dock, /testID="play-dock-hole-out"/);
@@ -249,9 +260,9 @@ test('Signal Lab: TF 49 putt sheet is pick → Made it on putt N≥1; Add putt i
   assert.match(madeFn, /payload\["lengthId"\] = pending/);
   assert.doesNotMatch(madeFn, /attachWatchFix/);
   const applySheet = session.slice(session.indexOf('private func applyPuttSheet'), session.indexOf('private func persist'));
-  assert.match(applySheet, /next\.canMake = next\.pending != nil \|\| next\.lengths\.count >= 5/);
+  assert.match(applySheet, /next\.canMake = true/);
   const addFn = session.slice(session.indexOf('func addPutt'), session.indexOf('func undoPutt'));
-  assert.match(addFn, /next\.canMake = next\.lengths\.count >= 5/);
+  assert.match(addFn, /next\.canMake = true/);
 });
 
 test('Signal Lab: Made it enabled after distance pick with zero putts logged; Add putt still commits a miss; Made it closes hole', () => {
@@ -264,7 +275,8 @@ test('Signal Lab: Made it enabled after distance pick with zero putts logged; Ad
   const miss = commitPuttLength(picked);
   assert.deepEqual(miss.draft, { putts: 1, lengths: ['inside_3'] });
   assert.equal(miss.pending, null);
-  assert.equal(canMakeCurrentPutt(miss), false);
+  assert.equal(canMakeCurrentPutt(miss), true);
+  assert.equal(showPuttNoLengthCue(miss), true);
   const holing = planMadeIt(emptyPuttDraft(), 'inside_3');
   assert.equal(holing.ok, true);
   if (holing.ok) {
@@ -288,7 +300,8 @@ test('Signal Lab: Made it with pending on putt N≥1 — no extra Add putt after
   const miss = commitPuttLength(putt1);
   assert.equal(miss.draft.lengths.length, 1);
   assert.equal(miss.pending, null);
-  assert.equal(canMakeCurrentPutt(miss), false);
+  assert.equal(canMakeCurrentPutt(miss), true);
+  assert.equal(showPuttNoLengthCue(miss), true);
   assert.equal(puttSheetDistanceTapCommits(), false);
 
   const putt2 = pickPuttLength(miss, '3_to_10');
@@ -313,10 +326,46 @@ test('Signal Lab: Made it with pending on putt N≥1 — no extra Add putt after
   }
 
   const sheet = readFileSync(new URL('../ui/PuttSheetBody.tsx', import.meta.url), 'utf8');
-  assert.match(sheet, /canMakeCurrentPutt\(pick\)/);
+  assert.match(sheet, /const canMake = !disabled/);
   assert.match(sheet, /onMadeIt\(pending\)/);
   assert.match(sheet, /commitPuttLength\(\{ draft, pending \}\)/);
   assert.doesNotMatch(sheet, /onPress=\{\(\) => onAdd\(bucket\.id\)\}/);
+});
+
+test('Signal Lab: Made it enabled with empty length; soft cue present; pending still commits length', () => {
+  assert.equal(madeItEnabledWithEmptyLength(), true);
+  assert.equal(madeItRequiresLengthPick(), false);
+  assert.equal(canMakeCurrentPutt(emptyPuttSheetPick()), true);
+  assert.equal(canMakePutt(emptyPuttDraft()), true);
+  assert.equal(showPuttNoLengthCue(emptyPuttSheetPick()), true);
+  const emptyClose = planMadeIt(emptyPuttDraft());
+  assert.equal(emptyClose.ok, true);
+  assert.equal(emptyClose.putts, 1);
+  assert.deepEqual(emptyClose.lengths, []);
+  assert.doesNotMatch(JSON.stringify(emptyClose), /yd|lat|lng|GPS/i);
+
+  const picked = pickPuttLength(emptyPuttSheetPick(), 'inside_3');
+  assert.equal(canMakeCurrentPutt(picked), true);
+  assert.equal(showPuttNoLengthCue(picked), false);
+  const withLen = planMadeItFromPick(picked);
+  assert.equal(withLen.ok, true);
+  if (withLen.ok) {
+    assert.equal(withLen.putts, 1);
+    assert.deepEqual(withLen.lengths, ['inside_3']);
+  }
+
+  const sheet = readFileSync(new URL('../ui/PuttSheetBody.tsx', import.meta.url), 'utf8');
+  assert.match(sheet, /const canMake = !disabled/);
+  assert.match(sheet, /showPuttNoLengthCue\(pick\)/);
+  assert.match(sheet, /testID="putt-no-length-cue"/);
+  assert.match(sheet, /COPY\.noLengthCue/);
+  assert.doesNotMatch(sheet, /Alert\.alert|Modal/);
+
+  const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  const watchSheet = watch.slice(watch.indexOf('private var puttSheet'), watch.indexOf('private var clubPick'));
+  assert.match(watchSheet, /Text\("No length — pick a distance"\)/);
+  assert.match(watchSheet, /session\.putt\.pending == nil/);
+  assert.doesNotMatch(watchSheet, /alert|Alert/);
 });
 
 test('Signal Lab: soft No length cue is inline when Made it is off for missing length — never a blocking modal', () => {
@@ -327,31 +376,37 @@ test('Signal Lab: soft No length cue is inline when Made it is off for missing l
   assert.equal(puttSheetNoLengthCueIsModal(), false);
   assert.equal(puttSheetNoLengthCueInventGps(), false);
   assert.equal(showPuttNoLengthCue(emptyPuttSheetPick()), true);
+  assert.equal(canMakeCurrentPutt(emptyPuttSheetPick()), true);
   assert.equal(puttLoggedWithoutLength({ putts: 1, lengths: [] }), true);
   const picked = pickPuttLength(emptyPuttSheetPick(), 'inside_3');
   assert.equal(canMakeCurrentPutt(picked), true);
   assert.equal(showPuttNoLengthCue(picked), false);
   const miss = commitPuttLength(picked);
   assert.equal(showPuttNoLengthCue(miss), true);
-  assert.equal(canMakeCurrentPutt(miss), false);
+  assert.equal(canMakeCurrentPutt(miss), true);
 
   const sheet = readFileSync(new URL('../ui/PuttSheetBody.tsx', import.meta.url), 'utf8');
   assert.match(sheet, /showPuttNoLengthCue\(pick\)/);
   assert.match(sheet, /testID="putt-no-length-cue"/);
   assert.match(sheet, /COPY\.noLengthCue/);
-  assert.match(sheet, /canMakeCurrentPutt\(pick\)/);
+  assert.match(sheet, /const canMake = !disabled/);
   assert.doesNotMatch(sheet, /Alert\.alert|Modal|finishHoleOut/);
 
   const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
   const watchSheet = watch.slice(watch.indexOf('private var puttSheet'), watch.indexOf('private var clubPick'));
   assert.match(watchSheet, /Text\("No length — pick a distance"\)/);
-  assert.match(watchSheet, /!session\.putt\.canMake/);
+  assert.match(watchSheet, /session\.putt\.pending == nil/);
   assert.doesNotMatch(watchSheet, /alert|Alert/);
 });
 
 test('Signal Lab: Made it only stores user-chosen buckets and advances the hole', () => {
-  assert.equal(planMadeIt(emptyPuttDraft()).ok, false);
-  assert.equal(planMadeIt({ putts: 3, lengths: [] }).ok, false);
+  const emptyMade = planMadeIt(emptyPuttDraft());
+  assert.equal(emptyMade.ok, true);
+  assert.deepEqual(emptyMade.lengths, []);
+  const noBuckets = planMadeIt({ putts: 3, lengths: [] });
+  assert.equal(noBuckets.ok, true);
+  assert.equal(noBuckets.putts, 3);
+  assert.deepEqual(noBuckets.lengths, []);
   const made = planMadeIt({ putts: 99, lengths: ['over_20', 'inside_3'] });
   assert.equal(made.ok, true);
   if (made.ok) {

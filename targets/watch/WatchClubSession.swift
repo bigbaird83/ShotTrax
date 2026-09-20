@@ -209,7 +209,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       next.lengths.append(lengthId)
       next.canAdd = next.lengths.count < 5
       next.pending = nil
-      next.canMake = next.lengths.count >= 5
+      next.canMake = true
       putt = next
     }
     sendPick([
@@ -491,7 +491,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     if next.canAdd, next.lengths == priorLengths {
       next.pending = priorPending
     }
-    next.canMake = next.pending != nil || next.lengths.count >= 5
+    next.canMake = true
     putt = next
   }
 

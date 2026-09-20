@@ -387,7 +387,7 @@ export function puttSheetPayload(args: {
     lengths,
     labels: puttLengthLabels(),
     canAdd: lengths.length < 5,
-    canMake: lengths.length > 0,
+    canMake: true,
   };
 }
 
