@@ -38,6 +38,9 @@ import {
   addShotPinchZoomAfterFrame,
   addShotShowsUserLocation,
   addShotTwoFingerPanAfterFrame,
+  addShotDragLayerCoversMap,
+  addShotDragLayerStealsTwoFinger,
+  addShotToPinUsesDraggableMarker,
   dragOneFingerMovesToPin,
   dragOverlayPointerEvents,
   dragTwoFingersPanAndZoom,
@@ -127,8 +130,11 @@ test('Signal Lab: Add shot two-finger pan/pinch after frame leave the camera and
   assert.equal(holeMapScrollZoomAfterFrame({ lockFrame: true, holeCameraReady: false }), true);
   assert.equal(twoFingerOwnsMap(2), true);
   assert.equal(twoFingerOwnsMap(1), false);
+  assert.equal(addShotDragLayerStealsTwoFinger(), false);
+  assert.equal(addShotDragLayerCoversMap(), false);
+  assert.equal(addShotToPinUsesDraggableMarker(), true);
   assert.equal(dragOverlayPointerEvents(true), 'none');
-  assert.equal(dragOverlayPointerEvents(false), 'auto');
+  assert.equal(dragOverlayPointerEvents(false), 'none');
   assert.equal(playDockFrostPointerEvents(), 'none');
   assert.equal(playDockGlassIgnoresTouches(), true);
   assert.equal(playDockPassesTwoFingerPan(), true);
@@ -218,16 +224,15 @@ test('Signal Lab: Add shot two-finger pan/pinch after frame leave the camera and
   assert.match(ready, /if \(framedOnce\.current\) return;/);
   assert.doesNotMatch(ready, /applyLockedCamera/);
 
-  assert.match(map, /to-pin-drag-layer/);
-  assert.match(map, /touches\.length >= 2/);
-  const dragStart = map.slice(
-    map.indexOf('onStartShouldSetResponder={(event) => {'),
-    map.indexOf('onMoveShouldSetResponder'),
-  );
-  assert.match(dragStart, /return false;/);
-  assert.doesNotMatch(dragStart, /return true;/);
-  assert.match(map, /pointerEvents=\{mapOwnsGesture \? 'none' : 'auto'\}/);
-  assert.match(map, /if \(!onPlaceToDrag \|\| mapOwnsGesture\) return/);
+  assert.doesNotMatch(map, /testID="to-pin-drag-layer"/);
+  assert.doesNotMatch(map, /styles\.dragLayer/);
+  assert.doesNotMatch(map, /yieldToMapGesture|dragLayerRef/);
+  assert.doesNotMatch(map, /pointerEvents=\{mapOwnsGesture \? 'none' : 'auto'\}/);
+  assert.doesNotMatch(map, /onPanDrag=/);
+  assert.doesNotMatch(map, /if \(!onPlaceToDrag \|\| mapOwnsGesture\) return/);
+  assert.match(map, /draggable=\{Boolean\(onPlaceToDrag\)\}/);
+  assert.match(map, /if \(!onPlaceToDrag\) return/);
+  assert.match(map, /onPlaceToDrag\(\{ lat: latitude, lng: longitude \}\)/);
   const dragLines = map.slice(map.indexOf('const dragLines = useMemo'), map.indexOf('const lockedCameraRef'));
   assert.match(dragLines, /drag: placedTo/);
   assert.doesNotMatch(dragLines, /locationX|locationY|pageX|pageY|screen:|camera:/);
@@ -324,4 +329,34 @@ test('Signal Lab: course-card first frame, then leave camera alone; scroll/zoom 
   assert.doesNotMatch(hole, /pointerEvents=\{[^}]*styles\.dockGlass/);
   const frost = hole.slice(hole.indexOf('dockGlass:'), hole.indexOf('dockRow:'));
   assert.doesNotMatch(frost, /pointerEvents/);
+});
+
+test('Signal Lab: Add-shot overlay cannot steal two-finger pan/pinch on first open or after edit', () => {
+  assert.equal(addShotDragLayerStealsTwoFinger(), false);
+  assert.equal(addShotDragLayerCoversMap(), false);
+  assert.equal(addShotToPinUsesDraggableMarker(), true);
+  assert.equal(dragOverlayPointerEvents(false), 'none');
+  assert.equal(dragOverlayPointerEvents(true), 'none');
+  assert.equal(addShotGesturesWorkOnFirstOpen(), true);
+  assert.equal(addShotGesturesWorkAfterEdit(), true);
+  assert.equal(addShotGesturesRequireRemount(), false);
+  assert.equal(holeMapKeepsScrollZoomOnceMounted(), true);
+  assert.equal(twoFingerOwnsMap(2), true);
+  assert.equal(dragOneFingerMovesToPin(), true);
+  assert.equal(dragTwoFingersPanAndZoom(), true);
+  assert.equal(mapPanChangesLiveYards(), false);
+  assert.equal(mapPinchChangesLiveYards(), false);
+
+  const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(map, /testID="to-pin-drag-layer"/);
+  assert.doesNotMatch(map, /styles\.dragLayer/);
+  assert.doesNotMatch(map, /yieldToMapGesture|releaseMapGesture|dragLayerRef/);
+  assert.doesNotMatch(map, /pointerEvents=\{mapOwnsGesture \? 'none' : 'auto'\}/);
+  assert.doesNotMatch(map, /onPanDrag=/);
+  assert.doesNotMatch(map, /scrollEnabled=\{mapOwnsGesture \|\| !toPinLive\}/);
+  assert.match(map, /draggable=\{Boolean\(onPlaceToDrag\)\}/);
+  assert.match(map, /scrollEnabled=\{framedForGestures\}/);
+  assert.match(map, /zoomEnabled=\{framedForGestures\}/);
+  assert.match(map, /const framedForGestures = holeMapKeepsScrollZoomOnceMounted\(\)/);
+  assert.match(map, /pointerEvents="box-none"/);
 });

@@ -22,7 +22,11 @@ import {
   addShotGestureYardsUsePinHaversine,
   addShotGestureYardsUseFingerPixel,
   addShotGestureYardsUseReframe,
+  addShotDragLayerCoversMap,
+  addShotDragLayerStealsTwoFinger,
+  addShotToPinUsesDraggableMarker,
   dragOneFingerMovesToPin,
+  dragOverlayPointerEvents,
   dragTwoFingersPanAndZoom,
   editToFreezesPan,
   editToOneFingerMovesToPin,
@@ -349,7 +353,9 @@ test('panning the map leaves shot and to-green unchanged unless the landing pin 
   const preview = map.slice(map.indexOf('const dragLines = useMemo'), map.indexOf('const lockedCameraRef'));
   assert.match(preview, /drag: placedTo/);
   assert.doesNotMatch(preview, /locationX|locationY|screen:|camera:/);
-  assert.match(map, /if \(!onPlaceToDrag \|\| mapOwnsGesture\) return/);
+  assert.match(map, /if \(!onPlaceToDrag\) return/);
+  assert.doesNotMatch(map, /if \(!onPlaceToDrag \|\| mapOwnsGesture\) return/);
+  assert.doesNotMatch(map, /onPanDrag=/);
   assert.match(map, /planDragShotLines/);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
@@ -398,6 +404,11 @@ test('to pin follows the finger; live yards are this shot only; nothing stores b
   assert.equal(dragFreezesPan(), false);
   assert.equal(dragOneFingerMovesToPin(), true);
   assert.equal(dragTwoFingersPanAndZoom(), true);
+  assert.equal(addShotDragLayerStealsTwoFinger(), false);
+  assert.equal(addShotDragLayerCoversMap(), false);
+  assert.equal(addShotToPinUsesDraggableMarker(), true);
+  assert.equal(dragOverlayPointerEvents(false), 'none');
+  assert.equal(dragOverlayPointerEvents(true), 'none');
   assert.equal(dragKeepsPinchZoom(), true);
   assert.equal(addShotMapScrollEnabledAfterFrame(), true);
   assert.equal(addShotMapZoomEnabledAfterFrame(), true);
@@ -418,10 +429,14 @@ test('to pin follows the finger; live yards are this shot only; nothing stores b
   assert.match(map, /scrollEnabled=\{framedForGestures\}/);
   assert.match(map, /zoomEnabled=\{framedForGestures\}/);
   assert.doesNotMatch(map, /scrollEnabled=\{mapOwnsGesture \|\| !toPinLive\}/);
-  assert.match(map, /to-pin-drag-layer/);
-  assert.match(map, /touches\.length >= 2/);
-  assert.match(map, /pointerEvents=\{mapOwnsGesture \? 'none' : 'auto'\}/);
-  assert.match(map, /if \(!onPlaceToDrag \|\| mapOwnsGesture\) return/);
+  assert.doesNotMatch(map, /testID="to-pin-drag-layer"/);
+  assert.doesNotMatch(map, /styles\.dragLayer/);
+  assert.doesNotMatch(map, /yieldToMapGesture|dragLayerRef/);
+  assert.doesNotMatch(map, /pointerEvents=\{mapOwnsGesture \? 'none' : 'auto'\}/);
+  assert.doesNotMatch(map, /if \(!onPlaceToDrag \|\| mapOwnsGesture\) return/);
+  assert.doesNotMatch(map, /onPanDrag=/);
+  assert.match(map, /draggable=\{Boolean\(onPlaceToDrag\)\}/);
+  assert.match(map, /if \(!onPlaceToDrag\) return/);
   assert.match(map, /onPlaceToDrag\(\{ lat: latitude, lng: longitude \}\)/);
   assert.doesNotMatch(map, /scrollEnabled=\{!panFrozen\}/);
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
