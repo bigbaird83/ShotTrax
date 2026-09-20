@@ -78,7 +78,7 @@ export const COPY = {
   holeOut: 'Hole Out',
   putts: 'Putts',
   puttSheetLede: 'How long was the putt?',
-  puttSheetHint: 'Pick a length, then Add putt.',
+  puttSheetHint: 'Pick a length, then Made it — or Add putt if you miss.',
   addPutt: 'Add a putt',
   undoPutt: 'Undo putt',
   forgotShot: 'Log a missed shot',

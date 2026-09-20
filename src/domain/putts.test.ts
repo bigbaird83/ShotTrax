@@ -91,7 +91,7 @@ test('each committed bucket is its own putt; undo drops the last', () => {
   assert.equal(full.putts, 5);
 });
 
-test('Signal: pick a length does not commit; Add putt commits; Made it needs logged putts', () => {
+test('Signal: pick a length does not commit; Add putt commits a miss; Made it on putt 1', () => {
   assert.equal(puttSheetDistanceTapCommits(), false);
   assert.equal(puttSheetHasAddPuttControl(), true);
   assert.equal(puttSheetCtaLabel(), 'Made it');
@@ -101,8 +101,15 @@ test('Signal: pick a length does not commit; Add putt commits; Made it needs log
   const picked = pickPuttLength(emptyPuttSheetPick(), 'over_20');
   assert.equal(picked.pending, 'over_20');
   assert.deepEqual(picked.draft, emptyPuttDraft());
+  assert.equal(picked.draft.lengths.length, 0);
   assert.equal(canCommitPutt(picked), true);
-  assert.equal(canMakePutt(picked.draft), false);
+  assert.equal(canMakePutt(picked.draft, picked.pending), true);
+  const onePutt = planMadeIt(picked.draft, picked.pending);
+  assert.equal(onePutt.ok, true);
+  if (onePutt.ok) {
+    assert.equal(onePutt.putts, 1);
+    assert.deepEqual(onePutt.lengths, ['over_20']);
+  }
   assert.equal(planMadeIt(picked.draft).ok, false);
 
   const idle = commitPuttLength(emptyPuttSheetPick());
@@ -124,11 +131,18 @@ test('Made it needs at least one putt with a bucket', () => {
   assert.equal(canMakePutt({ putts: 3, lengths: [] }), false);
   assert.equal(canMakePutt({ putts: 1, lengths: ['inside_3'] }), true);
   assert.equal(canMakePutt({ putts: 2, lengths: ['over_20', '3_to_10'] }), true);
+  assert.equal(canMakePutt(emptyPuttDraft(), 'inside_3'), true);
   const planned = planMadeIt({ putts: 99, lengths: ['3_to_10'] });
   assert.equal(planned.ok, true);
   if (planned.ok) {
     assert.equal(planned.putts, 1);
     assert.deepEqual(planned.lengths, ['3_to_10']);
+  }
+  const holing = planMadeIt({ putts: 1, lengths: ['over_20'] }, 'inside_3');
+  assert.equal(holing.ok, true);
+  if (holing.ok) {
+    assert.equal(holing.putts, 2);
+    assert.deepEqual(holing.lengths, ['over_20', 'inside_3']);
   }
 });
 

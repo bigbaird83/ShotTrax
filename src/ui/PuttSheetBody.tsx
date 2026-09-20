@@ -28,7 +28,7 @@ export function PuttSheetBody({
   disabled?: boolean;
   onAdd: (id: PuttLengthId) => void;
   onUndo: () => void;
-  onMadeIt: () => void;
+  onMadeIt: (pending?: PuttLengthId | null) => void;
 }) {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -37,7 +37,7 @@ export function PuttSheetBody({
   const nextN = nextPuttNumber(draft);
   const canPick = nextN != null && !disabled;
   const canAdd = canCommitPutt(pick) && !disabled;
-  const canMake = canMakePutt(draft) && !disabled;
+  const canMake = canMakePutt(draft, pending) && !disabled;
   const pendingLabel = pending ? PUTT_LENGTHS.find((row) => row.id === pending)?.label ?? pending : COPY.puttSheetHint;
 
   return (
@@ -87,7 +87,7 @@ export function PuttSheetBody({
       {draft.lengths.length > 0 ? (
         <BigButton label={COPY.undoPutt} variant="ghost" disabled={disabled} onPress={onUndo} />
       ) : null}
-      <BigButton label={COPY.madeIt} disabled={!canMake} onPress={onMadeIt} />
+      <BigButton label={COPY.madeIt} disabled={!canMake} onPress={() => onMadeIt(pending)} />
       <Text style={styles.meta}>Hole {holeNumber}</Text>
     </View>
   );

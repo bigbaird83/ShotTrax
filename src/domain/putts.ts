@@ -121,19 +121,29 @@ export function undoLastPutt(current: PuttDraft): PuttDraft {
   return { putts: lengths.length, lengths };
 }
 
-/** Made it needs at least one user-chosen bucket. GPS counts do not count. */
-export function canMakePutt(draft: PuttDraft): boolean {
-  return planMadeIt(draft).ok;
+/**
+ * Made it is on after a distance pick — including putt 1 with zero putts logged.
+ * GPS counts do not count. Distance tap still does not commit.
+ */
+export function canMakePutt(
+  draft: PuttDraft,
+  pending: PuttLengthId | null = null,
+): boolean {
+  return planMadeIt(draft, pending).ok;
 }
 
 /**
- * Made it persists only the buckets the player tapped — never a GPS-invented
- * putt count, never a fabricated distance.
+ * Made it persists user-chosen buckets only — logged misses plus the pending
+ * holing putt. Never a GPS-invented putt count or fabricated distance.
  */
 export function planMadeIt(
   draft: PuttDraft,
+  pending: PuttLengthId | null = null,
 ): { ok: false } | { ok: true; putts: number; lengths: PuttLengthId[] } {
-  const lengths = draft.lengths.filter(isPuttLengthId);
+  const lengths = draft.lengths.filter(isPuttLengthId).slice(0, PUTT_MAX);
+  if (pending && isPuttLengthId(pending) && lengths.length < PUTT_MAX) {
+    lengths.push(pending);
+  }
   if (lengths.length === 0) return { ok: false };
   return { ok: true, putts: lengths.length, lengths };
 }
