@@ -6,6 +6,8 @@ import {
   formatPuttN,
   finishShotChip,
   holeOutClosedOnShot,
+  formatPuttCount,
+  formatShotCount,
   formatHoleHeader,
   formatPlayHeader,
   formatPlayHeaderPrimary,
@@ -123,6 +125,11 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(finishPuttsChip(4), 'Finish putts · Hole 4');
   assert.equal(finishShotChip(2), 'Finish shot · Hole 2');
   assert.equal(holeOutClosedOnShot(3), 'Hole Out · shot 3');
+  assert.equal(formatShotCount(1), '1 shot');
+  assert.equal(formatShotCount(3), '3 shots');
+  assert.equal(formatPuttCount(1), '1 putt');
+  assert.equal(formatPuttCount(2), '2 putts');
+  assert.equal(formatPuttCount(0), '0 putts');
   assert.equal(markedSuggestedMessage('7i'), 'Marked 7i (suggested) · Change club.');
 });
 

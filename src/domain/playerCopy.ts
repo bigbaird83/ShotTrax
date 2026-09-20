@@ -169,6 +169,16 @@ export function holeOutClosedOnShot(seq: number): string {
   return `Hole Out · shot ${seq}`;
 }
 
+export function formatShotCount(n: number): string {
+  const count = Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
+  return count === 1 ? '1 shot' : `${count} shots`;
+}
+
+export function formatPuttCount(n: number): string {
+  const count = Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
+  return count === 1 ? '1 putt' : `${count} putts`;
+}
+
 export function markedSuggestedMessage(shortName: string): string {
   return `Marked ${shortName} (suggested) · Change club.`;
 }

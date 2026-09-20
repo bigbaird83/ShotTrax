@@ -31,7 +31,8 @@ import {
 import { clubAverageFromShots, type ClubAverage } from '../domain/averages';
 import { rememberResolvedTee } from '../course/osmOverlay';
 import { isValidLatLng } from '../domain/latLng';
-import { clampPenaltyStrokes, scoreAfterPenalty } from '../domain/penalty';
+import { planFinishHoleScore } from '../domain/holeScore';
+import { clampPenaltyStrokes, scoreAfterPenalty, totalPenaltyStrokes } from '../domain/penalty';
 import {
   clampPutts,
   planFinishHoleOut,
@@ -649,6 +650,17 @@ export function updateHoleScore(db: SQLiteDatabase, holeId: string, score: numbe
   db.runSync('UPDATE holes SET score = ? WHERE id = ?', [score, holeId]);
 }
 
+/** Made it / Hole Out: persist total strokes (marks + putts + penalties), never putts-only. */
+function persistCloseHoleScore(db: SQLiteDatabase, holeId: string, putts: number): void {
+  const planned = planFinishHoleScore({
+    shotCount: listShotsForHole(db, holeId).length,
+    putts,
+    penaltyStrokes: totalPenaltyStrokes(listPenaltiesForHole(db, holeId)),
+  });
+  if (!planned.ok) return;
+  updateHoleScore(db, holeId, planned.score);
+}
+
 export function updateHolePutts(
   db: SQLiteDatabase,
   holeId: string,
@@ -675,12 +687,14 @@ export function finishHolePutts(
   const planned = planMadeIt({ putts, lengths });
   if (!planned.ok) return;
   updateHolePutts(db, holeId, planned.putts, planned.lengths, true);
+  persistCloseHoleScore(db, holeId, planned.putts);
 }
 
 /** Off-green hole-out. Current club is the shot. No fake putt yards. GIR stays unset. */
 export function finishHoleOut(db: SQLiteDatabase, holeId: string): void {
   const planned = planFinishHoleOut();
   updateHolePutts(db, holeId, planned.putts, planned.lengths, true);
+  persistCloseHoleScore(db, holeId, planned.putts);
   const flag = planFlagLastRealShot(
     db.getAllSync<{ id: string; seq: number }>(
       'SELECT id, seq FROM shots WHERE hole_id = ? ORDER BY seq ASC',

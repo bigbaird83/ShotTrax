@@ -8,6 +8,7 @@ import type { OsmOverlay } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
 import { getRound, listClubAverages, listHoles, listPenaltiesForHole, listShotsForHole } from '@/src/db/repo';
 import { lockHoleCamera, resolveHoleTee, shotPinsForHoleCamera } from '@/src/domain/holeCamera';
+import { finishedHoleDisplayScore } from '@/src/domain/holeScore';
 import { planNerdOut } from '@/src/domain/nerdOut';
 import { formatPenaltyRow, totalPenaltyStrokes } from '@/src/domain/penalty';
 import { COPY, holeOutClosedOnShot } from '@/src/domain/playerCopy';
@@ -91,10 +92,24 @@ export default function RoundSummaryScreen() {
     );
   }
 
-  const scored = holes.filter((h) => h.score != null);
-  const withPar = scored.filter((h) => h.par != null);
-  const total = scored.reduce((sum, h) => sum + (h.score ?? 0), 0);
-  const toPar = withPar.reduce((sum, h) => sum + ((h.score ?? 0) - (h.par ?? 0)), 0);
+  const holeViews = holes.map((hole) => {
+    const shots = listShotsForHole(db, hole.id);
+    const penalties = listPenaltiesForHole(db, hole.id);
+    const penStrokes = totalPenaltyStrokes(penalties);
+    const displayScore = hole.puttsDone
+      ? finishedHoleDisplayScore({
+          score: hole.score,
+          shotCount: shots.length,
+          putts: hole.putts,
+          penaltyStrokes: penStrokes,
+        })
+      : hole.score;
+    return { hole, shots, penalties, penStrokes, displayScore };
+  });
+  const scored = holeViews.filter((row) => row.displayScore != null);
+  const withPar = scored.filter((row) => row.hole.par != null);
+  const total = scored.reduce((sum, row) => sum + (row.displayScore ?? 0), 0);
+  const toPar = withPar.reduce((sum, row) => sum + ((row.displayScore ?? 0) - (row.hole.par ?? 0)), 0);
   const toParLabel =
     withPar.length === 0 ? '—' : toPar === 0 ? 'E' : toPar > 0 ? `+${toPar}` : `${toPar}`;
 
@@ -120,16 +135,13 @@ export default function RoundSummaryScreen() {
         {scored.length} of {round.holeCount} holes scored.
       </Text>
 
-      {holes.map((hole) => {
-        const shots = listShotsForHole(db, hole.id);
-        const penalties = listPenaltiesForHole(db, hole.id);
+      {holeViews.map(({ hole, shots, penalties, penStrokes, displayScore }) => {
         const closedGps = shots.filter(
           (s) => (s.source === 'gps' || s.source === 'placed') && s.distanceYards != null,
         );
         const yards = closedGps.reduce((sum, h) => sum + (h.distanceYards ?? 0), 0);
-        const penStrokes = totalPenaltyStrokes(penalties);
         const mismatch = reconcileHoleScore({
-          score: hole.score,
+          score: displayScore,
           shotCount: shots.length,
           puttCount: hole.putts,
           penaltyStrokes: penStrokes,
@@ -164,11 +176,11 @@ export default function RoundSummaryScreen() {
               ) : null}
               {mismatch ? (
                 <Text style={styles.warn}>
-                  Score {hole.score} doesn’t match {shots.length} shots + {penStrokes} penalties.
+                  Score {displayScore} doesn’t match {shots.length} shots + {penStrokes} penalties.
                 </Text>
               ) : null}
             </View>
-            <Text style={styles.score}>{hole.score ?? '—'}</Text>
+            <Text style={styles.score}>{displayScore ?? '—'}</Text>
           </Pressable>
         );
       })}

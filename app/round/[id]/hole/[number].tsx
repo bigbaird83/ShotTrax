@@ -103,6 +103,7 @@ import {
 } from '@/src/domain/putts';
 import { canMoveFromPin, canMoveToPin, type ShotEditSnapshot } from '@/src/domain/shotEdit';
 import { clubToRankInput, lastClosedShotYards, rankDistanceYards, rankTopClubs, resolveNextShotDistanceTarget } from '@/src/domain/rankClubs';
+import { planFinishedHoleMiniSummary } from '@/src/domain/finishedHoleSummary';
 import { planScorecardDismiss } from '@/src/domain/scorecard';
 import { reconcileHoleScore, scoreMismatchMessage } from '@/src/domain/scoreReconcile';
 import { resolveStickyClub, selectClubForMark } from '@/src/domain/stickyClub';
@@ -1073,6 +1074,17 @@ export default function HoleScreen() {
   const catchUpSheet = planCatchUpSheet(placing);
   const hideHoleButtons = catchUpSheet.holeButtons === 'hidden';
   const catchUpFullScreen = catchUpSheet.map === 'fullscreen';
+  const finishedMini = planFinishedHoleMiniSummary({
+    puttsDone: hole.puttsDone,
+    placing,
+    catchUpFullScreen,
+    score: hole.score,
+    par: hole.par,
+    shotCount: shots.length,
+    putts: hole.putts,
+    penaltyStrokes: penaltyTotal,
+    shots,
+  });
   const dockFinish = planPlayDockFinish({
     readOnly,
     placing,
@@ -1293,6 +1305,34 @@ export default function HoleScreen() {
                     </Pressable>
                   ) : null}
                 </ScrollView>
+              ) : null}
+              {finishedMini.visible ? (
+                <Pressable
+                  testID="finished-hole-chip"
+                  accessibilityRole="button"
+                  accessibilityLabel={finishedMini.accessibilityLabel}
+                  onPress={() => setScorecardOpen(true)}
+                  style={styles.finishedHoleChip}>
+                  <Text style={styles.finishedHoleText} numberOfLines={1}>
+                    {finishedMini.score != null ? `${finishedMini.score}` : null}
+                    {finishedMini.vsPar ? (
+                      <Text
+                        style={[
+                          styles.finishedHoleVsPar,
+                          finishedMini.vsParTone === 'good' && styles.finishedHoleGood,
+                          finishedMini.vsParTone === 'bad' && styles.finishedHoleBad,
+                        ]}>
+                        {finishedMini.score != null ? ` · ${finishedMini.vsPar}` : finishedMini.vsPar}
+                      </Text>
+                    ) : null}
+                    {`${finishedMini.score != null || finishedMini.vsPar ? ' · ' : ''}${finishedMini.shotsLabel} · ${finishedMini.puttsLabel}`}
+                    {finishedMini.flag ? (
+                      <Text testID="finished-hole-flag" style={styles.finishedHoleFlag}>
+                        {` · ${finishedMini.flag}`}
+                      </Text>
+                    ) : null}
+                  </Text>
+                </Pressable>
               ) : null}
               {simBanner ? <GpsBanner message={simBanner} /> : null}
               {showFirstLaunchTip ? (
@@ -1579,7 +1619,19 @@ export default function HoleScreen() {
               par: row.par,
               score: row.score,
               putts: row.putts,
+              puttsDone: row.puttsDone,
+              shotCount: listShotsForHole(db, row.id).length,
+              penaltyStrokes: totalPenaltyStrokes(listPenaltiesForHole(db, row.id)),
             }))}
+            currentHoleNumber={holeNumber}
+            onSelectHole={(nextNumber) => {
+              setScorecardOpen(false);
+              if (nextNumber === holeNumber) {
+                bumpPlayFrame();
+                return;
+              }
+              goToHole(nextNumber);
+            }}
             onBack={dismissScorecard}
           />
         </ScrollView>
@@ -2023,6 +2075,24 @@ function makeStyles(colors: ColorPalette) {
     justifyContent: 'center',
   },
   scorecardChipText: { color: colors.cream, fontWeight: '800', fontSize: type.tiny },
+  finishedHoleChip: {
+    marginTop: 6,
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
+    minHeight: 32,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.overlay,
+    justifyContent: 'center',
+  },
+  finishedHoleText: { color: colors.cream, fontWeight: '800', fontSize: type.tiny },
+  finishedHoleVsPar: { color: colors.cream, fontWeight: '800', fontSize: type.tiny },
+  finishedHoleGood: { color: colors.good, fontWeight: '900' },
+  finishedHoleBad: { color: colors.red, fontWeight: '900' },
+  finishedHoleFlag: { color: colors.lime, fontWeight: '900', fontSize: type.tiny },
   dockHoleOutSlot: { flex: 1.2, minWidth: 88, gap: 4 },
   back: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 },
   backLabel: { color: colors.cream, fontWeight: '800', fontSize: type.meta },
