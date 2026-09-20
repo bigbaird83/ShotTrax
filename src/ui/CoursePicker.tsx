@@ -7,7 +7,12 @@ import type { CourseDetail, CourseSummary, TeeSet } from '@/src/course/types';
 import type { GpsFix } from '@/src/domain/types';
 import { COPY } from '@/src/domain/playerCopy';
 import { planCourseCard } from '@/src/domain/courseCard';
-import { planCourseList, planCourseSearchParams, planNearbyCourseSearch } from '@/src/domain/coursePick';
+import {
+  planCourseList,
+  planCourseSearchParams,
+  planNearbyCourseSearch,
+  showNearbyCourseList,
+} from '@/src/domain/coursePick';
 import { type CourseDistanceUnit } from '@/src/domain/courseDistance';
 import { getCurrentFix } from '@/src/services/location';
 import { BigButton } from './BigButton';
@@ -136,6 +141,7 @@ export function CoursePicker({
 
   const emptyNearby = configured && results != null && results.length === 0 && !busy;
   const needsLocation = error === COPY.nearbyNeedsLocation;
+  const showList = showNearbyCourseList(selected);
   const listed = planCourseList({
     courses: results ?? [],
     lastPlayedAtByCourse,
@@ -145,33 +151,36 @@ export function CoursePicker({
 
   return (
     <View style={styles.box}>
-      <TextInput
-        placeholder={COPY.courseNamePlaceholder}
-        placeholderTextColor={colors.muted}
-        value={query}
-        onChangeText={onQueryChange}
-        autoCapitalize="words"
-        autoCorrect={false}
-        style={styles.search}
-      />
-      {query.trim() ? (
-        <BigButton
-          label={COPY.clearSearch}
-          variant="ghost"
-          onPress={() => onQueryChange?.('')}
-        />
-      ) : null}
-      <Text style={styles.label}>{COPY.nearbyHint}</Text>
-      {!configured ? <Text style={styles.meta}>{COPY.nearbyUnavailable}</Text> : null}
-      {error && !emptyNearby ? <Text style={styles.warn}>{error}</Text> : null}
-      {busy ? <Text style={styles.meta}>{COPY.nearbyBusy}</Text> : null}
-      {emptyNearby ? (
-        <EmptyPanel
-          title={needsLocation ? COPY.nearbyNeedsLocation : COPY.nearbyEmpty}
-          hint={COPY.nearbyEmptyHint}
-        />
-      ) : null}
-      {selected ? (
+      {showList ? (
+        <>
+          <TextInput
+            placeholder={COPY.courseNamePlaceholder}
+            placeholderTextColor={colors.muted}
+            value={query}
+            onChangeText={onQueryChange}
+            autoCapitalize="words"
+            autoCorrect={false}
+            style={styles.search}
+          />
+          {query.trim() ? (
+            <BigButton
+              label={COPY.clearSearch}
+              variant="ghost"
+              onPress={() => onQueryChange?.('')}
+            />
+          ) : null}
+          <Text style={styles.label}>{COPY.nearbyHint}</Text>
+          {!configured ? <Text style={styles.meta}>{COPY.nearbyUnavailable}</Text> : null}
+          {error && !emptyNearby ? <Text style={styles.warn}>{error}</Text> : null}
+          {busy ? <Text style={styles.meta}>{COPY.nearbyBusy}</Text> : null}
+          {emptyNearby ? (
+            <EmptyPanel
+              title={needsLocation ? COPY.nearbyNeedsLocation : COPY.nearbyEmpty}
+              hint={COPY.nearbyEmptyHint}
+            />
+          ) : null}
+        </>
+      ) : selected ? (
         <View style={styles.selected}>
           <Text style={styles.selectedName}>{selected.name}</Text>
           <Text style={styles.meta}>{placeLine(selected)}</Text>
@@ -192,30 +201,33 @@ export function CoursePicker({
               onSelect(null);
             }}
           />
+          {error ? <Text style={styles.warn}>{error}</Text> : null}
         </View>
       ) : null}
       <ScrollView style={styles.list} keyboardShouldPersistTaps="handled">
-        {listed.map((course) => {
-          const card = planCourseCard({
-            name: course.name,
-            distanceMeters: course.distanceMeters,
-            unit: courseDistanceUnit,
-            lastPlayedAt: lastPlayedAtByCourse?.[course.id] ?? lastPlayedAtByCourse?.[course.name],
-          });
-          return (
-            <Pressable
-              key={course.id}
-              onPress={() => void pickCourse(course)}
-              style={[styles.row, selected?.id === course.id && styles.rowOn]}>
-              <Text style={styles.rowTitle}>{card.name}</Text>
-              <View style={styles.chips}>
-                {card.distance ? <Text style={styles.chip}>{card.distance}</Text> : null}
-                {card.lastPlayed ? <Text style={styles.chip}>{card.lastPlayed}</Text> : null}
-              </View>
-              <Text style={styles.meta}>{placeLine(course)}</Text>
-            </Pressable>
-          );
-        })}
+        {showList
+          ? listed.map((course) => {
+              const card = planCourseCard({
+                name: course.name,
+                distanceMeters: course.distanceMeters,
+                unit: courseDistanceUnit,
+                lastPlayedAt: lastPlayedAtByCourse?.[course.id] ?? lastPlayedAtByCourse?.[course.name],
+              });
+              return (
+                <Pressable
+                  key={course.id}
+                  onPress={() => void pickCourse(course)}
+                  style={styles.row}>
+                  <Text style={styles.rowTitle}>{card.name}</Text>
+                  <View style={styles.chips}>
+                    {card.distance ? <Text style={styles.chip}>{card.distance}</Text> : null}
+                    {card.lastPlayed ? <Text style={styles.chip}>{card.lastPlayed}</Text> : null}
+                  </View>
+                  <Text style={styles.meta}>{placeLine(course)}</Text>
+                </Pressable>
+              );
+            })
+          : null}
         {teeBusy ? <Text style={styles.meta}>Loading tees…</Text> : null}
         {selected && tees && tees.length === 0 ? (
           <Text style={styles.meta}>No tees listed for this course.</Text>

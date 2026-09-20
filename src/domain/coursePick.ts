@@ -195,6 +195,15 @@ export function courseSearchClearsOnFind(): true {
   return true;
 }
 
+/** Nearby/search cards hide after a real course pick so tees sit in-fold. */
+export function courseListHidesAfterSelect(): true {
+  return true;
+}
+
+export function showNearbyCourseList(selected?: { id?: string | null } | null): boolean {
+  return !selected?.id?.trim();
+}
+
 export function courseSearchUsesMarkGates(): false {
   return false;
 }
