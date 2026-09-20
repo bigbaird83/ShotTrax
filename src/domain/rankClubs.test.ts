@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { DEFAULT_BAG } from './defaultBag';
+import { DEFAULT_BAG, PUTTER_CLUB_ID } from './defaultBag';
+import { clubStripOpeningIds, planClubStrip } from './clubStrip';
 import { haversineYards, roundYards } from './haversine';
 import type { Club } from './types';
 import {
   addShotAfterMarksSuggestsFromLastLanding,
   addShotEmptyHoleSuggestsFromTee,
+  addShotSuggestIncludesPutter,
+  addShotSuggestPutterHasCarry,
   addShotSuggestRanksShotYards,
   addShotSuggestSource,
   addShotSuggestUsesPlayWheelTarget,
@@ -400,6 +403,8 @@ test('Add shot suggested clubs use the same remaining-yards D as the play wheel'
   assert.equal(addShotSuggestRanksShotYards(), false);
   assert.equal(addShotEmptyHoleSuggestsFromTee(), true);
   assert.equal(addShotAfterMarksSuggestsFromLastLanding(), true);
+  assert.equal(addShotSuggestIncludesPutter(), false);
+  assert.equal(addShotSuggestPutterHasCarry(), false);
   assert.equal(addShotSuggestSource(null), 'tee');
   assert.equal(addShotSuggestSource(undefined), 'tee');
 
@@ -466,6 +471,37 @@ test('Add shot suggested clubs use the same remaining-yards D as the play wheel'
     rankTopClubs(bag, afterAdd).map((c) => c.id),
     rankCatchUpClubs(bag, 200).map((c) => c.id),
   );
+  const withPutter = [
+    ...bag,
+    club({
+      id: PUTTER_CLUB_ID,
+      name: 'Putter',
+      shortName: 'Pt',
+      loftRank: 16,
+      avgYards: 8,
+      count: 20,
+      typicalCarryYards: 8,
+    }),
+  ];
+  const emptyIds = rankTopClubs(withPutter, emptyAdd).map((c) => c.id);
+  const afterIds = rankTopClubs(withPutter, afterAdd).map((c) => c.id);
+  assert.equal(emptyIds.length, 3);
+  assert.equal(afterIds.length, 3);
+  assert.ok(!emptyIds.includes(PUTTER_CLUB_ID));
+  assert.ok(!afterIds.includes(PUTTER_CLUB_ID));
+  const strip = planClubStrip({
+    clubs: [
+      { id: 'club_driver', carry: 230 },
+      { id: 'club_5i', carry: 170 },
+      { id: 'club_7i', carry: 150 },
+      { id: PUTTER_CLUB_ID, carry: 8 },
+    ],
+    yardsLeft: addShotSuggestYardsLeft({ playTarget: afterAdd, courseYards: 371 }),
+  });
+  assert.equal(strip.ids[strip.ids.length - 1], PUTTER_CLUB_ID);
+  assert.equal(strip.carries[PUTTER_CLUB_ID], undefined);
+  assert.ok(!clubStripOpeningIds(strip.ids, strip.windowStart).includes(PUTTER_CLUB_ID));
+  assert.notEqual(strip.pickId, PUTTER_CLUB_ID);
 
   const noInvent = resolveAddShotSuggestTarget({
     lastLanding: null,
@@ -489,6 +525,7 @@ test('Add shot suggested clubs use the same remaining-yards D as the play wheel'
   assert.doesNotMatch(placeStrip, /yardsLeft: placedYards/);
   assert.match(placeStrip, /editClubOpen/);
   assert.doesNotMatch(placeStrip, /phone|fix\?\.lat|house/);
+  assert.match(hole, /const placeStripItems[\s\S]*?filter\(\(id\) => !isPutterClubId/);
 });
 
 test('next suggested ranks from the new landing, not the card tee number', () => {

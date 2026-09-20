@@ -207,7 +207,7 @@ Use **Add shot** when you went back to a hole (or forgot a swing) and want to lo
 
 **Insert / append:** **+** between logged shots and after the last uses this same flow. Sequence numbers stay correct. Neighbors keep their pins.
 
-**Distance averages / top-3:** included because you confirmed both spots. After the two pins, the club picker is the **same top 3 as the play wheel** (tee-to-pin when the hole is empty; last-landing / from-pin remaining yards after marks — same seed → ≥5 live rule) plus **All clubs**. **Putter** stays out. Never ranks against that shot’s placed haversine. Live play is unchanged: club tap marks start; next mark or green closes it.
+**Distance averages / top-3:** included because you confirmed both spots. After the two pins, the club picker is the **same top 3 as the play wheel** (tee-to-pin when the hole is empty; last-landing / from-pin remaining yards after marks — same seed → ≥5 live rule) plus **All clubs**. **Putter** stays out of the suggested 3 (end of strip, null carry — never ranked). Never ranks against that shot’s placed haversine. Live play is unchanged: club tap marks start; next mark or green closes it.
 
 **Edit:** tap a shot (list or map pin). **Move from** / **Move to** stores `placed` with new haversine yards (400-yard confirm still asks). **Change club** keeps coordinates and moves averages to the new club. **Undo edit** restores the last edit. Never invents GPS.
 

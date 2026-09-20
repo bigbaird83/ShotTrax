@@ -55,6 +55,15 @@ export function addShotAfterMarksSuggestsFromLastLanding(): true {
   return true;
 }
 
+/** Same as the play wheel: putter sits at the end of the strip with null carry and is never in the suggested 3. */
+export function addShotSuggestIncludesPutter(): false {
+  return false;
+}
+
+export function addShotSuggestPutterHasCarry(): false {
+  return false;
+}
+
 /**
  * Add-shot suggested clubs: same remaining-yards D as the play club wheel.
  * Empty hole / tee: course pin from the tee (card / tee-to-pin). After marks:
