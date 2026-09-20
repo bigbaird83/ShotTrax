@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { DEFAULT_BAG, PUTTER_CLUB_ID } from './defaultBag';
-import { clubStripOpeningIds, planClubStrip } from './clubStrip';
+import { addShotSheetOpeningClubIds, clubStripOpeningIds, planClubStrip } from './clubStrip';
 import { haversineYards, roundYards } from './haversine';
 import type { Club } from './types';
 import {
@@ -537,6 +537,8 @@ test('Add shot suggested clubs use the same remaining-yards D as the play wheel'
   assert.doesNotMatch(placeStrip, /yardsLeft: pickerYards;/);
   assert.doesNotMatch(placeStrip, /yardsLeft: placedYards/);
   assert.match(hole, /windowStart=\{placeStripPlan\.windowStart\}/);
+  assert.match(hole, /addShotSheetOpeningClubIds/);
+  assert.match(hole, /items=\{placeOpeningItems/);
   assert.equal(addShotSheetUsesHeaderYards(), true);
   assert.equal(addShotSheetRankYards({ headerYards: 281, remainingPin: 371 }), 281);
   assert.equal(addShotSheetRankYards({ headerYards: 281, remainingPin: null }), 281);
@@ -811,4 +813,36 @@ test('TF 53: top-3 is closest carry to remaining pin yards — not shortest or l
     'club_gw',
     'club_48',
   ]);
+  assert.deepEqual(
+    addShotSheetOpeningClubIds({
+      clubs: [
+        { id: 'club_sw', carry: 101 },
+        { id: 'club_gw', carry: 120 },
+        { id: 'club_48', carry: 136 },
+        { id: 'club_7i', carry: 150 },
+        { id: 'club_2i', carry: 239 },
+        { id: 'club_3w', carry: 254 },
+        { id: 'club_driver', carry: 280 },
+      ],
+      headerYards: 281,
+      remainingPin: 40,
+    }),
+    ['club_2i', 'club_3w', 'club_driver'],
+  );
+  assert.notDeepEqual(
+    addShotSheetOpeningClubIds({
+      clubs: [
+        { id: 'club_sw', carry: 101 },
+        { id: 'club_gw', carry: 120 },
+        { id: 'club_48', carry: 136 },
+        { id: 'club_2i', carry: 239 },
+        { id: 'club_3w', carry: 254 },
+        { id: 'club_driver', carry: 280 },
+      ],
+      headerYards: 281,
+    }),
+    ['club_sw', 'club_gw', 'club_48'],
+  );
+  assert.match(hole, /addShotSheetOpeningClubIds/);
+  assert.match(hole, /placeOpeningItems/);
 });

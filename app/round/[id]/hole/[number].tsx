@@ -76,7 +76,7 @@ import { planInsertSlots } from '@/src/domain/insertShot';
 import { confirmUndoIsLive, planConfirmUndo, type ConfirmUndoWindow } from '@/src/domain/confirmUndo';
 import { confirmPlaceToDraft, courseGreenCenterForLine, resolveAddShotFromPin } from '@/src/domain/placeToDrag';
 import { applyWheelSelection, resolveWheelHighlightId } from '@/src/domain/clubSelect';
-import { formatClubStripLabel, PHONE_WHEEL_PILL_HEIGHT, PHONE_WHEEL_STRIP_HEIGHT, planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
+import { addShotSheetOpeningClubIds, formatClubStripLabel, PHONE_WHEEL_PILL_HEIGHT, PHONE_WHEEL_STRIP_HEIGHT, planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
 import {
   PLAY_CONTROL_MIN_TAP,
   PLAY_DOCK_ACTION_MIN_HEIGHT,
@@ -516,6 +516,18 @@ export default function HoleScreen() {
       const club = clubs.find((row) => row.id === id);
       return { id, label: formatClubStripLabel({ id, shortName: club?.shortName ?? id, carry: placeStripPlan.carries[id] }) };
     });
+  const placeOpeningIds = addShotSheetOpeningClubIds({
+    clubs: placeStripItems
+      .filter((item) => placeStripPlan.carries[item.id] != null)
+      .map((item) => ({ id: item.id, carry: placeStripPlan.carries[item.id] })),
+    headerYards: pickerYards,
+    remainingPin: editClubOpen
+      ? null
+      : addShotSuggestYardsLeft({ playTarget: addShotSuggestTarget, courseYards: toGreen.yards }),
+  });
+  const placeOpeningItems = placeOpeningIds
+    .map((id) => placeStripItems.find((item) => item.id === id))
+    .filter((item): item is (typeof placeStripItems)[number] => item != null);
   if (holeTee) {
     rememberResolvedTee({ courseId: round?.courseApiId, holeNumber, green }, holeTee);
   }
@@ -1759,9 +1771,9 @@ export default function HoleScreen() {
           <Text style={styles.muted}>
             {pickerYards != null ? `${pickerYards} yd` : COPY.placeToHint}
           </Text>
-          {placeStripItems.length > 0 ? (
+          {placeOpeningItems.length > 0 || placeStripItems.length > 0 ? (
             <ClubStrip
-              items={placeStripItems}
+              items={placeOpeningItems.length > 0 ? placeOpeningItems : placeStripItems}
               pickId={placeStripPlan.pickId}
               windowStart={placeStripPlan.windowStart}
               onPick={(id) => {

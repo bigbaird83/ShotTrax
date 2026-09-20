@@ -1,7 +1,7 @@
 import { fillEstimatedCarries, type CarryClub } from './carryFill';
 import { isPutterClubId, stockAvgCarryForSuggestion, typicalCarrySeedForClub } from './defaultBag';
 import { formatSuggestedClubChip } from './playerCopy';
-import { MIN_CLOSED_SHOTS_FOR_RANK, rankClosestCarryIds } from './rankClubs';
+import { addShotSheetRankYards, MIN_CLOSED_SHOTS_FOR_RANK, rankClosestCarryIds } from './rankClubs';
 
 /** Build 31 club-pill height. Dock actions stay this tall. */
 export const BUILD_31_CLUB_PILL_HEIGHT = 52;
@@ -377,9 +377,9 @@ export function resolveWheelCarries(clubs: ClubStripClub[]): Record<string, numb
 }
 
 /**
- * After fill and a carry sort, the opening three are the closest carries to
- * the hole — never a name/iron/hybrid sort, never a dash, never dropping a
- * numbered club (Dr · 280 on a 282-yard hole).
+ * Shared opening three for the play wheel AND the Add-shot sheet.
+ * After fill and a carry sort, lowest |carry − D| — never shortest-3,
+ * never longest-3, never a name/iron/hybrid sort. Putter out.
  */
 export function clubStripThreeClosestIds(
   ordered: { id: string; carry: number }[],
@@ -396,6 +396,26 @@ export function clubStripThreeClosestIds(
     const cb = usable.find((club) => club.id === b)?.carry ?? 0;
     return ca - cb;
   });
+}
+
+/**
+ * Add-shot sheet pills: same `clubStripThreeClosestIds` ranker as the play
+ * wheel. D is the header yards (281 yd · Pick a club). Do not feed the
+ * full short→long bag and hope the wheel scrolls — Modal scrollTo misses
+ * leave the shortest wedges on screen.
+ */
+export function addShotSheetOpeningClubIds(args: {
+  clubs: { id: string; carry: number }[];
+  headerYards: number | null | undefined;
+  remainingPin?: number | null;
+}): string[] {
+  return clubStripThreeClosestIds(
+    args.clubs,
+    addShotSheetRankYards({
+      headerYards: args.headerYards,
+      remainingPin: args.remainingPin,
+    }),
+  );
 }
 
 /** End of bag / after wedges — matches DEFAULT_BAG sortOrder. Never invents a putter carry. */
