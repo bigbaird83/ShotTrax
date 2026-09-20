@@ -78,7 +78,7 @@ export type Hole = {
   teeLng: number | null;
   /** 0–5. Stats / scoring only — never a map mark or club-distance sample. */
   putts: number;
-  /** One length bucket per putt, same order. Stats only — no green GPS. */
+  /** One length bucket per putt, same order. Empty string = no length yet. Stats only — no green GPS. */
   puttLengths: string[];
   /** True only after Made it. Walking off the green never sets this. */
   puttsDone: boolean;

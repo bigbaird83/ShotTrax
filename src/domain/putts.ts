@@ -1,6 +1,7 @@
 /** Hole-finish putts. Stats only — never a map mark, seed, club-distance sample, or GPS invent. */
 
 import { isPutterClubId } from './defaultBag';
+import { COPY } from './playerCopy';
 
 export const PUTT_MAX = 5;
 
@@ -49,6 +50,43 @@ export function parsePuttLengths(raw: string | null | undefined): PuttLengthId[]
 
 export function serializePuttLengths(ids: PuttLengthId[]): string {
   return ids.filter(isPuttLengthId).slice(0, PUTT_MAX).join(',');
+}
+
+/** One slot per logged putt. Null = no length yet. Stats only. */
+export type PuttLengthSlot = PuttLengthId | null;
+
+export function planPuttLengthSlots(
+  putts: number,
+  lengths: readonly (string | null | undefined)[],
+): PuttLengthSlot[] {
+  const n = clampPutts(putts);
+  return Array.from({ length: n }, (_, i) => {
+    const raw = lengths[i];
+    return raw && isPuttLengthId(raw) ? raw : null;
+  });
+}
+
+/** Preserves empty slots so a later attach can land on a specific putt. */
+export function parsePuttLengthSlots(
+  raw: string | null | undefined,
+  putts: number,
+): PuttLengthSlot[] {
+  const n = clampPutts(putts);
+  if (n === 0) return [];
+  const parts = raw == null ? [] : raw.split(',');
+  return Array.from({ length: n }, (_, i) => {
+    const part = (parts[i] ?? '').trim();
+    return isPuttLengthId(part) ? part : null;
+  });
+}
+
+export function serializePuttLengthSlots(slots: PuttLengthSlot[]): string {
+  let end = slots.length;
+  while (end > 0 && slots[end - 1] == null) end -= 1;
+  return slots
+    .slice(0, end)
+    .map((id) => (id && isPuttLengthId(id) ? id : ''))
+    .join(',');
 }
 
 export function setPuttCount(current: PuttDraft, next: number): PuttDraft {
@@ -169,6 +207,122 @@ export function puttSheetNoLengthCueInventGps(): false {
 /** A logged putt count without a matching bucket — stats gap only, never GPS. */
 export function puttLoggedWithoutLength(draft: PuttDraft): boolean {
   return clampPutts(draft.putts) > draft.lengths.filter(isPuttLengthId).length;
+}
+
+export type FinishedPuttRow = {
+  index: number;
+  n: number;
+  lengthId: PuttLengthId | null;
+  label: string;
+  missingLength: boolean;
+};
+
+/**
+ * One row per logged putt after Made it. Shown when a bucket is missing
+ * so the player can attach length later. Never reopens the hole.
+ */
+export function planFinishedPuttRows(args: {
+  puttsDone?: boolean;
+  putts: number;
+  lengths?: readonly (string | null | undefined)[];
+}): FinishedPuttRow[] {
+  if (!args.puttsDone) return [];
+  const slots = planPuttLengthSlots(args.putts, args.lengths ?? []);
+  return slots.map((lengthId, index) => ({
+    index,
+    n: index + 1,
+    lengthId,
+    label: lengthId
+      ? (PUTT_LENGTHS.find((row) => row.id === lengthId)?.label ?? lengthId)
+      : COPY.noLength,
+    missingLength: lengthId == null,
+  }));
+}
+
+/** Rows only when a finished hole still has a putt without a bucket. */
+export function planFinishedPuttAttachRows(args: {
+  puttsDone?: boolean;
+  putts: number;
+  lengths?: readonly (string | null | undefined)[];
+}): FinishedPuttRow[] {
+  const rows = planFinishedPuttRows(args);
+  return rows.some((row) => row.missingLength) ? rows : [];
+}
+
+export type AttachPuttLengthPlan =
+  | { ok: false }
+  | {
+      ok: true;
+      putts: number;
+      lengths: PuttLengthId[];
+      slots: PuttLengthSlot[];
+      puttsDone: true;
+      reopen: false;
+      writeScore: false;
+    };
+
+/**
+ * After-the-fact bucket on a finished putt. Stats only — does not reopen,
+ * change the putt count, rewrite score, or invent GPS / yards.
+ */
+export function planAttachPuttLength(
+  args: {
+    puttsDone?: boolean;
+    putts: number;
+    lengths?: readonly (string | null | undefined)[];
+  },
+  index: number,
+  id: PuttLengthId,
+): AttachPuttLengthPlan {
+  if (!args.puttsDone) return { ok: false };
+  if (!isPuttLengthId(id)) return { ok: false };
+  const putts = clampPutts(args.putts);
+  const slots = planPuttLengthSlots(putts, args.lengths ?? []);
+  if (!Number.isInteger(index) || index < 0 || index >= slots.length) return { ok: false };
+  if (slots[index] != null) return { ok: false };
+  const next = slots.slice();
+  next[index] = id;
+  return {
+    ok: true,
+    putts,
+    lengths: next.filter((slot): slot is PuttLengthId => slot != null),
+    slots: next,
+    puttsDone: true,
+    reopen: false,
+    writeScore: false,
+  };
+}
+
+export function canAttachPuttLength(
+  args: {
+    puttsDone?: boolean;
+    putts: number;
+    lengths?: readonly (string | null | undefined)[];
+  },
+  index: number,
+  id: PuttLengthId,
+): boolean {
+  return planAttachPuttLength(args, index, id).ok;
+}
+
+export function attachPuttLengthReopensHole(): false {
+  return false;
+}
+
+export function attachPuttLengthWritesScore(): false {
+  return false;
+}
+
+export function attachPuttLengthInventGps(): false {
+  return false;
+}
+
+export function attachPuttLengthInventYards(): false {
+  return false;
+}
+
+export function attachPuttLengthIsStatsOnly(): true {
+  return true;
 }
 
 /**

@@ -35,10 +35,12 @@ import { planFinishHoleScore } from '../domain/holeScore';
 import { clampPenaltyStrokes, scoreAfterPenalty, totalPenaltyStrokes } from '../domain/penalty';
 import {
   clampPutts,
+  planAttachPuttLength,
   planFinishHoleOut,
   planFlagLastRealShot,
   planMadeIt,
-  parsePuttLengths,
+  parsePuttLengthSlots,
+  serializePuttLengthSlots,
   serializePuttLengths,
   type PuttLengthId,
 } from '../domain/putts';
@@ -218,7 +220,9 @@ function mapHole(row: HoleRow): Hole {
     teeLat: row.tee_lat ?? null,
     teeLng: row.tee_lng ?? null,
     putts: clampPutts(row.putts ?? 0),
-    puttLengths: parsePuttLengths(row.putt_lengths),
+    puttLengths: parsePuttLengthSlots(row.putt_lengths, clampPutts(row.putts ?? 0)).map(
+      (id) => id ?? '',
+    ),
     puttsDone: (row.putts_done ?? 0) === 1,
   };
 }
@@ -712,6 +716,36 @@ export function sealOpenShotWithoutGps(db: SQLiteDatabase, shotId: string): void
     new Date().toISOString(),
     shotId,
   ]);
+}
+
+/**
+ * After-the-fact putt length on a finished hole. Writes putt_lengths only.
+ * Does not reopen, change putt count, rewrite score, or invent GPS / yards.
+ */
+export function attachHolePuttLength(
+  db: SQLiteDatabase,
+  holeId: string,
+  index: number,
+  id: PuttLengthId,
+): boolean {
+  const row = db.getFirstSync<HoleRow>('SELECT * FROM holes WHERE id = ?', [holeId]);
+  if (!row) return false;
+  const putts = clampPutts(row.putts ?? 0);
+  const planned = planAttachPuttLength(
+    {
+      puttsDone: (row.putts_done ?? 0) === 1,
+      putts,
+      lengths: parsePuttLengthSlots(row.putt_lengths, putts),
+    },
+    index,
+    id,
+  );
+  if (!planned.ok) return false;
+  db.runSync('UPDATE holes SET putt_lengths = ? WHERE id = ?', [
+    serializePuttLengthSlots(planned.slots),
+    holeId,
+  ]);
+  return true;
 }
 
 /** Green pin from current GPS, a map long-press, or a course centroid. Never invented. */
