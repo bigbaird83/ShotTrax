@@ -25,6 +25,7 @@ function shot(partial: Partial<Shot> & { id: string; seq: number }): Shot {
     endedAt: null,
     source: 'gps',
     suggested: false,
+    holeOut: false,
     ...partial,
   };
 }

@@ -43,6 +43,20 @@ export function QualityBadge({
   return null;
 }
 
+export function HoleOutBadge({
+  label,
+  testID = 'hole-out-badge',
+}: {
+  label?: string;
+  testID?: string;
+}) {
+  return (
+    <View style={[styles.badge, styles.holeOut]} testID={testID}>
+      <Text style={styles.holeOutText}>{label ?? COPY.holeOut}</Text>
+    </View>
+  );
+}
+
 export function AverageBadges({
   includesSoft,
   includesForced,
@@ -73,4 +87,11 @@ const styles = StyleSheet.create({
   manual: { backgroundColor: '#3A4A5C' },
   placed: { backgroundColor: '#1C3A24' },
   soft: { backgroundColor: '#5A4A22' },
+  holeOut: { backgroundColor: colors.accentWash },
+  holeOutText: {
+    color: colors.lime,
+    fontSize: type.tiny,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
 });

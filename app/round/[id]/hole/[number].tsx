@@ -91,6 +91,7 @@ import {
   emptyPuttDraft,
   holeAfterDone,
   holesNeedingPutts,
+  isHoleOutShot,
   isPuttLengthId,
   madeItAdvancesHole,
   planMadeIt,
@@ -115,7 +116,7 @@ import { useLiveFix } from '@/src/services/useLiveFix';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
 import { pushWatchPuttSheet } from '@/src/services/watchClub';
 import { MADE_IT_FEEDBACK, PHONE_UNAVAILABLE } from '@/src/domain/watchMessages';
-import { QualityBadge } from '@/src/ui/Badge';
+import { HoleOutBadge, QualityBadge } from '@/src/ui/Badge';
 import { BigButton } from '@/src/ui/BigButton';
 import { ClubButton } from '@/src/ui/ClubButton';
 import { ClubStrip } from '@/src/ui/ClubStrip';
@@ -559,7 +560,6 @@ export default function HoleScreen() {
   ]);
   const addShotFrom = resolveAddShotFromPin({
     tee: holeTee,
-    lastLanding: lastLandingMark(shots),
   });
   addShotFromRef.current = addShotFrom;
   const courseGreen = courseGreenCenterForLine({
@@ -1260,6 +1260,11 @@ export default function HoleScreen() {
                             style={styles.shotLineShot}>
                             <Text style={styles.shotLineText}>
                               {shot.seq} {club?.shortName ?? 'Club'} · {label}
+                              {isHoleOutShot(shot) ? (
+                                <Text testID="hole-out-shot-badge" style={styles.shotLineHoleOut}>
+                                  {` · ${COPY.holeOut}`}
+                                </Text>
+                              ) : null}
                             </Text>
                           </Pressable>
                           {!readOnly && slot && playLayout.insertPlus === 'header' ? (
@@ -1811,6 +1816,7 @@ export default function HoleScreen() {
                       </Text>
                       {!readOnly ? <Text style={styles.meta}>{COPY.changeClub}</Text> : null}
                     </View>
+                    {isHoleOutShot(shot) ? <HoleOutBadge testID="hole-out-score-badge" /> : null}
                     <QualityBadge quality={shot.fixQuality} open={openShot && !noGps} source={shot.source} />
                   </Pressable>
                   {!readOnly && slot ? (
@@ -2050,6 +2056,7 @@ function makeStyles(colors: ColorPalette) {
     justifyContent: 'center',
   },
   shotLineText: { color: colors.cream, fontSize: type.tiny, fontWeight: '800' },
+  shotLineHoleOut: { color: colors.lime, fontSize: type.tiny, fontWeight: '900' },
   shotLineMuted: { color: colors.muted, fontSize: type.tiny, fontWeight: '700' },
   shotLinePlus: {
     minHeight: 32,

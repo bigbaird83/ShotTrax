@@ -9,6 +9,8 @@ import {
   finishPuttsChipLabel,
   holeAfterDone,
   holeOutClosesOnLastMark,
+  holeOutFlagsLastRealShot,
+  holeOutInsertsShot,
   holeOutInventPutts,
   holeOutKeepsTappedClub,
   holeOutSetsGirFromOffGreen,
@@ -27,7 +29,11 @@ import {
   shouldAutoOpenClubPick,
   showPuttPills,
 } from './putts';
-import { watchHoleOutClosesOnLastMark, watchHoleOutInventPutts } from './watchClubPick';
+import {
+  watchHoleOutClosesOnLastMark,
+  watchHoleOutFlagsLastRealShot,
+  watchHoleOutInventPutts,
+} from './watchClubPick';
 import { rankTopClubs } from './rankClubs';
 import {
   AUTO_PUTTS_FROM_GPS,
@@ -87,11 +93,14 @@ test('Signal Lab: no auto-putts from GPS or leaving the green', () => {
 
 test('Signal Lab: Hole Out closes on the last real mark — no invented putt GPS', () => {
   assert.equal(holeOutClosesOnLastMark(), true);
+  assert.equal(holeOutFlagsLastRealShot(), true);
+  assert.equal(holeOutInsertsShot(), false);
   assert.equal(holeOutInventPutts(), false);
   assert.equal(holeOutKeepsTappedClub(), true);
   assert.equal(holeOutSetsGirFromOffGreen(), false);
   assert.equal(onGreenPuttsAreScoreOnly(), true);
   assert.equal(watchHoleOutClosesOnLastMark(), true);
+  assert.equal(watchHoleOutFlagsLastRealShot(), true);
   assert.equal(watchHoleOutInventPutts(), false);
   const offGreen = planFinishHoleOut();
   assert.equal(offGreen.putts, 0);
@@ -103,7 +112,9 @@ test('Signal Lab: Hole Out closes on the last real mark — no invented putt GPS
   const finishOut = repo.slice(repo.indexOf('export function finishHoleOut'), repo.indexOf('export function sealOpenShotWithoutGps'));
   assert.match(finishOut, /planFinishHoleOut/);
   assert.match(finishOut, /updateHolePutts/);
-  assert.doesNotMatch(finishOut, /insertShot|lat|lng|accuracy|acceptFix|addPlacedShot|club_putter/);
+  assert.match(finishOut, /planFlagLastRealShot/);
+  assert.match(finishOut, /hole_out/);
+  assert.doesNotMatch(finishOut, /INSERT INTO shots|insertShot|lat|lng|accuracy|acceptFix|addPlacedShot|club_putter/);
   const finishPutts = repo.slice(repo.indexOf('export function finishHolePutts'), repo.indexOf('export function finishHoleOut'));
   assert.match(finishPutts, /planMadeIt/);
   assert.doesNotMatch(finishPutts, /lat|lng|acceptFix|insertShot/);

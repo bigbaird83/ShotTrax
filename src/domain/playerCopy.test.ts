@@ -4,6 +4,7 @@ import {
   COPY,
   finishPuttsChip,
   finishShotChip,
+  holeOutClosedOnShot,
   formatHoleHeader,
   formatPlayHeader,
   formatPlayHeaderPrimary,
@@ -117,6 +118,7 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.noShots, 'No shots yet. Pick a club after you hit.');
   assert.equal(finishPuttsChip(4), 'Finish putts · Hole 4');
   assert.equal(finishShotChip(2), 'Finish shot · Hole 2');
+  assert.equal(holeOutClosedOnShot(3), 'Hole Out · shot 3');
   assert.equal(markedSuggestedMessage('7i'), 'Marked 7i (suggested) · Change club.');
 });
 

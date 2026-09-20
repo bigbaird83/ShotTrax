@@ -219,7 +219,23 @@ export function addShotShowsMapsCompass(): false {
   return false;
 }
 
-/** First shot starts at the course tee. Later shots start at the last landing. Never the phone. */
+/** Every Add shot starts at the course tee — never last landing, phone, or selected club. */
+export function addShotAlwaysFirstShotStyle(): true {
+  return true;
+}
+
+export function addShotChainsFromLastMark(): false {
+  return false;
+}
+
+export function addShotFromUsesLastLanding(): false {
+  return false;
+}
+
+export function addShotClubSelectChainsPins(): false {
+  return false;
+}
+
 export function addShotFromUsesPhone(): false {
   return false;
 }
@@ -251,11 +267,13 @@ export function courseGreenCenterForLine(args: {
 
 export function resolveAddShotFromPin(args: {
   tee: LatLng | null;
-  lastLanding: LatLng | null;
+  lastLanding?: LatLng | null;
   phone?: LatLng | null;
+  selectedClubId?: string | null;
 }): LatLng | null {
+  void args.lastLanding;
   void args.phone;
-  if (isValidLatLng(args.lastLanding)) return args.lastLanding;
+  void args.selectedClubId;
   if (isValidLatLng(args.tee)) return args.tee;
   return null;
 }

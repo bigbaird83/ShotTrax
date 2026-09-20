@@ -137,6 +137,59 @@ export function planFinishHoleOut(): { ok: true; putts: 0; lengths: []; gir: fal
   return { ok: true, putts: 0, lengths: [], gir: false };
 }
 
+/** Persist hole-out on the last real shot row. Never insert a phantom putt. */
+export function holeOutFlagsLastRealShot(): true {
+  return true;
+}
+
+export function holeOutInsertsShot(): false {
+  return false;
+}
+
+export function holeOutInventPuttGps(): false {
+  return false;
+}
+
+export function holeOutInventPuttYards(): false {
+  return false;
+}
+
+export function lastRealShotId<T extends { id: string; seq: number }>(shots: T[]): string | null {
+  if (shots.length === 0) return null;
+  return [...shots].sort((a, b) => b.seq - a.seq)[0]!.id;
+}
+
+export function planFlagLastRealShot<T extends { id: string; seq: number }>(
+  shots: T[],
+): {
+  insertShot: false;
+  inventGps: false;
+  inventPuttYards: false;
+  shotId: string | null;
+} {
+  return {
+    insertShot: false,
+    inventGps: false,
+    inventPuttYards: false,
+    shotId: lastRealShotId(shots),
+  };
+}
+
+export function isHoleOutShot(shot: { holeOut?: boolean | null }): boolean {
+  return shot.holeOut === true;
+}
+
+export function holeOutBadgeLabel(): 'Hole Out' {
+  return 'Hole Out';
+}
+
+export function holeClosedByShot<T extends { seq: number; holeOut?: boolean | null }>(
+  shots: T[],
+): { seq: number } | null {
+  const closer = [...shots].filter((shot) => shot.holeOut).sort((a, b) => b.seq - a.seq)[0];
+  return closer ? { seq: closer.seq } : null;
+}
+
 export type PlayDockFinishKind = 'hole_out' | 'hidden';
 
 /**

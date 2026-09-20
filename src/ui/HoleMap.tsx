@@ -31,7 +31,7 @@ import {
   holeMapShowsCover,
   holeNativeCameraIsPaintable,
 } from '@/src/domain/mapPaint';
-import { planDragShotLines } from '@/src/domain/placeToDrag';
+import { holeMapKeepsScrollZoomOnceMounted, planDragShotLines } from '@/src/domain/placeToDrag';
 import { COPY, showWaitingOnLocationLine } from '@/src/domain/playerCopy';
 import { isValidLatLng } from '@/src/domain/latLng';
 import { hasClosedGpsTrail, hasGpsStart } from '@/src/domain/shotSource';
@@ -199,7 +199,7 @@ function NativeHoleMap({
   const panStart = useRef<{ x: number; y: number } | null>(null);
   const toPinLive = Boolean(freezePan || onPlaceToDrag);
   const [mapOwnsGesture, setMapOwnsGesture] = useState(false);
-  const framedForGestures = !lockFrame || holeCameraReady;
+  const framedForGestures = holeMapKeepsScrollZoomOnceMounted();
 
   const yieldToMapGesture = () => {
     dragLayerRef.current?.setNativeProps({ pointerEvents: 'none' });
@@ -491,7 +491,7 @@ function NativeHoleMap({
       collapsable={false}
       style={[fullBleed ? styles.bleed : styles.wrap, style]}
       onLayout={onMapLayout}
-      pointerEvents={lockFrame && !holeCameraReady ? 'none' : 'box-none'}
+      pointerEvents="box-none"
       onStartShouldSetResponderCapture={(event) => {
         if (event.nativeEvent.touches.length >= 2) yieldToMapGesture();
         return false;
@@ -753,7 +753,7 @@ function NativeHoleMap({
             }
             panStart.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY };
             movedRef.current = false;
-            return true;
+            return false;
           }}
           onMoveShouldSetResponder={(event) => {
             if (event.nativeEvent.touches.length !== 1) {
