@@ -290,7 +290,7 @@ test('puttSheet is buckets plus Made it — never GPS and never invented putts',
   const parsed = parsePuttSheet(JSON.parse(JSON.stringify(msg)));
   assert.deepEqual(parsed, msg);
   assert.equal(parsePuttSheet({ type: 'puttSheet', open: true, holeNumber: 0, lengths: [] }), null);
-  assert.equal(puttSheetPayload({ open: false, holeNumber: 4, lengths: [] }).canMake, false);
+  assert.equal(puttSheetPayload({ open: false, holeNumber: 4, lengths: [] }).canMake, true);
 });
 
 test('puttPick add needs a bucket; Made it finishes; undo drops the last', () => {

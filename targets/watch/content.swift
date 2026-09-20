@@ -197,6 +197,12 @@ struct ContentView: View {
       .disabled(session.sending)
     }
 
+    if session.putt.pending == nil && session.putt.lengths.count < 5 {
+      Text("No length — pick a distance")
+        .font(.caption.weight(.bold))
+        .foregroundStyle(Color("cream"))
+    }
+
     Button(action: { session.madeIt() }) {
       Text("Made it")
         .font(.headline.weight(.black))

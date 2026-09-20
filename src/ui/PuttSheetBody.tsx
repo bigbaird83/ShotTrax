@@ -4,8 +4,8 @@ import { COPY, formatPuttN } from '../domain/playerCopy';
 import {
   PUTT_LENGTHS,
   canCommitPutt,
-  canMakePutt,
   commitPuttLength,
+  showPuttNoLengthCue,
   nextPuttNumber,
   pickPuttLength,
   type PuttDraft,
@@ -28,7 +28,7 @@ export function PuttSheetBody({
   disabled?: boolean;
   onAdd: (id: PuttLengthId) => void;
   onUndo: () => void;
-  onMadeIt: () => void;
+  onMadeIt: (pending?: PuttLengthId | null) => void;
 }) {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -37,8 +37,11 @@ export function PuttSheetBody({
   const nextN = nextPuttNumber(draft);
   const canPick = nextN != null && !disabled;
   const canAdd = canCommitPutt(pick) && !disabled;
-  const canMake = canMakePutt(draft) && !disabled;
-  const pendingLabel = pending ? PUTT_LENGTHS.find((row) => row.id === pending)?.label ?? pending : COPY.puttSheetHint;
+  const canMake = !disabled;
+  const showNoLength = showPuttNoLengthCue(pick);
+  const pendingLabel = pending
+    ? PUTT_LENGTHS.find((row) => row.id === pending)?.label ?? pending
+    : COPY.noLength;
 
   return (
     <View style={styles.wrap} testID="putt-sheet">
@@ -87,7 +90,12 @@ export function PuttSheetBody({
       {draft.lengths.length > 0 ? (
         <BigButton label={COPY.undoPutt} variant="ghost" disabled={disabled} onPress={onUndo} />
       ) : null}
-      <BigButton label={COPY.madeIt} disabled={!canMake} onPress={onMadeIt} />
+      {showNoLength ? (
+        <Text testID="putt-no-length-cue" style={styles.muted}>
+          {COPY.noLengthCue}
+        </Text>
+      ) : null}
+      <BigButton label={COPY.madeIt} disabled={!canMake} onPress={() => onMadeIt(pending)} />
       <Text style={styles.meta}>Hole {holeNumber}</Text>
     </View>
   );

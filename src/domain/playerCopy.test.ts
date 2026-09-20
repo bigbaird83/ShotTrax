@@ -81,7 +81,9 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.holeDone, 'Hole Out');
   assert.equal(COPY.finishHole, 'Hole Out');
   assert.equal(COPY.puttSheetLede, 'How long was the putt?');
-  assert.equal(COPY.puttSheetHint, 'Pick a length, then Add putt.');
+  assert.equal(COPY.puttSheetHint, 'Pick a length, then Made it — or Add putt if you miss.');
+  assert.equal(COPY.noLength, 'No length');
+  assert.equal(COPY.noLengthCue, 'No length — pick a distance');
   assert.equal(COPY.addPutt, 'Add a putt');
   assert.equal(formatPuttN(2), 'Putt 2');
   assert.equal(COPY.menu, 'Menu');

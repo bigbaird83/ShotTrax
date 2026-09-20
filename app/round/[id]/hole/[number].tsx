@@ -615,8 +615,8 @@ export default function HoleScreen() {
   }, []);
 
   const applyMadeIt = useCallback(
-    (targetHole: number, draft: PuttDraft) => {
-      const planned = planMadeIt(draft);
+    (targetHole: number, draft: PuttDraft, pending: PuttLengthId | null = null) => {
+      const planned = planMadeIt(draft, pending);
       if (readOnly || !planned.ok || !round) return false;
       saveDraft(targetHole, planned, true);
       setPuttOpen(false);
@@ -674,8 +674,9 @@ export default function HoleScreen() {
       }
       if (msg.action === 'made') {
         const draft = puttDraftRef.current;
-        if (planMadeIt(draft).ok) {
-          const ok = applyMadeIt(target, draft);
+        const pending = msg.lengthId ?? null;
+        if (puttOpenRef.current || pending || draft.lengths.length > 0 || draft.putts > 0) {
+          const ok = applyMadeIt(target, draft, pending);
           return ok ? { ok: true, feedback: MADE_IT_FEEDBACK } : { ok: false, feedback: COPY.puttSheetLede };
         }
         const row = getHole(db, id, target);
@@ -909,9 +910,9 @@ export default function HoleScreen() {
     hapticTap();
   };
 
-  const onMadeIt = () => {
+  const onMadeIt = (pending: PuttLengthId | null = null) => {
     if (readOnly) return;
-    applyMadeIt(puttSheetHole, puttDraft);
+    applyMadeIt(puttSheetHole, puttDraft, pending);
   };
 
   const onFinishHole = () => {
@@ -1477,7 +1478,7 @@ export default function HoleScreen() {
                   accessibilityLabel={COPY.holeOut}
                   disabled={readOnly || placing || busy}
                   onPress={
-                    dockFinish.showPutts && puttDraft.lengths.length > 0 ? onMadeIt : onFinishHole
+                    dockFinish.showPutts && puttDraft.lengths.length > 0 ? () => onMadeIt() : onFinishHole
                   }
                   style={[styles.dockAction, styles.dockFinishHole]}>
                   <Text style={styles.dockActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>

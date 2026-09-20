@@ -196,6 +196,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     guard putt.canAdd else { return }
     var next = putt
     next.pending = lengthId
+    next.canMake = true
     putt = next
   }
 
@@ -206,9 +207,9 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     if putt.lengths.count < 5 {
       var next = putt
       next.lengths.append(lengthId)
-      next.canMake = true
       next.canAdd = next.lengths.count < 5
       next.pending = nil
+      next.canMake = true
       putt = next
     }
     sendPick([
@@ -232,11 +233,15 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   func madeIt() {
     sending = true
     feedback = ""
-    sendPick([
+    var payload: [String: Any] = [
       "type": "puttPick",
       "action": "made",
       "at": isoNow(),
-    ])
+    ]
+    if let pending = putt.pending {
+      payload["lengthId"] = pending
+    }
+    sendPick(payload)
   }
 
   /// Stretch: attach Watch GPS only when the sample is fresh and accurate. Never invent.
@@ -486,6 +491,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     if next.canAdd, next.lengths == priorLengths {
       next.pending = priorPending
     }
+    next.canMake = true
     putt = next
   }
 
