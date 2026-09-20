@@ -381,7 +381,7 @@ test('play header is one line; shot list is one overlay row with + and In play o
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const play = hole.slice(0, hole.indexOf('<FullSheet'));
   assert.match(play, /formatPlayHeader\(hole\.number, hole\.par, playHeaderYards\.yards\)/);
-  assert.match(play, /yardsToGreen: playHeaderYards\.yards/);
+  assert.match(play, /yardsToGreen: liveToGreen\.yards/);
   assert.match(hole, /planPlayHeaderYards\(\{[\s\S]*?shots,/);
   assert.match(play, /numberOfLines=\{1\}/);
   assert.doesNotMatch(play, /formatSiLabel|SI unknown/);

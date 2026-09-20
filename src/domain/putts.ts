@@ -149,11 +149,9 @@ export type PlayDockFinishKind = 'hole_out' | 'hidden';
 export function showPuttPills(args: {
   putting?: boolean;
   toGreen?: { yards: number | null; quality: string };
-  onGreen?: boolean;
 }): boolean {
   if (args.putting) return true;
   if (args.toGreen) return isNearOrOnGreen(args.toGreen);
-  if (args.onGreen) return true;
   return false;
 }
 
@@ -186,7 +184,6 @@ export function planPlayDockFinish(args: {
   placing?: boolean;
   puttsDone?: boolean;
   putting?: boolean;
-  onGreen?: boolean;
   toGreen?: { yards: number | null; quality: string };
   shotCount?: number;
 }): { kind: PlayDockFinishKind; showPutts: boolean; showHoleOut: boolean } {
@@ -196,7 +193,6 @@ export function planPlayDockFinish(args: {
   const showPutts = showPuttPills({
     putting: args.putting,
     toGreen: args.toGreen,
-    onGreen: args.onGreen,
   });
   void args.shotCount;
   return { kind: 'hole_out', showPutts, showHoleOut: true };

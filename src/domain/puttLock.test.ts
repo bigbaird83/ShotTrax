@@ -13,11 +13,19 @@ import {
   holeOutKeepsTappedClub,
   holeOutSetsGirFromOffGreen,
   isNearOrOnGreen,
+  NEAR_GREEN_YD,
   onGreenPuttsAreScoreOnly,
   planFinishHoleOut,
   planMadeIt,
+  planPlayDockFinish,
+  puttPillsInventGreenEdge,
+  puttPillsProximityQualities,
+  puttPillsProximityUsesHardOrForced,
+  puttPillsUseHydratedGreenCentroid,
+  puttPillsUseYardsToGreen,
   puttsFromWalkOff,
   shouldAutoOpenClubPick,
+  showPuttPills,
 } from './putts';
 import { watchHoleOutClosesOnLastMark, watchHoleOutInventPutts } from './watchClubPick';
 import { rankTopClubs } from './rankClubs';
@@ -28,6 +36,41 @@ import {
   PUTT_ASSIST,
   WATCH_ASSIST,
 } from '../sensing/assists';
+
+test('Signal Lab: putt pills are putter or ≤40 yd haversine to green centroid, good/soft only', () => {
+  assert.equal(NEAR_GREEN_YD, 40);
+  assert.equal(puttPillsUseYardsToGreen(), true);
+  assert.equal(puttPillsUseHydratedGreenCentroid(), true);
+  assert.equal(puttPillsInventGreenEdge(), false);
+  assert.deepEqual([...puttPillsProximityQualities()], ['good', 'soft']);
+  assert.equal(puttPillsProximityUsesHardOrForced(), false);
+  assert.equal(showPuttPills({ putting: true }), true);
+  assert.equal(showPuttPills({ toGreen: { yards: 40, quality: 'good' } }), true);
+  assert.equal(showPuttPills({ toGreen: { yards: 40, quality: 'soft' } }), true);
+  assert.equal(showPuttPills({ toGreen: { yards: 41, quality: 'good' } }), false);
+  assert.equal(showPuttPills({ toGreen: { yards: 12, quality: 'forced' } }), false);
+  assert.equal(showPuttPills({ toGreen: { yards: 12, quality: 'hard' } }), false);
+  assert.equal(showPuttPills({ putting: true, toGreen: { yards: 12, quality: 'forced' } }), true);
+  const far = planPlayDockFinish({ toGreen: { yards: 160, quality: 'good' } });
+  assert.equal(far.showHoleOut, true);
+  assert.equal(far.showPutts, false);
+  const near = planPlayDockFinish({ toGreen: { yards: 36, quality: 'soft' } });
+  assert.equal(near.showHoleOut, true);
+  assert.equal(near.showPutts, true);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  assert.match(hole, /const liveToGreen = yardsToGreen\(fix, green\)/);
+  const dock = hole.slice(hole.indexOf('const dockFinish'), hole.indexOf('const showFirstLaunchTip'));
+  assert.match(dock, /toGreen: liveToGreen/);
+  assert.doesNotMatch(dock, /playHeaderYards|polygon|greenEdge/);
+  const watchPush = hole.slice(hole.indexOf('useWatchClubList'), hole.indexOf('if (!round || !hole)'));
+  assert.match(watchPush, /yardsToGreen: liveToGreen\.yards/);
+  assert.match(watchPush, /yardsQuality: liveToGreen\.quality/);
+
+  const sensing = readFileSync(new URL('../sensing/yardsToGreen.ts', import.meta.url), 'utf8');
+  assert.match(sensing, /haversineYards\(fix, greenCentroid\)/);
+  assert.match(sensing, /classifyAccuracyM/);
+});
 
 test('Signal Lab: no auto-putts from GPS or leaving the green', () => {
   assert.equal(AUTO_PUTTS_FROM_GPS, false);

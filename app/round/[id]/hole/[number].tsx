@@ -107,6 +107,7 @@ import { reconcileHoleScore, scoreMismatchMessage } from '@/src/domain/scoreReco
 import { resolveStickyClub, selectClubForMark } from '@/src/domain/stickyClub';
 import type { Club, PenaltyReason } from '@/src/domain/types';
 import { lastLandingMark, markToGreen, planPlayHeaderYards, toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
+import { yardsToGreen } from '@/src/sensing/yardsToGreen';
 import { describeGpsSource } from '@/src/services/location';
 import { shareRoundSnapshot } from '@/src/services/shareRound';
 import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, undoShotEdit, deleteHoleShot } from '@/src/services/shotActions';
@@ -572,6 +573,8 @@ export default function HoleScreen() {
     courseYards: hole?.yards ?? null,
     shots,
   });
+  /** Signal gate: haversine(fix → hydrated green centroid). Never a card number or green-edge. */
+  const liveToGreen = yardsToGreen(fix, green);
 
   const openPuttSheet = useCallback(
     async (targetHole: number) => {
@@ -734,8 +737,8 @@ export default function HoleScreen() {
         shortName: formatSuggestedClubChip(club.shortName, stripPlan.carries[club.id] ?? null),
       })),
       holeNumber,
-      yardsToGreen: playHeaderYards.yards,
-      yardsQuality: playHeaderYards.quality,
+      yardsToGreen: liveToGreen.yards,
+      yardsQuality: liveToGreen.quality,
       lastClubId: sticky?.id ?? null,
       selectedClubId: wheelSelectedId,
     },
@@ -1072,10 +1075,7 @@ export default function HoleScreen() {
     placing,
     puttsDone: hole.puttsDone,
     putting: putterOpensPuttSheet({ clubId: wheelSelectedId }),
-    toGreen: {
-      yards: playHeaderYards.yards,
-      quality: playHeaderYards.quality,
-    },
+    toGreen: liveToGreen,
   });
   const showFirstLaunchTip =
     !readOnly &&
