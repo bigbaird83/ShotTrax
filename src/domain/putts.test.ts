@@ -42,6 +42,7 @@ import {
   planFinishedPuttAttachRows,
   planFinishedPuttRows,
   planMadeIt,
+  planPersistMadeIt,
   planPuttLengthSlots,
   planPlayDockFinish,
   playDockHoleOutLabel,
@@ -54,6 +55,10 @@ import {
   PUTT_LENGTHS,
   PUTT_MAX,
   playDockKeepsHoleOutForOffGreen,
+  watchClubPickHoleOutIsChipInOnly,
+  watchPuttSheetAddPuttIsMissOnly,
+  watchPuttSheetMadeItAlwaysEnabled,
+  watchPuttSheetMadeItRequiresLength,
   putterOpensPuttSheet,
   puttLoggedWithoutLength,
   puttSheetCtaLabel,
@@ -169,6 +174,44 @@ test('Signal: pick a length does not commit; Add putt commits a miss; Made it on
   assert.deepEqual(two.draft.lengths, ['over_20', 'inside_3']);
 });
 
+test('Made it on putt N with empty length closes N putts; putt N attaches later', () => {
+  const miss = commitPuttLength(pickPuttLength(emptyPuttSheetPick(), 'over_20'));
+  assert.deepEqual(miss.draft, { putts: 1, lengths: ['over_20'] });
+  assert.equal(miss.pending, null);
+  const madeTwo = planMadeIt(miss.draft, null);
+  assert.equal(madeTwo.ok, true);
+  assert.equal(madeTwo.putts, 2);
+  assert.deepEqual(madeTwo.lengths, ['over_20']);
+  assert.deepEqual(planPuttLengthSlots(madeTwo.putts, madeTwo.lengths), ['over_20', null]);
+
+  const miss2 = commitPuttLength(pickPuttLength(miss, '3_to_10'));
+  assert.deepEqual(miss2.draft, { putts: 2, lengths: ['over_20', '3_to_10'] });
+  const madeThree = planMadeIt(miss2.draft, null);
+  assert.equal(madeThree.putts, 3);
+  assert.deepEqual(madeThree.lengths, ['over_20', '3_to_10']);
+  assert.deepEqual(planPuttLengthSlots(madeThree.putts, madeThree.lengths), [
+    'over_20',
+    '3_to_10',
+    null,
+  ]);
+
+  const emptyOne = planMadeIt(emptyPuttDraft(), null);
+  assert.equal(emptyOne.putts, 1);
+  assert.deepEqual(emptyOne.lengths, []);
+  assert.deepEqual(planPuttLengthSlots(emptyOne.putts, emptyOne.lengths), [null]);
+
+  const withPending = planMadeIt({ putts: 1, lengths: ['over_20'] }, 'inside_3');
+  assert.equal(withPending.putts, 2);
+  assert.deepEqual(withPending.lengths, ['over_20', 'inside_3']);
+
+  const persistOne = planPersistMadeIt({ putts: 1, lengths: ['over_20'] });
+  assert.equal(persistOne.putts, 1);
+  assert.deepEqual(persistOne.lengths, ['over_20']);
+  const persistTwo = planPersistMadeIt(madeTwo);
+  assert.equal(persistTwo.putts, 2);
+  assert.deepEqual(persistTwo.lengths, ['over_20']);
+});
+
 test('Made it stays enabled with empty length; pending still commits a bucket', () => {
   assert.equal(madeItEnabledWithEmptyLength(), true);
   assert.equal(madeItRequiresLengthPick(), false);
@@ -188,7 +231,7 @@ test('Made it stays enabled with empty length; pending still commits a bucket', 
   const planned = planMadeIt({ putts: 99, lengths: ['3_to_10'] });
   assert.equal(planned.ok, true);
   if (planned.ok) {
-    assert.equal(planned.putts, 1);
+    assert.equal(planned.putts, 5);
     assert.deepEqual(planned.lengths, ['3_to_10']);
   }
   const holing = planMadeIt({ putts: 1, lengths: ['over_20'] }, 'inside_3');
@@ -339,6 +382,16 @@ test('Finish hole / putts live on the play dock — not buried in Scorecard', ()
   assert.match(watch, /Text\("Hole Out"\)/);
   assert.match(watch, /session\.madeIt\(\)/);
   assert.match(watch, /showPuttChips|puttSheet/);
+  assert.match(watch, /private var puttMadeIt/);
+  const watchSheet = watch.slice(watch.indexOf('private var puttSheet'), watch.indexOf('private var clubPick'));
+  assert.match(watchSheet, /Text\("Made it"\)/);
+  assert.match(watchSheet, /\.disabled\(session\.sending\)/);
+  assert.doesNotMatch(watchSheet, /!session\.putt\.canMake/);
+  assert.doesNotMatch(watchSheet, /Text\("Hole Out"\)/);
+  assert.equal(watchPuttSheetMadeItAlwaysEnabled(), true);
+  assert.equal(watchPuttSheetMadeItRequiresLength(), false);
+  assert.equal(watchPuttSheetAddPuttIsMissOnly(), true);
+  assert.equal(watchClubPickHoleOutIsChipInOnly(), true);
   assert.doesNotMatch(watch, /Scorecard/);
 });
 

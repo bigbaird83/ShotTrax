@@ -64,7 +64,7 @@ struct PuttSheetState {
     "over_20": "20+",
   ]
   var canAdd: Bool = true
-  var canMake: Bool = false
+  var canMake: Bool = true
   var pending: String? = nil
 
   func label(for lengthId: String) -> String {
@@ -341,7 +341,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     if ok, (reply["feedback"] as? String)?.contains("Hole Out") == true {
       putt.open = false
       putt.lengths = []
-      putt.canMake = false
+      putt.canMake = true
       putt.canAdd = true
       putt.pending = nil
     }
@@ -487,11 +487,10 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       next.labels = labels
     }
     next.canAdd = message["canAdd"] as? Bool ?? (next.lengths.count < 5)
-    next.canMake = message["canMake"] as? Bool ?? (next.lengths.count > 0)
+    next.canMake = true
     if next.canAdd, next.lengths == priorLengths {
       next.pending = priorPending
     }
-    next.canMake = true
     putt = next
   }
 

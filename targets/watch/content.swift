@@ -49,12 +49,16 @@ struct ContentView: View {
           .padding(.horizontal, 4)
         }
       } else if session.putt.open {
-        ScrollView {
-          VStack(alignment: .leading, spacing: 8) {
-            statusHeader
-            puttSheet
+        VStack(alignment: .leading, spacing: 8) {
+          ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+              statusHeader
+              puttSheet
+            }
+            .padding(.horizontal, 4)
           }
-          .padding(.horizontal, 4)
+          puttMadeIt
+            .padding(.horizontal, 4)
         }
       } else {
         clubPick
@@ -202,7 +206,10 @@ struct ContentView: View {
         .font(.caption.weight(.bold))
         .foregroundStyle(Color("cream"))
     }
+  }
 
+  @ViewBuilder
+  private var puttMadeIt: some View {
     Button(action: { session.madeIt() }) {
       Text("Made it")
         .font(.headline.weight(.black))
@@ -211,7 +218,7 @@ struct ContentView: View {
     .buttonStyle(.borderedProminent)
     .tint(Color("accent"))
     .foregroundStyle(Color.black)
-    .disabled(session.sending || !session.putt.canMake)
+    .disabled(session.sending)
   }
 
   @ViewBuilder

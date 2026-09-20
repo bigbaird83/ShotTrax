@@ -38,7 +38,7 @@ import {
   planAttachPuttLength,
   planFinishHoleOut,
   planFlagLastRealShot,
-  planMadeIt,
+  planPersistMadeIt,
   parsePuttLengthSlots,
   serializePuttLengthSlots,
   serializePuttLengths,
@@ -688,7 +688,9 @@ export function finishHolePutts(
   putts: number,
   lengths: PuttLengthId[],
 ): void {
-  const planned = planMadeIt({ putts, lengths });
+  // applyMadeIt already closed via planMadeIt. Persist that count — a second
+  // sheet close would turn a one-putt with a bucket into two putts.
+  const planned = planPersistMadeIt({ putts, lengths });
   if (!planned.ok) return;
   updateHolePutts(db, holeId, planned.putts, planned.lengths, true);
   persistCloseHoleScore(db, holeId, planned.putts);
