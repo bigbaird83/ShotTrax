@@ -50,7 +50,7 @@ struct ContentView: View {
           .padding(.horizontal, 4)
         }
       } else if session.putt.open {
-        // Compact title only — statusHeader feedback was clipping Made it on small faces.
+        // Compact title only — header feedback was clipping Made it on small faces.
         VStack(alignment: .leading, spacing: 4) {
           Text("Hole \(session.putt.holeNumber) · Putts")
             .font(.system(size: 12, weight: .heavy))
