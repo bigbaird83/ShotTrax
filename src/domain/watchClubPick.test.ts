@@ -248,12 +248,14 @@ test('Watch suggested strip shows carry, opens on the pick, and is not stacked r
     },
     holeYards: 190,
   });
-  assert.deepEqual(strip.ids, ['club_pw', 'club_7i', 'club_6i', 'club_5i', 'club_driver']);
+  assert.deepEqual(strip.ids, ['club_pw', 'club_7i', 'club_6i', 'club_5i', 'club_driver', PUTTER_CLUB_ID]);
   assert.ok(strip.ids.length > 3);
   assert.equal(strip.openIndex, 2);
   assert.equal(strip.ids[strip.openIndex], 'club_6i');
   assert.equal(strip.ids[strip.openIndex - 1], 'club_7i');
   assert.equal(strip.ids[strip.openIndex + 1], 'club_5i');
+  assert.ok(strip.ids.includes(PUTTER_CLUB_ID));
+  assert.equal(strip.ids[strip.ids.length - 1], PUTTER_CLUB_ID);
   const tee282 = planWatchClubStrip({
     bag: ['club_driver', 'club_3w', 'club_2i', 'club_pw', 'club_gw', PUTTER_CLUB_ID],
     labels: {
@@ -292,19 +294,20 @@ test('Watch suggested strip shows carry, opens on the pick, and is not stacked r
 
   assert.ok((watchCarryFromLabel('5i · 205') ?? 0) > (watchCarryFromLabel('6i · 185') ?? 0));
   assert.ok((watchCarryFromLabel('7i · 165') ?? 0) < (watchCarryFromLabel('6i · 185') ?? 0));
-  assert.deepEqual(
-    planWatchClubStrip({
-      bag: [PUTTER_CLUB_ID, 'club_6i', 'club_5i', 'club_7i'],
-      labels: {
-        club_putter: 'Pt · 8',
-        club_5i: '5i · 205',
-        club_6i: '6i · 185',
-        club_7i: '7i · 165',
-      },
-      holeYards: 190,
-    }).ids.includes(PUTTER_CLUB_ID),
-    false,
-  );
+  const withPutter = planWatchClubStrip({
+    bag: [PUTTER_CLUB_ID, 'club_6i', 'club_5i', 'club_7i'],
+    labels: {
+      club_putter: 'Pt · 8',
+      club_5i: '5i · 205',
+      club_6i: '6i · 185',
+      club_7i: '7i · 165',
+    },
+    holeYards: 190,
+  });
+  assert.ok(withPutter.ids.includes(PUTTER_CLUB_ID));
+  assert.equal(withPutter.ids[withPutter.ids.length - 1], PUTTER_CLUB_ID);
+  assert.ok(!clubStripOpeningIds(withPutter.ids, withPutter.windowStart).includes(PUTTER_CLUB_ID));
+  assert.equal(withPutter.pickId, 'club_6i');
 
   const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
   const pickUi = watchUi.slice(watchUi.indexOf('private var clubPick'), watchUi.indexOf('private var moreClubs'));
@@ -330,6 +333,14 @@ test('Watch suggested strip shows carry, opens on the pick, and is not stacked r
   assert.match(watchUi, /sorted \{ \$0\.carry < \$1\.carry \}/);
   assert.match(watchUi, /session\.list\.yardsToGreen/);
   assert.match(watchUi, /session\.list\.bag/);
+  const stripClubs = watchUi.slice(watchUi.indexOf('private var stripClubs'), watchUi.indexOf('private var wheelClubs'));
+  assert.match(stripClubs, /"club_putter"/);
+  assert.match(stripClubs, /rows\.append\(\(id: "club_putter"/);
+  const pickIdFn = watchUi.slice(watchUi.indexOf('private var stripPickId'), watchUi.indexOf('private var stripSelectedId'));
+  assert.match(pickIdFn, /\$0\.id != "club_putter"/);
+  const windowFn = watchUi.slice(watchUi.indexOf('private var stripWindowStart'), watchUi.indexOf('private var stripWindowToken'));
+  assert.match(windowFn, /\$0\.id != "club_putter"/);
+  assert.match(windowFn, /selectedClubId/);
 
   const phoneHole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   assert.match(phoneHole, /<ClubStrip/);
@@ -511,9 +522,13 @@ test('P0: bag with Driver null + remaining ~330 keeps Driver in Watch top-3; nev
   assert.equal(watchClubListKeepsFullBag(), true);
   assert.equal(STOCK_AVG_CARRY.club_driver, 230);
   assert.equal(resolveWatchBagCarry({ id: 'club_driver', label: 'Dr · —' }), 230);
+  assert.equal(resolveWatchBagCarry({ id: PUTTER_CLUB_ID, label: 'Pt · 8' }), null);
   assert.equal(watchBagLabelForPush({ id: 'club_driver', shortName: 'Dr · —' }), 'Dr · 230');
   assert.notEqual(watchBagLabelForPush({ id: 'club_driver', shortName: 'Dr · —' }), 'Dr · —');
   assert.equal(watchBagLabelForPush({ id: 'club_3w', shortName: '3W · 254' }), '3W · 254');
+  assert.equal(watchBagLabelForPush({ id: PUTTER_CLUB_ID, shortName: 'Pt · —' }), 'Pt');
+  assert.equal(watchBagLabelForPush({ id: PUTTER_CLUB_ID, shortName: 'Putter' }), 'Putter');
+  assert.notEqual(watchBagLabelForPush({ id: PUTTER_CLUB_ID, shortName: 'Pt' }), 'Pt · —');
 
   const bagIds = [
     'club_driver',
@@ -539,7 +554,9 @@ test('P0: bag with Driver null + remaining ~330 keeps Driver in Watch top-3; nev
   assert.ok(strip.ids.includes('club_driver'));
   assert.ok(strip.ids.includes('club_7i'));
   assert.ok(strip.ids.includes('club_pw'));
-  assert.ok(!strip.ids.includes(PUTTER_CLUB_ID));
+  assert.ok(strip.ids.includes(PUTTER_CLUB_ID));
+  assert.equal(strip.ids[strip.ids.length - 1], PUTTER_CLUB_ID);
+  assert.ok(!clubStripOpeningIds(strip.ids, strip.windowStart).includes(PUTTER_CLUB_ID));
   assert.notEqual(strip.ids, ['club_2i', 'club_3w']);
   const opening = clubStripOpeningIds(strip.ids, strip.windowStart);
   assert.ok(opening.includes('club_driver'));
@@ -573,6 +590,8 @@ test('P0: bag with Driver null + remaining ~330 keeps Driver in Watch top-3; nev
   assert.ok(wheel.carries.club_driver > 0);
   assert.equal(formatSuggestedClubChip('Dr', wheel.carries.club_driver), 'Dr · 230');
   assert.ok(clubStripOpeningIds(wheel.ids, wheel.windowStart).includes('club_driver'));
+  assert.ok(wheel.ids.includes(PUTTER_CLUB_ID));
+  assert.equal(wheel.carries[PUTTER_CLUB_ID], undefined);
 
   const bagRows = [
     { id: 'club_driver', shortName: 'Dr · —' },
@@ -606,6 +625,7 @@ test('P0: bag with Driver null + remaining ~330 keeps Driver in Watch top-3; nev
   assert.equal(payload.labels.club_driver, 'Dr · 230');
   assert.notEqual(payload.labels.club_driver, 'Dr · —');
   assert.equal(payload.labels.club_3w, '3W · 254');
+  assert.equal(payload.labels.club_putter, 'Pt');
   assert.ok(payload.bag.includes('club_7i'));
   assert.ok(payload.bag.includes('club_pw'));
 
@@ -663,6 +683,15 @@ test('P0: phone selected=Driver at 330 stays on Watch strip highlighted, not onl
   const outsideOpen = clubStripOpeningIds(outside.ids, outside.windowStart);
   assert.ok(outsideOpen.includes('club_pw'));
   assert.ok(outsideOpen.includes('club_7i'));
+
+  const putterSelected = planWatchClubStrip({
+    bag: bagIds,
+    labels: { ...labels, club_putter: 'Pt' },
+    holeYards: 330,
+    selectedClubId: PUTTER_CLUB_ID,
+  });
+  assert.ok(putterSelected.ids.includes(PUTTER_CLUB_ID));
+  assert.ok(clubStripOpeningIds(putterSelected.ids, putterSelected.windowStart).includes(PUTTER_CLUB_ID));
 
   const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
   const windowFn = watchUi.slice(watchUi.indexOf('private var stripWindowStart'), watchUi.indexOf('private var stripWindowToken'));

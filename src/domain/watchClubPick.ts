@@ -8,11 +8,12 @@ import {
   clubStripSortedByName,
   clubStripThreeClosestIds,
   clubStripWraps,
+  formatClubStripLabel,
   planClubStrip,
   wrapClubStripIndex,
 } from './clubStrip';
 import { isPutterClubId, stockAvgCarryForSuggestion } from './defaultBag';
-import { COPY, formatSuggestedClubChip } from './playerCopy';
+import { COPY } from './playerCopy';
 import { showPuttPills } from './putts';
 
 /** Watch club pick opens on the same top-3 the phone ranked. */
@@ -273,6 +274,7 @@ export function resolveWatchBagCarry(args: {
   label?: string;
   wheelCarry?: number | null;
 }): number | null {
+  if (isPutterClubId(args.id)) return null;
   if (clubHasWheelCarry(args.wheelCarry)) return args.wheelCarry as number;
   const fromLabel = args.label ? watchCarryFromLabel(args.label) : null;
   if (fromLabel != null) return fromLabel;
@@ -285,10 +287,11 @@ export function watchBagLabelForPush(args: {
   wheelCarry?: number | null;
 }): string {
   const name = args.shortName.split(' · ')[0]?.trim() || args.shortName;
-  return formatSuggestedClubChip(
-    name,
-    resolveWatchBagCarry({ id: args.id, label: args.shortName, wheelCarry: args.wheelCarry }),
-  );
+  return formatClubStripLabel({
+    id: args.id,
+    shortName: name,
+    carry: resolveWatchBagCarry({ id: args.id, label: args.shortName, wheelCarry: args.wheelCarry }),
+  });
 }
 
 /** Top-3 short · mid · long by |carry − yardsLeft| from the full bag. */
@@ -313,8 +316,9 @@ export function wrapWatchClubStripIndex(index: number, count: number): number {
 /**
  * Sideways strip of the bag, sorted by carry (short left, long right) —
  * never by club name, never capped at three. Opens on the three-club
- * window around the closest carry — no wrap to fill a side. Putter never
- * enters. Swipe / scroll does not mark.
+ * window around the closest carry — no wrap to fill a side. Putter sits
+ * at the end of the bag (scroll to reach it); never in top-3 suggestions
+ * and never with an invented carry. Swipe / scroll does not mark.
  */
 export function planWatchClubStrip(args: {
   top3?: string[];

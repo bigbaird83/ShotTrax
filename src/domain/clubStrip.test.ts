@@ -52,6 +52,7 @@ import {
   clubStripWindowStartForSelection,
   clubStripKeepsSelectedVisible,
   openingClubStripWindow,
+  formatClubStripLabel,
   CLUB_STRIP_GAP,
   CLUB_STRIP_SEAM_GAP,
   CLUB_STRIP_VISIBLE_PILLS,
@@ -65,7 +66,7 @@ import {
 } from './clubStrip';
 import { planClubTapStart } from './homeClubTap';
 
-test('strip is carry-sorted, full bag, putter off, center is closest to yards left', () => {
+test('strip is carry-sorted, full bag, putter on, center is closest to yards left', () => {
   assert.equal(clubStripSortedByCarry(), true);
   assert.equal(clubStripSortedByName(), false);
   assert.equal(clubStripSortedByIronNumber(), false);
@@ -81,7 +82,7 @@ test('strip is carry-sorted, full bag, putter off, center is closest to yards le
   assert.equal(clubStripSwipeMarksShot(), false);
   assert.equal(clubStripScrollMarksShot(), false);
   assert.equal(clubStripOnlyTapMarks(), true);
-  assert.equal(clubStripPutterIncluded(), false);
+  assert.equal(clubStripPutterIncluded(), true);
   assert.equal(clubStripCenterIsClosestCarry(), true);
   assert.equal(clubStripCentersClosestWhenNeighborsExist(), true);
   assert.equal(clubStripNeverCentersClosest(), false);
@@ -120,13 +121,18 @@ test('strip is carry-sorted, full bag, putter off, center is closest to yards le
     ],
     yardsLeft: 190,
   });
-  assert.deepEqual(strip.ids, ['club_pw', 'club_7i', 'club_6i', 'club_5i', 'club_driver']);
+  assert.deepEqual(strip.ids, ['club_pw', 'club_7i', 'club_6i', 'club_5i', 'club_driver', PUTTER_CLUB_ID]);
   assert.ok(strip.ids.length > 3);
   assert.equal(strip.pickId, 'club_6i');
   assert.equal(strip.openIndex, 2);
   assert.equal(strip.ids[strip.openIndex - 1], 'club_7i');
   assert.equal(strip.ids[strip.openIndex + 1], 'club_5i');
-  assert.ok(!strip.ids.includes(PUTTER_CLUB_ID));
+  assert.ok(strip.ids.includes(PUTTER_CLUB_ID));
+  assert.equal(strip.ids[strip.ids.length - 1], PUTTER_CLUB_ID);
+  assert.equal(strip.carries[PUTTER_CLUB_ID], undefined);
+  assert.equal(formatClubStripLabel({ id: PUTTER_CLUB_ID, shortName: 'Pt', carry: 8 }), 'Pt');
+  assert.notEqual(formatClubStripLabel({ id: PUTTER_CLUB_ID, shortName: 'Pt' }), 'Pt · 8');
+  assert.notEqual(formatClubStripLabel({ id: PUTTER_CLUB_ID, shortName: 'Pt' }), 'Pt · —');
 
   const afterShot = planClubStrip({
     clubs: [
@@ -152,7 +158,7 @@ test('after a shot lands the middle pill is closest to yards left, and the strip
   assert.equal(clubStripCappedAtThree(), false);
   assert.equal(clubStripUsesFullBag(), true);
   assert.equal(clubStripUsesRankedTop3(), false);
-  assert.equal(clubStripPutterIncluded(), false);
+  assert.equal(clubStripPutterIncluded(), true);
   assert.equal(clubStripSwipeMarksShot(), false);
   assert.equal(clubStripOnlyTapMarks(), true);
 
@@ -169,12 +175,13 @@ test('after a shot lands the middle pill is closest to yards left, and the strip
     yardsLeft: 140,
   });
   assert.ok(afterShot.ids.length > 3);
-  assert.deepEqual(afterShot.ids, ['club_pw', 'club_8i', 'club_6i', 'club_5i', 'club_3w', 'club_driver']);
+  assert.deepEqual(afterShot.ids, ['club_pw', 'club_8i', 'club_6i', 'club_5i', 'club_3w', 'club_driver', PUTTER_CLUB_ID]);
   assert.equal(afterShot.pickId, 'club_8i');
   assert.notEqual(afterShot.pickId, 'club_driver');
   assert.equal(afterShot.ids[afterShot.openIndex - 1], 'club_pw');
   assert.equal(afterShot.ids[afterShot.openIndex + 1], 'club_6i');
-  assert.ok(!afterShot.ids.includes(PUTTER_CLUB_ID));
+  assert.ok(afterShot.ids.includes(PUTTER_CLUB_ID));
+  assert.equal(afterShot.ids[afterShot.ids.length - 1], PUTTER_CLUB_ID);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const plan = hole.slice(hole.indexOf('const stripPlan'), hole.indexOf('const stripItems'));
@@ -182,6 +189,10 @@ test('after a shot lands the middle pill is closest to yards left, and the strip
   assert.match(plan, /toWheelFillClub/);
   assert.match(plan, /target\?\.dYards/);
   assert.doesNotMatch(plan, /rankTopClubs|ranked\.slice|slice\(0,\s*3\)/);
+  const items = hole.slice(hole.indexOf('const stripItems'), hole.indexOf('const wheelSelectedId'));
+  assert.match(items, /formatClubStripLabel/);
+  assert.match(items, /stripPlan\.ids\.map/);
+  assert.doesNotMatch(items, /filter\(\(id\) => !isPutterClubId/);
   assert.match(hole, /COPY\.allClubs/);
   assert.match(hole, /openBag/);
 
@@ -196,6 +207,7 @@ test('after a shot lands the middle pill is closest to yards left, and the strip
   assert.match(stripClubs, /sorted \{ \$0\.carry < \$1\.carry \}/);
   assert.match(stripClubs, /compactMap/);
   assert.match(stripClubs, /wheelClubs/);
+  assert.match(stripClubs, /"club_putter"/);
   assert.doesNotMatch(stripClubs, /top3|localeCompare|name/);
   assert.doesNotMatch(stripClubs, /10_000/);
   assert.match(watch, /session\.list\.yardsToGreen/);
@@ -367,7 +379,9 @@ test('wheel order is carry not iron number; dash clubs are out with no empty slo
   assert.ok(withDash.ids.includes('club_4i'));
   assert.ok(withDash.ids.includes('club_7i'));
   assert.ok(!withDash.ids.includes('club_custom'));
-  assert.ok(!withDash.ids.includes(PUTTER_CLUB_ID));
+  assert.ok(withDash.ids.includes(PUTTER_CLUB_ID));
+  assert.equal(withDash.ids[withDash.ids.length - 1], PUTTER_CLUB_ID);
+  assert.equal(withDash.carries[PUTTER_CLUB_ID], undefined);
   assert.equal(withDash.pickId, 'club_driver');
   assert.notEqual(withDash.pickId, 'club_3w');
   assert.equal(carryFromClubLabel('3W · —'), null);
@@ -423,7 +437,7 @@ test('scrolling past the longest wraps to the shortest', () => {
   assert.match(watch, /padding\(\.trailing, club\.seamAfter/);
 });
 
-test('fill estimated carries before sort; whole-bag STOCK scale enters the wheel, putter stays out', () => {
+test('fill estimated carries before sort; whole-bag STOCK scale enters the wheel, putter on with no invented carry', () => {
   assert.equal(clubStripFillsBeforeSort(), true);
   assert.equal(clubStripEstimatedEntersWheel(), true);
   assert.equal(clubStripSortsByIronHybridName(), false);
@@ -454,9 +468,10 @@ test('fill estimated carries before sort; whole-bag STOCK scale enters the wheel
   assert.ok(filled.carries['club_4i'] != null && filled.carries['club_4i'] > 0);
   assert.equal(filled.carries['club_7i'], 150);
   assert.ok(filled.carries['club_48'] != null && filled.carries['club_48'] > 0);
-  assert.ok(!filled.ids.includes(PUTTER_CLUB_ID));
+  assert.ok(filled.ids.includes(PUTTER_CLUB_ID));
+  assert.equal(filled.ids[filled.ids.length - 1], PUTTER_CLUB_ID);
   assert.equal(filled.carries[PUTTER_CLUB_ID], undefined);
-  assert.deepEqual(filled.ids, ['club_48', 'club_pw', 'club_7i', 'club_4i', 'club_3w', 'club_driver']);
+  assert.deepEqual(filled.ids, ['club_48', 'club_pw', 'club_7i', 'club_4i', 'club_3w', 'club_driver', PUTTER_CLUB_ID]);
   assert.notDeepEqual(filled.ids, ['club_3w', 'club_4i', 'club_7i', 'club_pw', 'club_driver']);
   assert.ok(filled.ids.indexOf('club_7i') < filled.ids.indexOf('club_4i'));
 
@@ -487,7 +502,9 @@ test('330-yard hole: Driver with null typed carry still enters the strip top-3',
   assert.equal(tee.carries.club_driver, 230);
   assert.deepEqual(clubStripOpeningIds(tee.ids, tee.windowStart), ['club_driver', 'club_2i', 'club_3w']);
   assert.notEqual(formatSuggestedClubChip('Dr', tee.carries.club_driver), 'Dr · —');
-  assert.ok(!tee.ids.includes(PUTTER_CLUB_ID));
+  assert.ok(tee.ids.includes(PUTTER_CLUB_ID));
+  assert.ok(!clubStripOpeningIds(tee.ids, tee.windowStart).includes(PUTTER_CLUB_ID));
+  assert.equal(tee.carries[PUTTER_CLUB_ID], undefined);
 
   const selected = planClubStrip({
     clubs: [
@@ -515,6 +532,23 @@ test('330-yard hole: Driver with null typed carry still enters the strip top-3',
     }),
     selected.windowStart,
   );
+
+  const putterOn = planClubStrip({
+    clubs: [
+      { id: 'club_driver', loftRank: 0, typicalCarryYards: null },
+      { id: 'club_3w', loftRank: 1, typicalCarryYards: 254 },
+      { id: 'club_2i', loftRank: 4, typicalCarryYards: 239 },
+      { id: 'club_7i', loftRank: 9, typicalCarryYards: null },
+      { id: PUTTER_CLUB_ID, loftRank: 18, typicalCarryYards: null },
+    ],
+    yardsLeft: 330,
+    selectedClubId: PUTTER_CLUB_ID,
+  });
+  assert.ok(putterOn.ids.includes(PUTTER_CLUB_ID));
+  assert.equal(putterOn.ids[putterOn.ids.length - 1], PUTTER_CLUB_ID);
+  assert.ok(clubStripOpeningIds(putterOn.ids, putterOn.windowStart).includes(PUTTER_CLUB_ID));
+  assert.equal(putterOn.openIndex, putterOn.ids.indexOf(PUTTER_CLUB_ID));
+  assert.equal(clubStripKeepsSelectedVisible(), true);
 });
 
 test('282-yard hole opens 2i, 3W, Dr with no wedge; 100-yard hole centers the closest wedge', () => {
@@ -541,7 +575,7 @@ test('282-yard hole opens 2i, 3W, Dr with no wedge; 100-yard hole centers the cl
     ],
     yardsLeft: 282,
   });
-  assert.deepEqual(tee.ids, ['club_gw', 'club_pw', 'club_2i', 'club_3w', 'club_driver']);
+  assert.deepEqual(tee.ids, ['club_gw', 'club_pw', 'club_2i', 'club_3w', 'club_driver', PUTTER_CLUB_ID]);
   assert.equal(tee.pickId, 'club_driver');
   assert.notEqual(tee.pickId, 'club_2i');
   assert.deepEqual(clubStripOpeningIds(tee.ids, tee.windowStart), ['club_2i', 'club_3w', 'club_driver']);
@@ -550,7 +584,8 @@ test('282-yard hole opens 2i, 3W, Dr with no wedge; 100-yard hole centers the cl
   assert.equal(tee.ids[tee.windowStart + 2], 'club_driver');
   assert.ok(!clubStripOpeningIds(tee.ids, tee.windowStart).includes('club_gw'));
   assert.ok(!clubStripOpeningIds(tee.ids, tee.windowStart).includes('club_pw'));
-  assert.ok(!tee.ids.includes(PUTTER_CLUB_ID));
+  assert.ok(tee.ids.includes(PUTTER_CLUB_ID));
+  assert.ok(!clubStripOpeningIds(tee.ids, tee.windowStart).includes(PUTTER_CLUB_ID));
   assert.equal(tee.carries.club_driver, 280);
   assert.equal(tee.carries.club_2i, 243);
   assert.equal(formatSuggestedClubChip('2i', 243), '2i · 243');
