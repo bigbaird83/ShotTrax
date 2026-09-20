@@ -133,6 +133,8 @@ test('Signal Lab: Hole Out closes on the last real mark — no invented putt GPS
   assert.doesNotMatch(madeFn, /attachWatchFix/);
   const pickFn = session.slice(session.indexOf('func pick(clubId: String)'), session.indexOf('func addPutt'));
   assert.match(pickFn, /attachWatchFix/);
+  assert.match(pickFn, /clubId != "club_putter"/);
+  assert.ok(pickFn.indexOf('clubId != "club_putter"') < pickFn.indexOf('attachWatchFix'));
 });
 
 test('Signal Lab: Made it only stores user-chosen buckets and advances the hole', () => {

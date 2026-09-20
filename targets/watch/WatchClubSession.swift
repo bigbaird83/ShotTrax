@@ -175,7 +175,10 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       "clubId": clubId,
       "at": isoNow(),
     ]
-    attachWatchFix(&payload)
+    // Putter opens the putt sheet / select only — never attach Watch GPS.
+    if clubId != "club_putter" {
+      attachWatchFix(&payload)
+    }
     sendPick(payload)
   }
 

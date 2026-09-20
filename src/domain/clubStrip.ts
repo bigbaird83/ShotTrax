@@ -1,5 +1,6 @@
 import { fillEstimatedCarries, type CarryClub } from './carryFill';
 import { isPutterClubId, stockAvgCarryForSuggestion, typicalCarrySeedForClub } from './defaultBag';
+import { formatSuggestedClubChip } from './playerCopy';
 import { MIN_CLOSED_SHOTS_FOR_RANK } from './rankClubs';
 
 /** Build 31 club-pill height. Dock actions stay this tall. */
@@ -60,8 +61,9 @@ export function clubStripOnlyTapMarks(): true {
   return true;
 }
 
-export function clubStripPutterIncluded(): false {
-  return false;
+/** Putter sits on the phone + Watch wheel (end of bag / after wedges). Null carry — no invented yards. */
+export function clubStripPutterIncluded(): true {
+  return true;
 }
 
 /**
@@ -315,7 +317,9 @@ export function clubStripWindowStartForSelection(args: {
   const ids = args.ids;
   const n = ids.length;
   if (n <= CLUB_STRIP_VISIBLE_PILLS) return 0;
-  const ordered = ids.map((id) => ({ id, carry: args.carries?.[id] ?? 0 }));
+  const ordered = ids
+    .filter((id) => clubHasWheelCarry(args.carries?.[id]) && !isPutterClubId(id))
+    .map((id) => ({ id, carry: args.carries?.[id] as number }));
   const top3 = clubStripThreeClosestIds(ordered, args.yardsLeft);
   const top3Start = top3.length ? Math.max(0, ids.indexOf(top3[0])) : 0;
   const selected = args.selectedClubId;
@@ -345,6 +349,7 @@ export function resolveWheelCarries(clubs: ClubStripClub[]): Record<string, numb
     : null;
   const carries: Record<string, number> = {};
   for (const club of clubs) {
+    // Putter has null carry — never invent yards. It still enters the wheel via planClubStrip.
     if (isPutterClubId(club.id)) continue;
     if (clubHasWheelCarry(club.liveCarry)) {
       carries[club.id] = club.liveCarry as number;
@@ -380,11 +385,12 @@ export function clubStripThreeClosestIds(
   ordered: { id: string; carry: number }[],
   yards: number | null | undefined,
 ): string[] {
-  if (ordered.length <= CLUB_STRIP_VISIBLE_PILLS) return ordered.map((club) => club.id);
+  const usable = ordered.filter((club) => clubHasWheelCarry(club.carry) && !isPutterClubId(club.id));
+  if (usable.length <= CLUB_STRIP_VISIBLE_PILLS) return usable.map((club) => club.id);
   if (yards == null || !Number.isFinite(yards)) {
-    return ordered.slice(0, CLUB_STRIP_VISIBLE_PILLS).map((club) => club.id);
+    return usable.slice(0, CLUB_STRIP_VISIBLE_PILLS).map((club) => club.id);
   }
-  return [...ordered]
+  return [...usable]
     .sort((a, b) => {
       const da = Math.abs(a.carry - yards);
       const db = Math.abs(b.carry - yards);
@@ -396,11 +402,32 @@ export function clubStripThreeClosestIds(
     .map((club) => club.id);
 }
 
+/** End of bag / after wedges — matches DEFAULT_BAG sortOrder. Never invents a putter carry. */
+export function appendPutterToClubStrip(ids: string[], clubs: { id: string }[]): string[] {
+  if (!clubStripPutterIncluded()) return ids;
+  const putter = clubs.find((club) => isPutterClubId(club.id));
+  if (!putter || ids.includes(putter.id)) return ids;
+  return [...ids, putter.id];
+}
+
+/** Wheel chip: carry clubs keep `Name · yards`. Putter is short name only (Pt / Putter). */
+export function formatClubStripLabel(args: {
+  id: string;
+  shortName: string;
+  carry?: number | null;
+}): string {
+  const name = args.shortName.split(' · ')[0]?.trim() || args.shortName;
+  if (isPutterClubId(args.id)) return name || 'Pt';
+  return formatSuggestedClubChip(name, args.carry);
+}
+
 /**
  * Fill first (live ≥5 → typed → estimated fill → stockAvg for suggestion),
- * then sort shorter to longer. Putter and clubs that still have no number
- * stay out. No dash. No invented 0. Stock bag clubs (Driver) never vanish
- * just because typed carry is null and fill needs ≥3 anchors.
+ * then sort shorter to longer. Clubs that still have no number stay out
+ * (no dash, no invented 0) except putter, which sits at the end of the bag
+ * with a null carry. Stock bag clubs (Driver) never vanish just because
+ * typed carry is null and fill needs ≥3 anchors. Top-3 suggestions stay
+ * carry-only — putter is on the scrollable wheel, not forced into the opening window.
  */
 export function planClubStrip(args: {
   clubs: ClubStripClub[];
@@ -427,7 +454,10 @@ export function planClubStrip(args: {
   }
   if (!pick) pick = ordered[0]?.id ?? null;
   const closestIndex = pick ? Math.max(0, ordered.findIndex((club) => club.id === pick)) : 0;
-  const ids = ordered.map((club) => club.id);
+  const ids = appendPutterToClubStrip(
+    ordered.map((club) => club.id),
+    args.clubs,
+  );
   const windowStart = clubStripWindowStartForSelection({
     ids,
     carries,
@@ -438,10 +468,10 @@ export function planClubStrip(args: {
     args.selectedClubId && ids.includes(args.selectedClubId)
       ? ids.indexOf(args.selectedClubId)
       : -1;
+  const top3 = clubStripThreeClosestIds(ordered, yards);
   const window =
-    selectedIndex >= 0 &&
-    !clubStripThreeClosestIds(ordered, yards).includes(args.selectedClubId as string)
-      ? openingClubStripWindow({ count: ordered.length, closestIndex: selectedIndex })
+    selectedIndex >= 0 && !top3.includes(args.selectedClubId as string)
+      ? openingClubStripWindow({ count: ids.length, closestIndex: selectedIndex })
       : openingClubStripWindow({ count: ordered.length, closestIndex });
   return {
     ids,

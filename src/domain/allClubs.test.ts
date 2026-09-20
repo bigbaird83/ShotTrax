@@ -100,7 +100,9 @@ test('phone All clubs screen renders every bag club, including putter and dash c
   assert.ok(wheel.ids.includes('club_4i'));
   assert.ok(wheel.ids.includes('club_7i'));
   assert.ok(!wheel.ids.includes('club_custom'));
-  assert.ok(!wheel.ids.includes(PUTTER_CLUB_ID));
+  assert.ok(wheel.ids.includes(PUTTER_CLUB_ID));
+  assert.equal(wheel.ids[wheel.ids.length - 1], PUTTER_CLUB_ID);
+  assert.equal(wheel.carries[PUTTER_CLUB_ID], undefined);
   assert.ok(bag.includes('club_3w'));
   assert.ok(bag.includes('club_4i'));
   assert.ok(bag.includes('club_7i'));

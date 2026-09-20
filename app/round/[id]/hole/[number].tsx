@@ -75,7 +75,7 @@ import { planInsertSlots } from '@/src/domain/insertShot';
 import { confirmUndoIsLive, planConfirmUndo, type ConfirmUndoWindow } from '@/src/domain/confirmUndo';
 import { confirmPlaceToDraft, courseGreenCenterForLine, resolveAddShotFromPin } from '@/src/domain/placeToDrag';
 import { applyWheelSelection, resolveWheelHighlightId } from '@/src/domain/clubSelect';
-import { PHONE_WHEEL_PILL_HEIGHT, PHONE_WHEEL_STRIP_HEIGHT, planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
+import { formatClubStripLabel, PHONE_WHEEL_PILL_HEIGHT, PHONE_WHEEL_STRIP_HEIGHT, planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
 import { PLAY_DOCK_ACTION_MIN_HEIGHT, PLAY_GLASS_DOCK_LIFT, planPlayLayout } from '@/src/domain/playLayout';
 import {
   firstLaunchTipHistoryRoundCount,
@@ -256,10 +256,12 @@ export default function HoleScreen() {
     }),
     yardsLeft: pickerYards,
   });
-  const placeStripItems = placeStripPlan.ids.map((id) => {
-    const club = clubs.find((row) => row.id === id);
-    return { id, label: formatSuggestedClubChip(club?.shortName ?? id, placeStripPlan.carries[id]) };
-  });
+  const placeStripItems = placeStripPlan.ids
+    .filter((id) => !isPutterClubId(id))
+    .map((id) => {
+      const club = clubs.find((row) => row.id === id);
+      return { id, label: formatClubStripLabel({ id, shortName: club?.shortName ?? id, carry: placeStripPlan.carries[id] }) };
+    });
   const placeBag = clubs.filter((club) => !isPutterClubId(club.id));
 
   const resetPlace = () => {
@@ -483,7 +485,7 @@ export default function HoleScreen() {
   });
   const stripItems = stripPlan.ids.map((id) => {
     const club = clubs.find((row) => row.id === id);
-    return { id, label: formatSuggestedClubChip(club?.shortName ?? id, stripPlan.carries[id]) };
+    return { id, label: formatClubStripLabel({ id, shortName: club?.shortName ?? id, carry: stripPlan.carries[id] }) };
   });
   const wheelSelectedId = resolveWheelHighlightId(selectedClubId);
   if (holeTee) {

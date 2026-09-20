@@ -375,7 +375,7 @@ struct ContentView: View {
   }
 
   private var stripPickId: String? {
-    let clubs = stripClubs
+    let clubs = stripClubs.filter { $0.id != "club_putter" }
     guard !clubs.isEmpty else { return nil }
     guard let hole = session.list.yardsToGreen else { return clubs.first?.id }
     return clubs.min { abs($0.carry - hole) < abs($1.carry - hole) }?.id
@@ -389,10 +389,11 @@ struct ContentView: View {
     let clubs = stripClubs
     let n = clubs.count
     guard n > 3 else { return 0 }
+    let ranked = clubs.filter { $0.id != "club_putter" }
     let closestThree: [(id: String, carry: Int)] = {
-      guard let hole = session.list.yardsToGreen else { return Array(clubs.prefix(3)) }
+      guard let hole = session.list.yardsToGreen else { return Array(ranked.prefix(3)) }
       return Array(
-        clubs.sorted { a, b in
+        ranked.sorted { a, b in
           let da = abs(a.carry - hole)
           let db = abs(b.carry - hole)
           if da != db { return da < db }
@@ -458,7 +459,14 @@ struct ContentView: View {
       let carry = carryFromLabel(session.list.label(for: selected)) ?? stockCarryYards[selected] ?? 1
       rows.append((id: selected, carry: carry))
     }
-    return rows.sorted { $0.carry < $1.carry }
+    rows = rows.sorted { $0.carry < $1.carry }
+    // Putter is on the scrollable bag strip (end of bag). No invented carry. Not a top-3 suggestion.
+    if session.list.bag.contains("club_putter") || session.list.selectedClubId == "club_putter" {
+      if !rows.contains(where: { $0.id == "club_putter" }) {
+        rows.append((id: "club_putter", carry: 0))
+      }
+    }
+    return rows
   }
 
   private var wheelClubs: [(token: String, id: String, carry: Int, seamAfter: Bool)] {
