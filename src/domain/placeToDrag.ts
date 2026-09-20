@@ -238,21 +238,41 @@ export function addShotShowsMapsCompass(): false {
   return false;
 }
 
-/** Every Add shot starts at the course tee — never last landing, phone, or selected club. */
-export function addShotAlwaysFirstShotStyle(): true {
+/**
+ * TF 46 always-first-shot was wrong for catch-up after a drive.
+ * Empty hole: first-shot tee→green / course tee from-pin.
+ * After marks: from-pin is last landing (shot N start = shot N−1 end).
+ */
+export function addShotAlwaysFirstShotStyle(): false {
+  return false;
+}
+
+export function addShotEmptyHoleUsesFirstShotFraming(): true {
   return true;
 }
 
-export function addShotChainsFromLastMark(): false {
-  return false;
+export function addShotAfterMarksUsesLastLanding(): true {
+  return true;
 }
 
-export function addShotFromUsesLastLanding(): false {
-  return false;
+export function addShotChainsFromLastMark(): true {
+  return true;
 }
 
+export function addShotFromUsesLastLanding(): true {
+  return true;
+}
+
+/** Club pick does not invent a from-pin. Last landing does. */
 export function addShotClubSelectChainsPins(): false {
   return false;
+}
+
+export type AddShotFromKind = 'first_shot' | 'last_landing';
+
+/** Empty hole → first-shot tee. After a closed landing → that mark. */
+export function addShotFromKind(lastLanding: LatLng | null | undefined): AddShotFromKind {
+  return isValidLatLng(lastLanding) ? 'last_landing' : 'first_shot';
 }
 
 export function addShotFromUsesPhone(): false {
@@ -284,15 +304,18 @@ export function courseGreenCenterForLine(args: {
   return isValidLatLng(args.green) ? args.green : null;
 }
 
+/** First shot starts at the course tee. Later shots start at the last landing. Never the phone. */
 export function resolveAddShotFromPin(args: {
   tee: LatLng | null;
   lastLanding?: LatLng | null;
   phone?: LatLng | null;
   selectedClubId?: string | null;
 }): LatLng | null {
-  void args.lastLanding;
   void args.phone;
   void args.selectedClubId;
+  if (addShotFromKind(args.lastLanding) === 'last_landing' && isValidLatLng(args.lastLanding)) {
+    return args.lastLanding;
+  }
   if (isValidLatLng(args.tee)) return args.tee;
   return null;
 }
