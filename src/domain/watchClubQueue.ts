@@ -23,7 +23,39 @@ export function watchClubMarkUsesWatchGpsWhenUnreachable(): true {
   return true;
 }
 
+/** Same 15 m / 25 m acceptFix bands — queue does not skip quality. */
+export function watchClubMarkUsesAcceptFixGates(): true {
+  return true;
+}
+
+/** Hard Watch/phone GPS >25 m still force-prompts. Queue never silent-forces. */
+export function watchClubMarkHardOver25mStillForcePrompts(): true {
+  return true;
+}
+
+export function watchClubMarkSilentForceOnQueue(): false {
+  return false;
+}
+
 export function watchClubMarkAttachWatchFixOnPutter(): false {
+  return false;
+}
+
+/** Club pick + puttPick add/Made all ride transferUserInfo. */
+export function watchAllPicksUseTransferUserInfo(): true {
+  return true;
+}
+
+/** Distinct `at` keeps the 2nd tap. One pending slot would drop N≥2. */
+export function watchQueuedPicksNeverDropN2(): true {
+  return true;
+}
+
+export function watchSheetPuttMadeZeroThreeInventGps(): false {
+  return false;
+}
+
+export function watchSheetPuttMadeZeroThreeInventYards(): false {
   return false;
 }
 

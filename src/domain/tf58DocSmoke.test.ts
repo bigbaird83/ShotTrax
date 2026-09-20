@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
+  applyWatchPuttPickAdds,
+  emptyPuttDraft,
   watchPuttSheetMadeItAlwaysEnabled,
   watchPuttSheetMadeItIsFullWidthRow,
   watchPuttSheetMadeItLabel,
@@ -16,16 +18,164 @@ import {
   watchSelectedClubHighlightNeverHidesPill,
   watchSelectedClubNeverVanishes,
 } from './watchClubPick';
+import { SOFT_GPS_MAX_M, SOFT_GPS_MIN_M } from '../config/sensing';
+import { acceptFix } from '../sensing/gates';
+import { preferWatchFix, watchTapUsesAccuracyGates } from './preferWatchFix';
 import {
   QUEUED_WILL_SYNC,
+  enqueueWatchClubPick,
+  watchAllPicksUseTransferUserInfo,
   watchClubMarkFeedbackWhenQueued,
+  watchClubMarkHardOver25mStillForcePrompts,
   watchClubMarkNeverFreezesOnPhoneUnavailable,
   watchClubMarkQueuesWhenUnreachable,
+  watchClubMarkSilentForceOnQueue,
+  watchClubMarkUsesAcceptFixGates,
   watchClubMarkUsesTransferUserInfo,
   watchClubMarkUsesWatchGpsWhenUnreachable,
+  watchQueuedPicksNeverDropN2,
+  watchSheetPuttMadeZeroThreeInventGps,
+  watchSheetPuttMadeZeroThreeInventYards,
 } from './watchClubQueue';
+import type { GpsFix } from './types';
 
 const WATCH_MADE = /Text\("Made(?: it)?"\)/;
+
+function fix(partial: Partial<GpsFix> & { lat: number; lng: number }): GpsFix {
+  return {
+    accuracyM: 8,
+    mocked: false,
+    isSimulator: false,
+    timestamp: 1_000_000,
+    ...partial,
+  };
+}
+
+test('Signal: TF 58 club mark uses Watch GPS + 15/25 m gates; hard >25 m still force-prompts', () => {
+  assert.equal(watchClubMarkUsesWatchGpsWhenUnreachable(), true);
+  assert.equal(watchClubMarkUsesAcceptFixGates(), true);
+  assert.equal(watchClubMarkHardOver25mStillForcePrompts(), true);
+  assert.equal(watchClubMarkSilentForceOnQueue(), false);
+  assert.equal(watchTapUsesAccuracyGates(), true);
+  assert.equal(SOFT_GPS_MIN_M, 15);
+  assert.equal(SOFT_GPS_MAX_M, 25);
+
+  const goodWatch = preferWatchFix({
+    watchFix: fix({ lat: 34.11, lng: -85.64, accuracyM: SOFT_GPS_MIN_M - 0.1 }),
+    phoneFix: fix({ lat: 34.2, lng: -85.7, accuracyM: 6 }),
+    nowMs: 1_001_000,
+  });
+  assert.equal(goodWatch.usedWatch, true);
+  const goodAccept = acceptFix(goodWatch.fix!);
+  assert.equal(goodAccept.ok, true);
+  if (goodAccept.ok) assert.equal(goodAccept.fixQuality, 'good');
+
+  const softWatch = preferWatchFix({
+    watchFix: fix({ lat: 34.11, lng: -85.64, accuracyM: SOFT_GPS_MAX_M }),
+    phoneFix: fix({ lat: 34.2, lng: -85.7, accuracyM: 6 }),
+    nowMs: 1_001_000,
+  });
+  assert.equal(softWatch.usedWatch, true);
+  const softAccept = acceptFix(softWatch.fix!);
+  assert.equal(softAccept.ok, true);
+  if (softAccept.ok) assert.equal(softAccept.fixQuality, 'soft');
+
+  const poorWatch = preferWatchFix({
+    watchFix: fix({ lat: 34.11, lng: -85.64, accuracyM: SOFT_GPS_MAX_M + 1 }),
+    phoneFix: null,
+    nowMs: 1_001_000,
+  });
+  assert.equal(poorWatch.usedWatch, false);
+  const hardAlone = acceptFix(fix({ lat: 34.11, lng: -85.64, accuracyM: SOFT_GPS_MAX_M + 1 }));
+  assert.equal(hardAlone.ok, false);
+
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+  const pickFn = session.slice(session.indexOf('func pick(clubId: String)'), session.indexOf('func addPutt'));
+  assert.match(pickFn, /attachWatchFix\(&payload\)/);
+  assert.match(pickFn, /clubId != "club_putter"/);
+  const attachFn = session.slice(session.indexOf('private func attachWatchFix'), session.indexOf('func pickSameClub'));
+  assert.match(attachFn, /age <= 3/);
+  assert.match(attachFn, /acc > 0/);
+  assert.doesNotMatch(attachFn, /forceMark|force = true|silent/);
+
+  const service = readFileSync(new URL('../services/watchClub.ts', import.meta.url), 'utf8');
+  const handle = service.slice(service.indexOf('const pick = intent.pick'), service.indexOf('async function flushPendingClubPicks'));
+  assert.match(handle, /watchFixFromPick/);
+  assert.match(handle, /markShotWithClub/);
+  assert.match(handle, /promptForPlan/);
+  assert.match(handle, /force: true/);
+  assert.doesNotMatch(handle, /forcePoorGps: true|silentForce|skipAcceptFix/);
+  const actions = readFileSync(new URL('../services/shotActions.ts', import.meta.url), 'utf8');
+  assert.match(actions, /preferWatchFix/);
+  assert.match(actions, /promptForPlan/);
+});
+
+test('Signal: TF 58 all club + putt/Made picks queue transferUserInfo — never drop N≥2', () => {
+  assert.equal(watchAllPicksUseTransferUserInfo(), true);
+  assert.equal(watchQueuedPicksNeverDropN2(), true);
+  assert.equal(watchClubMarkUsesTransferUserInfo(), true);
+  const two = applyWatchPuttPickAdds(emptyPuttDraft(), ['inside_3', '3_to_10']);
+  assert.equal(two.putts, 2);
+  const a = { at: '2026-09-20T22:00:00.000Z', clubId: 'club_7i' };
+  const b = { at: '2026-09-20T22:00:01.000Z', clubId: 'club_8i' };
+  const queued = enqueueWatchClubPick(enqueueWatchClubPick([], a), b);
+  assert.equal(queued.length, 2);
+  assert.equal(enqueueWatchClubPick(queued, a).length, 2);
+
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+  const sendFn = session.slice(session.indexOf('private func sendPick'), session.indexOf('private func handleReply'));
+  assert.match(sendFn, /isPuttPick/);
+  assert.match(sendFn, /isClubPick/);
+  assert.match(sendFn, /sendPuttPickReliable/);
+  assert.match(sendFn, /sendClubMarkReliable/);
+  assert.match(sendFn, /transferUserInfo\(payload\)/);
+  assert.match(sendFn, /enqueuePending/);
+  const addFn = session.slice(session.indexOf('func addPutt'), session.indexOf('func undoPutt'));
+  assert.match(addFn, /uniquePuttAt\(\)/);
+  const madeFn = session.slice(session.indexOf('func madeIt()'), session.indexOf('/// Stretch: attach Watch GPS'));
+  assert.match(madeFn, /uniquePuttAt\(\)/);
+  assert.match(session, /pendingQueue/);
+});
+
+test('Signal: TF 58 Queued · will sync — never freeze or hard-block on phone unavailable', () => {
+  assert.equal(watchClubMarkNeverFreezesOnPhoneUnavailable(), true);
+  assert.equal(watchClubMarkFeedbackWhenQueued(), 'Queued · will sync');
+  assert.equal(QUEUED_WILL_SYNC, 'Queued · will sync');
+
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+  const sendFn = session.slice(session.indexOf('private func sendPick'), session.indexOf('private func handleReply'));
+  assert.match(sendFn, /"Queued · will sync"/);
+  assert.doesNotMatch(sendFn.slice(sendFn.indexOf('private func sendClubMarkReliable')), /failUnavailable|Phone unavailable/);
+  assert.doesNotMatch(sendFn.slice(sendFn.indexOf('private func sendPuttPickReliable')), /failUnavailable|Phone unavailable/);
+  assert.match(sendFn, /sending = false/);
+  const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  const clubPick = watch.slice(watch.indexOf('private var clubPick'), watch.indexOf('private var moreClubs'));
+  assert.doesNotMatch(clubPick, /\.disabled\(session\.sending\)/);
+});
+
+test('Signal: TF 58 hole Putt + Made + 0–3 are sheet-only — no invent GPS/yards', () => {
+  assert.equal(watchSheetPuttMadeZeroThreeInventGps(), false);
+  assert.equal(watchSheetPuttMadeZeroThreeInventYards(), false);
+  assert.equal(watchPuttControlAttachWatchFix(), false);
+  assert.equal(watchPuttControlInventGps(), false);
+
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+  const openFn = session.slice(session.indexOf('func openPuttSheet'), session.indexOf('func pickPuttLength'));
+  assert.doesNotMatch(openFn, /attachWatchFix|lat|lng|accuracyM|yards/);
+  const madeFn = session.slice(session.indexOf('func madeIt()'), session.indexOf('/// Stretch: attach Watch GPS'));
+  assert.doesNotMatch(madeFn, /attachWatchFix|lat|lng|accuracyM|yards/);
+  const addFn = session.slice(session.indexOf('func addPutt'), session.indexOf('func undoPutt'));
+  assert.doesNotMatch(addFn, /attachWatchFix|lat|lng|accuracyM|yards/);
+
+  const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  const sheet = watch.slice(watch.indexOf('private var puttSheet'), watch.indexOf('private var clubPick'));
+  assert.match(sheet, /"0–3"/);
+  assert.match(sheet, WATCH_MADE);
+  assert.doesNotMatch(sheet, /attachWatchFix|CLLocation|lat|lng/);
+  const clubPick = watch.slice(watch.indexOf('private var clubPick'), watch.indexOf('private var moreClubs'));
+  assert.match(clubPick, /session\.openPuttSheet\(\)/);
+  assert.ok(clubPick.indexOf('Text("Putt")') < clubPick.indexOf('ScrollView(.horizontal'));
+});
 
 test('TF 58 P0: phone-in-cart club mark queues Watch GPS — never freeze on PHONE_UNAVAILABLE', () => {
   assert.equal(watchClubMarkUsesTransferUserInfo(), true);

@@ -5,8 +5,12 @@ import { clubPickPayload } from './watchMessages';
 import {
   QUEUED_WILL_SYNC,
   enqueueWatchClubPick,
+  watchAllPicksUseTransferUserInfo,
   watchClubMarkAttachWatchFixOnPutter,
   watchClubMarkDropsWhenUnreachable,
+  watchClubMarkHardOver25mStillForcePrompts,
+  watchClubMarkSilentForceOnQueue,
+  watchClubMarkUsesAcceptFixGates,
   watchClubMarkFeedbackWhenQueued,
   watchClubMarkNeverFreezesOnPhoneUnavailable,
   watchClubMarkQueuesWhenUnreachable,
@@ -24,6 +28,10 @@ test('TF 58: unreachable phone queues club mark with Watch fix — UI not frozen
   assert.equal(watchClubMarkQueuesWhenUnreachable(), true);
   assert.equal(watchClubMarkDropsWhenUnreachable(), false);
   assert.equal(watchClubMarkUsesWatchGpsWhenUnreachable(), true);
+  assert.equal(watchClubMarkUsesAcceptFixGates(), true);
+  assert.equal(watchClubMarkHardOver25mStillForcePrompts(), true);
+  assert.equal(watchClubMarkSilentForceOnQueue(), false);
+  assert.equal(watchAllPicksUseTransferUserInfo(), true);
   assert.equal(watchClubMarkAttachWatchFixOnPutter(), false);
   assert.equal(watchClubMarkNeverFreezesOnPhoneUnavailable(), true);
   assert.equal(watchClubMarkFeedbackWhenQueued(), QUEUED_WILL_SYNC);
