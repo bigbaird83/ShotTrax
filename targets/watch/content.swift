@@ -347,7 +347,7 @@ struct ContentView: View {
 
   private var stripScrollKey: String {
     let clubs = stripClubs.map { "\($0.id):\($0.carry)" }.joined(separator: ",")
-    return "\(clubs)|\(stripWindowStart)|\(session.list.yardsToGreen ?? -1)"
+    return "\(clubs)|\(stripWindowStart)|\(session.list.yardsToGreen ?? -1)|\(session.list.selectedClubId ?? "")"
   }
 
   private var stripPickId: String? {
@@ -358,22 +358,31 @@ struct ContentView: View {
   }
 
   private var stripSelectedId: String? {
-    session.list.selectedClubId ?? stripPickId
+    session.list.selectedClubId
   }
 
   private var stripWindowStart: Int {
     let clubs = stripClubs
     let n = clubs.count
     guard n > 3 else { return 0 }
-    guard let hole = session.list.yardsToGreen else { return 0 }
-    let closestThree = Array(
-      clubs.sorted { a, b in
-        let da = abs(a.carry - hole)
-        let db = abs(b.carry - hole)
-        if da != db { return da < db }
-        return a.carry < b.carry
-      }.prefix(3)
-    ).sorted { $0.carry < $1.carry }
+    let closestThree: [(id: String, carry: Int)] = {
+      guard let hole = session.list.yardsToGreen else { return Array(clubs.prefix(3)) }
+      return Array(
+        clubs.sorted { a, b in
+          let da = abs(a.carry - hole)
+          let db = abs(b.carry - hole)
+          if da != db { return da < db }
+          return a.carry < b.carry
+        }.prefix(3)
+      ).sorted { $0.carry < $1.carry }
+    }()
+    if let selected = session.list.selectedClubId,
+       let selectedIndex = clubs.firstIndex(where: { $0.id == selected }),
+       !closestThree.contains(where: { $0.id == selected }) {
+      if selectedIndex > 0 && selectedIndex < n - 1 { return selectedIndex - 1 }
+      if selectedIndex >= n - 1 { return n - 3 }
+      return 0
+    }
     guard let first = closestThree.first else { return 0 }
     return min(max(clubs.firstIndex(where: { $0.id == first.id }) ?? 0, 0), n - 3)
   }
@@ -386,14 +395,46 @@ struct ContentView: View {
     return "\(clubs[start].id)#1"
   }
 
+  /// Same STOCK_AVG_CARRY seeds as phone rankDistanceYards / resolveWheelCarries.
+  private let stockCarryYards: [String: Int] = [
+    "club_driver": 230,
+    "club_3w": 210,
+    "club_5w": 195,
+    "club_4h": 185,
+    "club_2i": 200,
+    "club_3i": 190,
+    "club_4i": 180,
+    "club_5i": 170,
+    "club_6i": 160,
+    "club_7i": 150,
+    "club_8i": 140,
+    "club_9i": 130,
+    "club_pw": 120,
+    "club_48": 115,
+    "club_50": 110,
+    "club_gw": 105,
+    "club_sw": 90,
+    "club_lw": 75,
+  ]
+
   private var stripClubs: [(id: String, carry: Int)] {
-    session.list.bag
+    var rows = session.list.bag
       .filter { $0 != "club_putter" }
       .compactMap { id -> (id: String, carry: Int)? in
-        guard let carry = carryFromLabel(session.list.label(for: id)) else { return nil }
-        return (id: id, carry: carry)
+        if let carry = carryFromLabel(session.list.label(for: id)) {
+          return (id: id, carry: carry)
+        }
+        if let stock = stockCarryYards[id] {
+          return (id: id, carry: stock)
+        }
+        return nil
       }
-      .sorted { $0.carry < $1.carry }
+    if let selected = session.list.selectedClubId, selected != "club_putter",
+       !rows.contains(where: { $0.id == selected }) {
+      let carry = carryFromLabel(session.list.label(for: selected)) ?? stockCarryYards[selected] ?? 1
+      rows.append((id: selected, carry: carry))
+    }
+    return rows.sorted { $0.carry < $1.carry }
   }
 
   private var wheelClubs: [(token: String, id: String, carry: Int, seamAfter: Bool)] {

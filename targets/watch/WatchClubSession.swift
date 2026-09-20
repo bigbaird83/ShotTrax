@@ -166,6 +166,10 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   func pick(clubId: String) {
     sending = true
     feedback = ""
+    var next = list
+    next.selectedClubId = clubId
+    list = next
+    persist(next)
     var payload: [String: Any] = [
       "type": "clubPick",
       "clubId": clubId,
@@ -473,16 +477,47 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       defaults?.removeObject(forKey: "yardsToGreen")
     }
     defaults?.set(state.yardsQuality, forKey: "yardsQuality")
+    defaults?.set(state.bag, forKey: "bag")
+    defaults?.set(state.top3, forKey: "top3")
+    defaults?.set(state.labels, forKey: "labels")
     if let last = state.lastClubId {
       defaults?.set(last, forKey: "lastClubId")
     } else {
       defaults?.removeObject(forKey: "lastClubId")
+    }
+    if let selected = state.selectedClubId {
+      defaults?.set(selected, forKey: "selectedClubId")
+    } else {
+      defaults?.removeObject(forKey: "selectedClubId")
+    }
+    var obj: [String: Any] = [
+      "type": "clubList",
+      "top3": state.top3,
+      "bag": state.bag,
+      "labels": state.labels,
+      "holeNumber": state.holeNumber,
+      "yardsQuality": state.yardsQuality,
+    ]
+    if let yards = state.yardsToGreen, state.yardsQuality != "none" {
+      obj["yardsToGreen"] = yards
+    }
+    if let last = state.lastClubId { obj["lastClubId"] = last }
+    if let selected = state.selectedClubId { obj["selectedClubId"] = selected }
+    if let data = try? JSONSerialization.data(withJSONObject: obj),
+       let text = String(data: data, encoding: .utf8) {
+      defaults?.set(text, forKey: "clubListJSON")
     }
     defaults?.synchronize()
   }
 
   private func loadFromDefaults() {
     let defaults = UserDefaults(suiteName: "group.com.shottrax.app")
+    if let text = defaults?.string(forKey: "clubListJSON"),
+       let data = text.data(using: .utf8),
+       let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+      applyClubList(obj)
+      if receivedClubList { return }
+    }
     var next = ClubListState()
     let hole = defaults?.integer(forKey: "holeNumber") ?? 0
     if hole > 0 { next.holeNumber = hole }
@@ -490,8 +525,12 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       next.yardsToGreen = defaults?.integer(forKey: "yardsToGreen")
     }
     next.yardsQuality = defaults?.string(forKey: "yardsQuality") ?? "none"
-    next.lastClubId = nil
-    if hole > 0 {
+    next.bag = defaults?.stringArray(forKey: "bag") ?? []
+    next.top3 = defaults?.stringArray(forKey: "top3") ?? []
+    next.labels = defaults?.dictionary(forKey: "labels") as? [String: String] ?? [:]
+    next.lastClubId = defaults?.string(forKey: "lastClubId")
+    next.selectedClubId = defaults?.string(forKey: "selectedClubId")
+    if hole > 0 || !next.bag.isEmpty {
       list = next
       receivedClubList = true
     }

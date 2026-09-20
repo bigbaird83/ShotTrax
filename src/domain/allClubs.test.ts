@@ -79,6 +79,7 @@ test('phone All clubs screen renders every bag club, including putter and dash c
     { id: 'club_4i' },
     { id: 'club_7i' },
     { id: 'club_6i' },
+    { id: 'club_custom' },
     { id: PUTTER_CLUB_ID },
   ]);
   const wheel = planClubStrip({
@@ -88,21 +89,25 @@ test('phone All clubs screen renders every bag club, including putter and dash c
       { id: 'club_4i', carry: null },
       { id: 'club_7i', carry: null },
       { id: 'club_6i', carry: 185 },
+      { id: 'club_custom', carry: null },
       { id: PUTTER_CLUB_ID, carry: 8 },
     ],
     yardsLeft: 190,
   });
-  assert.deepEqual(wheel.ids, ['club_6i', 'club_driver']);
-  assert.ok(!wheel.ids.includes('club_3w'));
-  assert.ok(!wheel.ids.includes('club_4i'));
-  assert.ok(!wheel.ids.includes('club_7i'));
+  assert.ok(wheel.ids.includes('club_driver'));
+  assert.ok(wheel.ids.includes('club_6i'));
+  assert.ok(wheel.ids.includes('club_3w'));
+  assert.ok(wheel.ids.includes('club_4i'));
+  assert.ok(wheel.ids.includes('club_7i'));
+  assert.ok(!wheel.ids.includes('club_custom'));
   assert.ok(!wheel.ids.includes(PUTTER_CLUB_ID));
   assert.ok(bag.includes('club_3w'));
   assert.ok(bag.includes('club_4i'));
   assert.ok(bag.includes('club_7i'));
+  assert.ok(bag.includes('club_custom'));
   assert.ok(bag.includes(PUTTER_CLUB_ID));
   assert.ok(allClubsBagIncludesPutter(bag));
-  assert.equal(bag.length, 6);
+  assert.equal(bag.length, 7);
 
   const pick = readFileSync(new URL('../../app/round/[id]/club-pick.tsx', import.meta.url), 'utf8');
   assert.match(pick, /if \(!withoutGps && !relabelId\)/);

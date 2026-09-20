@@ -6,6 +6,11 @@ import {
   applyWheelSelection,
   clubStripTapMarksShot,
   clubStripTapSelectsClub,
+  holeOpensWithEmptySelection,
+  phoneSelectedClubAfterWatchTap,
+  resolveWheelHighlightId,
+  watchClubTapUpdatesPhoneSelection,
+  wheelAutoSelectsOnHoleStart,
   planClubStripGesture,
   watchBagTapMarksShot,
   watchSelectionMatchesPhone,
@@ -80,6 +85,8 @@ test('a wheel press marks that club and does not reopen the window', () => {
   assert.doesNotMatch(hole, /confirmWheelClub/);
   assert.match(hole, /setSelectedClubId\(null\)/);
   assert.match(hole, /\[holeNumber\]/);
+  assert.match(hole, /resolveWheelHighlightId\(selectedClubId\)/);
+  assert.doesNotMatch(hole, /selectedClubId \?\? stripPlan\.pickId/);
 
   const phone = readFileSync(new URL('../ui/ClubStrip.tsx', import.meta.url), 'utf8');
   const openFx = phone.slice(phone.indexOf('useEffect(() => {'), phone.indexOf('const settleWrap'));
@@ -94,6 +101,42 @@ test('a wheel press marks that club and does not reopen the window', () => {
     clubStripWindowKey(['club_2i', 'club_3w', 'club_driver'], 0),
     clubStripWindowKey(['club_2i', 'club_3w', 'club_driver'], 2),
   );
+});
+
+test('hole start never auto-selects a club; top-3 may suggest only', () => {
+  assert.equal(wheelAutoSelectsOnHoleStart(), false);
+  assert.equal(holeOpensWithEmptySelection(), true);
+  assert.equal(resolveWheelHighlightId(null), null);
+  assert.equal(resolveWheelHighlightId(undefined), null);
+  assert.equal(resolveWheelHighlightId('club_driver'), 'club_driver');
+  assert.notEqual(resolveWheelHighlightId(null), 'club_driver');
+
+  const opening = planClubStrip({
+    clubs: [
+      { id: 'club_driver', carry: 280 },
+      { id: 'club_3w', carry: 254 },
+      { id: 'club_2i', carry: 239 },
+    ],
+    yardsLeft: 330,
+  });
+  assert.deepEqual(clubStripOpeningIds(opening.ids, opening.windowStart), [
+    'club_2i',
+    'club_3w',
+    'club_driver',
+  ]);
+  assert.equal(resolveWheelHighlightId(null), null);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  assert.match(hole, /useState<string \| null>\(null\)/);
+  assert.match(hole, /setSelectedClubId\(null\)/);
+  assert.match(hole, /resolveWheelHighlightId\(selectedClubId\)/);
+  assert.doesNotMatch(hole, /selectedClubId \?\? stripPlan\.pickId/);
+  assert.doesNotMatch(hole, /wheelSelectedId = selectedClubId \?\?/);
+
+  const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  const highlight = watchUi.slice(watchUi.indexOf('private var stripSelectedId'), watchUi.indexOf('private var stripWindowStart'));
+  assert.match(highlight, /session\.list\.selectedClubId/);
+  assert.doesNotMatch(highlight, /stripPickId/);
 });
 
 test('Watch selection is the phone selection; strip press marks', () => {
@@ -141,7 +184,8 @@ test('Watch selection is the phone selection; strip press marks', () => {
   const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
   assert.match(watchUi, /session\.pick\(clubId: club.id\)/);
   assert.match(watchUi, /stripSelectedId/);
-  assert.match(watchUi, /selectedClubId \?\? stripPickId/);
+  assert.match(watchUi, /session\.list\.selectedClubId/);
+  assert.doesNotMatch(watchUi, /selectedClubId \?\? stripPickId/);
   assert.doesNotMatch(watchUi, /DragGesture/);
   assert.doesNotMatch(watchUi, /clubStripSlideUpConfirmed/);
   const bag = watchUi.slice(watchUi.indexOf('ForEach(moreClubs'), watchUi.indexOf('private var moreClubs'));
@@ -156,6 +200,38 @@ test('Watch selection is the phone selection; strip press marks', () => {
     service.slice(service.indexOf("if (intent.kind === 'select')"), service.indexOf("if (intent.kind === 'leave')")),
     /markShotWithClub/,
   );
+});
+
+test('Watch tap club X updates phone selectedClub to X and still marks', () => {
+  assert.equal(watchClubTapUpdatesPhoneSelection(), true);
+  assert.equal(watchStripTapSelectsClub(), true);
+  assert.equal(watchStripTapMarksShot(), true);
+  assert.equal(phoneSelectedClubAfterWatchTap('club_3w'), 'club_3w');
+  assert.equal(phoneSelectedClubAfterWatchTap('club_driver'), 'club_driver');
+  assert.equal(applyWheelSelection('club_2i'), 'club_2i');
+  assert.equal(wheelSelectionAfterTap({ openingPickId: 'club_driver', previousId: null, tappedId: 'club_3w' }).selectedId, 'club_3w');
+
+  const service = readFileSync(new URL('../services/watchClub.ts', import.meta.url), 'utf8');
+  const clubPath = service.slice(service.indexOf('const pick = intent.pick'), service.indexOf('async function handlePuttPick'));
+  assert.match(clubPath, /onSelectClub\?\.\(pick\.clubId\)/);
+  assert.match(clubPath, /markShotWithClub/);
+  assert.ok(clubPath.indexOf('onSelectClub') < clubPath.indexOf('markShotWithClub'));
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  assert.match(hole, /onSelectClub: \(clubId\) => \{/);
+  assert.match(hole, /setSelectedClubId\(applyWheelSelection\(clubId\)\)/);
+  assert.match(hole, /selectedClubId: wheelSelectedId/);
+
+  const clubPick = readFileSync(new URL('../../app/round/[id]/club-pick.tsx', import.meta.url), 'utf8');
+  assert.match(clubPick, /onSelectClub: \(clubId\) => \{/);
+  assert.match(clubPick, /setSelected\(club\)/);
+  assert.match(clubPick, /selectedClubId: selected\?\.id/);
+
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+  const pickFn = session.slice(session.indexOf('func pick(clubId: String)'), session.indexOf('func select('));
+  assert.match(pickFn, /selectedClubId = clubId/);
+  assert.match(pickFn, /"type": "clubPick"/);
+  assert.match(pickFn, /persist\(next\)/);
 });
 
 test('one press marks; swipe and scroll never mark', () => {

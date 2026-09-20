@@ -1,5 +1,5 @@
 import { fillEstimatedCarries, type CarryClub } from './carryFill';
-import { isPutterClubId, typicalCarrySeedForClub } from './defaultBag';
+import { isPutterClubId, stockAvgCarryForSuggestion, typicalCarrySeedForClub } from './defaultBag';
 import { MIN_CLOSED_SHOTS_FOR_RANK } from './rankClubs';
 
 /** Build 31 club-pill height. Dock actions stay this tall. */
@@ -296,6 +296,36 @@ export function clubStripOpeningIds(ids: string[], windowStart: number): string[
   return ids.slice(start, start + CLUB_STRIP_VISIBLE_PILLS);
 }
 
+/** Selected club stays on the strip. Highlight in place when it is already in the yards-left top-3. */
+export function clubStripKeepsSelectedVisible(): true {
+  return true;
+}
+
+/**
+ * Opening window is still short · mid · long by |carry − yardsLeft|.
+ * If the selected club is in that set, keep that window (highlight in place).
+ * If they picked outside top-3, slide to the selected club and its carry neighbors.
+ */
+export function clubStripWindowStartForSelection(args: {
+  ids: string[];
+  carries?: Record<string, number>;
+  yardsLeft?: number | null;
+  selectedClubId?: string | null;
+}): number {
+  const ids = args.ids;
+  const n = ids.length;
+  if (n <= CLUB_STRIP_VISIBLE_PILLS) return 0;
+  const ordered = ids.map((id) => ({ id, carry: args.carries?.[id] ?? 0 }));
+  const top3 = clubStripThreeClosestIds(ordered, args.yardsLeft);
+  const top3Start = top3.length ? Math.max(0, ids.indexOf(top3[0])) : 0;
+  const selected = args.selectedClubId;
+  if (selected && ids.includes(selected) && !top3.includes(selected)) {
+    const idx = Math.max(0, ids.indexOf(selected));
+    return openingClubStripWindow({ count: n, closestIndex: idx }).windowStart;
+  }
+  return clubStripWindowStartClamped(top3Start, n);
+}
+
 /** Re-open only when the bag or hole window changes — never when a tap selects. */
 export function clubStripWindowKey(ids: string[], windowStart: number): string {
   return `${ids.join('|')}@${windowStart}`;
@@ -331,6 +361,11 @@ export function resolveWheelCarries(clubs: ClubStripClub[]): Record<string, numb
     }
     if (clubHasWheelCarry(club.carry)) {
       carries[club.id] = club.carry as number;
+      continue;
+    }
+    const stock = stockAvgCarryForSuggestion(club.id);
+    if (stock != null && clubHasWheelCarry(stock)) {
+      carries[club.id] = stock;
     }
   }
   return carries;
@@ -362,12 +397,15 @@ export function clubStripThreeClosestIds(
 }
 
 /**
- * Fill first (typed / estimated / live), then sort shorter to longer.
- * Putter and clubs that still have no number stay out. No dash. No invented 0.
+ * Fill first (live ≥5 → typed → estimated fill → stockAvg for suggestion),
+ * then sort shorter to longer. Putter and clubs that still have no number
+ * stay out. No dash. No invented 0. Stock bag clubs (Driver) never vanish
+ * just because typed carry is null and fill needs ≥3 anchors.
  */
 export function planClubStrip(args: {
   clubs: ClubStripClub[];
   yardsLeft?: number | null;
+  selectedClubId?: string | null;
 }): ClubStripPlan {
   const carries = resolveWheelCarries(args.clubs);
   const ordered = args.clubs
@@ -389,15 +427,26 @@ export function planClubStrip(args: {
   }
   if (!pick) pick = ordered[0]?.id ?? null;
   const closestIndex = pick ? Math.max(0, ordered.findIndex((club) => club.id === pick)) : 0;
-  const closestThree = clubStripThreeClosestIds(ordered, yards);
-  const threeStart = closestThree.length
-    ? Math.max(0, ordered.findIndex((club) => club.id === closestThree[0]))
-    : openingClubStripWindow({ count: ordered.length, closestIndex }).windowStart;
-  const window = openingClubStripWindow({ count: ordered.length, closestIndex });
+  const ids = ordered.map((club) => club.id);
+  const windowStart = clubStripWindowStartForSelection({
+    ids,
+    carries,
+    yardsLeft: yards,
+    selectedClubId: args.selectedClubId,
+  });
+  const selectedIndex =
+    args.selectedClubId && ids.includes(args.selectedClubId)
+      ? ids.indexOf(args.selectedClubId)
+      : -1;
+  const window =
+    selectedIndex >= 0 &&
+    !clubStripThreeClosestIds(ordered, yards).includes(args.selectedClubId as string)
+      ? openingClubStripWindow({ count: ordered.length, closestIndex: selectedIndex })
+      : openingClubStripWindow({ count: ordered.length, closestIndex });
   return {
-    ids: ordered.map((club) => club.id),
-    openIndex: window.openIndex,
-    windowStart: clubStripWindowStartClamped(threeStart, ordered.length),
+    ids,
+    openIndex: selectedIndex >= 0 ? selectedIndex : window.openIndex,
+    windowStart,
     pickId: pick,
     carries,
   };
