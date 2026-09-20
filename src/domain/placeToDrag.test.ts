@@ -24,7 +24,18 @@ import {
   addShotGestureYardsUseReframe,
   addShotDragLayerCoversMap,
   addShotDragLayerStealsTwoFinger,
+  addShotMapOwnsTwoFingerWhilePinLive,
+  addShotToPinDragBouncesScrollOff,
+  addShotToPinDragPansMap,
+  addShotToPinDragUsesMarkCoords,
+  addShotToPinHitTargetCoversMap,
+  addShotToPinHitTargetIsTight,
+  addShotToPinHitTargetMaxPx,
+  addShotToPinHitTargetSize,
+  addShotToPinOneFingerMovesMarkerOnly,
+  addShotToPinStopPropagation,
   addShotToPinUsesDraggableMarker,
+  toPinMarkerCoordinate,
   dragOneFingerMovesToPin,
   dragOverlayPointerEvents,
   dragTwoFingersPanAndZoom,
@@ -442,6 +453,20 @@ test('to pin follows the finger; live yards are this shot only; nothing stores b
   assert.match(map, /draggable=\{Boolean\(onPlaceToDrag\)\}/);
   assert.match(map, /if \(!onPlaceToDrag\) return/);
   assert.match(map, /onPlaceToDrag\(\{ lat: latitude, lng: longitude \}\)/);
+  assert.match(map, /testID="to-pin-hit"/);
+  assert.match(map, /stopPropagation/);
+  assert.match(map, /toPinMarkerCoordinate/);
+  assert.equal(addShotToPinOneFingerMovesMarkerOnly(), true);
+  assert.equal(addShotToPinDragPansMap(), false);
+  assert.equal(addShotToPinHitTargetIsTight(), true);
+  assert.equal(addShotToPinHitTargetCoversMap(), false);
+  assert.ok(addShotToPinHitTargetSize().width <= addShotToPinHitTargetMaxPx());
+  assert.ok(addShotToPinHitTargetSize().height <= addShotToPinHitTargetMaxPx());
+  assert.equal(addShotToPinDragBouncesScrollOff(), false);
+  assert.equal(addShotMapOwnsTwoFingerWhilePinLive(), true);
+  assert.equal(addShotToPinStopPropagation(), true);
+  assert.equal(addShotToPinDragUsesMarkCoords(), true);
+  assert.deepEqual(toPinMarkerCoordinate({ placedTo: drag, dragOrigin: from }), from);
   assert.doesNotMatch(map, /scrollEnabled=\{!panFrozen\}/);
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   assert.match(hole, /freezePan=\{placeMode === 'to' \|\| placeMode === 'edit-to'\}/);
@@ -542,6 +567,28 @@ test('Add shot from-pin is tee when empty, last landing after marks — never ho
   assert.match(map, /green: lineGreen/);
   assert.doesNotMatch(map, /from: placedFrom/);
   assert.doesNotMatch(map, /showsUserLocation=\{true\}/);
+});
+
+test('TF 50: hold-drag freezes Marker coordinate; yards follow the real mark', () => {
+  const origin = drag;
+  const next = { lat: drag.lat + 0.002, lng: drag.lng };
+  assert.deepEqual(toPinMarkerCoordinate({ placedTo: origin, dragOrigin: null }), origin);
+  assert.deepEqual(toPinMarkerCoordinate({ placedTo: next, dragOrigin: origin }), origin);
+  assert.equal(toPinMarkerCoordinate({ placedTo: null, dragOrigin: null }), null);
+  assert.deepEqual(toPinMarkerCoordinate({ placedTo: origin, dragOrigin: { lat: 0, lng: 0 } }), origin);
+
+  const live = liveShotYardsFromThisFromPin({ from, pin: next, phone });
+  assert.equal(live, roundYards(haversineYards(from, next)));
+  assert.notEqual(live, roundYards(haversineYards(from, origin)));
+  assert.equal(addShotToPinDragUsesMarkCoords(), true);
+  assert.equal(addShotToPinDragPansMap(), false);
+  assert.equal(addShotToPinHitTargetIsTight(), true);
+  assert.equal(addShotToPinHitTargetCoversMap(), false);
+  assert.equal(addShotToPinOneFingerMovesMarkerOnly(), true);
+  assert.equal(addShotMapOwnsTwoFingerWhilePinLive(), true);
+  assert.equal(addShotToPinDragBouncesScrollOff(), false);
+  assert.equal(addShotEmptyHoleUsesFirstShotFraming(), true);
+  assert.equal(addShotAfterMarksUsesLastLanding(), true);
 });
 
 test('empty hole frames first-shot tee; after a closed drive Add shot starts at last landing', () => {

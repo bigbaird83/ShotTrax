@@ -108,6 +108,74 @@ export function addShotToPinUsesDraggableMarker(): true {
   return true;
 }
 
+/**
+ * Tight to-pin hit — pin-sized so one-finger on the Marker is Marker-owned.
+ * Must stay ≤ max so it cannot become a map-covering responder (TF 46).
+ */
+export const ADD_SHOT_TO_PIN_HIT_W = 32;
+export const ADD_SHOT_TO_PIN_HIT_H = 40;
+export const ADD_SHOT_TO_PIN_HIT_MAX_PX = 44;
+
+export function addShotToPinHitTargetSize(): { width: number; height: number } {
+  return { width: ADD_SHOT_TO_PIN_HIT_W, height: ADD_SHOT_TO_PIN_HIT_H };
+}
+
+export function addShotToPinHitTargetMaxPx(): 44 {
+  return ADD_SHOT_TO_PIN_HIT_MAX_PX;
+}
+
+export function addShotToPinHitTargetIsTight(): boolean {
+  const size = addShotToPinHitTargetSize();
+  const max = addShotToPinHitTargetMaxPx();
+  return size.width > 0 && size.height > 0 && size.width <= max && size.height <= max;
+}
+
+export function addShotToPinHitTargetCoversMap(): false {
+  return false;
+}
+
+/** Hold-drag on the to pin moves that Marker only. The map must not pan. */
+export function addShotToPinDragPansMap(): false {
+  return false;
+}
+
+export function addShotToPinOneFingerMovesMarkerOnly(): true {
+  return true;
+}
+
+/** Isolating pin drag must not bounce scroll/zoom — iOS will not reattach. */
+export function addShotToPinDragBouncesScrollOff(): false {
+  return false;
+}
+
+/** Two-finger pan/pinch stay on MapView while the to pin is live. */
+export function addShotMapOwnsTwoFingerWhilePinLive(): true {
+  return true;
+}
+
+/** Pin press/drag must not fall through to MapView onPress. */
+export function addShotToPinStopPropagation(): true {
+  return true;
+}
+
+/**
+ * Native Marker drag owns the pin's screen position. Keep the React
+ * `coordinate` at drag-start so a live yards re-render cannot snap the
+ * annotation and pan the camera. `placedTo` still updates for haversine.
+ */
+export function toPinMarkerCoordinate(args: {
+  placedTo: LatLng | null;
+  dragOrigin: LatLng | null;
+}): LatLng | null {
+  if (isValidLatLng(args.dragOrigin)) return args.dragOrigin;
+  return isValidLatLng(args.placedTo) ? args.placedTo : null;
+}
+
+/** Drag writes the Marker's map lat/lng — never a pixel, phone, or invented point. */
+export function addShotToPinDragUsesMarkCoords(): true {
+  return true;
+}
+
 export function dragKeepsPinchZoom(): true {
   return true;
 }

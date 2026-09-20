@@ -23,7 +23,13 @@ import {
   holeMapShowsCover,
   holeNativeCameraIsPaintable,
 } from '@/src/domain/mapPaint';
-import { holeMapKeepsScrollZoomOnceMounted, planDragShotLines } from '@/src/domain/placeToDrag';
+import {
+  ADD_SHOT_TO_PIN_HIT_H,
+  ADD_SHOT_TO_PIN_HIT_W,
+  holeMapKeepsScrollZoomOnceMounted,
+  planDragShotLines,
+  toPinMarkerCoordinate,
+} from '@/src/domain/placeToDrag';
 import { COPY, showWaitingOnLocationLine } from '@/src/domain/playerCopy';
 import { isValidLatLng } from '@/src/domain/latLng';
 import { hasClosedGpsTrail, hasGpsStart } from '@/src/domain/shotSource';
@@ -187,8 +193,19 @@ function NativeHoleMap({
   const [holeCameraReady, setHoleCameraReady] = useState(false);
   const [mapBox, setMapBox] = useState<{ width: number; height: number } | null>(null);
   const [mapsChrome, setMapsChrome] = useState(false);
+  const [toPinDragOrigin, setToPinDragOrigin] = useState<{ lat: number; lng: number } | null>(
+    null,
+  );
   const toPinLive = Boolean(freezePan || onPlaceToDrag);
   const framedForGestures = holeMapKeepsScrollZoomOnceMounted();
+  const toPinCoordinate = toPinMarkerCoordinate({
+    placedTo: placedTo ?? null,
+    dragOrigin: toPinDragOrigin,
+  });
+
+  useEffect(() => {
+    if (!placedTo) setToPinDragOrigin(null);
+  }, [placedTo]);
 
   const revealMapsChrome = () => {
     if (allowMapsChrome) setMapsChrome(true);
@@ -588,16 +605,23 @@ function NativeHoleMap({
             tracksViewChanges={false}
           />
         ) : null}
-        {placedTo ? (
+        {toPinCoordinate ? (
           <Marker
-            // One-finger drag is this Marker only. Do not put a map-covering
-            // View above MapView: iOS gives that layer the gesture stream and
+            // One-finger hold-drag is this Marker only — tight hit, not a
+            // map-covering View. iOS gives an overlay the gesture stream and
             // pan/pinch never reach the map on first Add shot or after edit.
-            coordinate={toCoord(placedTo.lat, placedTo.lng)}
-            pinColor="green"
+            // React coordinate stays at drag-start so live yards cannot snap
+            // the annotation and pan the camera. Map background keeps pan/pinch.
+            coordinate={toCoord(toPinCoordinate.lat, toPinCoordinate.lng)}
+            anchor={{ x: 0.5, y: 1 }}
             tappable={false}
-            tracksViewChanges={false}
+            tracksViewChanges
+            stopPropagation
             draggable={Boolean(onPlaceToDrag)}
+            onDragStart={() => {
+              if (!placedTo) return;
+              setToPinDragOrigin(placedTo);
+            }}
             onDrag={(event) => {
               if (!onPlaceToDrag) return;
               const { latitude, longitude } = event.nativeEvent.coordinate;
@@ -607,8 +631,17 @@ function NativeHoleMap({
               if (!onPlaceToDrag) return;
               const { latitude, longitude } = event.nativeEvent.coordinate;
               onPlaceToDrag({ lat: latitude, lng: longitude });
-            }}
-          />
+              setToPinDragOrigin(null);
+            }}>
+            <View
+              testID="to-pin-hit"
+              pointerEvents="auto"
+              collapsable={false}
+              style={styles.toPinHit}>
+              <View style={styles.toPinHead} />
+              <View style={styles.toPinStem} />
+            </View>
+          </Marker>
         ) : null}
         {(lineGreen ?? (onPlaceToDrag ? null : green)) ? (
           <Marker
@@ -813,5 +846,25 @@ const styles = StyleSheet.create({
     backgroundColor: '#2F80FF',
     borderWidth: 3,
     borderColor: '#FFFFFF',
+  },
+  toPinHit: {
+    width: ADD_SHOT_TO_PIN_HIT_W,
+    height: ADD_SHOT_TO_PIN_HIT_H,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  toPinHead: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.good,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  toPinStem: {
+    width: 3,
+    height: 16,
+    marginTop: -2,
+    backgroundColor: colors.good,
   },
 });

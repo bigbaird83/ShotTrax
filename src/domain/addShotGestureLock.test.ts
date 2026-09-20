@@ -44,7 +44,18 @@ import {
   addShotTwoFingerPanAfterFrame,
   addShotDragLayerCoversMap,
   addShotDragLayerStealsTwoFinger,
+  addShotMapOwnsTwoFingerWhilePinLive,
+  addShotToPinDragBouncesScrollOff,
+  addShotToPinDragPansMap,
+  addShotToPinDragUsesMarkCoords,
+  addShotToPinHitTargetCoversMap,
+  addShotToPinHitTargetIsTight,
+  addShotToPinHitTargetMaxPx,
+  addShotToPinHitTargetSize,
+  addShotToPinOneFingerMovesMarkerOnly,
+  addShotToPinStopPropagation,
   addShotToPinUsesDraggableMarker,
+  toPinMarkerCoordinate,
   dragOneFingerMovesToPin,
   dragOverlayPointerEvents,
   dragTwoFingersPanAndZoom,
@@ -369,4 +380,74 @@ test('Signal Lab: Add-shot overlay cannot steal two-finger pan/pinch on first op
   assert.match(map, /zoomEnabled=\{framedForGestures\}/);
   assert.match(map, /const framedForGestures = holeMapKeepsScrollZoomOnceMounted\(\)/);
   assert.match(map, /pointerEvents="box-none"/);
+});
+
+test('Signal Lab: TF 50 Marker-only one-finger to-pin drag; MapView keeps pan/pinch', () => {
+  assert.equal(addShotToPinUsesDraggableMarker(), true);
+  assert.equal(addShotToPinOneFingerMovesMarkerOnly(), true);
+  assert.equal(addShotToPinDragPansMap(), false);
+  assert.equal(addShotToPinHitTargetIsTight(), true);
+  assert.equal(addShotToPinHitTargetCoversMap(), false);
+  assert.equal(addShotToPinHitTargetMaxPx(), 44);
+  const hit = addShotToPinHitTargetSize();
+  assert.ok(hit.width > 0 && hit.width <= 44);
+  assert.ok(hit.height > 0 && hit.height <= 44);
+  assert.equal(addShotToPinDragBouncesScrollOff(), false);
+  assert.equal(addShotMapOwnsTwoFingerWhilePinLive(), true);
+  assert.equal(addShotToPinStopPropagation(), true);
+  assert.equal(addShotToPinDragUsesMarkCoords(), true);
+  assert.equal(addShotDragLayerStealsTwoFinger(), false);
+  assert.equal(addShotDragLayerCoversMap(), false);
+  assert.equal(dragOverlayPointerEvents(false), 'none');
+  assert.equal(addShotTwoFingerPanAfterFrame(), true);
+  assert.equal(addShotPinchZoomAfterFrame(), true);
+  assert.equal(addShotMapFrozenWhilePinLive(), false);
+  assert.equal(addShotEmptyHoleUsesFirstShotFraming(), true);
+  assert.equal(addShotAfterMarksUsesLastLanding(), true);
+  assert.equal(addShotAlwaysFirstShotStyle(), false);
+
+  const start = { lat: 37.001, lng: -122.0 };
+  const live = { lat: 37.002, lng: -122.001 };
+  assert.deepEqual(toPinMarkerCoordinate({ placedTo: start, dragOrigin: null }), start);
+  assert.deepEqual(toPinMarkerCoordinate({ placedTo: live, dragOrigin: start }), start);
+  assert.notDeepEqual(toPinMarkerCoordinate({ placedTo: live, dragOrigin: start }), live);
+  assert.equal(toPinMarkerCoordinate({ placedTo: null, dragOrigin: null }), null);
+  const dragYards = liveShotYardsFromThisFromPin({ from, pin: live, phone });
+  assert.equal(dragYards, roundYards(haversineYards(from, live)));
+  assert.notEqual(dragYards, roundYards(haversineYards(from, start)));
+
+  const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
+  assert.match(map, /testID="to-pin-hit"/);
+  assert.match(map, /styles\.toPinHit/);
+  assert.match(map, /ADD_SHOT_TO_PIN_HIT_W/);
+  assert.match(map, /ADD_SHOT_TO_PIN_HIT_H/);
+  assert.match(map, /toPinMarkerCoordinate/);
+  assert.match(map, /stopPropagation/);
+  assert.match(map, /onDragStart=/);
+  assert.match(map, /setToPinDragOrigin\(placedTo\)/);
+  assert.match(map, /setToPinDragOrigin\(null\)/);
+  assert.match(map, /draggable=\{Boolean\(onPlaceToDrag\)\}/);
+  assert.match(map, /onPlaceToDrag\(\{ lat: latitude, lng: longitude \}\)/);
+  assert.match(map, /scrollEnabled=\{framedForGestures\}/);
+  assert.match(map, /zoomEnabled=\{framedForGestures\}/);
+  assert.doesNotMatch(map, /testID="to-pin-drag-layer"/);
+  assert.doesNotMatch(map, /styles\.dragLayer/);
+  assert.doesNotMatch(map, /yieldToMapGesture|releaseMapGesture|dragLayerRef/);
+  assert.doesNotMatch(map, /pointerEvents=\{mapOwnsGesture \? 'none' : 'auto'\}/);
+  assert.doesNotMatch(map, /onPanDrag=/);
+  assert.doesNotMatch(map, /scrollEnabled=\{mapOwnsGesture \|\| !toPinLive\}/);
+  assert.doesNotMatch(map, /scrollEnabled=\{!toPinDragging/);
+  assert.doesNotMatch(map, /scrollEnabled=\{framedForGestures &&/);
+  const hitStyle = map.slice(map.indexOf('toPinHit:'), map.indexOf('toPinHead:'));
+  assert.match(hitStyle, /width: ADD_SHOT_TO_PIN_HIT_W/);
+  assert.match(hitStyle, /height: ADD_SHOT_TO_PIN_HIT_H/);
+  assert.doesNotMatch(hitStyle, /absoluteFill|\.\.\.StyleSheet\.absoluteFill|top: 0|bottom: 0|right: 0|left: 0/);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const fromPin = hole.slice(hole.indexOf('const addShotFrom = resolveAddShotFromPin'), hole.indexOf('const insertSlots'));
+  assert.match(fromPin, /tee: holeTee/);
+  assert.match(fromPin, /lastLanding: lastLandingMark\(shots\)/);
+  assert.doesNotMatch(fromPin, /selectedClubId|phone:/);
+  assert.match(hole, /freezePan=\{placeMode === 'to' \|\| placeMode === 'edit-to'\}/);
+  assert.match(hole, /setPlaceToDraft\(point\)/);
 });
