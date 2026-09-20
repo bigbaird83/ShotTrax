@@ -63,6 +63,16 @@ export function spectatorKeepsApproximateOnSoftForced(): true {
   return true;
 }
 
+/** Menu Share fail toast. Lead lock — never swallow. */
+export function shareFailToast(): typeof COPY.shareFail {
+  return COPY.shareFail;
+}
+
+/** Toast copy after Share.share. Success / dismiss stays silent. */
+export function toastAfterShareAttempt(opened: boolean): string | null {
+  return opened ? null : shareFailToast();
+}
+
 function isClosedDistanceShot(shot: SpectatorShotInput): boolean {
   if (shot.endedAt == null) return false;
   if (shot.source === 'no_gps') return false;

@@ -44,7 +44,6 @@ struct ContentView: View {
             if session.hasLiveHole {
               nearbyBack
             }
-            statusHeader
             nearbyStart
           }
           .padding(.horizontal, 4)
@@ -113,42 +112,46 @@ struct ContentView: View {
 
   @ViewBuilder
   private var nearbyStart: some View {
-    if session.nearby.courseId != nil, session.nearby.holeCount == nil {
+    if session.nearby.courseId != nil {
+      // One course name, then 9/18 or tee pills. Never title + leftover course row.
       if let name = session.nearby.courseName {
         Text(name)
           .font(.footnote.weight(.bold))
           .foregroundStyle(Color("cream"))
+          .lineLimit(2)
       }
-      Button(action: { session.pickHoleCount(9) }) {
-        Text("9")
-          .font(.headline.weight(.heavy))
-          .frame(maxWidth: .infinity, minHeight: 40)
-      }
-      .buttonStyle(.bordered)
-      .disabled(session.sending)
-      Button(action: { session.pickHoleCount(18) }) {
-        Text("18")
-          .font(.headline.weight(.heavy))
-          .frame(maxWidth: .infinity, minHeight: 40)
-      }
-      .buttonStyle(.bordered)
-      .disabled(session.sending)
-    } else if !session.nearby.tees.isEmpty {
-      if let name = session.nearby.courseName {
-        Text(name)
-          .font(.footnote.weight(.bold))
-          .foregroundStyle(Color("cream"))
-      }
-      ForEach(session.nearby.tees) { tee in
-        Button(action: { session.pickTee(name: tee.name) }) {
-          Text(tee.name)
+      if session.nearby.holeCount == nil {
+        Button(action: { session.pickHoleCount(9) }) {
+          Text("9")
             .font(.headline.weight(.heavy))
             .frame(maxWidth: .infinity, minHeight: 40)
         }
         .buttonStyle(.bordered)
         .disabled(session.sending)
+        Button(action: { session.pickHoleCount(18) }) {
+          Text("18")
+            .font(.headline.weight(.heavy))
+            .frame(maxWidth: .infinity, minHeight: 40)
+        }
+        .buttonStyle(.bordered)
+        .disabled(session.sending)
+      } else if !session.nearby.tees.isEmpty {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4)], spacing: 4) {
+          ForEach(session.nearby.tees) { tee in
+            Button(action: { session.pickTee(name: tee.name) }) {
+              Text(tee.name)
+                .font(.system(size: 13, weight: .heavy))
+                .lineLimit(2)
+                .minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity, minHeight: 30)
+            }
+            .buttonStyle(.bordered)
+            .disabled(session.sending)
+          }
+        }
       }
     } else {
+      statusHeader
       ForEach(session.nearby.courses) { course in
         Button(action: { session.pickCourse(courseId: course.id) }) {
           Text(course.name)

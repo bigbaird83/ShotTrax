@@ -22,7 +22,10 @@ import {
   phoneFixForNearbyCourses,
   planNearbyCourses,
   planWatchCoursePick,
+  watchCoursePickRepeatsNameAsRow,
+  watchCoursePickShowsOneName,
   watchStartsFromBuiltListWithoutPhoneFix,
+  watchTeePillsColumnCount,
   watchShowsBag,
   watchShowsScoring,
   watchShowsSettings,
@@ -359,6 +362,31 @@ test('Watch nearby UI is a short list — no search, bag, settings, or scoring',
   assert.match(service, /phoneFixForNearbyCourses|planNearbyCourses/);
   assert.doesNotMatch(service, /acceptFix\(|forceMark\(/);
   assert.match(service, /getLastLiveFix|phoneFix/);
+});
+
+test('Watch course pick is one name, then 2-col tee pills — never title + course row', () => {
+  assert.equal(watchCoursePickShowsOneName(), true);
+  assert.equal(watchCoursePickRepeatsNameAsRow(), false);
+  assert.equal(watchTeePillsColumnCount(), 2);
+
+  const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+  const start = watchUi.slice(watchUi.indexOf('private var nearbyStart'), watchUi.indexOf('private var puttSheet'));
+  assert.equal((start.match(/if let name = session\.nearby\.courseName/g) ?? []).length, 1);
+  assert.equal((start.match(/Text\(name\)/g) ?? []).length, 1);
+  assert.ok(start.indexOf('if let name = session.nearby.courseName') < start.indexOf('LazyVGrid'));
+  assert.ok(start.indexOf('Text(name)') < start.indexOf('ForEach(session.nearby.tees)'));
+  assert.ok(start.indexOf('ForEach(session.nearby.tees)') < start.indexOf('ForEach(session.nearby.courses)'));
+  assert.match(start, /if session\.nearby\.courseId != nil \{/);
+  assert.match(start, /LazyVGrid\(columns: \[GridItem\(\.flexible\(\), spacing: 4\), GridItem\(\.flexible\(\), spacing: 4\)\], spacing: 4\)/);
+  assert.match(start, /ForEach\(session\.nearby\.tees\)/);
+  assert.match(start, /minHeight: 30/);
+  const list = start.slice(start.indexOf('} else {'));
+  assert.match(list, /statusHeader/);
+  assert.match(list, /ForEach\(session\.nearby\.courses\)/);
+  assert.doesNotMatch(list, /session\.nearby\.courseName/);
+  assert.match(session, /nearby\.courseName = name/);
+  assert.match(session, /func pickCourse/);
 });
 
 test('build 26 locks stay: delete confirm, 60% map, one-line header, 600-yard tee start, 5s Undo, privacy strings', () => {

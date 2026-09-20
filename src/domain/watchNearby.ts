@@ -65,6 +65,20 @@ export function watchCoursePickSetsPhoneCourse(): true {
   return true;
 }
 
+/** Picked course is one name, then 9/18 or tee pills — never title + course row. */
+export function watchCoursePickShowsOneName(): true {
+  return true;
+}
+
+export function watchCoursePickRepeatsNameAsRow(): false {
+  return false;
+}
+
+/** Tee pills match putt 0–3 / 3–10 density: two columns. */
+export function watchTeePillsColumnCount(): 2 {
+  return 2;
+}
+
 /** A stale or missing phone fix does not reuse a list the Watch or phone built. */
 export function watchStartsFromBuiltListWithoutPhoneFix(): false {
   return false;
