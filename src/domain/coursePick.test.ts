@@ -19,9 +19,11 @@ import {
   courseSearchUsesMarkGates,
   courseSearchUsesPhoneFix,
   courseSearchUsesWatchGps,
+  courseListHidesAfterSelect,
   freeTextCourseStartAllowed,
   nearbyNeedsLocationWhenFixMissing,
   parseCourseSearchQuery,
+  showNearbyCourseList,
   planCourseList,
   planCourseListSort,
   planCourseSearchParams,
@@ -70,6 +72,24 @@ test('search placeholder is name/city/state/zip and never optional', () => {
   assert.equal(courseSearchUsesWatchGps(), false);
   assert.equal(courseSearchUsesPhoneFix(), false);
   assert.equal(courseSearchUsesMarkGates(), false);
+});
+
+test('selecting a course hides nearby/search cards so tees sit in-fold', () => {
+  assert.equal(courseListHidesAfterSelect(), true);
+  assert.equal(showNearbyCourseList(null), true);
+  assert.equal(showNearbyCourseList(undefined), true);
+  assert.equal(showNearbyCourseList({ id: '' }), true);
+  assert.equal(showNearbyCourseList({ id: 'cypress' }), false);
+
+  const picker = readFileSync(new URL('../ui/CoursePicker.tsx', import.meta.url), 'utf8');
+  assert.match(picker, /showNearbyCourseList\(selected\)/);
+  assert.match(picker, /COPY\.clearCourse/);
+  assert.match(picker, /COPY\.pickTee/);
+  assert.match(picker, /onSelect\(null\)/);
+  const listMap = picker.slice(picker.indexOf('{showList'), picker.indexOf('{teeBusy'));
+  assert.match(listMap, /listed\.map/);
+  assert.match(listMap, /showList/);
+  assert.doesNotMatch(listMap, /selected\?\.id === course\.id/);
 });
 
 test('one course list puts played courses on top', () => {
