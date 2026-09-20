@@ -299,11 +299,13 @@ test('Signal Lab: TF 49 putt sheet is pick → Made it on putt N≥1; Add putt i
   assert.doesNotMatch(puttOpen, /ScrollView/);
   assert.match(puttOpen, /puttSheet/);
   const watchSheet = watch.slice(watch.indexOf('private var puttSheet'), watch.indexOf('private var clubPick'));
-  assert.match(watchSheet, /LazyVGrid/);
-  assert.match(watchSheet, /GridItem\(\.flexible/);
-  assert.match(watchSheet, /session\.pickPuttLength\(bucket\.id\)/);
+  assert.doesNotMatch(watchSheet, /LazyVGrid\(/);
+  assert.match(watchSheet, /session\.pickPuttLength/);
   assert.doesNotMatch(watchSheet, /session\.addPutt\(lengthId: bucket\.id\)/);
-  assert.match(watchSheet, /Text\("0–3"\)|watchPuttBuckets/);
+  assert.match(watchSheet, /"0–3"/);
+  assert.match(watchSheet, /"3–10"/);
+  assert.match(watchSheet, /"10–20"/);
+  assert.match(watchSheet, /"20\+"/);
   assert.match(watchSheet, /Text\("Add putt"\)/);
   assert.match(watchSheet, /session\.addPutt\(\)/);
   assert.match(watchSheet, /Text\("Made(?: it)?"\)/);

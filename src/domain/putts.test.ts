@@ -393,7 +393,7 @@ test('Finish hole / putts live on the play dock — not buried in Scorecard', ()
   assert.match(watch, /session\.madeIt\(\)/);
   assert.match(watch, /showPuttChips|puttSheet/);
   const watchSheet = watch.slice(watch.indexOf('private var puttSheet'), watch.indexOf('private var clubPick'));
-  assert.match(watchSheet, /LazyVGrid/);
+  assert.doesNotMatch(watchSheet, /LazyVGrid\(/);
   assert.match(watchSheet, /Text\("Made(?: it)?"\)/);
   assert.match(watchSheet, /Text\("Add putt"\)/);
   assert.match(watchSheet, /Text\("Undo"\)/);
@@ -586,12 +586,15 @@ test('TF 54: dock Putt + shrunken Hole Out; Watch Made it always on putt sheet',
   const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
   const watchSheet = watch.slice(watch.indexOf('private var puttSheet'), watch.indexOf('private var clubPick'));
   const clubPick = watch.slice(watch.indexOf('private var clubPick'), watch.indexOf('private var moreClubs'));
-  assert.match(watchSheet, /LazyVGrid/);
+  assert.doesNotMatch(watchSheet, /LazyVGrid\(/);
   assert.match(watchSheet, /Text\("Made(?: it)?"\)/);
   assert.match(watchSheet, /Text\("Add putt"\)/);
   assert.match(watchSheet, /Text\("Undo"\)/);
-  assert.match(watchSheet, /Text\("0–3"\)|watchPuttBuckets/);
-  assert.ok(watchSheet.indexOf('LazyVGrid') < watchSheet.search(/Text\("Made(?: it)?"\)/));
+  assert.match(watchSheet, /"0–3"/);
+  assert.match(watchSheet, /"3–10"/);
+  assert.match(watchSheet, /"10–20"/);
+  assert.match(watchSheet, /"20\+"/);
+  assert.ok(watchSheet.indexOf('"0–3"') < watchSheet.search(/Text\("Made(?: it)?"\)/));
   assert.doesNotMatch(watchSheet, /!session\.putt\.canMake/);
   const madeAlways = watchSheet.slice(watchSheet.indexOf('session.madeIt()'), watchSheet.indexOf('if !session.putt.lengths'));
   assert.doesNotMatch(madeAlways, /\.disabled\(session\.sending\)/);

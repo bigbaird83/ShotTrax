@@ -69,6 +69,19 @@ export function watchPuttControlIsClubWheel(): false {
   return false;
 }
 
+/** Dedicated Putt opens the sheet only — never Watch GPS or invented yards. */
+export function watchPuttControlAttachWatchFix(): false {
+  return false;
+}
+
+export function watchPuttControlInventGps(): false {
+  return false;
+}
+
+export function watchPuttControlInventYards(): false {
+  return false;
+}
+
 /** Made it lives on the putt sheet, not the club-pick chip row. */
 export function watchPuttChipsShowMadeIt(): false {
   return false;

@@ -52,6 +52,11 @@ export function watchPuttAddsNeverDropAfterFirst(): true {
   return true;
 }
 
+/** add, undo, and Made all ride sendPuttPickReliable → transferUserInfo + queue. */
+export function watchPuttPickMadeUsesTransferUserInfo(): true {
+  return true;
+}
+
 export function enqueueWatchPuttPick<T extends { at: string }>(queue: T[], next: T): T[] {
   if (!next.at || queue.some((row) => row.at === next.at)) return queue;
   return [...queue, next];

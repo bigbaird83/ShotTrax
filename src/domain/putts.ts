@@ -598,7 +598,7 @@ export function watchPuttSheetMadeItAlwaysEnabled(): true {
   return true;
 }
 
-/** Made sits on its own full-width row so a small face cannot clip it off. */
+/** Made shares the Add/Undo row so a small face cannot clip it off. */
 export function watchPuttSheetPinsMadeIt(): true {
   return true;
 }
@@ -607,7 +607,7 @@ export function watchPuttSheetMadeItSitsWithAddUndo(): true {
   return true;
 }
 
-/** Full-width row under Add/Undo — not a third HStack pill that clips. */
+/** Action row is Add + Undo + Made (short). Not a clipped third-line CTA. */
 export function watchPuttSheetMadeItIsFullWidthRow(): true {
   return true;
 }
