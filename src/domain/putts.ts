@@ -148,6 +148,37 @@ export function planMadeItFromPick(pick: PuttSheetPick) {
   return planMadeIt(pick.draft, pick.pending);
 }
 
+/** Soft No length cue — copy/stats only. Never a modal. Never blocks Made it. */
+export function puttSheetNoLengthCue(): 'No length — pick a distance' {
+  return 'No length — pick a distance';
+}
+
+export function puttSheetNoLengthCueBlocksMadeIt(): false {
+  return false;
+}
+
+export function puttSheetNoLengthCueIsModal(): false {
+  return false;
+}
+
+export function puttSheetNoLengthCueInventGps(): false {
+  return false;
+}
+
+/** A logged putt count without a matching bucket — stats gap only, never GPS. */
+export function puttLoggedWithoutLength(draft: PuttDraft): boolean {
+  return clampPutts(draft.putts) > draft.lengths.filter(isPuttLengthId).length;
+}
+
+/**
+ * Show the soft cue when Made it is off for a missing current bucket,
+ * or when a logged putt has no length. Informational — does not gate close.
+ */
+export function showPuttNoLengthCue(pick: PuttSheetPick): boolean {
+  if (puttLoggedWithoutLength(pick.draft)) return true;
+  return !canMakeCurrentPutt(pick);
+}
+
 /**
  * Made it persists user-chosen buckets only — logged misses plus the pending
  * holing putt. Never a GPS-invented putt count or fabricated distance.

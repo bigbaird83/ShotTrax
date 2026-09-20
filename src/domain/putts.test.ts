@@ -37,9 +37,14 @@ import {
   PUTT_MAX,
   playDockKeepsHoleOutForOffGreen,
   putterOpensPuttSheet,
+  puttLoggedWithoutLength,
   puttSheetCtaLabel,
   puttSheetDistanceTapCommits,
   puttSheetHasAddPuttControl,
+  puttSheetNoLengthCue,
+  puttSheetNoLengthCueBlocksMadeIt,
+  puttSheetNoLengthCueInventGps,
+  puttSheetNoLengthCueIsModal,
   puttSheetShowsHoleOut,
   puttPillsInventGreenEdge,
   puttPillsNearGreenYards,
@@ -51,6 +56,7 @@ import {
   serializePuttLengths,
   setPuttCount,
   shouldAutoOpenClubPick,
+  showPuttNoLengthCue,
   showPuttPills,
   undoLastPutt,
 } from './putts';
@@ -167,6 +173,25 @@ test('Made it needs at least one putt with a bucket', () => {
     pending: null,
   };
   assert.equal(canMakeCurrentPutt(capped), true);
+});
+
+test('Signal: soft No length cue is inline stats-only — never blocks Made it or invents GPS', () => {
+  assert.equal(puttSheetNoLengthCue(), 'No length — pick a distance');
+  assert.equal(puttSheetNoLengthCueBlocksMadeIt(), false);
+  assert.equal(puttSheetNoLengthCueIsModal(), false);
+  assert.equal(puttSheetNoLengthCueInventGps(), false);
+  assert.equal(showPuttNoLengthCue(emptyPuttSheetPick()), true);
+  assert.equal(puttLoggedWithoutLength({ putts: 2, lengths: [] }), true);
+  assert.equal(showPuttNoLengthCue({ draft: { putts: 2, lengths: [] }, pending: null }), true);
+  const picked = pickPuttLength(emptyPuttSheetPick(), '3_to_10');
+  assert.equal(canMakeCurrentPutt(picked), true);
+  assert.equal(showPuttNoLengthCue(picked), false);
+  const miss = commitPuttLength(picked);
+  assert.equal(canMakeCurrentPutt(miss), false);
+  assert.equal(showPuttNoLengthCue(miss), true);
+  const putt2 = pickPuttLength(miss, 'inside_3');
+  assert.equal(canMakeCurrentPutt(putt2), true);
+  assert.equal(showPuttNoLengthCue(putt2), false);
 });
 
 test('next hole with no shots stays on play — All clubs does not auto-open', () => {

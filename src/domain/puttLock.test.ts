@@ -26,9 +26,14 @@ import {
   planMadeIt,
   planMadeItFromPick,
   playDockKeepsHoleOutForOffGreen,
+  puttLoggedWithoutLength,
   puttSheetCtaLabel,
   puttSheetDistanceTapCommits,
   puttSheetHasAddPuttControl,
+  puttSheetNoLengthCue,
+  puttSheetNoLengthCueBlocksMadeIt,
+  puttSheetNoLengthCueInventGps,
+  puttSheetNoLengthCueIsModal,
   puttSheetShowsHoleOut,
   planPlayDockFinish,
   puttPillsInventGreenEdge,
@@ -38,6 +43,7 @@ import {
   puttPillsUseYardsToGreen,
   puttsFromWalkOff,
   shouldAutoOpenClubPick,
+  showPuttNoLengthCue,
   showPuttPills,
 } from './putts';
 import {
@@ -189,11 +195,15 @@ test('Signal Lab: TF 49 putt sheet is pick → Made it on putt N≥1; Add putt i
   assert.match(sheet, /commitPuttLength\(\{ draft, pending \}\)/);
   assert.match(sheet, /onAdd\(added\)/);
   assert.match(sheet, /canMakeCurrentPutt\(pick\)/);
+  assert.match(sheet, /showPuttNoLengthCue\(pick\)/);
+  assert.match(sheet, /COPY\.noLengthCue/);
+  assert.match(sheet, /testID="putt-no-length-cue"/);
   assert.match(sheet, /onMadeIt\(pending\)/);
   assert.match(sheet, /label=\{COPY\.madeIt\}/);
   assert.match(sheet, /label=\{COPY\.undoPutt\}/);
   assert.doesNotMatch(sheet, /COPY\.holeOut/);
   assert.doesNotMatch(sheet, /finishHoleOut/);
+  assert.doesNotMatch(sheet, /Alert\.alert|Modal/);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const body = hole.slice(hole.indexOf('<PuttSheetBody'), hole.indexOf('</PuttSheetBody>'));
@@ -224,7 +234,9 @@ test('Signal Lab: TF 49 putt sheet is pick → Made it on putt N≥1; Add putt i
   assert.match(watchSheet, /session\.addPutt\(\)/);
   assert.match(watchSheet, /Text\("Made it"\)/);
   assert.match(watchSheet, /Text\("Undo putt"\)/);
+  assert.match(watchSheet, /Text\("No length — pick a distance"\)/);
   assert.doesNotMatch(watchSheet, /Text\("Hole Out"\)/);
+  assert.doesNotMatch(watchSheet, /alert|Alert|sheet\(/);
   const watchDock = watch.slice(watch.indexOf('private var clubPick'), watch.indexOf('private var moreClubs'));
   assert.match(watchDock, /Text\("Hole Out"\)/);
   assert.match(watchDock, /session\.madeIt\(\)/);
@@ -305,6 +317,36 @@ test('Signal Lab: Made it with pending on putt N≥1 — no extra Add putt after
   assert.match(sheet, /onMadeIt\(pending\)/);
   assert.match(sheet, /commitPuttLength\(\{ draft, pending \}\)/);
   assert.doesNotMatch(sheet, /onPress=\{\(\) => onAdd\(bucket\.id\)\}/);
+});
+
+test('Signal Lab: soft No length cue is inline when Made it is off for missing length — never a blocking modal', () => {
+  assert.equal(COPY.noLength, 'No length');
+  assert.equal(COPY.noLengthCue, 'No length — pick a distance');
+  assert.equal(puttSheetNoLengthCue(), COPY.noLengthCue);
+  assert.equal(puttSheetNoLengthCueBlocksMadeIt(), false);
+  assert.equal(puttSheetNoLengthCueIsModal(), false);
+  assert.equal(puttSheetNoLengthCueInventGps(), false);
+  assert.equal(showPuttNoLengthCue(emptyPuttSheetPick()), true);
+  assert.equal(puttLoggedWithoutLength({ putts: 1, lengths: [] }), true);
+  const picked = pickPuttLength(emptyPuttSheetPick(), 'inside_3');
+  assert.equal(canMakeCurrentPutt(picked), true);
+  assert.equal(showPuttNoLengthCue(picked), false);
+  const miss = commitPuttLength(picked);
+  assert.equal(showPuttNoLengthCue(miss), true);
+  assert.equal(canMakeCurrentPutt(miss), false);
+
+  const sheet = readFileSync(new URL('../ui/PuttSheetBody.tsx', import.meta.url), 'utf8');
+  assert.match(sheet, /showPuttNoLengthCue\(pick\)/);
+  assert.match(sheet, /testID="putt-no-length-cue"/);
+  assert.match(sheet, /COPY\.noLengthCue/);
+  assert.match(sheet, /canMakeCurrentPutt\(pick\)/);
+  assert.doesNotMatch(sheet, /Alert\.alert|Modal|finishHoleOut/);
+
+  const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  const watchSheet = watch.slice(watch.indexOf('private var puttSheet'), watch.indexOf('private var clubPick'));
+  assert.match(watchSheet, /Text\("No length — pick a distance"\)/);
+  assert.match(watchSheet, /!session\.putt\.canMake/);
+  assert.doesNotMatch(watchSheet, /alert|Alert/);
 });
 
 test('Signal Lab: Made it only stores user-chosen buckets and advances the hole', () => {

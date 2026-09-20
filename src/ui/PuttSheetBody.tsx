@@ -6,6 +6,7 @@ import {
   canCommitPutt,
   canMakeCurrentPutt,
   commitPuttLength,
+  showPuttNoLengthCue,
   nextPuttNumber,
   pickPuttLength,
   type PuttDraft,
@@ -38,7 +39,10 @@ export function PuttSheetBody({
   const canPick = nextN != null && !disabled;
   const canAdd = canCommitPutt(pick) && !disabled;
   const canMake = canMakeCurrentPutt(pick) && !disabled;
-  const pendingLabel = pending ? PUTT_LENGTHS.find((row) => row.id === pending)?.label ?? pending : COPY.puttSheetHint;
+  const showNoLength = showPuttNoLengthCue(pick);
+  const pendingLabel = pending
+    ? PUTT_LENGTHS.find((row) => row.id === pending)?.label ?? pending
+    : COPY.noLength;
 
   return (
     <View style={styles.wrap} testID="putt-sheet">
@@ -86,6 +90,11 @@ export function PuttSheetBody({
       />
       {draft.lengths.length > 0 ? (
         <BigButton label={COPY.undoPutt} variant="ghost" disabled={disabled} onPress={onUndo} />
+      ) : null}
+      {showNoLength ? (
+        <Text testID="putt-no-length-cue" style={styles.muted}>
+          {COPY.noLengthCue}
+        </Text>
       ) : null}
       <BigButton label={COPY.madeIt} disabled={!canMake} onPress={() => onMadeIt(pending)} />
       <Text style={styles.meta}>Hole {holeNumber}</Text>
