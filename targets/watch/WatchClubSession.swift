@@ -65,6 +65,7 @@ struct PuttSheetState {
   ]
   var canAdd: Bool = true
   var canMake: Bool = false
+  var pending: String? = nil
 
   func label(for lengthId: String) -> String {
     labels[lengthId] ?? lengthId
@@ -191,7 +192,15 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     ], keepPending: false)
   }
 
-  func addPutt(lengthId: String) {
+  func pickPuttLength(_ lengthId: String) {
+    guard putt.canAdd else { return }
+    var next = putt
+    next.pending = lengthId
+    putt = next
+  }
+
+  func addPutt(lengthId: String? = nil) {
+    guard let lengthId = lengthId ?? putt.pending else { return }
     sending = true
     feedback = ""
     if putt.lengths.count < 5 {
@@ -199,6 +208,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       next.lengths.append(lengthId)
       next.canMake = true
       next.canAdd = next.lengths.count < 5
+      next.pending = nil
       putt = next
     }
     sendPick([
@@ -328,6 +338,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       putt.lengths = []
       putt.canMake = false
       putt.canAdd = true
+      putt.pending = nil
     }
   }
 
@@ -457,6 +468,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   private func applyPuttSheet(_ message: [String: Any]) {
+    let priorPending = putt.pending
+    let priorLengths = putt.lengths
     var next = PuttSheetState()
     next.open = message["open"] as? Bool ?? false
     if let hole = message["holeNumber"] as? Int {
@@ -470,6 +483,9 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
     next.canAdd = message["canAdd"] as? Bool ?? (next.lengths.count < 5)
     next.canMake = message["canMake"] as? Bool ?? (next.lengths.count > 0)
+    if next.canAdd, next.lengths == priorLengths {
+      next.pending = priorPending
+    }
     putt = next
   }
 
