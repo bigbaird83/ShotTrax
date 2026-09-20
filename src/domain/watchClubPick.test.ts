@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { PUTTER_CLUB_ID } from './defaultBag';
+import { PUTTER_CLUB_ID, STOCK_AVG_CARRY } from './defaultBag';
 import { COPY } from './playerCopy';
 import { planClubPickLeave } from './clubPickNav';
 import {
@@ -38,7 +38,14 @@ import {
   watchStripSwipeRightIsLonger,
   watchAllClubsExtendsStrip,
   planWatchClubStrip,
+  resolveWatchBagCarry,
+  watchBagLabelForPush,
   watchCarryFromLabel,
+  watchClubListKeepsFullBag,
+  watchSelectedClubNeverVanishes,
+  watchSelectedHighlightInPlace,
+  watchStripNeverDropsBagClub,
+  watchTop3ByRemainingYards,
   formatWatchSameClub,
   watchTop3MatchesPhone,
   watchTop3RequiresScroll,
@@ -64,9 +71,11 @@ import {
   watchBackHomeAreTinyText,
   wrapWatchClubStripIndex,
 } from './watchClubPick';
+import { clubStripOpeningIds, planClubStrip } from './clubStrip';
 import { HOME_CLUB_TAP_MAX_YD, homeClubTapPaths } from './homeClubTap';
 import { formatPickerLeftYards, formatSuggestedClubChip } from './playerCopy';
 import { rankDistanceYards, rankTopClubs } from './rankClubs';
+import { clubListPayload } from './watchMessages';
 
 test('Watch opens on the same top 3 as the phone; no scroll to hit one', () => {
   assert.equal(watchClubPickOpensOnTop3(), true);
@@ -445,4 +454,175 @@ test('a bag club under All clubs marks with the same rules as a top-3 tap', () =
     handle.slice(handle.indexOf("if (intent.kind === 'leave')"), handle.indexOf("if (intent.kind === 'putter')")),
     /markShotWithClub/,
   );
+});
+
+test('P0: bag with Driver null + remaining ~330 keeps Driver in Watch top-3; never dash or woods-only', () => {
+  assert.equal(watchStripNeverDropsBagClub(), true);
+  assert.equal(watchClubListKeepsFullBag(), true);
+  assert.equal(STOCK_AVG_CARRY.club_driver, 230);
+  assert.equal(resolveWatchBagCarry({ id: 'club_driver', label: 'Dr · —' }), 230);
+  assert.equal(watchBagLabelForPush({ id: 'club_driver', shortName: 'Dr · —' }), 'Dr · 230');
+  assert.notEqual(watchBagLabelForPush({ id: 'club_driver', shortName: 'Dr · —' }), 'Dr · —');
+  assert.equal(watchBagLabelForPush({ id: 'club_3w', shortName: '3W · 254' }), '3W · 254');
+
+  const bagIds = [
+    'club_driver',
+    'club_3w',
+    'club_2i',
+    'club_7i',
+    'club_pw',
+    PUTTER_CLUB_ID,
+  ];
+  const labels = {
+    club_driver: 'Dr · —',
+    club_3w: '3W · 254',
+    club_2i: '2i · 239',
+    club_7i: '7i · 150',
+    club_pw: 'PW · 120',
+    club_putter: 'Pt · —',
+  };
+  const strip = planWatchClubStrip({
+    bag: bagIds,
+    labels,
+    holeYards: 330,
+  });
+  assert.ok(strip.ids.includes('club_driver'));
+  assert.ok(strip.ids.includes('club_7i'));
+  assert.ok(strip.ids.includes('club_pw'));
+  assert.ok(!strip.ids.includes(PUTTER_CLUB_ID));
+  assert.notEqual(strip.ids, ['club_2i', 'club_3w']);
+  const opening = clubStripOpeningIds(strip.ids, strip.windowStart);
+  assert.ok(opening.includes('club_driver'));
+  assert.deepEqual(opening, ['club_driver', 'club_2i', 'club_3w']);
+  assert.deepEqual(
+    watchTop3ByRemainingYards({
+      bag: [
+        { id: 'club_driver', carry: 230 },
+        { id: 'club_3w', carry: 254 },
+        { id: 'club_2i', carry: 239 },
+        { id: 'club_7i', carry: 150 },
+        { id: 'club_pw', carry: 120 },
+      ],
+      yardsLeft: 330,
+    }),
+    ['club_driver', 'club_2i', 'club_3w'],
+  );
+
+  const wheel = planClubStrip({
+    clubs: [
+      { id: 'club_driver', loftRank: 0, typicalCarryYards: null },
+      { id: 'club_3w', loftRank: 1, typicalCarryYards: 254 },
+      { id: 'club_2i', loftRank: 4, typicalCarryYards: 239 },
+      { id: 'club_7i', loftRank: 9, typicalCarryYards: null },
+      { id: 'club_pw', loftRank: 12, typicalCarryYards: null },
+      { id: PUTTER_CLUB_ID, loftRank: 18, typicalCarryYards: null },
+    ],
+    yardsLeft: 330,
+  });
+  assert.ok(wheel.ids.includes('club_driver'));
+  assert.ok(wheel.carries.club_driver > 0);
+  assert.equal(formatSuggestedClubChip('Dr', wheel.carries.club_driver), 'Dr · 230');
+  assert.ok(clubStripOpeningIds(wheel.ids, wheel.windowStart).includes('club_driver'));
+
+  const bagRows = [
+    { id: 'club_driver', shortName: 'Dr · —' },
+    { id: 'club_3w', shortName: '3W · 254' },
+    { id: 'club_2i', shortName: '2i · 239' },
+    { id: 'club_7i', shortName: '7i · —' },
+    { id: 'club_pw', shortName: 'PW · —' },
+    { id: PUTTER_CLUB_ID, shortName: 'Pt · —' },
+  ];
+  const labelsForPush: Record<string, string> = {};
+  for (const club of bagRows) {
+    labelsForPush[club.id] = watchBagLabelForPush({ id: club.id, shortName: club.shortName });
+  }
+  const payload = clubListPayload({
+    top3: ['club_3w', 'club_2i'],
+    bag: bagRows.map((club) => club.id),
+    labels: labelsForPush,
+    holeNumber: 1,
+    yardsToGreen: 330,
+    yardsQuality: 'good',
+  });
+  assert.deepEqual(payload.bag, [
+    'club_driver',
+    'club_3w',
+    'club_2i',
+    'club_7i',
+    'club_pw',
+    PUTTER_CLUB_ID,
+  ]);
+  assert.notEqual(payload.bag, ['club_3w', 'club_2i']);
+  assert.equal(payload.labels.club_driver, 'Dr · 230');
+  assert.notEqual(payload.labels.club_driver, 'Dr · —');
+  assert.equal(payload.labels.club_3w, '3W · 254');
+  assert.ok(payload.bag.includes('club_7i'));
+  assert.ok(payload.bag.includes('club_pw'));
+
+  const service = readFileSync(new URL('../services/watchClub.ts', import.meta.url), 'utf8');
+  const build = service.slice(service.indexOf('export function buildClubList'), service.indexOf('async function replyToken'));
+  assert.match(build, /watchBagLabelForPush/);
+  assert.match(build, /args\.bag\.map/);
+  assert.doesNotMatch(build, /bag\.slice\(0,\s*3\)|woods|typed-carry-only/);
+
+  const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  assert.match(watchUi, /stockCarryYards/);
+  assert.match(watchUi, /"club_driver": 230/);
+  assert.match(watchUi, /session\.list\.bag/);
+
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+  assert.match(session, /clubListJSON/);
+  assert.match(session, /defaults\?\.set\(state\.bag, forKey: "bag"\)/);
+  assert.doesNotMatch(session, /next\.bag = next\.top3|bag = top3/);
+});
+
+test('P0: phone selected=Driver at 330 stays on Watch strip highlighted, not only 2i/3w', () => {
+  assert.equal(watchSelectedClubNeverVanishes(), true);
+  assert.equal(watchSelectedHighlightInPlace(), true);
+
+  const bagIds = ['club_driver', 'club_3w', 'club_2i', 'club_7i', 'club_pw', PUTTER_CLUB_ID];
+  const labels = {
+    club_driver: 'Dr · 230',
+    club_3w: '3W · 254',
+    club_2i: '2i · 239',
+    club_7i: '7i · 150',
+    club_pw: 'PW · 120',
+  };
+  const yards = planWatchClubStrip({ bag: bagIds, labels, holeYards: 330 });
+  const selected = planWatchClubStrip({
+    bag: bagIds,
+    labels,
+    holeYards: 330,
+    selectedClubId: 'club_driver',
+  });
+  const yardsOpen = clubStripOpeningIds(yards.ids, yards.windowStart);
+  const selectedOpen = clubStripOpeningIds(selected.ids, selected.windowStart);
+  assert.ok(yardsOpen.includes('club_driver'));
+  assert.ok(selectedOpen.includes('club_driver'));
+  assert.deepEqual(selectedOpen, yardsOpen);
+  assert.deepEqual(selectedOpen, ['club_driver', 'club_2i', 'club_3w']);
+  assert.notDeepEqual(selectedOpen, ['club_2i', 'club_3w']);
+  assert.equal(selected.windowStart, yards.windowStart);
+
+  const outside = planWatchClubStrip({
+    bag: bagIds,
+    labels,
+    holeYards: 330,
+    selectedClubId: 'club_pw',
+  });
+  const outsideOpen = clubStripOpeningIds(outside.ids, outside.windowStart);
+  assert.ok(outsideOpen.includes('club_pw'));
+  assert.ok(outsideOpen.includes('club_7i'));
+
+  const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  const windowFn = watchUi.slice(watchUi.indexOf('private var stripWindowStart'), watchUi.indexOf('private var stripWindowToken'));
+  assert.match(windowFn, /selectedClubId/);
+  assert.match(watchUi, /selectedClubId \?\? stripPickId/);
+  const stripClubs = watchUi.slice(watchUi.indexOf('private var stripClubs'), watchUi.indexOf('private var wheelClubs'));
+  assert.match(stripClubs, /selectedClubId/);
+  assert.doesNotMatch(stripClubs, /filter \{ \$0 == selected|filter \{ \$0 != selected/);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const plan = hole.slice(hole.indexOf('const stripPlan'), hole.indexOf('const stripItems'));
+  assert.match(plan, /selectedClubId/);
 });

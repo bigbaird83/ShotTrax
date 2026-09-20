@@ -6,12 +6,13 @@ import {
   clubStripSortedByCarry,
   clubStripSortedByIronNumber,
   clubStripSortedByName,
+  clubStripThreeClosestIds,
   clubStripWraps,
   planClubStrip,
   wrapClubStripIndex,
 } from './clubStrip';
-import { isPutterClubId } from './defaultBag';
-import { COPY } from './playerCopy';
+import { isPutterClubId, stockAvgCarryForSuggestion } from './defaultBag';
+import { COPY, formatSuggestedClubChip } from './playerCopy';
 
 /** Watch club pick opens on the same top-3 the phone ranked. */
 export function watchClubPickOpensOnTop3(): true {
@@ -156,6 +157,26 @@ export function watchStripUsesFullBag(): true {
   return true;
 }
 
+/** Watch never silently drops a phone-bag club from the synced strip. */
+export function watchStripNeverDropsBagClub(): true {
+  return true;
+}
+
+/** Phone selected club stays on the Watch strip and is highlighted — never hidden. */
+export function watchSelectedClubNeverVanishes(): true {
+  return true;
+}
+
+/** If selected is already in the yards-left top-3, keep that window and highlight in place. */
+export function watchSelectedHighlightInPlace(): true {
+  return true;
+}
+
+/** Payload is the enabled bag, never a woods-only or typed-carry-only slice. */
+export function watchClubListKeepsFullBag(): true {
+  return true;
+}
+
 export function watchStripIsWheel(): true {
   return true;
 }
@@ -196,6 +217,45 @@ export function watchCarryFromLabel(label: string): number | null {
   return carryFromClubLabel(label);
 }
 
+/**
+ * Watch bag carry stack, same as rankDistanceYards / resolveWheelCarries:
+ * live/typed/estimated (already in the label or wheel carry) → stockAvg.
+ * Never a dash for a stock bag club.
+ */
+export function resolveWatchBagCarry(args: {
+  id: string;
+  label?: string;
+  wheelCarry?: number | null;
+}): number | null {
+  if (clubHasWheelCarry(args.wheelCarry)) return args.wheelCarry as number;
+  const fromLabel = args.label ? watchCarryFromLabel(args.label) : null;
+  if (fromLabel != null) return fromLabel;
+  return stockAvgCarryForSuggestion(args.id);
+}
+
+export function watchBagLabelForPush(args: {
+  id: string;
+  shortName: string;
+  wheelCarry?: number | null;
+}): string {
+  const name = args.shortName.split(' · ')[0]?.trim() || args.shortName;
+  return formatSuggestedClubChip(
+    name,
+    resolveWatchBagCarry({ id: args.id, label: args.shortName, wheelCarry: args.wheelCarry }),
+  );
+}
+
+/** Top-3 short · mid · long by |carry − yardsLeft| from the full bag. */
+export function watchTop3ByRemainingYards(args: {
+  bag: { id: string; carry: number }[];
+  yardsLeft: number;
+}): string[] {
+  const ordered = [...args.bag]
+    .filter((club) => !isPutterClubId(club.id) && clubHasWheelCarry(club.carry))
+    .sort((a, b) => a.carry - b.carry);
+  return clubStripThreeClosestIds(ordered, args.yardsLeft);
+}
+
 export function watchClubHasWheelCarry(carry: number | null | undefined): boolean {
   return clubHasWheelCarry(carry);
 }
@@ -215,11 +275,16 @@ export function planWatchClubStrip(args: {
   bag?: string[];
   labels: Record<string, string>;
   holeYards?: number | null;
+  selectedClubId?: string | null;
 }): { ids: string[]; openIndex: number; windowStart: number; pickId: string | null } {
   const source = args.bag ?? args.top3 ?? [];
   return planClubStrip({
-    clubs: source.map((id) => ({ id, carry: watchCarryFromLabel(args.labels[id] ?? '') })),
+    clubs: source.map((id) => ({
+      id,
+      carry: resolveWatchBagCarry({ id, label: args.labels[id] ?? '' }),
+    })),
     yardsLeft: args.holeYards,
+    selectedClubId: args.selectedClubId,
   });
 }
 

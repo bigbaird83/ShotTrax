@@ -6,6 +6,8 @@ import {
   applyWheelSelection,
   clubStripTapMarksShot,
   clubStripTapSelectsClub,
+  phoneSelectedClubAfterWatchTap,
+  watchClubTapUpdatesPhoneSelection,
   planClubStripGesture,
   watchBagTapMarksShot,
   watchSelectionMatchesPhone,
@@ -156,6 +158,38 @@ test('Watch selection is the phone selection; strip press marks', () => {
     service.slice(service.indexOf("if (intent.kind === 'select')"), service.indexOf("if (intent.kind === 'leave')")),
     /markShotWithClub/,
   );
+});
+
+test('Watch tap club X updates phone selectedClub to X and still marks', () => {
+  assert.equal(watchClubTapUpdatesPhoneSelection(), true);
+  assert.equal(watchStripTapSelectsClub(), true);
+  assert.equal(watchStripTapMarksShot(), true);
+  assert.equal(phoneSelectedClubAfterWatchTap('club_3w'), 'club_3w');
+  assert.equal(phoneSelectedClubAfterWatchTap('club_driver'), 'club_driver');
+  assert.equal(applyWheelSelection('club_2i'), 'club_2i');
+  assert.equal(wheelSelectionAfterTap({ openingPickId: 'club_driver', previousId: null, tappedId: 'club_3w' }).selectedId, 'club_3w');
+
+  const service = readFileSync(new URL('../services/watchClub.ts', import.meta.url), 'utf8');
+  const clubPath = service.slice(service.indexOf('const pick = intent.pick'), service.indexOf('async function handlePuttPick'));
+  assert.match(clubPath, /onSelectClub\?\.\(pick\.clubId\)/);
+  assert.match(clubPath, /markShotWithClub/);
+  assert.ok(clubPath.indexOf('onSelectClub') < clubPath.indexOf('markShotWithClub'));
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  assert.match(hole, /onSelectClub: \(clubId\) => \{/);
+  assert.match(hole, /setSelectedClubId\(applyWheelSelection\(clubId\)\)/);
+  assert.match(hole, /selectedClubId: wheelSelectedId/);
+
+  const clubPick = readFileSync(new URL('../../app/round/[id]/club-pick.tsx', import.meta.url), 'utf8');
+  assert.match(clubPick, /onSelectClub: \(clubId\) => \{/);
+  assert.match(clubPick, /setSelected\(club\)/);
+  assert.match(clubPick, /selectedClubId: selected\?\.id/);
+
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+  const pickFn = session.slice(session.indexOf('func pick(clubId: String)'), session.indexOf('func select('));
+  assert.match(pickFn, /selectedClubId = clubId/);
+  assert.match(pickFn, /"type": "clubPick"/);
+  assert.match(pickFn, /persist\(next\)/);
 });
 
 test('one press marks; swipe and scroll never mark', () => {

@@ -192,6 +192,7 @@ export default function ClubPickScreen() {
       return toWheelFillClub(club, row);
     }),
     yardsLeft: target?.dYards ?? toGreen.yards,
+    selectedClubId: selected?.id ?? null,
   });
   const lastLie = useMemo(() => {
     const last = [...shots].reverse().find((shot) => shot.startLat != null && shot.startLng != null);
@@ -222,6 +223,10 @@ export default function ClubPickScreen() {
         }
         leavePicker(action);
       },
+      onSelectClub: (clubId) => {
+        const club = clubs.find((row) => row.id === clubId);
+        if (club) setSelected(club);
+      },
       labelForClub: (clubId) => clubs.find((club) => club.id === clubId)?.shortName ?? null,
     },
     {
@@ -237,6 +242,7 @@ export default function ClubPickScreen() {
       yardsToGreen: target?.dYards ?? toGreen.yards,
       yardsQuality: toGreen.quality,
       lastClubId: selected?.id ?? null,
+      selectedClubId: selected?.id ?? null,
     },
   );
 

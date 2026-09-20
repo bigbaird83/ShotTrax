@@ -49,6 +49,8 @@ import {
   clubStripOpeningIds,
   clubStripWindowKey,
   clubStripWindowStartClamped,
+  clubStripWindowStartForSelection,
+  clubStripKeepsSelectedVisible,
   openingClubStripWindow,
   CLUB_STRIP_GAP,
   CLUB_STRIP_SEAM_GAP,
@@ -355,15 +357,17 @@ test('wheel order is carry not iron number; dash clubs are out with no empty slo
       { id: 'club_6i', carry: 185 },
       { id: 'club_driver', carry: 280 },
       { id: 'club_pw', carry: 130 },
+      { id: 'club_custom', carry: null },
       { id: PUTTER_CLUB_ID, carry: 8 },
     ],
     yardsLeft: 282,
   });
-  assert.deepEqual(withDash.ids, ['club_pw', 'club_6i', 'club_driver']);
-  assert.ok(!withDash.ids.includes('club_3w'));
-  assert.ok(!withDash.ids.includes('club_4i'));
-  assert.ok(!withDash.ids.includes('club_7i'));
-  assert.equal(withDash.ids.length, 3);
+  assert.ok(withDash.ids.includes('club_driver'));
+  assert.ok(withDash.ids.includes('club_3w'));
+  assert.ok(withDash.ids.includes('club_4i'));
+  assert.ok(withDash.ids.includes('club_7i'));
+  assert.ok(!withDash.ids.includes('club_custom'));
+  assert.ok(!withDash.ids.includes(PUTTER_CLUB_ID));
   assert.equal(withDash.pickId, 'club_driver');
   assert.notEqual(withDash.pickId, 'club_3w');
   assert.equal(carryFromClubLabel('3W · —'), null);
@@ -380,9 +384,9 @@ test('wheel order is carry not iron number; dash clubs are out with no empty slo
     ],
     yardsLeft: 220,
   });
-  assert.deepEqual(estimated.ids, ['club_6i', 'club_3w']);
-  assert.ok(!estimated.ids.includes('club_7i'));
-  assert.equal(estimated.ids.length, 2);
+  assert.deepEqual(estimated.ids, ['club_7i', 'club_6i', 'club_3w']);
+  assert.ok(estimated.ids.includes('club_7i'));
+  assert.equal(estimated.carries.club_7i, 150);
 });
 
 test('scrolling past the longest wraps to the shortest', () => {
@@ -462,7 +466,55 @@ test('fill estimated carries before sort; whole-bag STOCK scale enters the wheel
   const src = readFileSync(new URL('./clubStrip.ts', import.meta.url), 'utf8');
   const resolve = src.slice(src.indexOf('export function resolveWheelCarries'), src.indexOf('export function planClubStrip'));
   assert.match(resolve, /fillEstimatedCarries/);
+  assert.match(resolve, /stockAvgCarryForSuggestion/);
   assert.ok(resolve.indexOf('fillEstimatedCarries') < src.indexOf('.sort((a, b) => a.carry - b.carry)'));
+  assert.ok(resolve.indexOf('stockAvgCarryForSuggestion') > resolve.indexOf('fillEstimatedCarries'));
+});
+
+test('330-yard hole: Driver with null typed carry still enters the strip top-3', () => {
+  assert.equal(clubStripKeepsSelectedVisible(), true);
+  const tee = planClubStrip({
+    clubs: [
+      { id: 'club_driver', loftRank: 0, typicalCarryYards: null },
+      { id: 'club_3w', loftRank: 1, typicalCarryYards: 254 },
+      { id: 'club_2i', loftRank: 4, typicalCarryYards: 239 },
+      { id: 'club_7i', loftRank: 9, typicalCarryYards: null },
+      { id: PUTTER_CLUB_ID, loftRank: 18, typicalCarryYards: null },
+    ],
+    yardsLeft: 330,
+  });
+  assert.ok(tee.ids.includes('club_driver'));
+  assert.equal(tee.carries.club_driver, 230);
+  assert.deepEqual(clubStripOpeningIds(tee.ids, tee.windowStart), ['club_driver', 'club_2i', 'club_3w']);
+  assert.notEqual(formatSuggestedClubChip('Dr', tee.carries.club_driver), 'Dr · —');
+  assert.ok(!tee.ids.includes(PUTTER_CLUB_ID));
+
+  const selected = planClubStrip({
+    clubs: [
+      { id: 'club_driver', loftRank: 0, typicalCarryYards: null },
+      { id: 'club_3w', loftRank: 1, typicalCarryYards: 254 },
+      { id: 'club_2i', loftRank: 4, typicalCarryYards: 239 },
+      { id: 'club_7i', loftRank: 9, typicalCarryYards: null },
+      { id: PUTTER_CLUB_ID, loftRank: 18, typicalCarryYards: null },
+    ],
+    yardsLeft: 330,
+    selectedClubId: 'club_driver',
+  });
+  assert.deepEqual(clubStripOpeningIds(selected.ids, selected.windowStart), [
+    'club_driver',
+    'club_2i',
+    'club_3w',
+  ]);
+  assert.notDeepEqual(clubStripOpeningIds(selected.ids, selected.windowStart), ['club_2i', 'club_3w']);
+  assert.equal(
+    clubStripWindowStartForSelection({
+      ids: selected.ids,
+      carries: selected.carries,
+      yardsLeft: 330,
+      selectedClubId: 'club_driver',
+    }),
+    selected.windowStart,
+  );
 });
 
 test('282-yard hole opens 2i, 3W, Dr with no wedge; 100-yard hole centers the closest wedge', () => {

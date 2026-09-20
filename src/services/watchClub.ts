@@ -2,7 +2,7 @@ import { Alert } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getWatchBridgeNative } from '@/modules/watch-bridge';
 import { COPY } from '../domain/playerCopy';
-import { watchClubListTop3 } from '../domain/watchClubPick';
+import { watchBagLabelForPush, watchClubListTop3 } from '../domain/watchClubPick';
 import { watchFixFromPick } from '../domain/preferWatchFix';
 import {
   MADE_IT_FEEDBACK,
@@ -102,8 +102,13 @@ export function buildClubList(args: {
   selectedClubId?: string | null;
 }): ClubListMessage {
   const labels: Record<string, string> = {};
-  for (const club of [...args.top3, ...args.bag]) {
-    labels[club.id] = club.shortName;
+  // Phone bag is source of truth. Full enabled bag — never a pre-trimmed top-3.
+  for (const club of args.bag) {
+    labels[club.id] = watchBagLabelForPush({ id: club.id, shortName: club.shortName });
+  }
+  for (const club of args.top3) {
+    if (labels[club.id]) continue;
+    labels[club.id] = watchBagLabelForPush({ id: club.id, shortName: club.shortName });
   }
   return clubListPayload({
     top3: watchClubListTop3(args.top3.map((club) => club.id)),
@@ -173,6 +178,7 @@ async function handlePick(token: string, json: string): Promise<void> {
   }
 
   const pick = intent.pick;
+  ctx.onSelectClub?.(pick.clubId);
   const label = ctx.labelForClub(pick.clubId) ?? pick.clubId;
   const watchFix = watchFixFromPick(pick);
   try {

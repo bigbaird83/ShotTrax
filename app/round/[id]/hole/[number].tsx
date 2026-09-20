@@ -470,6 +470,7 @@ export default function HoleScreen() {
       return toWheelFillClub(club, row);
     }),
     yardsLeft: target?.dYards ?? toGreen.yards,
+    selectedClubId,
   });
   const stripItems = stripPlan.ids.map((id) => {
     const club = clubs.find((row) => row.id === id);

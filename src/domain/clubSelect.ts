@@ -68,3 +68,12 @@ export function watchSelectionMatchesPhone(
 ): boolean {
   return phoneId != null && phoneId === watchId;
 }
+
+/** Watch strip tap updates phone selectedClub and marks. One press, both. */
+export function watchClubTapUpdatesPhoneSelection(): true {
+  return true;
+}
+
+export function phoneSelectedClubAfterWatchTap(clubId: string): string {
+  return applyWheelSelection(clubId);
+}
