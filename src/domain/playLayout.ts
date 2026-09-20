@@ -177,6 +177,19 @@ export function playFinishedHoleMiniSummaryIsModal(): false {
   return false;
 }
 
+/** Cypress noon: running ±par is a small corner badge, not a modal. */
+export function playRunningParBadgeIsCorner(): true {
+  return true;
+}
+
+export function playRunningParBadgeIsModal(): false {
+  return false;
+}
+
+export function playRunningParBadgeHidesDuringCatchUp(): true {
+  return true;
+}
+
 export function playSameClubHiddenUntilShot(): true {
   return true;
 }

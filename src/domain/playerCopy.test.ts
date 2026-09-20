@@ -12,6 +12,7 @@ import {
   formatPlayHeader,
   formatPlayHeaderPrimary,
   formatPlayHeaderSecondary,
+  formatRunningParBadge,
   formatParLabel,
   formatPickerLeftYards,
   formatSiLabel,
@@ -133,6 +134,9 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(formatPuttCount(1), '1 putt');
   assert.equal(formatPuttCount(2), '2 putts');
   assert.equal(formatPuttCount(0), '0 putts');
+  assert.equal(formatRunningParBadge(3, '−1'), 'thru 3, −1');
+  assert.equal(formatRunningParBadge(1, 'E'), 'thru 1, E');
+  assert.equal(formatRunningParBadge(2, null), 'thru 2');
   assert.equal(markedSuggestedMessage('7i'), 'Marked 7i (suggested) · Change club.');
 });
 

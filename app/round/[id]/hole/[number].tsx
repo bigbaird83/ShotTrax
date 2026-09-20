@@ -112,6 +112,7 @@ import {
 import { canMoveFromPin, canMoveToPin, type ShotEditSnapshot } from '@/src/domain/shotEdit';
 import { addShotSuggestYardsLeft, clubToRankInput, lastClosedShotYards, rankDistanceYards, rankTopClubs, resolveAddShotSuggestTarget, resolveNextShotDistanceTarget } from '@/src/domain/rankClubs';
 import { planFinishedHoleMiniSummary } from '@/src/domain/finishedHoleSummary';
+import { planRunningParBadge } from '@/src/domain/runningPar';
 import { planScorecardDismiss } from '@/src/domain/scorecard';
 import { reconcileHoleScore, scoreMismatchMessage } from '@/src/domain/scoreReconcile';
 import { resolveStickyClub, selectClubForMark } from '@/src/domain/stickyClub';
@@ -1117,6 +1118,21 @@ export default function HoleScreen() {
     penaltyStrokes: penaltyTotal,
     shots,
   });
+  const runningPar = planRunningParBadge({
+    holes: holes.map((row) => ({
+      number: row.number,
+      par: row.par,
+      score: row.score,
+      puttsDone: row.puttsDone,
+      shotCount: listShotsForHole(db, row.id).length,
+      putts: row.putts,
+      penaltyStrokes: totalPenaltyStrokes(listPenaltiesForHole(db, row.id)),
+    })),
+    placing,
+    catchUpFullScreen,
+    puttOpen,
+    readOnly,
+  });
   const dockFinish = planPlayDockFinish({
     readOnly,
     placing,
@@ -1429,6 +1445,26 @@ export default function HoleScreen() {
             </View>
           )}
         </View>
+        {runningPar.visible ? (
+          <View
+            pointerEvents="none"
+            testID="running-par-badge"
+            accessibilityLabel={runningPar.accessibilityLabel}
+            style={[styles.runningParBadge, { top: insets.top + 58 }]}>
+            <Text style={styles.runningParText}>
+              {`thru ${runningPar.thru}`}
+              {runningPar.toParLabel ? (
+                <Text
+                  style={[
+                    runningPar.toParTone === 'good' && styles.runningParGood,
+                    runningPar.toParTone === 'bad' && styles.runningParBad,
+                  ]}>
+                  {`, ${runningPar.toParLabel}`}
+                </Text>
+              ) : null}
+            </Text>
+          </View>
+        ) : null}
         {catchUpFullScreen &&
         (placeMode === 'to' || placeMode === 'edit-to') &&
         placeToDraft &&
@@ -2140,6 +2176,18 @@ function makeStyles(colors: ColorPalette) {
   finishedHoleGood: { color: colors.good, fontWeight: '900' },
   finishedHoleBad: { color: colors.red, fontWeight: '900' },
   finishedHoleFlag: { color: colors.lime, fontWeight: '900', fontSize: type.tiny },
+  runningParBadge: {
+    position: 'absolute',
+    right: 12,
+    maxWidth: 132,
+    backgroundColor: colors.overlay,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  runningParText: { color: colors.cream, fontSize: type.tiny, fontWeight: '800' },
+  runningParGood: { color: colors.good, fontWeight: '900' },
+  runningParBad: { color: colors.red, fontWeight: '900' },
   dockHoleOutSlot: { flex: 1.2, minWidth: 88, gap: 4 },
   dockPuttHoleOutRow: { flexDirection: 'row', alignItems: 'center', minWidth: 108 },
   dockPutt: { flex: PLAY_DOCK_PUTT_FLEX, minWidth: PLAY_CONTROL_MIN_TAP },

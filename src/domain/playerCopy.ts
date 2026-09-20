@@ -182,6 +182,11 @@ export function formatPuttCount(n: number): string {
   return count === 1 ? '1 putt' : `${count} putts`;
 }
 
+/** In-round HUD: thru N holes and ±par from finished persisted scores. */
+export function formatRunningParBadge(thru: number, toParLabel: string | null): string {
+  return toParLabel ? `thru ${thru}, ${toParLabel}` : `thru ${thru}`;
+}
+
 export function markedSuggestedMessage(shortName: string): string {
   return `Marked ${shortName} (suggested) · Change club.`;
 }
