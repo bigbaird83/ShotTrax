@@ -301,12 +301,16 @@ test('Signal Lab: TF 51.x finished-hole chip exposes no-length putt rows without
   assert.equal(missThenEmpty.puttRows[1]?.missingLength, true);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const plan = hole.slice(
+    hole.indexOf('const finishedMini = planFinishedHoleMiniSummary'),
+    hole.indexOf('const dockFinish'),
+  );
+  assert.match(plan, /lengths: hole\.puttLengths/);
   const header = hole.slice(hole.indexOf('styles.stickyInner'), hole.indexOf('!hideHoleButtons'));
   assert.match(header, /testID="finished-hole-chip"/);
   assert.match(header, /setScorecardOpen\(true\)/);
   assert.match(header, /<FinishedPuttRows/);
   assert.match(header, /finishedMini\.puttRows/);
-  assert.match(header, /lengths: hole\.puttLengths/);
   assert.doesNotMatch(header, /setPuttOpen\(true\)|finishHolePutts|Alert\.alert|Modal/);
   assert.doesNotMatch(header, /puttGps|inventPutt|greenEdge|centroid/i);
 

@@ -548,7 +548,8 @@ test('Signal Lab: TF 51.x attach putt length after no-length Made it — stats o
   );
   assert.match(attach, /planAttachPuttLength/);
   assert.match(attach, /UPDATE holes SET putt_lengths = \?/);
-  assert.doesNotMatch(attach, /putts_done|updateHoleScore|persistCloseHoleScore|finishHolePutts/);
+  assert.match(attach, /putts_done \?\? 0/);
+  assert.doesNotMatch(attach, /SET putts_done|updateHoleScore|persistCloseHoleScore|finishHolePutts/);
   assert.doesNotMatch(attach, /lat|lng|acceptFix|insertShot/);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
