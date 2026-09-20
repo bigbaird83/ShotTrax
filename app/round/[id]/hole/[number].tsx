@@ -1521,9 +1521,7 @@ export default function HoleScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={COPY.holeOut}
                   disabled={readOnly || placing || busy}
-                  onPress={
-                    dockFinish.showPutts && puttDraft.lengths.length > 0 ? () => onMadeIt() : onFinishHole
-                  }
+                  onPress={onFinishHole}
                   style={[
                     styles.dockAction,
                     styles.dockFinishHole,

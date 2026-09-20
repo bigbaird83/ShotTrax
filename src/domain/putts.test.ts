@@ -45,6 +45,8 @@ import {
   planPuttLengthSlots,
   planPlayDockFinish,
   playDockHoleOutLabel,
+  playDockHoleOutCallsMadeIt,
+  playDockHoleOutIsChipInOnly,
   playDockPuttLabel,
   playDockPuttOpensExistingSheet,
   playDockPuttUsesShowPuttPillsGate,
@@ -318,13 +320,17 @@ test('Finish hole / putts live on the play dock — not buried in Scorecard', ()
   assert.match(dock, /<PuttDock/);
   assert.match(dock, /openPuttSheet\(holeNumber\)/);
   assert.match(dock, /COPY\.holeOut/);
-  assert.match(dock, /onFinishHole|onMadeIt/);
+  assert.match(dock, /onPress=\{onFinishHole\}/);
+  assert.doesNotMatch(dock, /onMadeIt/);
   const puttAt = dock.indexOf('<PuttDock');
   const holeOutAt = dock.indexOf('testID="play-dock-hole-out"');
   assert.ok(puttAt >= 0 && holeOutAt > puttAt);
   assert.equal(playDockPuttOpensExistingSheet(), true);
   assert.equal(playDockPuttUsesShowPuttPillsGate(), true);
   assert.equal(playDockPuttLabel(), 'Putt');
+  assert.equal(playDockHoleOutIsChipInOnly(), true);
+  assert.equal(playDockHoleOutCallsMadeIt(), false);
+  assert.equal(playDockKeepsHoleOutForOffGreen(), true);
   assert.match(play, /styles\.scorecardChip/);
   assert.doesNotMatch(dock, /COPY\.scorecard/);
   assert.match(hole, /finishHoleOut/);

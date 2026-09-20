@@ -845,6 +845,8 @@ test('Signal: dock Putt sits left of a shrunken Hole Out — not a third row', (
   const holeOutAt = dock.indexOf('testID="play-dock-hole-out"');
   assert.ok(puttAt >= 0 && holeOutAt > puttAt);
   assert.match(dock, /openPuttSheet\(holeNumber\)/);
+  assert.match(dock, /onPress=\{onFinishHole\}/);
+  assert.doesNotMatch(dock, /onMadeIt/);
   assert.match(dock, /styles\.dockPuttHoleOutRow/);
   assert.match(dock, /styles\.dockPutt/);
   assert.match(dock, /styles\.dockHoleOutShrunk/);

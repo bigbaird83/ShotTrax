@@ -218,7 +218,8 @@ test('Signal Lab: TF 48 chip sits in play header chrome; putt sheet / dock / Add
   const dock = hole.slice(hole.indexOf('style={[styles.dock'), hole.indexOf('<FullSheet'));
   assert.match(dock, /testID="play-dock-hole-out"/);
   assert.match(dock, /COPY\.holeOut/);
-  assert.match(dock, /onFinishHole/);
+  assert.match(dock, /onPress=\{onFinishHole\}/);
+  assert.doesNotMatch(dock, /onMadeIt/);
   assert.doesNotMatch(dock, /finished-hole-chip|planFinishedHoleMiniSummary/);
 
   const sheet = readFileSync(new URL('../ui/PuttSheetBody.tsx', import.meta.url), 'utf8');

@@ -34,6 +34,8 @@ import {
   madeItRequiresLengthPick,
   planMadeIt,
   planMadeItFromPick,
+  playDockHoleOutCallsMadeIt,
+  playDockHoleOutIsChipInOnly,
   playDockKeepsHoleOutForOffGreen,
   playDockPuttOpensExistingSheet,
   playDockPuttUsesShowPuttPillsGate,
@@ -245,7 +247,8 @@ test('Signal Lab: TF 49 putt sheet is pick → Made it on putt N≥1; Add putt i
   const dock = hole.slice(hole.indexOf('style={[styles.dock'), hole.indexOf('<FullSheet'));
   assert.match(dock, /testID="play-dock-hole-out"/);
   assert.match(dock, /COPY\.holeOut/);
-  assert.match(dock, /onFinishHole/);
+  assert.match(dock, /onPress=\{onFinishHole\}/);
+  assert.doesNotMatch(dock, /onMadeIt/);
   assert.match(dock, /<PuttDock/);
   assert.match(dock, /openPuttSheet\(holeNumber\)/);
   assert.match(dock, /styles\.dockHoleOutShrunk/);
@@ -254,6 +257,9 @@ test('Signal Lab: TF 49 putt sheet is pick → Made it on putt N≥1; Add putt i
   assert.ok(puttAt >= 0 && holeOutAt > puttAt);
   assert.doesNotMatch(dock, /onAdd=\{onAddPutt\}/);
   assert.doesNotMatch(dock, /PUTT_LENGTHS/);
+  assert.equal(playDockHoleOutIsChipInOnly(), true);
+  assert.equal(playDockHoleOutCallsMadeIt(), false);
+  assert.equal(playDockKeepsHoleOutForOffGreen(), true);
   const finish = hole.slice(hole.indexOf('const onFinishHole'), hole.indexOf('const onAddPenalty'));
   assert.match(finish, /finishHoleOut/);
   assert.doesNotMatch(finish, /addPlacedShot|insertNoGpsShot|club_putter/);
@@ -492,6 +498,32 @@ test('Signal Lab: putter stays out of averages and top-3', () => {
     { source: 'yards_to_green', dYards: 10 },
   );
   assert.ok(!ranked.some((club) => club.id === PUTTER_CLUB_ID));
+});
+
+test('Signal: dock Putt opens sheet; Hole Out is chip-in only; no third dock row', () => {
+  assert.equal(playDockPuttOpensExistingSheet(), true);
+  assert.equal(playDockPuttUsesShowPuttPillsGate(), true);
+  assert.equal(showPuttPills({ putting: true }), true);
+  assert.equal(showPuttPills({ toGreen: { yards: 40, quality: 'good' } }), true);
+  assert.equal(showPuttPills({ toGreen: { yards: 40, quality: 'soft' } }), true);
+  assert.equal(showPuttPills({ toGreen: { yards: 41, quality: 'good' } }), false);
+  assert.equal(showPuttPills({ toGreen: { yards: 12, quality: 'forced' } }), false);
+  assert.equal(playDockHoleOutIsChipInOnly(), true);
+  assert.equal(playDockHoleOutCallsMadeIt(), false);
+  assert.equal(playDockKeepsHoleOutForOffGreen(), true);
+  assert.equal(holeOutFlagsLastRealShot(), true);
+  assert.equal(holeOutInventPutts(), false);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const dock = hole.slice(hole.indexOf('style={[styles.dock'), hole.indexOf('<FullSheet'));
+  assert.equal((dock.match(/styles\.dockRow/g) ?? []).length, 2);
+  assert.match(dock, /openPuttSheet\(holeNumber\)/);
+  assert.match(dock, /onPress=\{onFinishHole\}/);
+  assert.doesNotMatch(dock, /onMadeIt/);
+  assert.doesNotMatch(dock, /PUTT_LENGTHS/);
+  const finish = hole.slice(hole.indexOf('const onFinishHole'), hole.indexOf('const onAddPenalty'));
+  assert.match(finish, /finishHoleOut/);
+  assert.doesNotMatch(finish, /lat|lng|acceptFix|insertShot|club_putter/);
 });
 
 test('Signal Lab: next hole stays on play — All clubs does not auto-open', () => {

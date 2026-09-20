@@ -534,6 +534,15 @@ export function playDockPuttLabel(): 'Putt' {
   return 'Putt';
 }
 
+/** Dock Hole Out is the off-green chip-in. Made it stays on the putt sheet. */
+export function playDockHoleOutIsChipInOnly(): true {
+  return true;
+}
+
+export function playDockHoleOutCallsMadeIt(): false {
+  return false;
+}
+
 export function playDockHoleDoneLabel(): 'Hole Out' {
   return 'Hole Out';
 }
