@@ -196,10 +196,13 @@ test('Watch selection is the phone selection; strip press marks', () => {
   assert.match(session, /func select\(_ clubId: String\)/);
   const service = readFileSync(new URL('../services/watchClub.ts', import.meta.url), 'utf8');
   assert.match(service, /intent\.kind === 'select'/);
-  assert.doesNotMatch(
-    service.slice(service.indexOf("if (intent.kind === 'select')"), service.indexOf("if (intent.kind === 'leave')")),
-    /markShotWithClub/,
+  const selectPath = service.slice(
+    service.indexOf("if (intent.kind === 'select')"),
+    service.indexOf("if (intent.kind === 'leave')"),
   );
+  assert.match(selectPath, /onSelectClub/);
+  assert.match(selectPath, /hapticSelect/);
+  assert.doesNotMatch(selectPath, /markShotWithClub/);
 });
 
 test('Watch tap club X updates phone selectedClub to X and still marks', () => {

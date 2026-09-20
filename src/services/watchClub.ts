@@ -158,6 +158,7 @@ async function handlePick(token: string, json: string): Promise<void> {
 
   if (intent.kind === 'select') {
     ctx.onSelectClub?.(intent.clubId);
+    hapticSelect();
     const label = ctx.labelForClub(intent.clubId) ?? intent.clubId;
     await replyToken(token, { ok: true, feedback: label });
     return;
