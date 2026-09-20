@@ -41,8 +41,15 @@ import {
   playDockKeepsHoleOutForOffGreen,
   watchClubPickHoleOutIsChipInOnly,
   watchPuttSheetAddPuttIsMissOnly,
+  watchPuttSheetAddPuttLabel,
+  watchPuttSheetLengthLabel,
   watchPuttSheetMadeItAlwaysEnabled,
+  watchPuttSheetMadeItLabel,
   watchPuttSheetMadeItRequiresLength,
+  watchPuttSheetUndoLabel,
+  watchPuttSheetUsesTwoColumnGrid,
+  WATCH_PUTT_LENGTHS,
+  PUTT_LENGTHS,
   playDockPuttOpensExistingSheet,
   playDockPuttUsesShowPuttPillsGate,
   puttLoggedWithoutLength,
@@ -276,17 +283,20 @@ test('Signal Lab: TF 49 putt sheet is pick → Made it on putt N≥1; Add putt i
     watch.indexOf('} else if session.putt.open'),
     watch.indexOf('} else {\n        clubPick'),
   );
-  assert.ok(puttOpen.indexOf('puttMadeIt') > puttOpen.indexOf('ScrollView'));
+  assert.doesNotMatch(puttOpen, /ScrollView/);
+  assert.match(puttOpen, /puttSheet/);
   const watchSheet = watch.slice(watch.indexOf('private var puttSheet'), watch.indexOf('private var clubPick'));
+  assert.match(watchSheet, /LazyVGrid/);
+  assert.match(watchSheet, /GridItem\(\.flexible/);
   assert.match(watchSheet, /session\.pickPuttLength\(bucket\.id\)/);
   assert.doesNotMatch(watchSheet, /session\.addPutt\(lengthId: bucket\.id\)/);
-  assert.match(watchSheet, /Text\("Add a putt"\)/);
+  assert.match(watchSheet, /Text\("0–3"\)|watchPuttBuckets/);
+  assert.match(watchSheet, /Text\("Add putt"\)/);
   assert.match(watchSheet, /session\.addPutt\(\)/);
   assert.match(watchSheet, /Text\("Made it"\)/);
-  assert.match(watchSheet, /private var puttMadeIt/);
   assert.match(watchSheet, /\.disabled\(session\.sending\)/);
   assert.doesNotMatch(watchSheet, /!session\.putt\.canMake/);
-  assert.match(watchSheet, /Text\("Undo putt"\)/);
+  assert.match(watchSheet, /Text\("Undo"\)/);
   assert.match(watchSheet, /Text\("No length — pick a distance"\)/);
   assert.doesNotMatch(watchSheet, /Text\("Hole Out"\)/);
   assert.doesNotMatch(watchSheet, /alert|Alert|sheet\(/);
@@ -294,6 +304,20 @@ test('Signal Lab: TF 49 putt sheet is pick → Made it on putt N≥1; Add putt i
   assert.equal(watchPuttSheetMadeItRequiresLength(), false);
   assert.equal(watchPuttSheetAddPuttIsMissOnly(), true);
   assert.equal(watchClubPickHoleOutIsChipInOnly(), true);
+  assert.equal(watchPuttSheetUsesTwoColumnGrid(), true);
+  assert.equal(watchPuttSheetAddPuttLabel(), 'Add putt');
+  assert.equal(watchPuttSheetUndoLabel(), 'Undo');
+  assert.equal(watchPuttSheetMadeItLabel(), 'Made it');
+  assert.deepEqual(
+    WATCH_PUTT_LENGTHS.map((row) => row.label),
+    ['0–3', '3–10', '10–20', '20+'],
+  );
+  assert.deepEqual(
+    WATCH_PUTT_LENGTHS.map((row) => row.id),
+    PUTT_LENGTHS.map((row) => row.id),
+  );
+  assert.equal(watchPuttSheetLengthLabel('inside_3'), '0–3');
+  assert.equal(COPY.addPutt, 'Add a putt');
   const watchDock = watch.slice(watch.indexOf('private var clubPick'), watch.indexOf('private var moreClubs'));
   assert.match(watchDock, /Text\("Hole Out"\)/);
   assert.match(watchDock, /session\.madeIt\(\)/);

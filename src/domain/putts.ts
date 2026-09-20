@@ -585,6 +585,34 @@ export function watchClubPickHoleOutIsChipInOnly(): true {
   return true;
 }
 
+/** Watch putt menu is a compact 2-column grid. Phone copy stays long-form. */
+export const WATCH_PUTT_LENGTHS: { id: PuttLengthId; label: string }[] = [
+  { id: 'inside_3', label: '0–3' },
+  { id: '3_to_10', label: '3–10' },
+  { id: '10_to_20', label: '10–20' },
+  { id: 'over_20', label: '20+' },
+];
+
+export function watchPuttSheetLengthLabel(id: PuttLengthId): string {
+  return WATCH_PUTT_LENGTHS.find((row) => row.id === id)?.label ?? id;
+}
+
+export function watchPuttSheetUsesTwoColumnGrid(): true {
+  return true;
+}
+
+export function watchPuttSheetAddPuttLabel(): 'Add putt' {
+  return 'Add putt';
+}
+
+export function watchPuttSheetUndoLabel(): 'Undo' {
+  return 'Undo';
+}
+
+export function watchPuttSheetMadeItLabel(): 'Made it' {
+  return 'Made it';
+}
+
 export function playDockHoleDoneLabel(): 'Hole Out' {
   return 'Hole Out';
 }

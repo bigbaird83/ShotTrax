@@ -57,8 +57,14 @@ import {
   playDockKeepsHoleOutForOffGreen,
   watchClubPickHoleOutIsChipInOnly,
   watchPuttSheetAddPuttIsMissOnly,
+  watchPuttSheetAddPuttLabel,
+  watchPuttSheetLengthLabel,
   watchPuttSheetMadeItAlwaysEnabled,
+  watchPuttSheetMadeItLabel,
   watchPuttSheetMadeItRequiresLength,
+  watchPuttSheetUndoLabel,
+  watchPuttSheetUsesTwoColumnGrid,
+  WATCH_PUTT_LENGTHS,
   putterOpensPuttSheet,
   puttLoggedWithoutLength,
   puttSheetCtaLabel,
@@ -382,9 +388,11 @@ test('Finish hole / putts live on the play dock — not buried in Scorecard', ()
   assert.match(watch, /Text\("Hole Out"\)/);
   assert.match(watch, /session\.madeIt\(\)/);
   assert.match(watch, /showPuttChips|puttSheet/);
-  assert.match(watch, /private var puttMadeIt/);
   const watchSheet = watch.slice(watch.indexOf('private var puttSheet'), watch.indexOf('private var clubPick'));
+  assert.match(watchSheet, /LazyVGrid/);
   assert.match(watchSheet, /Text\("Made it"\)/);
+  assert.match(watchSheet, /Text\("Add putt"\)/);
+  assert.match(watchSheet, /Text\("Undo"\)/);
   assert.match(watchSheet, /\.disabled\(session\.sending\)/);
   assert.doesNotMatch(watchSheet, /!session\.putt\.canMake/);
   assert.doesNotMatch(watchSheet, /Text\("Hole Out"\)/);
@@ -392,6 +400,20 @@ test('Finish hole / putts live on the play dock — not buried in Scorecard', ()
   assert.equal(watchPuttSheetMadeItRequiresLength(), false);
   assert.equal(watchPuttSheetAddPuttIsMissOnly(), true);
   assert.equal(watchClubPickHoleOutIsChipInOnly(), true);
+  assert.equal(watchPuttSheetUsesTwoColumnGrid(), true);
+  assert.equal(watchPuttSheetAddPuttLabel(), 'Add putt');
+  assert.equal(watchPuttSheetUndoLabel(), 'Undo');
+  assert.equal(watchPuttSheetMadeItLabel(), 'Made it');
+  assert.deepEqual(
+    WATCH_PUTT_LENGTHS.map((row) => [row.id, row.label]),
+    [
+      ['inside_3', '0–3'],
+      ['3_to_10', '3–10'],
+      ['10_to_20', '10–20'],
+      ['over_20', '20+'],
+    ],
+  );
+  assert.equal(watchPuttSheetLengthLabel('inside_3'), '0–3');
   assert.doesNotMatch(watch, /Scorecard/);
 });
 
