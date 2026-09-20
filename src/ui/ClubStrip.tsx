@@ -90,10 +90,15 @@ export function ClubStrip({ items, pickId, windowStart = 0, onPick, disabled, co
     items.map((item) => item.id),
     start,
   );
+  const openX = pillWidth > 0 ? offsetForIndex(origin + start) : 0;
+
+  const snapOpen = () => {
+    if (width <= 0 || items.length === 0 || pillWidth <= 0) return;
+    scrollToIndex(origin + start, false);
+  };
 
   useEffect(() => {
-    if (width <= 0 || items.length === 0) return;
-    scrollToIndex(origin + start, false);
+    snapOpen();
     // Selection / label changes do not re-open the window. A new hole updates windowKey.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [windowKey, origin, pillWidth, width]);
@@ -126,11 +131,15 @@ export function ClubStrip({ items, pickId, windowStart = 0, onPick, disabled, co
       onTouchCancel={() => setPassMap(false)}>
       {width > 0 ? (
         <ScrollView
+          key={windowKey}
           ref={scrollRef}
           horizontal
           nestedScrollEnabled
           showsHorizontalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          contentOffset={{ x: openX, y: 0 }}
+          onLayout={snapOpen}
+          onContentSizeChange={snapOpen}
           onMomentumScrollEnd={onWrapSettle}
           onScrollEndDrag={onWrapSettle}
           contentContainerStyle={{

@@ -2,14 +2,8 @@ import SwiftUI
 
 struct ContentView: View {
   @EnvironmentObject private var session: WatchClubSession
+  @Environment(\.scenePhase) private var scenePhase
   @State private var showAllClubs = false
-
-  private let buckets: [(id: String, label: String)] = [
-    ("inside_3", "Under 3 ft"),
-    ("3_to_10", "3–10"),
-    ("10_to_20", "10–20"),
-    ("over_20", "20+"),
-  ]
 
   private let watchPuttBuckets: [(id: String, label: String)] = [
     ("inside_3", "0–3"),
@@ -66,6 +60,10 @@ struct ContentView: View {
       }
     }
     .background(Color("bg").ignoresSafeArea())
+    .onChange(of: scenePhase) { phase in
+      if phase == .active { session.noteScenePhase("active") }
+      if phase == .background { session.noteScenePhase("background") }
+    }
   }
 
   @ViewBuilder
@@ -157,22 +155,7 @@ struct ContentView: View {
 
   @ViewBuilder
   private var puttSheet: some View {
-    Text("How long was the putt?")
-      .font(.system(size: 12, weight: .bold))
-      .foregroundStyle(Color("cream"))
-
-    ForEach(Array(session.putt.lengths.enumerated()), id: \.offset) { index, lengthId in
-      Text("Putt \(index + 1) · \(session.putt.label(for: lengthId))")
-        .font(.system(size: 11, weight: .heavy))
-        .foregroundStyle(Color("cream"))
-    }
-
-    if session.putt.canAdd {
-      Text("Putt \(session.putt.lengths.count + 1)")
-        .font(.system(size: 11, weight: .heavy))
-        .foregroundStyle(Color("cream"))
-    }
-
+    // Compact 2-col first so Made it stays on-screen — no hunt, no scroll.
     LazyVGrid(columns: [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)], spacing: 6) {
       ForEach(watchPuttBuckets, id: \.id) { bucket in
         Button(action: { session.pickPuttLength(bucket.id) }) {
@@ -182,7 +165,7 @@ struct ContentView: View {
         }
         .buttonStyle(.bordered)
         .tint(session.putt.pending == bucket.id ? Color("accent") : Color("cream"))
-        .disabled(session.sending || !session.putt.canAdd)
+        .disabled(!session.putt.canAdd)
       }
 
       Button(action: { session.addPutt() }) {
@@ -209,8 +192,14 @@ struct ContentView: View {
       .buttonStyle(.borderedProminent)
       .tint(Color("accent"))
       .foregroundStyle(Color.black)
-      .disabled(session.sending)
       .gridCellColumns(2)
+    }
+
+    if !session.putt.lengths.isEmpty {
+      Text(session.putt.lengths.enumerated().map { "Putt \($0.offset + 1) · \(session.putt.label(for: $0.element))" }.joined(separator: " · "))
+        .font(.system(size: 10, weight: .heavy))
+        .foregroundStyle(Color("cream"))
+        .lineLimit(2)
     }
 
     if session.putt.pending == nil && session.putt.lengths.count < 5 {
@@ -306,27 +295,6 @@ struct ContentView: View {
           }
           .frame(height: 52)
 
-          if showPuttChips {
-            HStack(spacing: 4) {
-              ForEach(buckets, id: \.id) { bucket in
-                Button(action: { session.addPutt(lengthId: bucket.id) }) {
-                  Text(session.putt.label(for: bucket.id))
-                    .font(.system(size: 11, weight: .heavy))
-                    .foregroundStyle(Color("cream"))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                    .frame(maxWidth: .infinity, minHeight: 32)
-                    .overlay(
-                      RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color("cream"), lineWidth: 1)
-                    )
-                }
-                .buttonStyle(.plain)
-                .disabled(session.sending || !session.putt.canAdd)
-              }
-            }
-          }
-
           HStack(spacing: 8) {
             Button(action: { session.madeIt() }) {
               Text("Hole Out")
@@ -379,15 +347,6 @@ struct ContentView: View {
       }
     }
     .padding(.horizontal, 4)
-  }
-
-  /// Putter selected, or haversine ≤ 40 yd to hydrated green (good/soft only).
-  /// Hard / forced quality never opens chips — putter-selected only.
-  private var showPuttChips: Bool {
-    if session.list.selectedClubId == "club_putter" { return true }
-    guard session.list.yardsQuality == "good" || session.list.yardsQuality == "soft" else { return false }
-    guard let yards = session.list.yardsToGreen else { return false }
-    return yards <= 40
   }
 
   private var moreClubs: [String] {

@@ -21,6 +21,12 @@ import {
   type PuttSheetMessage,
 } from '../domain/watchMessages';
 import type { PuttLengthId } from '../domain/putts';
+import {
+  drainWatchPuttPickQueue,
+  forgetWatchPuttPickAt,
+  queueWatchPuttPickEvent,
+  watchPuttPickShouldApply,
+} from '../domain/watchPuttSync';
 import { hapticMark, hapticSelect, hapticWarn } from '../ui/haptics';
 import { markShotWithClub, promptForPlan } from './shotActions';
 import { handleWatchNearbyJson, isWatchNearbyJson } from './watchNearby';
@@ -55,6 +61,7 @@ export function watchBridgeAvailable(): boolean {
 
 export function setWatchClubContext(next: WatchClubContext | null): void {
   context = next;
+  if (next) void flushPendingPuttPicks();
 }
 
 export async function pushWatchClubList(msg: ClubListMessage): Promise<void> {
@@ -246,12 +253,21 @@ async function handlePuttPick(token: string, json: string): Promise<void> {
     return;
   }
   const ctx = context;
-  if (!ctx || ctx.readOnly || !ctx.onPuttPick) {
+  if (!ctx || !ctx.onPuttPick) {
+    queueWatchPuttPickEvent({ token, json, at: pick.at });
+    return;
+  }
+  if (ctx.readOnly) {
     await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
+    return;
+  }
+  if (!watchPuttPickShouldApply(pick.at)) {
+    await replyToken(token, { ok: true, feedback: PUTTS_ON_WATCH });
     return;
   }
   try {
     const result = await ctx.onPuttPick(pick);
+    if (!result.ok) forgetWatchPuttPickAt(pick.at);
     if (result.ok && pick.action === 'made') {
       hapticMark();
     } else if (result.ok) {
@@ -261,8 +277,16 @@ async function handlePuttPick(token: string, json: string): Promise<void> {
     }
     await replyToken(token, result.ok ? result : { ok: false, feedback: result.feedback || PHONE_UNAVAILABLE });
   } catch {
+    forgetWatchPuttPickAt(pick.at);
     hapticWarn();
     await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
+  }
+}
+
+async function flushPendingPuttPicks(): Promise<void> {
+  const rows = drainWatchPuttPickQueue();
+  for (const row of rows) {
+    await handlePuttPick(row.token, row.json);
   }
 }
 

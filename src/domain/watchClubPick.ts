@@ -51,6 +51,16 @@ export function watchPutterOpensPuttSheet(): true {
   return true;
 }
 
+/** Putter tap opens the putt sheet on Watch immediately — do not wait for phone push. */
+export function watchPutterPickOpensPuttSheetImmediately(): true {
+  return true;
+}
+
+/** Made it lives on the putt sheet, not the club-pick chip row. */
+export function watchPuttChipsShowMadeIt(): false {
+  return false;
+}
+
 /** Watch putter tap never attaches lat/lng. Domain plan is marks:false / opensPuttSheet. */
 export function watchPutterSkipsAttachWatchFix(): true {
   return true;

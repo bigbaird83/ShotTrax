@@ -37,6 +37,7 @@ import {
   clubStripSortsByIronHybridName,
   clubStripDropsNumberedClub,
   clubStripPicksThreeClosest,
+  addShotSheetOpeningClubIds,
   clubStripThreeClosestIds,
   clubStripSeamGapOnly,
   clubStripWrapsToFillEmptySide,
@@ -630,11 +631,32 @@ test('282-yard hole opens 2i, 3W, Dr with no wedge; 100-yard hole centers the cl
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   assert.match(hole, /windowStart=\{stripPlan\.windowStart\}/);
+  assert.match(hole, /windowStart=\{placeStripPlan\.windowStart\}/);
+  assert.match(hole, /addShotSheetOpeningClubIds/);
+  assert.match(hole, /items=\{placeOpeningItems/);
   const phone = readFileSync(new URL('../ui/ClubStrip.tsx', import.meta.url), 'utf8');
   assert.match(phone, /windowStart/);
   assert.match(phone, /clubStripWindowKey/);
+  assert.match(phone, /contentOffset/);
   assert.equal(clubStripWindowKey(tee.ids, tee.windowStart), clubStripWindowKey(tee.ids, tee.windowStart));
   assert.match(phone, /item\.label/);
+  const smokingBag = [
+    { id: 'club_sw', carry: 101 },
+    { id: 'club_gw', carry: 120 },
+    { id: 'club_48', carry: 136 },
+    { id: 'club_2i', carry: 239 },
+    { id: 'club_3w', carry: 254 },
+    { id: 'club_driver', carry: 280 },
+  ];
+  assert.deepEqual(
+    addShotSheetOpeningClubIds({ clubs: smokingBag, headerYards: 281 }),
+    ['club_2i', 'club_3w', 'club_driver'],
+  );
+  assert.deepEqual(clubStripThreeClosestIds(smokingBag, 281), ['club_2i', 'club_3w', 'club_driver']);
+  assert.notDeepEqual(
+    addShotSheetOpeningClubIds({ clubs: smokingBag, headerYards: 281 }),
+    ['club_sw', 'club_gw', 'club_48'],
+  );
   const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
   assert.match(watch, /stripWindowStart/);
   assert.match(watch, /stripWindowToken/);

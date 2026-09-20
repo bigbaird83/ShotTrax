@@ -483,7 +483,7 @@ export function holeClosedByShot<T extends { seq: number; holeOut?: boolean | nu
 export type PlayDockFinishKind = 'hole_out' | 'hidden';
 
 /**
- * Same club slot is always Hole Out. A Putt button sits to its left only
+ * Same club slot is always Hole Out. A Putt button sits to its left
  * when putter is selected or GPS is within ~40 yd of the hydrated green
  * centroid (haversine yards-to-green, good/soft only). Hard/forced →
  * putter-selected only. Putt opens the existing putt sheet. Hole Out
@@ -552,6 +552,11 @@ export function playDockPuttOpensExistingSheet(): true {
 
 export function playDockPuttUsesShowPuttPillsGate(): true {
   return true;
+}
+
+/** Signal + Fairway TF 53: Putt is putter or ≤40 yd good/soft — not always-on. */
+export function playDockPuttAlwaysWhenUnfinished(): false {
+  return false;
 }
 
 export function playDockPuttLabel(): 'Putt' {

@@ -2,12 +2,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { DEFAULT_BAG, PUTTER_CLUB_ID } from './defaultBag';
-import { clubStripOpeningIds, planClubStrip } from './clubStrip';
+import { addShotSheetOpeningClubIds, clubStripOpeningIds, planClubStrip } from './clubStrip';
 import { haversineYards, roundYards } from './haversine';
 import type { Club } from './types';
 import {
   addShotAfterMarksSuggestsFromLastLanding,
   addShotEmptyHoleSuggestsFromTee,
+  addShotSheetRankYards,
+  addShotSheetUsesHeaderYards,
   addShotSuggestIncludesPutter,
   addShotSuggestPutterHasCarry,
   addShotSuggestRanksShotYards,
@@ -20,9 +22,17 @@ import {
   rankCatchUpClubs,
   rankDistanceYards,
   rankTopClubs,
+  playAndAddShotShareClosestCarryRanker,
+  rankClosestCarryIds,
+  remainingPinRanksLastClosedShot,
+  remainingPinUsesPhoneGps,
   resolveAddShotSuggestTarget,
+  top3RanksByAbsCarryMinusD,
+  top3SortsByCarryAscending,
+  top3SortsByCarryDescending,
   resolveDistanceTarget,
   resolveNextShotDistanceTarget,
+  resolveRemainingPinTarget,
   shotYardsDistanceTarget,
   type RankClubInput,
 } from './rankClubs';
@@ -518,11 +528,21 @@ test('Add shot suggested clubs use the same remaining-yards D as the play wheel'
   assert.match(hole, /resolveAddShotSuggestTarget/);
   assert.match(hole, /addShotSuggestYardsLeft/);
   assert.match(placeStrip, /lastLanding: lastLandingMark\(shots\)/);
+  assert.match(placeStrip, /tee: holeTee/);
   assert.match(placeStrip, /courseToGreen: toGreen/);
   assert.match(placeStrip, /playTarget: addShotSuggestTarget/);
+  assert.match(placeStrip, /addShotSheetRankYards/);
+  assert.match(placeStrip, /headerYards: pickerYards/);
   assert.match(placeStrip, /yardsLeft: placeSuggestYards/);
-  assert.doesNotMatch(placeStrip, /yardsLeft: pickerYards/);
+  assert.doesNotMatch(placeStrip, /yardsLeft: pickerYards;/);
   assert.doesNotMatch(placeStrip, /yardsLeft: placedYards/);
+  assert.match(hole, /windowStart=\{placeStripPlan\.windowStart\}/);
+  assert.match(hole, /addShotSheetOpeningClubIds/);
+  assert.match(hole, /items=\{placeOpeningItems/);
+  assert.equal(addShotSheetUsesHeaderYards(), true);
+  assert.equal(addShotSheetRankYards({ headerYards: 281, remainingPin: 371 }), 281);
+  assert.equal(addShotSheetRankYards({ headerYards: 281, remainingPin: null }), 281);
+  assert.equal(addShotSheetRankYards({ headerYards: null, remainingPin: 371 }), 371);
   assert.match(placeStrip, /editClubOpen/);
   assert.doesNotMatch(placeStrip, /phone|fix\?\.lat|house/);
   assert.match(hole, /const placeStripItems[\s\S]*?filter\(\(id\) => !isPutterClubId/);
@@ -632,4 +652,197 @@ test('typical-carry seed ranks a stock club before 5 live shots; live avg takes 
   );
   assert.equal(live[0]?.id, 'club_gw');
   assert.equal(live[0]?.deltaYards, 0);
+});
+
+test('TF 53: top-3 is closest carry to remaining pin yards — not shortest or longest', () => {
+  assert.equal(remainingPinRanksLastClosedShot(), false);
+  assert.equal(remainingPinUsesPhoneGps(), false);
+  assert.equal(top3RanksByAbsCarryMinusD(), true);
+  assert.equal(top3SortsByCarryDescending(), false);
+  assert.equal(top3SortsByCarryAscending(), false);
+  assert.equal(playAndAddShotShareClosestCarryRanker(), true);
+
+  const cypress6Tee = { lat: 35.0349146, lng: -92.0203523 };
+  const cypress6Green = { lat: 35.0332467, lng: -92.0234644 };
+  const teeToPin = markToGreen(cypress6Tee, cypress6Green);
+  assert.ok(teeToPin.yards != null && teeToPin.yards > 300 && teeToPin.yards < 430);
+  const empty = resolveRemainingPinTarget({
+    landingToGreen: { yards: null, quality: 'none' },
+    teeToGreen: teeToPin,
+    courseToGreen: { yards: null, quality: 'none' },
+  });
+  assert.deepEqual(empty, { source: 'yards_to_green', dYards: teeToPin.yards });
+  assert.notEqual(empty?.dYards, 280);
+  const ignoresLastClosed = resolveNextShotDistanceTarget({
+    landingToGreen: { yards: null, quality: 'none' },
+    teeToGreen: teeToPin,
+    courseToGreen: { yards: null, quality: 'none' },
+    lastClosedYards: 280,
+  });
+  assert.deepEqual(ignoresLastClosed, empty);
+
+  const noPin = resolveRemainingPinTarget({
+    landingToGreen: { yards: null, quality: 'none' },
+    teeToGreen: { yards: null, quality: 'none' },
+    courseToGreen: { yards: null, quality: 'none' },
+  });
+  assert.equal(noPin, null);
+
+  const landing = { lat: cypress6Tee.lat + (220 * 0.9144) / 111_320, lng: cypress6Tee.lng };
+  const fromPin = markToGreen(landing, cypress6Green);
+  const after = resolveRemainingPinTarget({
+    landingToGreen: fromPin,
+    teeToGreen: teeToPin,
+    courseToGreen: { yards: 371, quality: 'good' },
+  });
+  assert.equal(after?.source, 'yards_to_green');
+  assert.equal(after?.dYards, fromPin.yards);
+  assert.notEqual(after?.dYards, teeToPin.yards);
+  assert.notEqual(after?.dYards, 220);
+
+  const docBag: RankClubInput[] = [
+    club({ id: 'club_lw', shortName: 'LW', loftRank: 17, avgYards: 0, count: 0, typicalCarryYards: 75 }),
+    club({ id: 'club_7i', shortName: '7i', loftRank: 9, avgYards: 0, count: 0, typicalCarryYards: 150 }),
+    club({ id: 'club_5i', shortName: '5i', loftRank: 7, avgYards: 0, count: 0, typicalCarryYards: 170 }),
+    club({ id: 'club_2i', shortName: '2i', loftRank: 4, avgYards: 0, count: 0, typicalCarryYards: 239 }),
+    club({ id: 'club_3w', shortName: '3W', loftRank: 1, avgYards: 0, count: 0, typicalCarryYards: 254 }),
+    club({ id: 'club_driver', shortName: 'Dr', loftRank: 0, avgYards: 0, count: 0, typicalCarryYards: 280 }),
+    club({ id: PUTTER_CLUB_ID, shortName: 'Pt', loftRank: 18, avgYards: 8, count: 20, typicalCarryYards: 8 }),
+  ];
+  const teeIds = rankTopClubs(docBag, empty).map((row) => row.id);
+  assert.deepEqual(teeIds, ['club_driver', 'club_3w', 'club_2i']);
+  assert.ok(!teeIds.includes(PUTTER_CLUB_ID));
+  const midIds = rankTopClubs(docBag, { source: 'yards_to_green', dYards: 155 }).map((row) => row.id);
+  assert.deepEqual(midIds, ['club_7i', 'club_5i', 'club_lw']);
+  assert.ok(!midIds.includes('club_driver'));
+  assert.ok(!midIds.includes('club_3w'));
+  const shortIds = rankTopClubs(docBag, { source: 'yards_to_green', dYards: 80 }).map((row) => row.id);
+  assert.equal(shortIds[0], 'club_lw');
+  assert.ok(!shortIds.includes('club_driver'));
+
+  const stripMid = planClubStrip({
+    clubs: docBag.map((row) => ({ id: row.id, carry: row.typicalCarryYards })),
+    yardsLeft: 155,
+  });
+  assert.deepEqual(clubStripOpeningIds(stripMid.ids, stripMid.windowStart), [
+    'club_lw',
+    'club_7i',
+    'club_5i',
+  ]);
+  assert.notDeepEqual(clubStripOpeningIds(stripMid.ids, stripMid.windowStart), [
+    'club_2i',
+    'club_3w',
+    'club_driver',
+  ]);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const pick = readFileSync(new URL('../../app/round/[id]/club-pick.tsx', import.meta.url), 'utf8');
+  assert.match(hole, /const teeToGreen = markToGreen\(holeTee, green\)/);
+  assert.match(hole, /teeToGreen,/);
+  assert.match(pick, /const teeToGreen = markToGreen\(holeTee, green\)/);
+  const watchPush = hole.slice(hole.indexOf('useWatchClubList'), hole.indexOf('if (!round || !hole)'));
+  assert.match(watchPush, /yardsToGreen: target\?\.dYards/);
+  assert.doesNotMatch(watchPush, /yardsToGreen: liveToGreen\.yards/);
+  assert.match(pick, /yardsToGreen: target\?\.dYards/);
+  assert.doesNotMatch(pick, /yardsToGreen\(fix, green\)/);
+
+  const withBomb = [
+    { id: 'club_lw', carry: 75 },
+    { id: 'club_7i', carry: 150 },
+    { id: 'club_5i', carry: 170 },
+    { id: 'club_2i', carry: 239 },
+    { id: 'club_3w', carry: 254 },
+    { id: 'club_driver', carry: 280 },
+    { id: 'club_bomb', carry: 400 },
+  ];
+  const longest3 = [...withBomb].sort((a, b) => b.carry - a.carry).slice(0, 3).map((row) => row.id);
+  assert.deepEqual(longest3, ['club_bomb', 'club_driver', 'club_3w']);
+  assert.deepEqual(rankClosestCarryIds(withBomb, 155), ['club_7i', 'club_5i', 'club_lw']);
+  assert.deepEqual(rankClosestCarryIds(withBomb, 281), ['club_driver', 'club_3w', 'club_2i']);
+  assert.ok(!rankClosestCarryIds(withBomb, 281).includes('club_bomb'));
+  const strip = readFileSync(new URL('./clubStrip.ts', import.meta.url), 'utf8');
+  assert.match(strip, /rankClosestCarryIds/);
+
+  const header281 = planClubStrip({
+    clubs: docBag.map((row) => ({ id: row.id, carry: row.typicalCarryYards })),
+    yardsLeft: addShotSheetRankYards({ headerYards: 281, remainingPin: empty?.dYards ?? null }),
+  });
+  assert.equal(addShotSheetRankYards({ headerYards: 281, remainingPin: empty?.dYards ?? null }), 281);
+  assert.deepEqual(clubStripOpeningIds(header281.ids, header281.windowStart), [
+    'club_2i',
+    'club_3w',
+    'club_driver',
+  ]);
+  assert.notDeepEqual(clubStripOpeningIds(header281.ids, header281.windowStart), [
+    'club_lw',
+    'club_7i',
+    'club_5i',
+  ]);
+  assert.equal(header281.windowStart > 0, true);
+
+  const smoking = planClubStrip({
+    clubs: [
+      { id: 'club_sw', carry: 101 },
+      { id: 'club_gw', carry: 120 },
+      { id: 'club_48', carry: 136 },
+      { id: 'club_7i', carry: 150 },
+      { id: 'club_2i', carry: 239 },
+      { id: 'club_3w', carry: 254 },
+      { id: 'club_driver', carry: 280 },
+    ],
+    yardsLeft: addShotSheetRankYards({ headerYards: 281, remainingPin: 40 }),
+  });
+  assert.deepEqual(rankClosestCarryIds(
+    [
+      { id: 'club_sw', carry: 101 },
+      { id: 'club_gw', carry: 120 },
+      { id: 'club_48', carry: 136 },
+      { id: 'club_2i', carry: 239 },
+      { id: 'club_3w', carry: 254 },
+      { id: 'club_driver', carry: 280 },
+    ],
+    281,
+  ), ['club_driver', 'club_3w', 'club_2i']);
+  assert.deepEqual(clubStripOpeningIds(smoking.ids, smoking.windowStart), [
+    'club_2i',
+    'club_3w',
+    'club_driver',
+  ]);
+  assert.deepEqual(clubStripOpeningIds(smoking.ids, 0), [
+    'club_sw',
+    'club_gw',
+    'club_48',
+  ]);
+  assert.deepEqual(
+    addShotSheetOpeningClubIds({
+      clubs: [
+        { id: 'club_sw', carry: 101 },
+        { id: 'club_gw', carry: 120 },
+        { id: 'club_48', carry: 136 },
+        { id: 'club_7i', carry: 150 },
+        { id: 'club_2i', carry: 239 },
+        { id: 'club_3w', carry: 254 },
+        { id: 'club_driver', carry: 280 },
+      ],
+      headerYards: 281,
+      remainingPin: 40,
+    }),
+    ['club_2i', 'club_3w', 'club_driver'],
+  );
+  assert.notDeepEqual(
+    addShotSheetOpeningClubIds({
+      clubs: [
+        { id: 'club_sw', carry: 101 },
+        { id: 'club_gw', carry: 120 },
+        { id: 'club_48', carry: 136 },
+        { id: 'club_2i', carry: 239 },
+        { id: 'club_3w', carry: 254 },
+        { id: 'club_driver', carry: 280 },
+      ],
+      headerYards: 281,
+    }),
+    ['club_sw', 'club_gw', 'club_48'],
+  );
+  assert.match(hole, /addShotSheetOpeningClubIds/);
+  assert.match(hole, /placeOpeningItems/);
 });

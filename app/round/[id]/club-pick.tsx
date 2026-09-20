@@ -18,7 +18,6 @@ import { selectClubForMark } from '@/src/domain/stickyClub';
 import { emptyWalkAway, stepWalkAway, walkAwayEligible } from '@/src/domain/walkAway';
 import type { Club, GpsFix } from '@/src/domain/types';
 import { lastLandingMark, markToGreen, toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
-import { yardsToGreen } from '@/src/sensing/yardsToGreen';
 import { addNoGpsShot, changeShotClub, markShotWithClub, promptForPlan } from '@/src/services/shotActions';
 import { useLiveFix } from '@/src/services/useLiveFix';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
@@ -178,8 +177,10 @@ export default function ClubPickScreen() {
     green,
     shots,
   });
+  const teeToGreen = markToGreen(holeTee, green);
   const target = resolveNextShotDistanceTarget({
     landingToGreen: markToGreen(lastLandingMark(shots), green),
+    teeToGreen,
     courseToGreen: toGreen,
     lastClosedYards: lastClosedShotYards(shots),
   });
@@ -240,8 +241,8 @@ export default function ClubPickScreen() {
         shortName: formatSuggestedClubChip(club.shortName, stripPlan.carries[club.id] ?? null),
       })),
       holeNumber,
-      yardsToGreen: yardsToGreen(fix, green).yards,
-      yardsQuality: yardsToGreen(fix, green).quality,
+      yardsToGreen: target?.dYards ?? teeToGreen.yards ?? toGreen.yards,
+      yardsQuality: target || teeToGreen.quality !== 'none' || toGreen.quality !== 'none' ? 'good' : 'none',
       lastClubId: selected?.id ?? null,
       selectedClubId: selected?.id ?? null,
     },

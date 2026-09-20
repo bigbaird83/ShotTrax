@@ -4,8 +4,8 @@ import { PHONE_WHEEL_STRIP_HEIGHT } from './clubStrip';
  * Play screen: map fills the hole. A frosted two-row dock sits over the map.
  * Header is a thin overlay. Add shot still takes the full screen.
  * Same club is gone — that slot is Hole Out. Scorecard is a header chip.
- * A Putt button sits left of a shrunken Hole Out only when putter or ≤40 yd
- * green (good/soft) — not a third dock row. Putt opens the existing sheet.
+ * A Putt button sits left of a shrunken Hole Out while the hole is
+ * unfinished — not a third dock row. Putt opens the existing sheet.
  */
 
 export const PLAY_MAP_MIN_RATIO = 0.6;

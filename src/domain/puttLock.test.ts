@@ -86,7 +86,7 @@ import {
   WATCH_ASSIST,
 } from '../sensing/assists';
 
-test('Signal Lab: dock Putt is putter or ≤40 yd haversine to green centroid, good/soft only', () => {
+test('TF 53: dock Putt is putter or ≤40 yd haversine to green centroid, good/soft only', () => {
   assert.equal(NEAR_GREEN_YD, 40);
   assert.equal(puttPillsUseYardsToGreen(), true);
   assert.equal(puttPillsUseHydratedGreenCentroid(), true);
@@ -103,9 +103,15 @@ test('Signal Lab: dock Putt is putter or ≤40 yd haversine to green centroid, g
   const far = planPlayDockFinish({ toGreen: { yards: 160, quality: 'good' } });
   assert.equal(far.showHoleOut, true);
   assert.equal(far.showPutts, false);
+  const tee = planPlayDockFinish({ putting: false, toGreen: { yards: 371, quality: 'good' } });
+  assert.equal(tee.showHoleOut, true);
+  assert.equal(tee.showPutts, false);
   const near = planPlayDockFinish({ toGreen: { yards: 36, quality: 'soft' } });
   assert.equal(near.showHoleOut, true);
   assert.equal(near.showPutts, true);
+  const done = planPlayDockFinish({ puttsDone: true, putting: true });
+  assert.equal(done.showHoleOut, false);
+  assert.equal(done.showPutts, false);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   assert.match(hole, /const liveToGreen = yardsToGreen\(fix, green\)/);
@@ -115,8 +121,9 @@ test('Signal Lab: dock Putt is putter or ≤40 yd haversine to green centroid, g
   assert.equal(playDockPuttUsesShowPuttPillsGate(), true);
   assert.equal(playDockPuttOpensExistingSheet(), true);
   const watchPush = hole.slice(hole.indexOf('useWatchClubList'), hole.indexOf('if (!round || !hole)'));
-  assert.match(watchPush, /yardsToGreen: liveToGreen\.yards/);
-  assert.match(watchPush, /yardsQuality: liveToGreen\.quality/);
+  assert.match(watchPush, /yardsToGreen: target\?\.dYards/);
+  assert.doesNotMatch(watchPush, /yardsToGreen: liveToGreen\.yards/);
+  assert.doesNotMatch(watchPush, /yardsQuality: liveToGreen\.quality/);
 
   const sensing = readFileSync(new URL('../sensing/yardsToGreen.ts', import.meta.url), 'utf8');
   assert.match(sensing, /haversineYards\(fix, greenCentroid\)/);
@@ -294,8 +301,10 @@ test('Signal Lab: TF 49 putt sheet is pick → Made it on putt N≥1; Add putt i
   assert.match(watchSheet, /Text\("Add putt"\)/);
   assert.match(watchSheet, /session\.addPutt\(\)/);
   assert.match(watchSheet, /Text\("Made it"\)/);
-  assert.match(watchSheet, /\.disabled\(session\.sending\)/);
+  assert.match(watchSheet, /session\.sending \|\|/);
   assert.doesNotMatch(watchSheet, /!session\.putt\.canMake/);
+  const madeBtn = watchSheet.slice(watchSheet.indexOf('session.madeIt()'), watchSheet.indexOf('if !session.putt.lengths'));
+  assert.doesNotMatch(madeBtn, /\.disabled\(session\.sending\)/);
   assert.match(watchSheet, /Text\("Undo"\)/);
   assert.match(watchSheet, /Text\("No length — pick a distance"\)/);
   assert.doesNotMatch(watchSheet, /Text\("Hole Out"\)/);
@@ -445,8 +454,10 @@ test('Signal Lab: Made it enabled with empty length; soft cue present; pending s
   assert.match(watchSheet, /Text\("No length — pick a distance"\)/);
   assert.match(watchSheet, /session\.putt\.pending == nil/);
   assert.match(watchSheet, /Text\("Made it"\)/);
-  assert.match(watchSheet, /\.disabled\(session\.sending\)/);
+  assert.match(watchSheet, /session\.sending \|\|/);
   assert.doesNotMatch(watchSheet, /!session\.putt\.canMake/);
+  const madeAlways = watchSheet.slice(watchSheet.indexOf('session.madeIt()'), watchSheet.indexOf('if !session.putt.lengths'));
+  assert.doesNotMatch(madeAlways, /\.disabled\(session\.sending\)/);
   assert.doesNotMatch(watchSheet, /alert|Alert/);
 });
 
@@ -479,8 +490,10 @@ test('Signal Lab: soft No length cue is inline when Made it is off for missing l
   assert.match(watchSheet, /Text\("No length — pick a distance"\)/);
   assert.match(watchSheet, /session\.putt\.pending == nil/);
   assert.match(watchSheet, /Text\("Made it"\)/);
-  assert.match(watchSheet, /\.disabled\(session\.sending\)/);
+  assert.match(watchSheet, /session\.sending \|\|/);
   assert.doesNotMatch(watchSheet, /!session\.putt\.canMake/);
+  const madeAlways = watchSheet.slice(watchSheet.indexOf('session.madeIt()'), watchSheet.indexOf('if !session.putt.lengths'));
+  assert.doesNotMatch(madeAlways, /\.disabled\(session\.sending\)/);
   assert.doesNotMatch(watchSheet, /alert|Alert/);
 });
 

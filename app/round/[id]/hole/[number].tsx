@@ -76,7 +76,7 @@ import { planInsertSlots } from '@/src/domain/insertShot';
 import { confirmUndoIsLive, planConfirmUndo, type ConfirmUndoWindow } from '@/src/domain/confirmUndo';
 import { confirmPlaceToDraft, courseGreenCenterForLine, resolveAddShotFromPin } from '@/src/domain/placeToDrag';
 import { applyWheelSelection, resolveWheelHighlightId } from '@/src/domain/clubSelect';
-import { formatClubStripLabel, PHONE_WHEEL_PILL_HEIGHT, PHONE_WHEEL_STRIP_HEIGHT, planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
+import { addShotSheetOpeningClubIds, formatClubStripLabel, PHONE_WHEEL_PILL_HEIGHT, PHONE_WHEEL_STRIP_HEIGHT, planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
 import {
   PLAY_CONTROL_MIN_TAP,
   PLAY_DOCK_ACTION_MIN_HEIGHT,
@@ -110,7 +110,7 @@ import {
   type PuttLengthId,
 } from '@/src/domain/putts';
 import { canMoveFromPin, canMoveToPin, type ShotEditSnapshot } from '@/src/domain/shotEdit';
-import { addShotSuggestYardsLeft, clubToRankInput, lastClosedShotYards, rankDistanceYards, rankTopClubs, resolveAddShotSuggestTarget, resolveNextShotDistanceTarget } from '@/src/domain/rankClubs';
+import { addShotSheetRankYards, addShotSuggestYardsLeft, clubToRankInput, lastClosedShotYards, rankDistanceYards, rankTopClubs, resolveAddShotSuggestTarget, resolveNextShotDistanceTarget } from '@/src/domain/rankClubs';
 import { planFinishedHoleMiniSummary } from '@/src/domain/finishedHoleSummary';
 import { planRunningParBadge } from '@/src/domain/runningPar';
 import { planScorecardDismiss } from '@/src/domain/scorecard';
@@ -466,8 +466,10 @@ export default function HoleScreen() {
   };
   const fmb = hasApiFmb(pins) ? formatFmbRow(yardsToGreenDepth(fix, pins)) : null;
   const toGreen = yardsToGreenResult;
+  const teeToGreen = markToGreen(holeTee, green);
   const target = resolveNextShotDistanceTarget({
     landingToGreen: markToGreen(lastLandingMark(shots), green),
+    teeToGreen,
     courseToGreen: toGreen,
     lastClosedYards: lastClosedShotYards(shots),
   });
@@ -490,13 +492,17 @@ export default function HoleScreen() {
   const wheelSelectedId = resolveWheelHighlightId(selectedClubId);
   const addShotSuggestTarget = resolveAddShotSuggestTarget({
     lastLanding: lastLandingMark(shots),
+    tee: holeTee,
     green,
     courseToGreen: toGreen,
     lastClosedYards: lastClosedShotYards(shots),
   });
-  const placeSuggestYards = editClubOpen
-    ? pickerYards
-    : addShotSuggestYardsLeft({ playTarget: addShotSuggestTarget, courseYards: toGreen.yards });
+  const placeSuggestYards = addShotSheetRankYards({
+    headerYards: pickerYards,
+    remainingPin: editClubOpen
+      ? null
+      : addShotSuggestYardsLeft({ playTarget: addShotSuggestTarget, courseYards: toGreen.yards }),
+  });
   const placeStripPlan = planClubStrip({
     clubs: clubs.map((club) => {
       const row = averages.find((item) => item.club.id === club.id);
@@ -510,6 +516,18 @@ export default function HoleScreen() {
       const club = clubs.find((row) => row.id === id);
       return { id, label: formatClubStripLabel({ id, shortName: club?.shortName ?? id, carry: placeStripPlan.carries[id] }) };
     });
+  const placeOpeningIds = addShotSheetOpeningClubIds({
+    clubs: placeStripItems
+      .filter((item) => placeStripPlan.carries[item.id] != null)
+      .map((item) => ({ id: item.id, carry: placeStripPlan.carries[item.id] })),
+    headerYards: pickerYards,
+    remainingPin: editClubOpen
+      ? null
+      : addShotSuggestYardsLeft({ playTarget: addShotSuggestTarget, courseYards: toGreen.yards }),
+  });
+  const placeOpeningItems = placeOpeningIds
+    .map((id) => placeStripItems.find((item) => item.id === id))
+    .filter((item): item is (typeof placeStripItems)[number] => item != null);
   if (holeTee) {
     rememberResolvedTee({ courseId: round?.courseApiId, holeNumber, green }, holeTee);
   }
@@ -773,8 +791,8 @@ export default function HoleScreen() {
         shortName: formatSuggestedClubChip(club.shortName, stripPlan.carries[club.id] ?? null),
       })),
       holeNumber,
-      yardsToGreen: liveToGreen.yards,
-      yardsQuality: liveToGreen.quality,
+      yardsToGreen: target?.dYards ?? teeToGreen.yards ?? toGreen.yards,
+      yardsQuality: target || teeToGreen.quality !== 'none' || toGreen.quality !== 'none' ? 'good' : 'none',
       lastClubId: sticky?.id ?? null,
       selectedClubId: wheelSelectedId,
     },
@@ -1753,10 +1771,11 @@ export default function HoleScreen() {
           <Text style={styles.muted}>
             {pickerYards != null ? `${pickerYards} yd` : COPY.placeToHint}
           </Text>
-          {placeStripItems.length > 0 ? (
+          {placeOpeningItems.length > 0 || placeStripItems.length > 0 ? (
             <ClubStrip
-              items={placeStripItems}
+              items={placeOpeningItems.length > 0 ? placeOpeningItems : placeStripItems}
               pickId={placeStripPlan.pickId}
+              windowStart={placeStripPlan.windowStart}
               onPick={(id) => {
                 const full = clubs.find((row) => row.id === id);
                 if (!full) return;
