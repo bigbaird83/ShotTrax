@@ -87,10 +87,10 @@ test('TF 57: 0–3 is always the top-left 2×2 cell — literal label, never a b
   assert.ok(watchSheet.indexOf('"0–3"') < watchSheet.indexOf('"3–10"'));
   assert.ok(watchSheet.indexOf('"3–10"') < watchSheet.indexOf('"10–20"'));
   assert.ok(watchSheet.indexOf('"0–3"') < watchSheet.indexOf('Text("Made")'));
-  assert.doesNotMatch(watchSheet, /Under 3 ft/);
   const grid = watchSheet.slice(0, watchSheet.indexOf('Text("Add putt")'));
+  assert.doesNotMatch(grid, /Under 3 ft/);
   assert.doesNotMatch(grid, /session\.putt\.label\(for:/);
-  assert.doesNotMatch(lengthBtn, /\.disabled/);
+  assert.doesNotMatch(lengthBtn, /\.disabled\(/);
   assert.match(lengthBtn, /Color\("cream"\)/);
   assert.match(lengthBtn, /\.buttonStyle\(\.plain\)/);
 

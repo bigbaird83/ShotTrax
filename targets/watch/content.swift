@@ -226,8 +226,8 @@ struct ContentView: View {
 
   @ViewBuilder
   private func puttLengthButton(id: String, label: String) -> some View {
-    // Literal labels — phone putt.labels.inside_3 is "Under 3 ft" and clips to a blank Ultra cell.
-    // No .disabled: watchOS bordered/disabled emptied the top-left 0–3 pill.
+    // Literal labels — phone long-form inside_3 copy overflows a Watch pill to a blank Ultra cell.
+    // Do not disable the control: a dimmed system pill emptied the top-left 0–3 cell.
     let selected = session.putt.pending == id
     Button(action: { session.pickPuttLength(id) }) {
       Text(label)

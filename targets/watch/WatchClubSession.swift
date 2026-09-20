@@ -597,7 +597,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     if let labels = message["labels"] as? [String: String] {
       next.labels = labels
     }
-    // Phone sends "Under 3 ft" for inside_3 — that overflows a Watch pill to a blank cell.
+    // Phone long-form inside_3 copy overflows a Watch pill to a blank cell.
     next.labels["inside_3"] = "0–3"
     next.labels["3_to_10"] = next.labels["3_to_10"] ?? "3–10"
     next.labels["10_to_20"] = next.labels["10_to_20"] ?? "10–20"
