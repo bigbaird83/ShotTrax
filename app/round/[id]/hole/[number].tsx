@@ -476,6 +476,7 @@ export default function HoleScreen() {
     const club = clubs.find((row) => row.id === id);
     return { id, label: formatClubStripLabel({ id, shortName: club?.shortName ?? id, carry: stripPlan.carries[id] }) };
   });
+  const wheelSelectedId = resolveWheelHighlightId(selectedClubId);
   const addShotSuggestTarget = resolveAddShotSuggestTarget({
     lastLanding: lastLandingMark(shots),
     green,
@@ -498,7 +499,6 @@ export default function HoleScreen() {
       const club = clubs.find((row) => row.id === id);
       return { id, label: formatClubStripLabel({ id, shortName: club?.shortName ?? id, carry: placeStripPlan.carries[id] }) };
     });
-  const wheelSelectedId = resolveWheelHighlightId(selectedClubId);
   if (holeTee) {
     rememberResolvedTee({ courseId: round?.courseApiId, holeNumber, green }, holeTee);
   }
