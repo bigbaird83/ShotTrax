@@ -168,6 +168,19 @@ export function watchFinishShotPrevBlocksLeftoverClub(): true {
   return true;
 }
 
+/** Overlay is mid-swap — no Watch clubPick may apply or re-apply. */
+export function watchFinishShotOverlayAcceptsClubMark(): false {
+  return false;
+}
+
+export function watchFinishShotFlushAppliesClubPick(): false {
+  return false;
+}
+
+export function watchQueuedClubPickNeverRestampsHole(): true {
+  return true;
+}
+
 /** Native sendMessage + transferUserInfo can emit onClubPick in parallel. */
 export function watchClubPickSerializesOnPhone(): true {
   return true;
@@ -178,15 +191,23 @@ export function watchHoleAdvanceClearsArmedClub(): true {
   return true;
 }
 
+/** Finish shot · Hole N on another hole — every inbound/queued clubPick is stale. */
+export function watchFinishShotOverlayBlocksClubPick(args: {
+  currentHole: number;
+  openShotHoles?: number[] | null;
+}): boolean {
+  return (args.openShotHoles ?? []).some((hole) => hole !== args.currentHole);
+}
+
 export function watchOpenPrevBlocksClubPick(args: {
-  clubId: string;
+  clubId?: string;
   currentHole: number;
   openShotHoles?: number[] | null;
   lastClubId?: string | null;
 }): boolean {
-  const openPrev = (args.openShotHoles ?? []).some((hole) => hole !== args.currentHole);
-  if (!openPrev) return false;
-  return Boolean(args.lastClubId && args.lastClubId === args.clubId);
+  void args.clubId;
+  void args.lastClubId;
+  return watchFinishShotOverlayBlocksClubPick(args);
 }
 
 export type WatchClubPickGateReason = 'ok' | 'replay' | 'debounce' | 'wrong_hole' | 'open_prev';
@@ -206,11 +227,9 @@ export function gateWatchClubPick(args: {
     return { apply: false, reason: 'wrong_hole' };
   }
   if (
-    watchOpenPrevBlocksClubPick({
-      clubId: args.clubId,
+    watchFinishShotOverlayBlocksClubPick({
       currentHole: args.currentHole,
       openShotHoles: args.openShotHoles,
-      lastClubId: args.last?.clubId ?? null,
     })
   ) {
     return { apply: false, reason: 'open_prev' };

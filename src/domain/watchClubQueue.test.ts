@@ -18,6 +18,10 @@ import {
   watchUnstampedClubPickApplies,
   watchClubPickSerializesOnPhone,
   watchFinishShotPrevBlocksLeftoverClub,
+  watchFinishShotOverlayAcceptsClubMark,
+  watchFinishShotFlushAppliesClubPick,
+  watchFinishShotOverlayBlocksClubPick,
+  watchQueuedClubPickNeverRestampsHole,
   watchHoleAdvanceClearsArmedClub,
   watchOpenPrevBlocksClubPick,
   gateWatchClubPickBurst,
@@ -107,6 +111,9 @@ test('TF 58: ghost Watch marks — replay, debounce, and hole-advance never inve
   assert.equal(watchHoleAdvanceFlushesMarksToNextHole(), false);
   assert.equal(watchIdleWalkInventsShots(), false);
   assert.equal(watchFinishShotPrevBlocksLeftoverClub(), true);
+  assert.equal(watchFinishShotOverlayAcceptsClubMark(), false);
+  assert.equal(watchFinishShotFlushAppliesClubPick(), false);
+  assert.equal(watchQueuedClubPickNeverRestampsHole(), true);
   assert.equal(watchClubPickSerializesOnPhone(), true);
   assert.equal(watchHoleAdvanceClearsArmedClub(), true);
   assert.equal(WATCH_CLUB_MARK_DEBOUNCE_MS, 300);
@@ -153,6 +160,10 @@ test('TF 58: ghost Watch marks — replay, debounce, and hole-advance never inve
 
   // Cypress clip: Hole 11 header + Finish shot · Hole 10 + 56° burst, no taps.
   assert.equal(
+    watchFinishShotOverlayBlocksClubPick({ currentHole: 11, openShotHoles: [10] }),
+    true,
+  );
+  assert.equal(
     watchOpenPrevBlocksClubPick({
       clubId: 'club_50',
       currentHole: 11,
@@ -168,7 +179,7 @@ test('TF 58: ghost Watch marks — replay, debounce, and hole-advance never inve
       openShotHoles: [10],
       lastClubId: 'club_50',
     }),
-    false,
+    true,
   );
   const clipBurst = gateWatchClubPickBurst(
     [
@@ -183,7 +194,6 @@ test('TF 58: ghost Watch marks — replay, debounce, and hole-advance never inve
     {
       currentHole: 11,
       openShotHoles: [10],
-      last: { clubId: 'club_50', appliedAtMs: 1_000_000 },
       startMs: 1_000_400,
     },
   );
@@ -210,8 +220,18 @@ test('TF 58: ghost Watch marks — replay, debounce, and hole-advance never inve
       openShotHoles: [10],
       last: { clubId: 'club_50', appliedAtMs: 1_000_000 },
       nowMs: 1_002_000,
-    }).apply,
-    true,
+    }).reason,
+    'open_prev',
+  );
+  assert.equal(
+    gateWatchClubPick({
+      at: 'h10-stale',
+      clubId: 'club_50',
+      holeNumber: 10,
+      currentHole: 11,
+      openShotHoles: [10],
+    }).reason,
+    'wrong_hole',
   );
 
   const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
@@ -224,6 +244,7 @@ test('TF 58: ghost Watch marks — replay, debounce, and hole-advance never inve
   const flushFn = session.slice(session.indexOf('private func flushPending()'), session.indexOf('private func syncRoundStay'));
   assert.match(flushFn, /dropStaleClubPicks\(liveHole: list\.holeNumber\)/);
   assert.match(flushFn, /sendReliableQueued\(payload, transfer: false\)/);
+  assert.doesNotMatch(flushFn, /holeNumber\s*=/);
   const applyFn = session.slice(session.indexOf('private func applyClubList'), session.indexOf('private func applyPuttSheet'));
   assert.match(applyFn, /holeChanged/);
   assert.match(applyFn, /dropStaleClubPicks\(liveHole: next\.holeNumber\)/);
@@ -247,10 +268,22 @@ test('TF 58: ghost Watch marks — replay, debounce, and hole-advance never inve
   assert.match(service, /live\.holeNumber !== markHole/);
   assert.match(service, /enqueueClubPick/);
   assert.match(service, /openShotHoles: ctx\.openShotHoles/);
+  assert.match(service, /watchFinishShotOverlayBlocksClubPick/);
+  const flushPhone = service.slice(
+    service.indexOf('async function flushPendingClubPicks'),
+    service.indexOf('let puttPickTail'),
+  );
+  assert.match(flushPhone, /watchFinishShotOverlayBlocksClubPick/);
+  assert.match(flushPhone, /return;/);
   assert.doesNotMatch(service, /forgetWatchClubPickAt/);
+  const selectBlock = service.slice(service.indexOf("if (intent.kind === 'select')"), service.indexOf("if (intent.kind === 'leave')"));
+  assert.doesNotMatch(selectBlock, /markShotWithClub|attachWatchFix|gateWatchClubPick/);
 
   const holePlay = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   assert.match(holePlay, /openShotHoles: pendingShots\.map/);
+  const finishChip = holePlay.slice(holePlay.indexOf('{pendingShots.map'), holePlay.indexOf('{pendingPutts.map'));
+  assert.match(finishChip, /goToHole\(row\.number\)/);
+  assert.doesNotMatch(finishChip, /markShotWithClub|handlePick|clubPick/);
 });
 
 test('TF 58: selected Watch putt bucket and club pill stay visible with lime highlight', () => {

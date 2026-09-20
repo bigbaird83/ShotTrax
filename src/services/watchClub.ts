@@ -26,6 +26,7 @@ import {
   gateWatchClubPick,
   queueWatchClubPickEvent,
   watchClubPickShouldApply,
+  watchFinishShotOverlayBlocksClubPick,
 } from '../domain/watchClubQueue';
 import {
   drainWatchPuttPickQueue,
@@ -43,7 +44,7 @@ export type WatchClubContext = {
   holeNumber: number;
   readOnly: boolean;
   tee?: { lat: number; lng: number } | null;
-  /** Other holes still showing Finish shot — leftover club must not land here. */
+  /** Finish shot · Hole N on another hole — reject every Watch clubPick. */
   openShotHoles?: number[];
   bump: () => void;
   onMarked?: () => void;
@@ -300,6 +301,14 @@ async function handlePickNow(token: string, json: string): Promise<void> {
 
 async function flushPendingClubPicks(holeNumber: number): Promise<void> {
   const rows = drainWatchClubPickQueueForHole(holeNumber);
+  if (
+    watchFinishShotOverlayBlocksClubPick({
+      currentHole: holeNumber,
+      openShotHoles: context?.openShotHoles,
+    })
+  ) {
+    return;
+  }
   for (const row of rows) {
     await handlePick(row.token, row.json);
   }

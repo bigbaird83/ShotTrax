@@ -29,6 +29,9 @@ import {
   gateWatchClubPickBurst,
   watchClubPickSerializesOnPhone,
   watchFinishShotPrevBlocksLeftoverClub,
+  watchFinishShotOverlayAcceptsClubMark,
+  watchFinishShotFlushAppliesClubPick,
+  watchFinishShotOverlayBlocksClubPick,
   watchHoleAdvanceClearsArmedClub,
   watchHighlightLogsShot,
   watchHoleAdvanceFlushesMarksToNextHole,
@@ -308,6 +311,9 @@ test('Signal: Cypress ghost 56° — highlight never marks; debounce; no hole-ad
   assert.equal(watchHoleAdvanceFlushesMarksToNextHole(), false);
   assert.equal(watchIdleWalkInventsShots(), false);
   assert.equal(watchFinishShotPrevBlocksLeftoverClub(), true);
+  assert.equal(watchFinishShotOverlayAcceptsClubMark(), false);
+  assert.equal(watchFinishShotFlushAppliesClubPick(), false);
+  assert.equal(watchFinishShotOverlayBlocksClubPick({ currentHole: 11, openShotHoles: [10] }), true);
   assert.equal(watchClubPickSerializesOnPhone(), true);
   assert.equal(watchHoleAdvanceClearsArmedClub(), true);
   assert.equal(WATCH_CLUB_MARK_DEBOUNCE_MS, 300);
@@ -343,7 +349,6 @@ test('Signal: Cypress ghost 56° — highlight never marks; debounce; no hole-ad
     {
       currentHole: 11,
       openShotHoles: [10],
-      last: { clubId: 'club_50', appliedAtMs: 1_900_000 },
       startMs: 2_000_000,
     },
   );
@@ -356,10 +361,18 @@ test('Signal: Cypress ghost 56° — highlight never marks; debounce; no hole-ad
       holeNumber: 11,
       currentHole: 11,
       openShotHoles: [10],
-      last: { clubId: 'club_50', appliedAtMs: 1_900_000 },
-      nowMs: 2_000_000,
-    }).apply,
-    true,
+    }).reason,
+    'open_prev',
+  );
+  assert.equal(
+    gateWatchClubPick({
+      at: '2026-09-20T21:01:48.000Z',
+      clubId: 'club_50',
+      holeNumber: 10,
+      currentHole: 11,
+      openShotHoles: [10],
+    }).reason,
+    'wrong_hole',
   );
 
   const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
@@ -376,6 +389,7 @@ test('Signal: Cypress ghost 56° — highlight never marks; debounce; no hole-ad
   const flushFn = session.slice(session.indexOf('private func flushPending()'), session.indexOf('private func syncRoundStay'));
   assert.match(flushFn, /transfer: false/);
   assert.match(flushFn, /dropStaleClubPicks/);
+  assert.doesNotMatch(flushFn, /holeNumber\s*=/);
 
   const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
   const strip = watch.slice(watch.indexOf('ScrollView(.horizontal'), watch.indexOf('Text("All clubs")'));
@@ -388,5 +402,8 @@ test('Signal: Cypress ghost 56° — highlight never marks; debounce; no hole-ad
   assert.match(service, /drainWatchClubPickQueueForHole/);
   assert.match(service, /enqueueClubPick/);
   assert.match(service, /openShotHoles: ctx\.openShotHoles/);
+  assert.match(service, /watchFinishShotOverlayBlocksClubPick/);
   assert.doesNotMatch(service, /forgetWatchClubPickAt/);
+  const selectBlock = service.slice(service.indexOf("if (intent.kind === 'select')"), service.indexOf("if (intent.kind === 'leave')"));
+  assert.doesNotMatch(selectBlock, /markShotWithClub|attachWatchFix/);
 });
