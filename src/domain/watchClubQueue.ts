@@ -163,7 +163,33 @@ export function watchUnstampedClubPickApplies(): false {
   return false;
 }
 
-export type WatchClubPickGateReason = 'ok' | 'replay' | 'debounce' | 'wrong_hole';
+/** Cypress clip: Finish shot · Hole 10 while header is Hole 11. */
+export function watchFinishShotPrevBlocksLeftoverClub(): true {
+  return true;
+}
+
+/** Native sendMessage + transferUserInfo can emit onClubPick in parallel. */
+export function watchClubPickSerializesOnPhone(): true {
+  return true;
+}
+
+/** Hole advance must disarm leftover 56° so the wheel cannot stay armed. */
+export function watchHoleAdvanceClearsArmedClub(): true {
+  return true;
+}
+
+export function watchOpenPrevBlocksClubPick(args: {
+  clubId: string;
+  currentHole: number;
+  openShotHoles?: number[] | null;
+  lastClubId?: string | null;
+}): boolean {
+  const openPrev = (args.openShotHoles ?? []).some((hole) => hole !== args.currentHole);
+  if (!openPrev) return false;
+  return Boolean(args.lastClubId && args.lastClubId === args.clubId);
+}
+
+export type WatchClubPickGateReason = 'ok' | 'replay' | 'debounce' | 'wrong_hole' | 'open_prev';
 
 export function gateWatchClubPick(args: {
   at: string;
@@ -173,10 +199,21 @@ export function gateWatchClubPick(args: {
   last?: { clubId: string; appliedAtMs: number } | null;
   nowMs?: number;
   alreadyApplied?: boolean;
+  openShotHoles?: number[] | null;
 }): { apply: boolean; reason: WatchClubPickGateReason } {
   if (args.alreadyApplied || !args.at) return { apply: false, reason: 'replay' };
   if (args.holeNumber == null || args.holeNumber !== args.currentHole) {
     return { apply: false, reason: 'wrong_hole' };
+  }
+  if (
+    watchOpenPrevBlocksClubPick({
+      clubId: args.clubId,
+      currentHole: args.currentHole,
+      openShotHoles: args.openShotHoles,
+      lastClubId: args.last?.clubId ?? null,
+    })
+  ) {
+    return { apply: false, reason: 'open_prev' };
   }
   if (args.last && args.last.clubId === args.clubId) {
     const dt = (args.nowMs ?? Date.now()) - args.last.appliedAtMs;
@@ -185,6 +222,34 @@ export function gateWatchClubPick(args: {
     }
   }
   return { apply: true, reason: 'ok' };
+}
+
+/** Serialized reconnect drain — models phone handlePick tail (~40 ms apart). */
+export function gateWatchClubPickBurst(
+  picks: Array<{ at: string; clubId: string; holeNumber?: number | null }>,
+  args: {
+    currentHole: number;
+    openShotHoles?: number[] | null;
+    last?: { clubId: string; appliedAtMs: number } | null;
+    startMs: number;
+    stepMs?: number;
+  },
+): { apply: boolean; reason: WatchClubPickGateReason }[] {
+  let last = args.last ?? null;
+  let nowMs = args.startMs;
+  const stepMs = args.stepMs ?? 40;
+  return picks.map((pick) => {
+    const gate = gateWatchClubPick({
+      ...pick,
+      currentHole: args.currentHole,
+      openShotHoles: args.openShotHoles,
+      last,
+      nowMs,
+    });
+    if (gate.apply) last = { clubId: pick.clubId, appliedAtMs: nowMs };
+    nowMs += stepMs;
+    return gate;
+  });
 }
 
 export function retainWatchClubPicksForHole<T extends { holeNumber?: number | null }>(

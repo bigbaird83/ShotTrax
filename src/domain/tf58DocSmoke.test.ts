@@ -26,6 +26,10 @@ import {
   WATCH_CLUB_MARK_DEBOUNCE_MS,
   enqueueWatchClubPick,
   gateWatchClubPick,
+  gateWatchClubPickBurst,
+  watchClubPickSerializesOnPhone,
+  watchFinishShotPrevBlocksLeftoverClub,
+  watchHoleAdvanceClearsArmedClub,
   watchHighlightLogsShot,
   watchHoleAdvanceFlushesMarksToNextHole,
   watchIdleWalkInventsShots,
@@ -303,6 +307,9 @@ test('Signal: Cypress ghost 56° — highlight never marks; debounce; no hole-ad
   assert.equal(watchUnstampedClubPickApplies(), false);
   assert.equal(watchHoleAdvanceFlushesMarksToNextHole(), false);
   assert.equal(watchIdleWalkInventsShots(), false);
+  assert.equal(watchFinishShotPrevBlocksLeftoverClub(), true);
+  assert.equal(watchClubPickSerializesOnPhone(), true);
+  assert.equal(watchHoleAdvanceClearsArmedClub(), true);
   assert.equal(WATCH_CLUB_MARK_DEBOUNCE_MS, 300);
 
   const h10 = {
@@ -323,6 +330,37 @@ test('Signal: Cypress ghost 56° — highlight never marks; debounce; no hole-ad
     }).reason,
     'debounce',
   );
+  const clip = gateWatchClubPickBurst(
+    [
+      { at: '2026-09-20T21:01:48.100Z', clubId: 'club_50', holeNumber: 11 },
+      { at: '2026-09-20T21:01:48.400Z', clubId: 'club_50', holeNumber: 11 },
+      { at: '2026-09-20T21:01:48.700Z', clubId: 'club_50', holeNumber: 11 },
+      { at: '2026-09-20T21:01:49.000Z', clubId: 'club_50', holeNumber: 11 },
+      { at: '2026-09-20T21:01:49.300Z', clubId: 'club_50', holeNumber: 11 },
+      { at: '2026-09-20T21:01:49.600Z', clubId: 'club_50', holeNumber: 11 },
+      { at: '2026-09-20T21:01:49.900Z', clubId: 'club_50', holeNumber: 11 },
+    ],
+    {
+      currentHole: 11,
+      openShotHoles: [10],
+      last: { clubId: 'club_50', appliedAtMs: 1_900_000 },
+      startMs: 2_000_000,
+    },
+  );
+  assert.equal(clip.length, 7);
+  assert.ok(clip.every((row) => row.reason === 'open_prev' && row.apply === false));
+  assert.equal(
+    gateWatchClubPick({
+      at: '2026-09-20T21:01:50.000Z',
+      clubId: 'club_driver',
+      holeNumber: 11,
+      currentHole: 11,
+      openShotHoles: [10],
+      last: { clubId: 'club_50', appliedAtMs: 1_900_000 },
+      nowMs: 2_000_000,
+    }).apply,
+    true,
+  );
 
   const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
   const selectFn = session.slice(session.indexOf('func select('), session.indexOf('func openPuttSheet'));
@@ -330,6 +368,9 @@ test('Signal: Cypress ghost 56° — highlight never marks; debounce; no hole-ad
   assert.match(selectFn, /"type": "clubSelect"/);
   const applyFn = session.slice(session.indexOf('private func applyClubList'), session.indexOf('private func applyPuttSheet'));
   assert.doesNotMatch(applyFn, /attachWatchFix|sendPick|func pick\(/);
+  assert.match(applyFn, /next\.selectedClubId = nil/);
+  assert.match(applyFn, /next\.lastClubId = nil/);
+  assert.match(applyFn, /lastClubTapId = nil/);
   const pickFn = session.slice(session.indexOf('func pick(clubId: String)'), session.indexOf('func select('));
   assert.ok(pickFn.indexOf('clubId != "club_putter"') < pickFn.indexOf('attachWatchFix'));
   const flushFn = session.slice(session.indexOf('private func flushPending()'), session.indexOf('private func syncRoundStay'));
@@ -345,5 +386,7 @@ test('Signal: Cypress ghost 56° — highlight never marks; debounce; no hole-ad
   const service = readFileSync(new URL('../services/watchClub.ts', import.meta.url), 'utf8');
   assert.match(service, /gateWatchClubPick/);
   assert.match(service, /drainWatchClubPickQueueForHole/);
+  assert.match(service, /enqueueClubPick/);
+  assert.match(service, /openShotHoles: ctx\.openShotHoles/);
   assert.doesNotMatch(service, /forgetWatchClubPickAt/);
 });

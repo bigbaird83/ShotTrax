@@ -43,6 +43,8 @@ export type WatchClubContext = {
   holeNumber: number;
   readOnly: boolean;
   tee?: { lat: number; lng: number } | null;
+  /** Other holes still showing Finish shot — leftover club must not land here. */
+  openShotHoles?: number[];
   bump: () => void;
   onMarked?: () => void;
   onPutter?: () => void;
@@ -149,7 +151,22 @@ async function replyToken(token: string, payload: ClubPickReply | PuttPickReply)
   }
 }
 
+let clubPickTail: Promise<void> = Promise.resolve();
+
+function enqueueClubPick(work: () => Promise<void>): Promise<void> {
+  const run = clubPickTail.then(work, work);
+  clubPickTail = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
 async function handlePick(token: string, json: string): Promise<void> {
+  return enqueueClubPick(() => handlePickNow(token, json));
+}
+
+async function handlePickNow(token: string, json: string): Promise<void> {
   if (isWatchNearbyJson(json)) {
     const result = await handleWatchNearbyJson(json);
     await replyToken(token, result);
@@ -214,6 +231,7 @@ async function handlePick(token: string, json: string): Promise<void> {
     last: lastClubMark,
     nowMs: Date.now(),
     alreadyApplied,
+    openShotHoles: ctx.openShotHoles,
   });
   if (!gate.apply) {
     const label = ctx.labelForClub(pick.clubId) ?? pick.clubId;

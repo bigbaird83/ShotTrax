@@ -635,6 +635,13 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       next.selectedClubId = nil
     }
     let holeChanged = list.holeNumber > 0 && next.holeNumber != list.holeNumber
+    if holeChanged {
+      // Cypress H10→H11: leftover 56° must not stay armed on the new hole.
+      next.selectedClubId = nil
+      next.lastClubId = nil
+      lastClubTapId = nil
+      lastClubTapAt = Date.distantPast
+    }
     list = next
     persist(next)
     if holeChanged {
