@@ -560,6 +560,7 @@ export default function HoleScreen() {
   ]);
   const addShotFrom = resolveAddShotFromPin({
     tee: holeTee,
+    lastLanding: lastLandingMark(shots),
   });
   addShotFromRef.current = addShotFrom;
   const courseGreen = courseGreenCenterForLine({

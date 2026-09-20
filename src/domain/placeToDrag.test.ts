@@ -61,8 +61,11 @@ import {
   dragLineStartsAtHousePin,
   addShotFollowsUser,
   addShotAlwaysFirstShotStyle,
+  addShotAfterMarksUsesLastLanding,
   addShotChainsFromLastMark,
   addShotClubSelectChainsPins,
+  addShotEmptyHoleUsesFirstShotFraming,
+  addShotFromKind,
   addShotFromUsesHousePin,
   addShotFromUsesLastLanding,
   addShotFromUsesPhone,
@@ -81,7 +84,7 @@ import { placedPinUsesJumpGate, placedShotAsksPast400 } from './shotSource';
 import { COPY } from './playerCopy';
 import { PLAY_MAP_MIN_RATIO, playMapMinRatio } from './playLayout';
 import { includeInDistanceAverages, placedShotRunsAcceptFix } from './shotSource';
-import { TO_GREEN_LIVE_MAX_YD } from './yardsToGreen';
+import { lastLandingMark, TO_GREEN_LIVE_MAX_YD } from './yardsToGreen';
 
 const from = { lat: 37.0, lng: -122.0 };
 const drag = { lat: 37.001, lng: -122.0 };
@@ -119,7 +122,8 @@ test('preview is this shot from pin to the finger, not the prior shot', () => {
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const fromPin = hole.slice(hole.indexOf('const addShotFrom = resolveAddShotFromPin'), hole.indexOf('const insertSlots'));
   assert.match(fromPin, /tee: holeTee/);
-  assert.doesNotMatch(fromPin, /lastLanding|selectedClubId|phone:/);
+  assert.match(fromPin, /lastLanding: lastLandingMark\(shots\)/);
+  assert.doesNotMatch(fromPin, /selectedClubId|phone:/);
 });
 
 test('preview to-green is fingertip to green center; over 600 or no green is a dash', () => {
@@ -463,20 +467,25 @@ test('to pin follows the finger; live yards are this shot only; nothing stores b
   assert.doesNotMatch(dragCall, /previousFrom|phone:/);
 });
 
-test('Add shot from-pin is always the tee, never last landing, house, phone, or puck', () => {
+test('Add shot from-pin is tee when empty, last landing after marks — never house, phone, or puck', () => {
   assert.deepEqual(resolveAddShotFromPin({ tee: from, lastLanding: null, phone }), from);
-  assert.deepEqual(resolveAddShotFromPin({ tee: from, lastLanding: drag, phone }), from);
+  assert.deepEqual(resolveAddShotFromPin({ tee: from, lastLanding: drag, phone }), drag);
   assert.deepEqual(
     resolveAddShotFromPin({ tee: from, lastLanding: drag, selectedClubId: 'club_driver' }),
-    from,
+    drag,
   );
-  assert.equal(addShotAlwaysFirstShotStyle(), true);
-  assert.equal(addShotChainsFromLastMark(), false);
-  assert.equal(addShotFromUsesLastLanding(), false);
+  assert.equal(addShotFromKind(null), 'first_shot');
+  assert.equal(addShotFromKind(drag), 'last_landing');
+  assert.equal(addShotAlwaysFirstShotStyle(), false);
+  assert.equal(addShotEmptyHoleUsesFirstShotFraming(), true);
+  assert.equal(addShotAfterMarksUsesLastLanding(), true);
+  assert.equal(addShotChainsFromLastMark(), true);
+  assert.equal(addShotFromUsesLastLanding(), true);
   assert.equal(addShotClubSelectChainsPins(), false);
   assert.equal(resolveAddShotFromPin({ tee: null, lastLanding: null, phone }), null);
   assert.notEqual(resolveAddShotFromPin({ tee: from, lastLanding: null, phone })?.lat, phone.lat);
   assert.notEqual(resolveAddShotFromPin({ tee: from, lastLanding: null, phone })?.lat, house.lat);
+  assert.notEqual(resolveAddShotFromPin({ tee: from, lastLanding: drag, phone })?.lat, from.lat);
   assert.equal(addShotFromUsesPhone(), false);
   assert.equal(addShotFromUsesHousePin(), false);
   assert.equal(addShotShowsUserLocation(), false);
@@ -504,17 +513,20 @@ test('Add shot from-pin is always the tee, never last landing, house, phone, or 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const startCatchUp = hole.slice(hole.indexOf('const startCatchUp'), hole.indexOf('const closeEdit'));
   assert.match(startCatchUp, /addShotFromRef\.current/);
-  assert.doesNotMatch(startCatchUp, /lastLanding|selectedClubId|selectedClub/);
+  assert.doesNotMatch(startCatchUp, /selectedClubId|selectedClub/);
   const addShotCall = hole.slice(hole.indexOf('const addShotFrom = resolveAddShotFromPin'), hole.indexOf('const insertSlots'));
   assert.match(addShotCall, /tee: holeTee/);
-  assert.doesNotMatch(addShotCall, /lastLanding|selectedClubId|phone:/);
+  assert.match(addShotCall, /lastLanding: lastLandingMark\(shots\)/);
+  assert.doesNotMatch(addShotCall, /selectedClubId|phone:/);
   const src = readFileSync(new URL('./placeToDrag.ts', import.meta.url), 'utf8');
   const resolveFn = src.slice(
     src.indexOf('export function resolveAddShotFromPin'),
     src.indexOf('export function midpointLatLng'),
   );
-  assert.match(resolveFn, /void args\.lastLanding/);
+  assert.match(resolveFn, /addShotFromKind\(args\.lastLanding\)/);
+  assert.match(resolveFn, /return args\.lastLanding/);
   assert.match(resolveFn, /void args\.selectedClubId/);
+  assert.doesNotMatch(resolveFn, /void args\.lastLanding/);
   assert.match(hole, /showPhonePin=\{!catchUpFullScreen\}/);
   assert.match(hole, /allowMapsChrome=\{!catchUpFullScreen\}/);
   assert.match(hole, /addShotFromRef\.current/);
@@ -530,4 +542,32 @@ test('Add shot from-pin is always the tee, never last landing, house, phone, or 
   assert.match(map, /green: lineGreen/);
   assert.doesNotMatch(map, /from: placedFrom/);
   assert.doesNotMatch(map, /showsUserLocation=\{true\}/);
+});
+
+test('empty hole frames first-shot tee; after a closed drive Add shot starts at last landing', () => {
+  const landing = drag;
+  assert.equal(lastLandingMark([]), null);
+  assert.equal(addShotFromKind(lastLandingMark([])), 'first_shot');
+  assert.deepEqual(
+    resolveAddShotFromPin({ tee: from, lastLanding: lastLandingMark([]), phone }),
+    from,
+  );
+
+  const afterDrive = lastLandingMark([
+    {
+      seq: 1,
+      endLat: landing.lat,
+      endLng: landing.lng,
+      endedAt: '2026-09-20T12:00:00.000Z',
+      source: 'placed',
+      fixQuality: 'good',
+    },
+  ]);
+  assert.deepEqual(afterDrive, landing);
+  assert.equal(addShotFromKind(afterDrive), 'last_landing');
+  assert.deepEqual(resolveAddShotFromPin({ tee: from, lastLanding: afterDrive, phone }), landing);
+  assert.notDeepEqual(resolveAddShotFromPin({ tee: from, lastLanding: afterDrive, phone }), from);
+  assert.equal(addShotEmptyHoleUsesFirstShotFraming(), true);
+  assert.equal(addShotAfterMarksUsesLastLanding(), true);
+  assert.equal(addShotAlwaysFirstShotStyle(), false);
 });

@@ -19,9 +19,13 @@ import {
 } from './holeCamera';
 import {
   addShotAlwaysFirstShotStyle,
+  addShotAfterMarksUsesLastLanding,
   addShotChainsFromLastMark,
+  addShotEmptyHoleUsesFirstShotFraming,
   addShotFollowsUser,
+  addShotFromKind,
   addShotFromUsesLastLanding,
+  resolveAddShotFromPin,
   addShotGestureYardsUseFingerPixel,
   addShotGestureYardsUsePinHaversine,
   addShotGestureYardsUseReframe,
@@ -77,9 +81,15 @@ const green = { lat: 37.003, lng: -122.0 };
 const phone = { lat: 40.7128, lng: -74.006 };
 
 test('Signal Lab: Add shot two-finger pan/pinch after frame leave the camera and user puck alone', () => {
-  assert.equal(addShotAlwaysFirstShotStyle(), true);
-  assert.equal(addShotChainsFromLastMark(), false);
-  assert.equal(addShotFromUsesLastLanding(), false);
+  assert.equal(addShotAlwaysFirstShotStyle(), false);
+  assert.equal(addShotEmptyHoleUsesFirstShotFraming(), true);
+  assert.equal(addShotAfterMarksUsesLastLanding(), true);
+  assert.equal(addShotChainsFromLastMark(), true);
+  assert.equal(addShotFromUsesLastLanding(), true);
+  assert.equal(addShotFromKind(null), 'first_shot');
+  assert.equal(addShotFromKind(pin), 'last_landing');
+  assert.deepEqual(resolveAddShotFromPin({ tee: from, lastLanding: null, phone }), from);
+  assert.deepEqual(resolveAddShotFromPin({ tee: from, lastLanding: pin, phone }), pin);
   assert.equal(addShotGesturesWorkOnFirstOpen(), true);
   assert.equal(addShotGesturesWorkAfterEdit(), true);
   assert.equal(addShotGesturesRequireRemount(), false);
