@@ -16,4 +16,7 @@ module.exports = (config) => ({
   entitlements: {
     'com.apple.security.application-groups': ['group.com.shottrax.app'],
   },
+  infoPlist: {
+    WKBackgroundModes: ['self-care'],
+  },
 });

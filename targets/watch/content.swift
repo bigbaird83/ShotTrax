@@ -50,18 +50,26 @@ struct ContentView: View {
           .padding(.horizontal, 4)
         }
       } else if session.putt.open {
-        VStack(alignment: .leading, spacing: 6) {
-          statusHeader
+        // Compact title only — statusHeader feedback was clipping Made it on small faces.
+        VStack(alignment: .leading, spacing: 4) {
+          Text("Hole \(session.putt.holeNumber) · Putts")
+            .font(.system(size: 12, weight: .heavy))
+            .foregroundStyle(Color("cream"))
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
           puttSheet
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(.horizontal, 4)
       } else {
         clubPick
       }
     }
     .background(Color("bg").ignoresSafeArea())
+    .onAppear { session.noteScenePhase("active") }
     .onChange(of: scenePhase) { phase in
       if phase == .active { session.noteScenePhase("active") }
+      if phase == .inactive { session.noteScenePhase("inactive") }
       if phase == .background { session.noteScenePhase("background") }
     }
   }
@@ -155,13 +163,14 @@ struct ContentView: View {
 
   @ViewBuilder
   private var puttSheet: some View {
-    // Compact 2-col first so Made it stays on-screen — no hunt, no scroll.
-    LazyVGrid(columns: [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)], spacing: 6) {
+    // 2-col pills first. Made it is reserved below the grid (not a 4th grid
+    // row) so small faces cannot clip it. Extra copy may clip; Made it cannot.
+    LazyVGrid(columns: [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4)], spacing: 4) {
       ForEach(watchPuttBuckets, id: \.id) { bucket in
         Button(action: { session.pickPuttLength(bucket.id) }) {
           Text(bucket.label)
-            .font(.system(size: 14, weight: .heavy))
-            .frame(maxWidth: .infinity, minHeight: 36)
+            .font(.system(size: 13, weight: .heavy))
+            .frame(maxWidth: .infinity, minHeight: 30)
         }
         .buttonStyle(.bordered)
         .tint(session.putt.pending == bucket.id ? Color("accent") : Color("cream"))
@@ -170,42 +179,44 @@ struct ContentView: View {
 
       Button(action: { session.addPutt() }) {
         Text("Add putt")
-          .font(.system(size: 13, weight: .heavy))
-          .frame(maxWidth: .infinity, minHeight: 36)
+          .font(.system(size: 12, weight: .heavy))
+          .frame(maxWidth: .infinity, minHeight: 30)
       }
       .buttonStyle(.bordered)
       .disabled(session.sending || session.putt.pending == nil || !session.putt.canAdd)
 
       Button(action: { session.undoPutt() }) {
         Text("Undo")
-          .font(.system(size: 13, weight: .heavy))
-          .frame(maxWidth: .infinity, minHeight: 36)
+          .font(.system(size: 12, weight: .heavy))
+          .frame(maxWidth: .infinity, minHeight: 30)
       }
       .buttonStyle(.bordered)
       .disabled(session.sending || session.putt.lengths.isEmpty)
-
-      Button(action: { session.madeIt() }) {
-        Text("Made it")
-          .font(.system(size: 15, weight: .black))
-          .frame(maxWidth: .infinity, minHeight: 40)
-      }
-      .buttonStyle(.borderedProminent)
-      .tint(Color("accent"))
-      .foregroundStyle(Color.black)
-      .gridCellColumns(2)
     }
+
+    Button(action: { session.madeIt() }) {
+      Text("Made it")
+        .font(.system(size: 15, weight: .black))
+        .frame(maxWidth: .infinity, minHeight: 40)
+    }
+    .buttonStyle(.borderedProminent)
+    .tint(Color("accent"))
+    .foregroundStyle(Color.black)
+    .layoutPriority(1)
+    .fixedSize(horizontal: false, vertical: true)
 
     if !session.putt.lengths.isEmpty {
       Text(session.putt.lengths.enumerated().map { "Putt \($0.offset + 1) · \(session.putt.label(for: $0.element))" }.joined(separator: " · "))
         .font(.system(size: 10, weight: .heavy))
         .foregroundStyle(Color("cream"))
-        .lineLimit(2)
+        .lineLimit(1)
     }
 
     if session.putt.pending == nil && session.putt.lengths.count < 5 {
       Text("No length — pick a distance")
         .font(.system(size: 10, weight: .bold))
         .foregroundStyle(Color("cream"))
+        .lineLimit(1)
     }
   }
 
