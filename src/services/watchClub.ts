@@ -50,6 +50,7 @@ let context: WatchClubContext | null = null;
 let started = false;
 let lastJson = '';
 let lastPuttJson = '';
+let puttPickChain: Promise<void> = Promise.resolve();
 
 function native() {
   return getWatchBridgeNative();
@@ -240,6 +241,15 @@ async function handlePick(token: string, json: string): Promise<void> {
   }
 }
 
+function enqueuePuttPick(token: string, json: string): Promise<void> {
+  const run = puttPickChain.then(() => handlePuttPick(token, json));
+  puttPickChain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
 async function handlePuttPick(token: string, json: string): Promise<void> {
   const pick = (() => {
     try {
@@ -286,7 +296,7 @@ async function handlePuttPick(token: string, json: string): Promise<void> {
 async function flushPendingPuttPicks(): Promise<void> {
   const rows = drainWatchPuttPickQueue();
   for (const row of rows) {
-    await handlePuttPick(row.token, row.json);
+    await enqueuePuttPick(row.token, row.json);
   }
 }
 
@@ -301,7 +311,7 @@ export function startWatchClubBridge(): void {
   });
   mod.addListener('onPuttPick', (event) => {
     if (!event?.json || !event.token) return;
-    void handlePuttPick(event.token, event.json);
+    void enqueuePuttPick(event.token, event.json);
   });
 }
 

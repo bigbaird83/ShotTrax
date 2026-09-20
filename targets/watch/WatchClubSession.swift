@@ -96,6 +96,9 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   private var staySession: WKExtendedRuntimeSession?
   private var wantsStay = false
   private var userLeftApp = false
+  private var putterOwnsPuttSheet = false
+  private var awaitingMadeClose = false
+  private var lastPuttPickMs: Int64 = 0
   private let location = CLLocationManager()
   private var lastFix: CLLocation?
 
@@ -188,6 +191,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       sheet.canMake = true
       sheet.canAdd = sheet.lengths.count < 5
       putt = sheet
+      putterOwnsPuttSheet = true
+      awaitingMadeClose = false
       syncRoundStay()
     }
     var payload: [String: Any] = [
@@ -235,7 +240,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       "type": "puttPick",
       "action": "add",
       "lengthId": lengthId,
-      "at": isoNow(),
+      "at": puttPickAt(),
     ])
   }
 
@@ -245,17 +250,18 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     sendPick([
       "type": "puttPick",
       "action": "undo",
-      "at": isoNow(),
+      "at": puttPickAt(),
     ])
   }
 
   func madeIt() {
     sending = true
     feedback = ""
+    awaitingMadeClose = true
     var payload: [String: Any] = [
       "type": "puttPick",
       "action": "made",
-      "at": isoNow(),
+      "at": puttPickAt(),
     ]
     if let pending = putt.pending {
       payload["lengthId"] = pending
@@ -284,6 +290,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     feedback = ""
     userLeftApp = true
     putt.open = false
+    putterOwnsPuttSheet = false
+    awaitingMadeClose = false
     stopRoundStay()
     if action == "home", hasLiveHole {
       nearbyFromHome = true
@@ -312,9 +320,21 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   private func isoNow() -> String {
+    isoFrom(Date())
+  }
+
+  /// Unique per tap. Same-ms Add putt must not share `at` (phone dedupes by `at`).
+  private func puttPickAt() -> String {
+    var ms = Int64(Date().timeIntervalSince1970 * 1000)
+    if ms <= lastPuttPickMs { ms = lastPuttPickMs + 1 }
+    lastPuttPickMs = ms
+    return isoFrom(Date(timeIntervalSince1970: TimeInterval(ms) / 1000.0))
+  }
+
+  private func isoFrom(_ date: Date) -> String {
     let fmt = ISO8601DateFormatter()
     fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    return fmt.string(from: Date())
+    return fmt.string(from: date)
   }
 
   private func isPuttPick(_ payload: [String: Any]) -> Bool {
@@ -396,6 +416,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       putt.canMake = true
       putt.canAdd = true
       putt.pending = nil
+      putterOwnsPuttSheet = false
+      awaitingMadeClose = false
       syncRoundStay()
     }
   }
@@ -569,9 +591,17 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     next.canAdd = message["canAdd"] as? Bool ?? (next.lengths.count < 5)
     next.canMake = true
     let incomingOpen = message["open"] as? Bool ?? false
-    // Phone add/undo can race puttOpen=false and close a Watch-opened sheet.
-    // Keep the putt sheet up while putter still owns it (Made it stays on-screen).
-    next.open = incomingOpen || (putt.open && list.selectedClubId == "club_putter")
+    // Phone add/undo can race puttOpen=false and dump to the club dock
+    // (Made it gone). Own the sheet until Made it acks, not selectedClubId —
+    // clubList can overwrite putter before the sheet is visible.
+    if incomingOpen {
+      putterOwnsPuttSheet = true
+      awaitingMadeClose = false
+    } else if awaitingMadeClose {
+      putterOwnsPuttSheet = false
+      awaitingMadeClose = false
+    }
+    next.open = incomingOpen || putterOwnsPuttSheet
     if next.canAdd, next.lengths == priorLengths {
       next.pending = priorPending
     }
