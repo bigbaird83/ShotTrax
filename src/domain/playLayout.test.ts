@@ -89,6 +89,8 @@ import {
   signalLabBlankMapBuild38,
   PLAY_GLASS_DOCK_LIFT,
   playScorecardWraps,
+  playFinishedHoleMiniSummaryIsChip,
+  playFinishedHoleMiniSummaryIsModal,
   playScorecardIsHeaderChip,
   playScorecardIsDockAction,
   playShowsSameClub,
@@ -436,6 +438,8 @@ test('Add shot hides the user puck, Legal, and compass; play and edit wait for a
 test('play map still mounts; waiting line is off when 282 is on the card; Scorecard is one word; Same club waits for a shot', () => {
   assert.equal(playMapMountsWhenYardsShown(), true);
   assert.equal(playScorecardWraps(), false);
+  assert.equal(playFinishedHoleMiniSummaryIsChip(), true);
+  assert.equal(playFinishedHoleMiniSummaryIsModal(), false);
   assert.equal(playSameClubHiddenUntilShot(), true);
   assert.ok(playMapMinRatio() >= 0.6);
 

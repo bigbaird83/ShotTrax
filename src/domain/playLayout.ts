@@ -150,6 +150,15 @@ export function playScorecardWraps(): false {
   return false;
 }
 
+/** TF 48: finished-hole revisit is a thin floating chip, not a modal. */
+export function playFinishedHoleMiniSummaryIsChip(): true {
+  return true;
+}
+
+export function playFinishedHoleMiniSummaryIsModal(): false {
+  return false;
+}
+
 export function playSameClubHiddenUntilShot(): true {
   return true;
 }
