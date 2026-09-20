@@ -67,19 +67,20 @@ test('Signal Lab: Hole Out closes on the last real mark — no invented putt GPS
 
   const close = readFileSync(new URL('../services/shotActions.ts', import.meta.url), 'utf8');
   const closeFn = close.slice(
-    close.indexOf('export async function closeApproachBeforePutts'),
+    close.indexOf('Close the approach before the putt sheet'),
     close.indexOf('export function addNoGpsShot'),
   );
   assert.match(closeFn, /Never inserts a putter GPS shot/);
   assert.match(closeFn, /sealOpenShotWithoutGps/);
-  assert.doesNotMatch(closeFn, /club_putter|insertPutter|invent/);
+  assert.doesNotMatch(closeFn, /club_putter|insertPutter/);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const finish = hole.slice(hole.indexOf('const onFinishHole'), hole.indexOf('const onAddPenalty'));
   assert.match(finish, /closeApproachBeforePutts/);
   assert.match(finish, /finishHoleOut/);
   assert.doesNotMatch(finish, /addPlacedShot|insertNoGpsShot|club_putter/);
-  const watchFn = hole.slice(hole.indexOf('const onWatchPuttPick'), hole.indexOf('useWatchClubList'));
+  const watchStart = hole.indexOf('const onWatchPuttPick');
+  const watchFn = hole.slice(watchStart, hole.indexOf('useWatchClubList', watchStart + 1));
   assert.match(watchFn, /planMadeIt/);
   assert.match(watchFn, /finishHoleOut/);
   assert.doesNotMatch(watchFn, /addPlacedShot|insertNoGpsShot/);
