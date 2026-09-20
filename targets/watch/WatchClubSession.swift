@@ -171,7 +171,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   func pick(clubId: String) {
-    sending = true
+    sending = false
     feedback = ""
     var next = list
     next.selectedClubId = clubId
@@ -239,7 +239,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
 
   func addPutt(lengthId: String? = nil) {
     guard let lengthId = lengthId ?? putt.pending else { return }
-    sending = true
+    sending = false
     feedback = ""
     if putt.lengths.count < 5 {
       var next = putt
@@ -258,7 +258,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   func undoPutt() {
-    sending = true
+    sending = false
     feedback = ""
     sendPick([
       "type": "puttPick",
@@ -268,7 +268,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   func madeIt() {
-    sending = true
+    sending = false
     feedback = ""
     var payload: [String: Any] = [
       "type": "puttPick",
@@ -352,9 +352,17 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     payload["type"] as? String == "puttPick"
   }
 
+  private func isClubPick(_ payload: [String: Any]) -> Bool {
+    payload["type"] as? String == "clubPick"
+  }
+
   private func sendPick(_ payload: [String: Any], keepPending: Bool = true) {
     if isPuttPick(payload) {
       sendPuttPickReliable(payload)
+      return
+    }
+    if isClubPick(payload) {
+      sendClubMarkReliable(payload)
       return
     }
     guard WCSession.isSupported() else {
@@ -382,24 +390,51 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
   }
 
+  /// TF 58: club mark uses Watch GPS (already on payload) and queues when
+  /// the phone is unreachable. Never freeze on PHONE_UNAVAILABLE.
+  private func sendClubMarkReliable(_ payload: [String: Any]) {
+    sendReliableQueued(payload)
+  }
+
   /// TF 53 D: puttPick must not depend on isReachable / one pendingClubPick slot.
   /// transferUserInfo queues in order; sendMessage is extra when the phone is awake.
   private func sendPuttPickReliable(_ payload: [String: Any]) {
+    sendReliableQueued(payload)
+  }
+
+  private func sendReliableQueued(_ payload: [String: Any]) {
     enqueuePending(payload)
     sending = false
-    guard WCSession.isSupported() else { return }
+    guard WCSession.isSupported() else {
+      noteQueued()
+      return
+    }
     let session = WCSession.default
     session.transferUserInfo(payload)
     if session.isReachable {
       session.sendMessage(payload, replyHandler: { [weak self] reply in
         DispatchQueue.main.async {
           self?.dequeuePending(at: payload["at"] as? String)
-          self?.handleReply(reply, fallbackClubId: nil, type: "puttPick")
+          self?.handleReply(
+            reply,
+            fallbackClubId: payload["clubId"] as? String,
+            type: payload["type"] as? String
+          )
         }
-      }, errorHandler: { _ in
-        // userInfo already queued — do not wipe later taps
+      }, errorHandler: { [weak self] _ in
+        DispatchQueue.main.async {
+          self?.noteQueued()
+        }
       })
+    } else {
+      noteQueued()
     }
+  }
+
+  private func noteQueued() {
+    sending = false
+    feedback = "Queued · will sync"
+    haptic(.click)
   }
 
   private func handleReply(_ reply: [String: Any], fallbackClubId: String?, type: String? = nil) {
@@ -686,7 +721,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
     let batch = pendingQueue
     guard !batch.isEmpty else { return }
-    sending = true
+    sending = false
     for payload in batch {
       sendPick(payload, keepPending: true)
     }

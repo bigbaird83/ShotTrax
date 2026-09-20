@@ -50,6 +50,12 @@ struct ContentView: View {
             .foregroundStyle(Color("cream"))
             .lineLimit(1)
             .minimumScaleFactor(0.8)
+          if !session.feedback.isEmpty {
+            Text(session.feedback)
+              .font(.system(size: 11, weight: .bold))
+              .foregroundStyle(Color.orange)
+              .lineLimit(1)
+          }
           puttSheet
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -154,10 +160,14 @@ struct ContentView: View {
     }
   }
 
+  /// #C8F542 — same lime as phone. Asset accent can vanish on Ultra outdoor.
+  private let outdoorLime = Color(red: 200.0 / 255.0, green: 245.0 / 255.0, blue: 66.0 / 255.0)
+
   @ViewBuilder
   private var puttSheet: some View {
     // Fixed 2×2 with literal 0–3 — a lazy grid dropped that cell on Ultra.
-    // Made is a full-width row under Add/Undo so it cannot clip off the face.
+    // Selection is lime fill on the same pill — never hide the tapped bucket.
+    // Made is a full-width high-contrast pill under Add/Undo.
     VStack(spacing: 4) {
       HStack(spacing: 4) {
         puttLengthButton(id: "inside_3", label: "0–3")
@@ -172,34 +182,48 @@ struct ContentView: View {
         Button(action: { session.addPutt() }) {
           Text("Add putt")
             .font(.system(size: 11, weight: .heavy))
+            .foregroundStyle(Color("cream"))
             .lineLimit(1)
             .minimumScaleFactor(0.7)
             .frame(maxWidth: .infinity, minHeight: 36)
+            .overlay(
+              RoundedRectangle(cornerRadius: 10)
+                .stroke(Color("cream"), lineWidth: 1)
+            )
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.plain)
         .disabled(session.sending || session.putt.pending == nil || !session.putt.canAdd)
 
         Button(action: { session.undoPutt() }) {
           Text("Undo")
             .font(.system(size: 11, weight: .heavy))
+            .foregroundStyle(Color("cream"))
             .lineLimit(1)
             .minimumScaleFactor(0.7)
             .frame(maxWidth: .infinity, minHeight: 36)
+            .overlay(
+              RoundedRectangle(cornerRadius: 10)
+                .stroke(Color("cream"), lineWidth: 1)
+            )
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.plain)
         .disabled(session.sending || session.putt.lengths.isEmpty)
       }
 
       Button(action: { session.madeIt() }) {
         Text("Made")
-          .font(.system(size: 14, weight: .black))
+          .font(.system(size: 18, weight: .black))
+          .foregroundStyle(Color("bg"))
           .lineLimit(1)
           .minimumScaleFactor(0.8)
-          .frame(maxWidth: .infinity, minHeight: 40)
+          .frame(maxWidth: .infinity, minHeight: 48)
+          .background(outdoorLime)
+          .overlay(
+            RoundedRectangle(cornerRadius: 12)
+              .stroke(Color("cream"), lineWidth: 2)
+          )
       }
-      .buttonStyle(.borderedProminent)
-      .tint(Color("accent"))
-      .foregroundStyle(Color.black)
+      .buttonStyle(.plain)
       .layoutPriority(1)
       .fixedSize(horizontal: false, vertical: true)
 
@@ -221,15 +245,21 @@ struct ContentView: View {
 
   @ViewBuilder
   private func puttLengthButton(id: String, label: String) -> some View {
+    let selected = session.putt.pending == id
     Button(action: { session.pickPuttLength(id) }) {
       Text(label)
         .font(.system(size: 13, weight: .heavy))
+        .foregroundStyle(selected ? Color("bg") : Color("cream"))
         .lineLimit(1)
         .minimumScaleFactor(0.7)
-        .frame(maxWidth: .infinity, minHeight: 32)
+        .frame(maxWidth: .infinity, minHeight: 36)
+        .background(selected ? outdoorLime : Color.clear)
+        .overlay(
+          RoundedRectangle(cornerRadius: 10)
+            .stroke(selected ? outdoorLime : Color("cream"), lineWidth: selected ? 3 : 1)
+        )
     }
-    .buttonStyle(.bordered)
-    .tint(session.putt.pending == id ? Color("accent") : Color("cream"))
+    .buttonStyle(.plain)
     .disabled(!session.putt.canAdd)
   }
 
@@ -268,7 +298,6 @@ struct ContentView: View {
                 )
             }
             .buttonStyle(.plain)
-            .disabled(session.sending)
             Button(action: { session.leave("home") }) {
               Text("Home")
                 .font(.system(size: 16, weight: .heavy))
@@ -280,8 +309,21 @@ struct ContentView: View {
                 )
             }
             .buttonStyle(.plain)
-            .disabled(session.sending)
           }
+
+          Button(action: { session.openPuttSheet() }) {
+            Text("Putt")
+              .font(.system(size: 15, weight: .heavy))
+              .foregroundStyle(Color("cream"))
+              .lineLimit(1)
+              .minimumScaleFactor(0.7)
+              .frame(maxWidth: .infinity, minHeight: 40)
+              .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                  .stroke(Color("cream"), lineWidth: 1)
+              )
+          }
+          .buttonStyle(.plain)
 
           GeometryReader { wheelGeo in
             let visible = min(3, max(stripClubs.count, 1))
@@ -291,21 +333,22 @@ struct ContentView: View {
               ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                   ForEach(wheelClubs, id: \.token) { club in
+                    let selected = club.id == stripSelectedId
                     Text(session.list.label(for: club.id))
                       .font(.system(size: 16, weight: .black))
-                      .foregroundStyle(club.id == stripSelectedId ? Color("accent") : Color("cream"))
+                      .foregroundStyle(selected ? Color("bg") : Color("cream"))
                       .lineLimit(1)
                       .minimumScaleFactor(0.65)
                       .frame(width: pillWidth, height: 44)
-                      .background(Color("bg"))
+                      .background(selected ? outdoorLime : Color("bg"))
                       .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                          .stroke(club.id == stripSelectedId ? Color("accent") : Color("cream"), lineWidth: 1)
+                          .stroke(selected ? outdoorLime : Color("cream"), lineWidth: selected ? 3 : 1)
                       )
                       .padding(.trailing, club.seamAfter ? 24 : 0)
                       .id(club.token)
                       .onTapGesture {
-                        if !session.sending { session.pick(clubId: club.id) }
+                        session.pick(clubId: club.id)
                       }
                   }
                 }
@@ -319,37 +362,19 @@ struct ContentView: View {
           }
           .frame(height: 52)
 
-          HStack(spacing: 8) {
-            Button(action: { session.openPuttSheet() }) {
-              Text("Putt")
-                .font(.system(size: 15, weight: .heavy))
-                .foregroundStyle(Color("cream"))
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .frame(maxWidth: .infinity, minHeight: 40)
-                .overlay(
-                  RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color("cream"), lineWidth: 1)
-                )
-            }
-            .buttonStyle(.plain)
-            .disabled(session.sending)
-
-            Button(action: { session.madeIt() }) {
-              Text("Hole Out")
-                .font(.system(size: 15, weight: .heavy))
-                .foregroundStyle(Color("cream"))
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .frame(maxWidth: .infinity, minHeight: 40)
-                .overlay(
-                  RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color("cream"), lineWidth: 1)
-                )
-            }
-            .buttonStyle(.plain)
-            .disabled(session.sending)
+          Button(action: { session.madeIt() }) {
+            Text("Hole Out")
+              .font(.system(size: 15, weight: .heavy))
+              .foregroundStyle(Color("cream"))
+              .lineLimit(1)
+              .minimumScaleFactor(0.7)
+              .frame(maxWidth: .infinity, minHeight: 40)
+              .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                  .stroke(Color("cream"), lineWidth: 1)
+              )
           }
+          .buttonStyle(.plain)
 
           Button(action: { showAllClubs.toggle() }) {
             Text("All clubs")
@@ -376,7 +401,6 @@ struct ContentView: View {
                   }
                   .buttonStyle(.bordered)
                   .tint(Color("cream"))
-                  .disabled(session.sending)
                 }
               }
             }

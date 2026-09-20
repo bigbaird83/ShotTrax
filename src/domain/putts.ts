@@ -612,6 +612,15 @@ export function watchPuttSheetMadeItIsFullWidthRow(): true {
   return true;
 }
 
+/** Tapping 0–3 (or any bucket) highlights that cell — never blanks it. */
+export function watchPuttSheetSelectedBucketNeverHides(): true {
+  return true;
+}
+
+export function watchPuttSheetSelectedIsHighlightNotRemoval(): true {
+  return true;
+}
+
 export function watchPuttSheetMadeItRequiresLength(): false {
   return false;
 }

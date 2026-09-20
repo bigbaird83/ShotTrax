@@ -151,7 +151,8 @@ test('Fairway: dedicated Watch Putt opens the sheet only — no attachWatchFix, 
   assert.match(clubPick, /Text\("Hole Out"\)/);
   assert.doesNotMatch(clubPick, WATCH_MADE);
   assert.ok(clubPick.indexOf('session.openPuttSheet()') < clubPick.indexOf('Text("Hole Out")'));
-  assert.ok(clubPick.indexOf('Text("Putt")') > clubPick.indexOf('ScrollView(.horizontal'));
+  assert.ok(clubPick.indexOf('session.leave("back")') < clubPick.indexOf('Text("Putt")'));
+  assert.ok(clubPick.indexOf('Text("Putt")') < clubPick.indexOf('ScrollView(.horizontal'));
 
   const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
   const openFn = session.slice(session.indexOf('func openPuttSheet'), session.indexOf('func pickPuttLength'));

@@ -22,6 +22,12 @@ import {
 } from '../domain/watchMessages';
 import type { PuttLengthId } from '../domain/putts';
 import {
+  drainWatchClubPickQueue,
+  forgetWatchClubPickAt,
+  queueWatchClubPickEvent,
+  watchClubPickShouldApply,
+} from '../domain/watchClubQueue';
+import {
   drainWatchPuttPickQueue,
   forgetWatchPuttPickAt,
   queueWatchPuttPickEvent,
@@ -61,7 +67,10 @@ export function watchBridgeAvailable(): boolean {
 
 export function setWatchClubContext(next: WatchClubContext | null): void {
   context = next;
-  if (next) void flushPendingPuttPicks();
+  if (next) {
+    void flushPendingClubPicks();
+    void flushPendingPuttPicks();
+  }
 }
 
 export async function pushWatchClubList(msg: ClubListMessage): Promise<void> {
@@ -159,6 +168,10 @@ async function handlePick(token: string, json: string): Promise<void> {
   }
   const ctx = context;
   if (!ctx || ctx.readOnly) {
+    if (!ctx && intent.kind === 'club') {
+      queueWatchClubPickEvent({ token, json, at: intent.pick.at });
+      return;
+    }
     await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
     return;
   }
@@ -186,6 +199,11 @@ async function handlePick(token: string, json: string): Promise<void> {
   }
 
   const pick = intent.pick;
+  if (!watchClubPickShouldApply(pick.at)) {
+    const label = ctx.labelForClub(pick.clubId) ?? pick.clubId;
+    await replyToken(token, { ok: true, feedback: formatClubMarkedFeedback(label) });
+    return;
+  }
   ctx.onSelectClub?.(pick.clubId);
   const label = ctx.labelForClub(pick.clubId) ?? pick.clubId;
   const watchFix = watchFixFromPick(pick);
@@ -221,6 +239,7 @@ async function handlePick(token: string, json: string): Promise<void> {
       })();
     });
     if (waiting) {
+      forgetWatchClubPickAt(pick.at);
       hapticWarn();
       await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
       return;
@@ -232,11 +251,20 @@ async function handlePick(token: string, json: string): Promise<void> {
       await replyToken(token, { ok: true, feedback: formatClubMarkedFeedback(label) });
       return;
     }
+    forgetWatchClubPickAt(pick.at);
     await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
   } catch {
+    forgetWatchClubPickAt(pick.at);
     hapticWarn();
     Alert.alert(COPY.waitingOnLocation, COPY.locationOff, [{ text: COPY.cancel, style: 'cancel' }]);
     await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
+  }
+}
+
+async function flushPendingClubPicks(): Promise<void> {
+  const rows = drainWatchClubPickQueue();
+  for (const row of rows) {
+    await handlePick(row.token, row.json);
   }
 }
 

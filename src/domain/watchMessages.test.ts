@@ -8,6 +8,7 @@ import type { GpsFix } from './types';
 import {
   CLUB_LIST_KEYS,
   PHONE_UNAVAILABLE,
+  QUEUED_WILL_SYNC,
   WATCH_MESSAGE_TYPES,
   clubListPayload,
   clubListPushKey,
@@ -258,9 +259,10 @@ test('Signal Lab: only a club tap, Watch tap, or Same club runs acceptFix', () =
   assert.equal(watchPayloadRunsAcceptFix(clubPickPayload({ clubId: 'club_7i', at })), true);
 });
 
-test('Watch feedback is marked ✓ or Phone unavailable — never silent fail', () => {
+test('Watch feedback is marked ✓, queued, or Phone unavailable — never silent fail', () => {
   assert.equal(formatClubMarkedFeedback('7i'), '7i marked ✓');
   assert.equal(PHONE_UNAVAILABLE, 'Phone unavailable');
+  assert.equal(QUEUED_WILL_SYNC, 'Queued · will sync');
 });
 
 test('Watch companion is club-pick only — no motion, mic, or auto-putt', () => {

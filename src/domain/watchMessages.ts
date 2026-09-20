@@ -337,6 +337,8 @@ export function formatClubMarkedFeedback(shortName: string): string {
 }
 
 export const PHONE_UNAVAILABLE = 'Phone unavailable';
+/** Watch stays live when the phone is in the cart — queue, do not freeze. */
+export const QUEUED_WILL_SYNC = 'Queued · will sync';
 export const CHECK_PHONE = 'Check phone';
 export const PUTTS_ON_WATCH = 'Putts';
 export const MADE_IT_FEEDBACK = 'Hole Out ✓';

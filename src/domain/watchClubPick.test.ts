@@ -46,6 +46,7 @@ import {
   watchCarryFromLabel,
   watchClubListKeepsFullBag,
   watchSelectedClubNeverVanishes,
+  watchSelectedClubHighlightNeverHidesPill,
   watchSelectedHighlightInPlace,
   watchStripNeverDropsBagClub,
   watchTop3ByRemainingYards,
@@ -685,6 +686,7 @@ test('P0: bag with Driver null + remaining ~330 keeps Driver in Watch top-3; nev
 
 test('P0: phone selected=Driver at 330 stays on Watch strip highlighted, not only 2i/3w', () => {
   assert.equal(watchSelectedClubNeverVanishes(), true);
+  assert.equal(watchSelectedClubHighlightNeverHidesPill(), true);
   assert.equal(watchSelectedHighlightInPlace(), true);
 
   const bagIds = ['club_driver', 'club_3w', 'club_2i', 'club_7i', 'club_pw', PUTTER_CLUB_ID];
