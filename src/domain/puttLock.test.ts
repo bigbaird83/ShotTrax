@@ -5,6 +5,7 @@ import { PUTTER_CLUB_ID } from './defaultBag';
 import { includeInDistanceAverages, includeInTop3Samples } from './shotSource';
 import { COPY } from './playerCopy';
 import {
+  canMakeCurrentPutt,
   canMakePutt,
   commitPuttLength,
   emptyPuttDraft,
@@ -23,6 +24,7 @@ import {
   pickPuttLength,
   planFinishHoleOut,
   planMadeIt,
+  planMadeItFromPick,
   playDockKeepsHoleOutForOffGreen,
   puttSheetCtaLabel,
   puttSheetDistanceTapCommits,
@@ -157,7 +159,7 @@ test('Signal Lab: Hole Out closes on the last real mark — no invented putt GPS
   assert.ok(pickFn.indexOf('clubId != "club_putter"') < pickFn.indexOf('attachWatchFix'));
 });
 
-test('Signal Lab: TF 49 putt sheet is pick → Made it on putt 1; Add putt is a miss; Hole Out stays on the dock', () => {
+test('Signal Lab: TF 49 putt sheet is pick → Made it on putt N≥1; Add putt is a miss; Hole Out stays on the dock', () => {
   assert.equal(puttSheetDistanceTapCommits(), false);
   assert.equal(puttSheetHasAddPuttControl(), true);
   assert.equal(puttSheetCtaLabel(), 'Made it');
@@ -172,6 +174,7 @@ test('Signal Lab: TF 49 putt sheet is pick → Made it on putt 1; Add putt is a 
   assert.equal(picked.pending, '3_to_10');
   assert.deepEqual(picked.draft.lengths, []);
   assert.equal(planMadeIt(picked.draft).ok, false);
+  assert.equal(canMakeCurrentPutt(picked), true);
   assert.equal(planMadeIt(picked.draft, picked.pending).ok, true);
   const madeOne = planMadeIt(picked.draft, picked.pending);
   if (madeOne.ok) {
@@ -185,7 +188,7 @@ test('Signal Lab: TF 49 putt sheet is pick → Made it on putt 1; Add putt is a 
   assert.match(sheet, /label=\{COPY\.addPutt\}/);
   assert.match(sheet, /commitPuttLength\(\{ draft, pending \}\)/);
   assert.match(sheet, /onAdd\(added\)/);
-  assert.match(sheet, /canMakePutt\(draft, pending\)/);
+  assert.match(sheet, /canMakeCurrentPutt\(pick\)/);
   assert.match(sheet, /onMadeIt\(pending\)/);
   assert.match(sheet, /label=\{COPY\.madeIt\}/);
   assert.match(sheet, /label=\{COPY\.undoPutt\}/);
@@ -234,7 +237,9 @@ test('Signal Lab: TF 49 putt sheet is pick → Made it on putt 1; Add putt is a 
   assert.match(madeFn, /payload\["lengthId"\] = pending/);
   assert.doesNotMatch(madeFn, /attachWatchFix/);
   const applySheet = session.slice(session.indexOf('private func applyPuttSheet'), session.indexOf('private func persist'));
-  assert.match(applySheet, /next\.pending != nil \|\| !next\.lengths\.isEmpty/);
+  assert.match(applySheet, /next\.canMake = next\.pending != nil \|\| next\.lengths\.count >= 5/);
+  const addFn = session.slice(session.indexOf('func addPutt'), session.indexOf('func undoPutt'));
+  assert.match(addFn, /next\.canMake = next\.lengths\.count >= 5/);
 });
 
 test('Signal Lab: Made it enabled after distance pick with zero putts logged; Add putt still commits a miss; Made it closes hole', () => {
@@ -242,10 +247,12 @@ test('Signal Lab: Made it enabled after distance pick with zero putts logged; Ad
   assert.equal(picked.draft.lengths.length, 0);
   assert.equal(picked.pending, 'inside_3');
   assert.equal(canMakePutt(picked.draft, picked.pending), true);
+  assert.equal(canMakeCurrentPutt(picked), true);
   assert.equal(puttSheetDistanceTapCommits(), false);
   const miss = commitPuttLength(picked);
   assert.deepEqual(miss.draft, { putts: 1, lengths: ['inside_3'] });
   assert.equal(miss.pending, null);
+  assert.equal(canMakeCurrentPutt(miss), false);
   const holing = planMadeIt(emptyPuttDraft(), 'inside_3');
   assert.equal(holing.ok, true);
   if (holing.ok) {
@@ -261,6 +268,43 @@ test('Signal Lab: Made it enabled after distance pick with zero putts logged; Ad
   assert.match(apply, /planMadeIt\(draft, pending\)/);
   assert.match(apply, /madeItAdvancesHole/);
   assert.match(hole, /holeAfterDone\(targetHole, round\.holeCount\)/);
+});
+
+test('Signal Lab: Made it with pending on putt N≥1 — no extra Add putt after the distance pick', () => {
+  const putt1 = pickPuttLength(emptyPuttSheetPick(), 'over_20');
+  assert.equal(canMakeCurrentPutt(putt1), true);
+  const miss = commitPuttLength(putt1);
+  assert.equal(miss.draft.lengths.length, 1);
+  assert.equal(miss.pending, null);
+  assert.equal(canMakeCurrentPutt(miss), false);
+  assert.equal(puttSheetDistanceTapCommits(), false);
+
+  const putt2 = pickPuttLength(miss, '3_to_10');
+  assert.equal(putt2.pending, '3_to_10');
+  assert.deepEqual(putt2.draft.lengths, ['over_20']);
+  assert.equal(canMakeCurrentPutt(putt2), true);
+  const made2 = planMadeItFromPick(putt2);
+  assert.equal(made2.ok, true);
+  if (made2.ok) {
+    assert.equal(made2.putts, 2);
+    assert.deepEqual(made2.lengths, ['over_20', '3_to_10']);
+  }
+
+  const miss2 = commitPuttLength(putt2);
+  const putt3 = pickPuttLength(miss2, 'inside_3');
+  assert.equal(canMakeCurrentPutt(putt3), true);
+  const made3 = planMadeItFromPick(putt3);
+  assert.equal(made3.ok, true);
+  if (made3.ok) {
+    assert.equal(made3.putts, 3);
+    assert.deepEqual(made3.lengths, ['over_20', '3_to_10', 'inside_3']);
+  }
+
+  const sheet = readFileSync(new URL('../ui/PuttSheetBody.tsx', import.meta.url), 'utf8');
+  assert.match(sheet, /canMakeCurrentPutt\(pick\)/);
+  assert.match(sheet, /onMadeIt\(pending\)/);
+  assert.match(sheet, /commitPuttLength\(\{ draft, pending \}\)/);
+  assert.doesNotMatch(sheet, /onPress=\{\(\) => onAdd\(bucket\.id\)\}/);
 });
 
 test('Signal Lab: Made it only stores user-chosen buckets and advances the hole', () => {

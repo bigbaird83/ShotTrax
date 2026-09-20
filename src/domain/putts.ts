@@ -133,6 +133,22 @@ export function canMakePutt(
 }
 
 /**
+ * Sheet Made it: the current putt (N≥1) has a selected/pending bucket.
+ * Logged misses alone do not enable it — pick the holing putt, then Made it.
+ * At the 5-putt cap there is no next pick, so logged buckets can close.
+ */
+export function canMakeCurrentPutt(pick: PuttSheetPick): boolean {
+  if (pick.pending && isPuttLengthId(pick.pending)) {
+    return planMadeIt(pick.draft, pick.pending).ok;
+  }
+  return pick.draft.lengths.length >= PUTT_MAX && planMadeIt(pick.draft).ok;
+}
+
+export function planMadeItFromPick(pick: PuttSheetPick) {
+  return planMadeIt(pick.draft, pick.pending);
+}
+
+/**
  * Made it persists user-chosen buckets only — logged misses plus the pending
  * holing putt. Never a GPS-invented putt count or fabricated distance.
  */

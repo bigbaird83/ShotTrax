@@ -4,7 +4,7 @@ import { COPY, formatPuttN } from '../domain/playerCopy';
 import {
   PUTT_LENGTHS,
   canCommitPutt,
-  canMakePutt,
+  canMakeCurrentPutt,
   commitPuttLength,
   nextPuttNumber,
   pickPuttLength,
@@ -37,7 +37,7 @@ export function PuttSheetBody({
   const nextN = nextPuttNumber(draft);
   const canPick = nextN != null && !disabled;
   const canAdd = canCommitPutt(pick) && !disabled;
-  const canMake = canMakePutt(draft, pending) && !disabled;
+  const canMake = canMakeCurrentPutt(pick) && !disabled;
   const pendingLabel = pending ? PUTT_LENGTHS.find((row) => row.id === pending)?.label ?? pending : COPY.puttSheetHint;
 
   return (

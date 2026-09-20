@@ -5,12 +5,14 @@ import { PUTTER_CLUB_ID } from './defaultBag';
 import {
   addPuttLength,
   canCommitPutt,
+  canMakeCurrentPutt,
   canMakePutt,
   clampPutts,
   commitPuttLength,
   emptyPuttDraft,
   emptyPuttSheetPick,
   pickPuttLength,
+  planMadeItFromPick,
   finishHoleBuriedInScorecard,
   finishHoleLivesOnPlayDock,
   finishPuttsChipLabel,
@@ -104,6 +106,7 @@ test('Signal: pick a length does not commit; Add putt commits a miss; Made it on
   assert.equal(picked.draft.lengths.length, 0);
   assert.equal(canCommitPutt(picked), true);
   assert.equal(canMakePutt(picked.draft, picked.pending), true);
+  assert.equal(canMakeCurrentPutt(picked), true);
   const onePutt = planMadeIt(picked.draft, picked.pending);
   assert.equal(onePutt.ok, true);
   if (onePutt.ok) {
@@ -120,8 +123,20 @@ test('Signal: pick a length does not commit; Add putt commits a miss; Made it on
   assert.equal(logged.pending, null);
   assert.deepEqual(logged.draft, { putts: 1, lengths: ['over_20'] });
   assert.equal(canMakePutt(logged.draft), true);
+  assert.equal(canMakeCurrentPutt(logged), false);
 
-  const two = commitPuttLength(pickPuttLength({ draft: logged.draft, pending: null }, 'inside_3'));
+  const putt2 = pickPuttLength({ draft: logged.draft, pending: null }, 'inside_3');
+  assert.equal(putt2.pending, 'inside_3');
+  assert.deepEqual(putt2.draft.lengths, ['over_20']);
+  assert.equal(canMakeCurrentPutt(putt2), true);
+  const madeTwo = planMadeItFromPick(putt2);
+  assert.equal(madeTwo.ok, true);
+  if (madeTwo.ok) {
+    assert.equal(madeTwo.putts, 2);
+    assert.deepEqual(madeTwo.lengths, ['over_20', 'inside_3']);
+  }
+
+  const two = commitPuttLength(putt2);
   assert.deepEqual(two.draft.lengths, ['over_20', 'inside_3']);
 });
 
@@ -132,6 +147,9 @@ test('Made it needs at least one putt with a bucket', () => {
   assert.equal(canMakePutt({ putts: 1, lengths: ['inside_3'] }), true);
   assert.equal(canMakePutt({ putts: 2, lengths: ['over_20', '3_to_10'] }), true);
   assert.equal(canMakePutt(emptyPuttDraft(), 'inside_3'), true);
+  assert.equal(canMakeCurrentPutt({ draft: emptyPuttDraft(), pending: 'inside_3' }), true);
+  assert.equal(canMakeCurrentPutt({ draft: { putts: 1, lengths: ['over_20'] }, pending: null }), false);
+  assert.equal(canMakeCurrentPutt({ draft: { putts: 1, lengths: ['over_20'] }, pending: 'inside_3' }), true);
   const planned = planMadeIt({ putts: 99, lengths: ['3_to_10'] });
   assert.equal(planned.ok, true);
   if (planned.ok) {
@@ -144,6 +162,11 @@ test('Made it needs at least one putt with a bucket', () => {
     assert.equal(holing.putts, 2);
     assert.deepEqual(holing.lengths, ['over_20', 'inside_3']);
   }
+  const capped = {
+    draft: { putts: 5, lengths: ['inside_3', 'inside_3', 'inside_3', 'inside_3', 'inside_3'] as const },
+    pending: null,
+  };
+  assert.equal(canMakeCurrentPutt(capped), true);
 });
 
 test('next hole with no shots stays on play — All clubs does not auto-open', () => {
