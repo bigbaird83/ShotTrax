@@ -8,7 +8,7 @@ export const PUTT_MAX = 5;
 /** Inside this many yards-to-green (live quality) counts as near / on the green — display only. */
 export const NEAR_GREEN_YD = 40;
 
-/** Proximity arm for putt pills. Hard / forced / none never opens pills. */
+/** Proximity arm for the dock Putt button. Hard / forced / none never opens it. */
 export const PUTT_PILL_PROXIMITY_QUALITIES = ['good', 'soft'] as const;
 
 export const PUTT_LENGTH_IDS = ['inside_3', '3_to_10', '10_to_20', 'over_20'] as const;
@@ -459,11 +459,12 @@ export function holeClosedByShot<T extends { seq: number; holeOut?: boolean | nu
 export type PlayDockFinishKind = 'hole_out' | 'hidden';
 
 /**
- * Same club slot is always Hole Out. Putt pills sit just above it only
+ * Same club slot is always Hole Out. A Putt button sits to its left only
  * when putter is selected or GPS is within ~40 yd of the hydrated green
  * centroid (haversine yards-to-green, good/soft only). Hard/forced →
- * putter-selected only. Never a third dock row. Never invent putt GPS
- * or green-edge polygons.
+ * putter-selected only. Putt opens the existing putt sheet. Hole Out
+ * stays for off-green chip-ins. Never a third dock row. Never invent
+ * putt GPS or green-edge polygons.
  */
 export function showPuttPills(args: {
   putting?: boolean;
@@ -518,6 +519,27 @@ export function planPlayDockFinish(args: {
 }
 
 export function playDockStacksFinishAndHoleDone(): false {
+  return false;
+}
+
+export function playDockPuttOpensExistingSheet(): true {
+  return true;
+}
+
+export function playDockPuttUsesShowPuttPillsGate(): true {
+  return true;
+}
+
+export function playDockPuttLabel(): 'Putt' {
+  return 'Putt';
+}
+
+/** Dock Hole Out is the off-green chip-in. Made it stays on the putt sheet. */
+export function playDockHoleOutIsChipInOnly(): true {
+  return true;
+}
+
+export function playDockHoleOutCallsMadeIt(): false {
   return false;
 }
 

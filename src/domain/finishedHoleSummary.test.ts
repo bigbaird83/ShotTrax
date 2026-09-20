@@ -218,7 +218,8 @@ test('Signal Lab: TF 48 chip sits in play header chrome; putt sheet / dock / Add
   const dock = hole.slice(hole.indexOf('style={[styles.dock'), hole.indexOf('<FullSheet'));
   assert.match(dock, /testID="play-dock-hole-out"/);
   assert.match(dock, /COPY\.holeOut/);
-  assert.match(dock, /onFinishHole/);
+  assert.match(dock, /onPress=\{onFinishHole\}/);
+  assert.doesNotMatch(dock, /onMadeIt/);
   assert.doesNotMatch(dock, /finished-hole-chip|planFinishedHoleMiniSummary/);
 
   const sheet = readFileSync(new URL('../ui/PuttSheetBody.tsx', import.meta.url), 'utf8');
@@ -230,6 +231,9 @@ test('Signal Lab: TF 48 chip sits in play header chrome; putt sheet / dock / Add
 
   const puttDock = readFileSync(new URL('../ui/PuttDock.tsx', import.meta.url), 'utf8');
   assert.doesNotMatch(puttDock, /planFinishedHoleMiniSummary|finished-hole-chip/);
+  assert.match(puttDock, /COPY\.putt/);
+  assert.match(puttDock, /testID="play-dock-putts"/);
+  assert.doesNotMatch(puttDock, /PUTT_LENGTHS|onAdd|onUndo/);
 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   assert.match(map, /scrollEnabled=\{framedForGestures\}/);
