@@ -50,6 +50,7 @@ import {
   playDockHoleOutIsChipInOnly,
   playDockPuttLabel,
   playDockPuttOpensExistingSheet,
+  playDockPuttAlwaysWhenUnfinished,
   playDockPuttUsesShowPuttPillsGate,
   puttsLiveOnPlayDock,
   PUTT_LENGTHS,
@@ -314,16 +315,17 @@ test('Signal: dock Putt when putter or ≤40 yd good/soft; Hole Out stays either
   const far = planPlayDockFinish({ putting: false, toGreen: { yards: 160, quality: 'good' } });
   assert.equal(far.kind, 'hole_out');
   assert.equal(far.showHoleOut, true);
-  assert.equal(far.showPutts, false);
+  assert.equal(far.showPutts, true);
   const fringe = planPlayDockFinish({ putting: false, toGreen: { yards: 36, quality: 'soft' } });
   assert.equal(fringe.showHoleOut, true);
   assert.equal(fringe.showPutts, true);
   const junk = planPlayDockFinish({ putting: false, toGreen: { yards: 10, quality: 'forced' } });
   assert.equal(junk.showHoleOut, true);
-  assert.equal(junk.showPutts, false);
+  assert.equal(junk.showPutts, true);
   const putter = planPlayDockFinish({ putting: true, toGreen: { yards: 180, quality: 'good' } });
   assert.equal(putter.showHoleOut, true);
   assert.equal(putter.showPutts, true);
+  assert.equal(playDockPuttAlwaysWhenUnfinished(), true);
   const hidden = planPlayDockFinish({ readOnly: true, putting: true });
   assert.equal(hidden.showHoleOut, false);
   assert.equal(hidden.showPutts, false);
@@ -375,7 +377,7 @@ test('Finish hole / putts live on the play dock — not buried in Scorecard', ()
   const holeOutAt = dock.indexOf('testID="play-dock-hole-out"');
   assert.ok(puttAt >= 0 && holeOutAt > puttAt);
   assert.equal(playDockPuttOpensExistingSheet(), true);
-  assert.equal(playDockPuttUsesShowPuttPillsGate(), true);
+  assert.equal(playDockPuttUsesShowPuttPillsGate(), false);
   assert.equal(playDockPuttLabel(), 'Putt');
   assert.equal(playDockHoleOutIsChipInOnly(), true);
   assert.equal(playDockHoleOutCallsMadeIt(), false);
@@ -551,4 +553,45 @@ test('selecting Putter opens the putt sheet — not a GPS mark; change-club does
   assert.equal(putterOpensPuttSheet({ clubId: 'club_7i' }), false);
   assert.equal(putterOpensPuttSheet({ clubId: PUTTER_CLUB_ID, relabel: true }), false);
   assert.equal(putterOpensPuttSheet({ clubId: null }), false);
+});
+
+test('TF 53: dock Putt + shrunken Hole Out; Watch Made it always on putt sheet', () => {
+  assert.equal(playDockPuttAlwaysWhenUnfinished(), true);
+  assert.equal(playDockPuttUsesShowPuttPillsGate(), false);
+  assert.equal(planPlayDockFinish({ putting: false, toGreen: { yards: 371, quality: 'good' } }).showPutts, true);
+  assert.equal(planPlayDockFinish({ putting: false, toGreen: { yards: 371, quality: 'none' } }).showPutts, true);
+  assert.equal(planPlayDockFinish({ readOnly: true }).showPutts, false);
+  assert.equal(planPlayDockFinish({ putting: false, puttsDone: true }).showPutts, false);
+  assert.equal(watchPuttSheetMadeItAlwaysEnabled(), true);
+  assert.equal(watchPuttSheetMadeItRequiresLength(), false);
+  assert.equal(canMakeCurrentPutt(emptyPuttSheetPick()), true);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const dock = hole.slice(hole.indexOf('style={[styles.dock'), hole.indexOf('<FullSheet'));
+  const puttAt = dock.indexOf('<PuttDock');
+  const holeOutAt = dock.indexOf('testID="play-dock-hole-out"');
+  assert.ok(puttAt >= 0 && holeOutAt > puttAt);
+  assert.match(dock, /styles\.dockHoleOutShrunk/);
+  assert.match(dock, /openPuttSheet\(holeNumber\)/);
+  assert.doesNotMatch(dock, /onMadeIt/);
+
+  const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+  const watchSheet = watch.slice(watch.indexOf('private var puttSheet'), watch.indexOf('private var clubPick'));
+  const clubPick = watch.slice(watch.indexOf('private var clubPick'), watch.indexOf('private var moreClubs'));
+  assert.match(watchSheet, /LazyVGrid/);
+  assert.match(watchSheet, /Text\("Made it"\)/);
+  assert.match(watchSheet, /Text\("Add putt"\)/);
+  assert.match(watchSheet, /Text\("Undo"\)/);
+  assert.match(watchSheet, /Text\("0–3"\)|watchPuttBuckets/);
+  assert.ok(watchSheet.indexOf('LazyVGrid') < watchSheet.indexOf('Text("Made it")'));
+  assert.doesNotMatch(watchSheet, /!session\.putt\.canMake/);
+  assert.doesNotMatch(watchSheet, /Text\("Hole Out"\)/);
+  assert.doesNotMatch(watchSheet, /ScrollView/);
+  assert.match(clubPick, /Text\("Hole Out"\)/);
+  assert.doesNotMatch(clubPick, /Text\("Made it"\)/);
+  const pickFn = session.slice(session.indexOf('func pick(clubId: String)'), session.indexOf('func addPutt'));
+  assert.match(pickFn, /clubId == "club_putter"/);
+  assert.match(pickFn, /sheet\.open = true/);
+  assert.match(pickFn, /sheet\.canMake = true/);
 });

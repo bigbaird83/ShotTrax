@@ -20,9 +20,12 @@ import {
   rankCatchUpClubs,
   rankDistanceYards,
   rankTopClubs,
+  remainingPinRanksLastClosedShot,
+  remainingPinUsesPhoneGps,
   resolveAddShotSuggestTarget,
   resolveDistanceTarget,
   resolveNextShotDistanceTarget,
+  resolveRemainingPinTarget,
   shotYardsDistanceTarget,
   type RankClubInput,
 } from './rankClubs';
@@ -518,6 +521,7 @@ test('Add shot suggested clubs use the same remaining-yards D as the play wheel'
   assert.match(hole, /resolveAddShotSuggestTarget/);
   assert.match(hole, /addShotSuggestYardsLeft/);
   assert.match(placeStrip, /lastLanding: lastLandingMark\(shots\)/);
+  assert.match(placeStrip, /tee: holeTee/);
   assert.match(placeStrip, /courseToGreen: toGreen/);
   assert.match(placeStrip, /playTarget: addShotSuggestTarget/);
   assert.match(placeStrip, /yardsLeft: placeSuggestYards/);
@@ -632,4 +636,93 @@ test('typical-carry seed ranks a stock club before 5 live shots; live avg takes 
   );
   assert.equal(live[0]?.id, 'club_gw');
   assert.equal(live[0]?.deltaYards, 0);
+});
+
+test('TF 53: top-3 is closest carry to remaining pin yards — not shortest or longest', () => {
+  assert.equal(remainingPinRanksLastClosedShot(), false);
+  assert.equal(remainingPinUsesPhoneGps(), false);
+
+  const cypress6Tee = { lat: 35.0349146, lng: -92.0203523 };
+  const cypress6Green = { lat: 35.0332467, lng: -92.0234644 };
+  const teeToPin = markToGreen(cypress6Tee, cypress6Green);
+  assert.ok(teeToPin.yards != null && teeToPin.yards > 300 && teeToPin.yards < 430);
+  const empty = resolveRemainingPinTarget({
+    landingToGreen: { yards: null, quality: 'none' },
+    teeToGreen: teeToPin,
+    courseToGreen: { yards: null, quality: 'none' },
+  });
+  assert.deepEqual(empty, { source: 'yards_to_green', dYards: teeToPin.yards });
+  assert.notEqual(empty?.dYards, 280);
+  const ignoresLastClosed = resolveNextShotDistanceTarget({
+    landingToGreen: { yards: null, quality: 'none' },
+    teeToGreen: teeToPin,
+    courseToGreen: { yards: null, quality: 'none' },
+    lastClosedYards: 280,
+  });
+  assert.deepEqual(ignoresLastClosed, empty);
+
+  const noPin = resolveRemainingPinTarget({
+    landingToGreen: { yards: null, quality: 'none' },
+    teeToGreen: { yards: null, quality: 'none' },
+    courseToGreen: { yards: null, quality: 'none' },
+  });
+  assert.equal(noPin, null);
+
+  const landing = { lat: cypress6Tee.lat + (220 * 0.9144) / 111_320, lng: cypress6Tee.lng };
+  const fromPin = markToGreen(landing, cypress6Green);
+  const after = resolveRemainingPinTarget({
+    landingToGreen: fromPin,
+    teeToGreen: teeToPin,
+    courseToGreen: { yards: 371, quality: 'good' },
+  });
+  assert.equal(after?.source, 'yards_to_green');
+  assert.equal(after?.dYards, fromPin.yards);
+  assert.notEqual(after?.dYards, teeToPin.yards);
+  assert.notEqual(after?.dYards, 220);
+
+  const docBag: RankClubInput[] = [
+    club({ id: 'club_lw', shortName: 'LW', loftRank: 17, avgYards: 0, count: 0, typicalCarryYards: 75 }),
+    club({ id: 'club_7i', shortName: '7i', loftRank: 9, avgYards: 0, count: 0, typicalCarryYards: 150 }),
+    club({ id: 'club_5i', shortName: '5i', loftRank: 7, avgYards: 0, count: 0, typicalCarryYards: 170 }),
+    club({ id: 'club_2i', shortName: '2i', loftRank: 4, avgYards: 0, count: 0, typicalCarryYards: 239 }),
+    club({ id: 'club_3w', shortName: '3W', loftRank: 1, avgYards: 0, count: 0, typicalCarryYards: 254 }),
+    club({ id: 'club_driver', shortName: 'Dr', loftRank: 0, avgYards: 0, count: 0, typicalCarryYards: 280 }),
+    club({ id: PUTTER_CLUB_ID, shortName: 'Pt', loftRank: 18, avgYards: 8, count: 20, typicalCarryYards: 8 }),
+  ];
+  const teeIds = rankTopClubs(docBag, empty).map((row) => row.id);
+  assert.deepEqual(teeIds, ['club_driver', 'club_3w', 'club_2i']);
+  assert.ok(!teeIds.includes(PUTTER_CLUB_ID));
+  const midIds = rankTopClubs(docBag, { source: 'yards_to_green', dYards: 155 }).map((row) => row.id);
+  assert.deepEqual(midIds, ['club_7i', 'club_5i', 'club_lw']);
+  assert.ok(!midIds.includes('club_driver'));
+  assert.ok(!midIds.includes('club_3w'));
+  const shortIds = rankTopClubs(docBag, { source: 'yards_to_green', dYards: 80 }).map((row) => row.id);
+  assert.equal(shortIds[0], 'club_lw');
+  assert.ok(!shortIds.includes('club_driver'));
+
+  const stripMid = planClubStrip({
+    clubs: docBag.map((row) => ({ id: row.id, carry: row.typicalCarryYards })),
+    yardsLeft: 155,
+  });
+  assert.deepEqual(clubStripOpeningIds(stripMid.ids, stripMid.windowStart), [
+    'club_lw',
+    'club_7i',
+    'club_5i',
+  ]);
+  assert.notDeepEqual(clubStripOpeningIds(stripMid.ids, stripMid.windowStart), [
+    'club_2i',
+    'club_3w',
+    'club_driver',
+  ]);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const pick = readFileSync(new URL('../../app/round/[id]/club-pick.tsx', import.meta.url), 'utf8');
+  assert.match(hole, /const teeToGreen = markToGreen\(holeTee, green\)/);
+  assert.match(hole, /teeToGreen,/);
+  assert.match(pick, /const teeToGreen = markToGreen\(holeTee, green\)/);
+  const watchPush = hole.slice(hole.indexOf('useWatchClubList'), hole.indexOf('if (!round || !hole)'));
+  assert.match(watchPush, /yardsToGreen: target\?\.dYards/);
+  assert.doesNotMatch(watchPush, /yardsToGreen: liveToGreen\.yards/);
+  assert.match(pick, /yardsToGreen: target\?\.dYards/);
+  assert.doesNotMatch(pick, /yardsToGreen\(fix, green\)/);
 });

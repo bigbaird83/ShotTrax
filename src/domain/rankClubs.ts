@@ -66,20 +66,22 @@ export function addShotSuggestPutterHasCarry(): false {
 
 /**
  * Add-shot suggested clubs: same remaining-yards D as the play club wheel.
- * Empty hole / tee: course pin from the tee (card / tee-to-pin). After marks:
- * last landing (from-pin) → course pin. Never that shot's placed haversine,
- * never phone GPS, never an invented pin.
+ * Empty hole / tee: tee → course pin (haversine), else card yards. After marks:
+ * last landing → course pin. Never that shot's placed haversine, never phone
+ * GPS, never last-closed-shot length, never an invented pin.
  */
 export function resolveAddShotSuggestTarget(args: {
   lastLanding: LatLng | null;
+  tee?: LatLng | null;
   green: LatLng | null;
   courseToGreen: { yards: number | null; quality: ShotFixQuality };
-  lastClosedYards: number | null;
+  lastClosedYards?: number | null;
 }): DistanceTarget | null {
   return resolveNextShotDistanceTarget({
     landingToGreen: markToGreen(args.lastLanding, args.green),
+    teeToGreen: markToGreen(args.tee ?? null, args.green),
     courseToGreen: args.courseToGreen,
-    lastClosedYards: args.lastClosedYards,
+    lastClosedYards: args.lastClosedYards ?? null,
   });
 }
 
@@ -175,14 +177,17 @@ export function resolveDistanceTarget(args: {
 }
 
 /**
- * Next suggested club (big chip): remaining yards from the new landing to the
- * green. Not the card / tee number. No landing yet → existing tee / last-closed
- * fallback. The 20% rule still lives on `rankDistanceYards`.
+ * Remaining pin yards for Suggested top-3 (play strip AND Add-shot strip).
+ * 1. last landing → pin after marks
+ * 2. else tee → pin on an empty hole (hydrate / course tee+green)
+ * 3. else card / tee-box yards
+ * Never phone GPS. Never last-closed-shot length (that is carry, not remaining).
+ * Never invent a pin.
  */
-export function resolveNextShotDistanceTarget(args: {
+export function resolveRemainingPinTarget(args: {
   landingToGreen: { yards: number | null; quality: ShotFixQuality };
+  teeToGreen?: { yards: number | null; quality: ShotFixQuality } | null;
   courseToGreen: { yards: number | null; quality: ShotFixQuality };
-  lastClosedYards: number | null;
 }): DistanceTarget | null {
   if (
     args.landingToGreen.quality !== 'none' &&
@@ -194,9 +199,48 @@ export function resolveNextShotDistanceTarget(args: {
       dYards: args.landingToGreen.yards,
     };
   }
+  const tee = args.teeToGreen;
+  if (
+    tee &&
+    tee.quality !== 'none' &&
+    tee.yards != null &&
+    Number.isFinite(tee.yards)
+  ) {
+    return {
+      source: 'yards_to_green',
+      dYards: tee.yards,
+    };
+  }
   return resolveDistanceTarget({
     toGreen: args.courseToGreen,
-    lastClosedYards: args.lastClosedYards,
+    lastClosedYards: null,
+  });
+}
+
+export function remainingPinRanksLastClosedShot(): false {
+  return false;
+}
+
+export function remainingPinUsesPhoneGps(): false {
+  return false;
+}
+
+/**
+ * Next suggested club: remaining pin yards. Empty hole is tee → pin (or card).
+ * After a mark: landing → pin. lastClosedYards is ignored — shot length is not
+ * remaining. The 20% rule still lives on `rankDistanceYards`.
+ */
+export function resolveNextShotDistanceTarget(args: {
+  landingToGreen: { yards: number | null; quality: ShotFixQuality };
+  teeToGreen?: { yards: number | null; quality: ShotFixQuality } | null;
+  courseToGreen: { yards: number | null; quality: ShotFixQuality };
+  lastClosedYards?: number | null;
+}): DistanceTarget | null {
+  void args.lastClosedYards;
+  return resolveRemainingPinTarget({
+    landingToGreen: args.landingToGreen,
+    teeToGreen: args.teeToGreen,
+    courseToGreen: args.courseToGreen,
   });
 }
 

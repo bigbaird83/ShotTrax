@@ -21,6 +21,8 @@ import {
   watchClubPickRestOfBag,
   watchPutterInTop3,
   watchPutterOpensPuttSheet,
+  watchPutterPickOpensPuttSheetImmediately,
+  watchPuttChipsShowMadeIt,
   watchPutterSkipsAttachWatchFix,
   watchRestOfBagBelowAllClubs,
   watchSameClubSitsAboveTop3,
@@ -403,18 +405,21 @@ test('Watch putt chips use the Signal gate; Hole Out stays; no scorecard', () =>
   assert.equal(watchShowPuttPills({ selectedClubId: 'club_7i', yardsToGreen: 20, yardsQuality: 'none' }), false);
 
   const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
-  assert.match(watchUi, /showPuttChips/);
-  assert.match(watchUi, /yardsQuality == "good" \|\| session\.list\.yardsQuality == "soft"/);
-  assert.match(watchUi, /yards <= 40/);
-  assert.match(watchUi, /selectedClubId == "club_putter"/);
-  assert.match(watchUi, /session\.addPutt\(lengthId: bucket\.id\)/);
+  assert.doesNotMatch(watchUi, /showPuttChips/);
+  assert.doesNotMatch(watchUi, /session\.addPutt\(lengthId: bucket\.id\)/);
   assert.match(watchUi, /session\.madeIt\(\)/);
   assert.doesNotMatch(watchUi, /Scorecard/);
   const pick = watchUi.slice(watchUi.indexOf('private var clubPick'), watchUi.indexOf('private var moreClubs'));
   const stripAt = pick.indexOf('ScrollView(.horizontal');
-  const chipsAt = pick.indexOf('showPuttChips');
   const holeOutAt = pick.indexOf('session.madeIt()');
-  assert.ok(stripAt >= 0 && chipsAt > stripAt && holeOutAt > chipsAt);
+  assert.ok(stripAt >= 0 && holeOutAt > stripAt);
+  assert.match(pick, /Text\("Hole Out"\)/);
+  assert.doesNotMatch(pick, /Text\("Made it"\)/);
+  const watchSheet = watchUi.slice(watchUi.indexOf('private var puttSheet'), watchUi.indexOf('private var clubPick'));
+  assert.match(watchSheet, /Text\("Made it"\)/);
+  assert.match(watchSheet, /Text\("0–3"\)|watchPuttBuckets/);
+  assert.ok(watchSheet.indexOf('LazyVGrid') < watchSheet.indexOf('Text("Made it")'));
+  assert.equal(watchPuttChipsShowMadeIt(), false);
 
   const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
   const pickFn = session.slice(session.indexOf('func pick(clubId: String)'), session.indexOf('func addPutt'));
@@ -432,6 +437,7 @@ test('Watch putt chips use the Signal gate; Hole Out stays; no scorecard', () =>
 test('Watch putter opens the putt sheet and stays out of the top 3', () => {
   assert.equal(watchPutterInTop3(), false);
   assert.equal(watchPutterOpensPuttSheet(), true);
+  assert.equal(watchPutterPickOpensPuttSheetImmediately(), true);
   assert.equal(watchPutterSkipsAttachWatchFix(), true);
   const stripPutter = planWatchClubTap({ action: 'club', clubId: PUTTER_CLUB_ID, from: 'top3' });
   assert.equal(stripPutter.marks, false);
@@ -471,6 +477,10 @@ test('Watch putter opens the putt sheet and stays out of the top 3', () => {
   assert.match(pickFn, /attachWatchFix/);
   assert.ok(pickFn.indexOf('clubId != "club_putter"') < pickFn.indexOf('attachWatchFix(&payload)'));
   assert.doesNotMatch(pickFn.slice(0, pickFn.indexOf('if clubId != "club_putter"')), /attachWatchFix/);
+  assert.match(pickFn, /clubId == "club_putter"/);
+  assert.match(pickFn, /sheet\.open = true/);
+  assert.match(pickFn, /sheet\.canMake = true/);
+  assert.ok(pickFn.indexOf('sheet.open = true') < pickFn.indexOf('sendPick(payload)'));
 });
 
 test('a bag club under All clubs marks with the same rules as a top-3 tap', () => {

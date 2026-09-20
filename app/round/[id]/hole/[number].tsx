@@ -466,8 +466,10 @@ export default function HoleScreen() {
   };
   const fmb = hasApiFmb(pins) ? formatFmbRow(yardsToGreenDepth(fix, pins)) : null;
   const toGreen = yardsToGreenResult;
+  const teeToGreen = markToGreen(holeTee, green);
   const target = resolveNextShotDistanceTarget({
     landingToGreen: markToGreen(lastLandingMark(shots), green),
+    teeToGreen,
     courseToGreen: toGreen,
     lastClosedYards: lastClosedShotYards(shots),
   });
@@ -490,6 +492,7 @@ export default function HoleScreen() {
   const wheelSelectedId = resolveWheelHighlightId(selectedClubId);
   const addShotSuggestTarget = resolveAddShotSuggestTarget({
     lastLanding: lastLandingMark(shots),
+    tee: holeTee,
     green,
     courseToGreen: toGreen,
     lastClosedYards: lastClosedShotYards(shots),
@@ -773,8 +776,8 @@ export default function HoleScreen() {
         shortName: formatSuggestedClubChip(club.shortName, stripPlan.carries[club.id] ?? null),
       })),
       holeNumber,
-      yardsToGreen: liveToGreen.yards,
-      yardsQuality: liveToGreen.quality,
+      yardsToGreen: target?.dYards ?? teeToGreen.yards ?? toGreen.yards,
+      yardsQuality: target || teeToGreen.quality !== 'none' || toGreen.quality !== 'none' ? 'good' : 'none',
       lastClubId: sticky?.id ?? null,
       selectedClubId: wheelSelectedId,
     },

@@ -171,6 +171,18 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     next.selectedClubId = clubId
     list = next
     persist(next)
+    // Putter opens the putt sheet locally so Made it is on-screen without
+    // waiting on a phone push (TF 53: Doc never saw Made it).
+    if clubId == "club_putter" {
+      var sheet = putt
+      sheet.open = true
+      if sheet.holeNumber < 1 {
+        sheet.holeNumber = list.holeNumber
+      }
+      sheet.canMake = true
+      sheet.canAdd = sheet.lengths.count < 5
+      putt = sheet
+    }
     var payload: [String: Any] = [
       "type": "clubPick",
       "clubId": clubId,

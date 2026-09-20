@@ -395,7 +395,7 @@ test('play header is one line; shot list is one overlay row with + and In play o
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const play = hole.slice(0, hole.indexOf('<FullSheet'));
   assert.match(play, /formatPlayHeader\(hole\.number, hole\.par, playHeaderYards\.yards\)/);
-  assert.match(play, /yardsToGreen: liveToGreen\.yards/);
+  assert.match(play, /yardsToGreen: target\?\.dYards/);
   assert.match(hole, /planPlayHeaderYards\(\{[\s\S]*?shots,/);
   assert.match(play, /numberOfLines=\{1\}/);
   assert.doesNotMatch(play, /formatSiLabel|SI unknown/);
@@ -869,4 +869,5 @@ test('Signal: dock Putt sits left of a shrunken Hole Out — not a third row', (
   const layout = readFileSync(new URL('./playLayout.ts', import.meta.url), 'utf8');
   assert.match(layout, /Putt button sits left of a shrunken Hole Out/);
   assert.match(layout, /not a third dock row/);
+  assert.match(layout, /unfinished/);
 });
