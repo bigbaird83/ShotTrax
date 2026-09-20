@@ -60,3 +60,35 @@ export function finishHoleScoreInventGps(): false {
 export function finishHoleScoreInventYards(): false {
   return false;
 }
+
+/** Cypress H10: Made it cached 9 · +5; delete ghosts must restamp from remaining only. */
+export function deleteShotRecomputesHoleScore(): true {
+  return true;
+}
+
+export function deletePuttRecomputesHoleScore(): true {
+  return true;
+}
+
+export function orphanGhostStrokesAfterDelete(): false {
+  return false;
+}
+
+/**
+ * Finished hole after delete/edit. Write logged strokes (marks + putts + penalties).
+ * Clear the posted score when nothing remains. Unfinished holes stay untouched.
+ */
+export function planRecomputeFinishedHoleScore(args: {
+  puttsDone: boolean;
+  shotCount: number;
+  putts: number;
+  penaltyStrokes?: number;
+}): { write: boolean; score: number | null } {
+  if (!args.puttsDone) return { write: false, score: null };
+  const planned = planFinishHoleScore({
+    shotCount: args.shotCount,
+    putts: args.putts,
+    penaltyStrokes: args.penaltyStrokes,
+  });
+  return { write: true, score: planned.ok ? planned.score : null };
+}
