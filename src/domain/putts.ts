@@ -577,8 +577,12 @@ export function watchPuttSheetMadeItAlwaysEnabled(): true {
   return true;
 }
 
-/** Made it is reserved below the 2-col pills so a small face cannot clip it. */
+/** Made it shares the Add/Undo row so a small face cannot clip it off. */
 export function watchPuttSheetPinsMadeIt(): true {
+  return true;
+}
+
+export function watchPuttSheetMadeItSitsWithAddUndo(): true {
   return true;
 }
 

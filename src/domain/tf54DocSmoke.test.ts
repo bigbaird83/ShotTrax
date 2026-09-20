@@ -11,6 +11,7 @@ import {
   playDockPuttAlwaysWhenUnfinished,
   playDockPuttUsesShowPuttPillsGate,
   watchPuttSheetMadeItAlwaysEnabled,
+  watchPuttSheetMadeItSitsWithAddUndo,
   watchPuttSheetPinsMadeIt,
 } from './putts';
 import {
@@ -23,6 +24,7 @@ import {
 test('TF 54 A/E: Watch Made it is reserved on the putt sheet — always enabled, never clipped off', () => {
   assert.equal(watchPuttSheetMadeItAlwaysEnabled(), true);
   assert.equal(watchPuttSheetPinsMadeIt(), true);
+  assert.equal(watchPuttSheetMadeItSitsWithAddUndo(), true);
   assert.equal(canMakeCurrentPutt(emptyPuttSheetPick()), true);
 
   const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
@@ -37,10 +39,17 @@ test('TF 54 A/E: Watch Made it is reserved on the putt sheet — always enabled,
   assert.doesNotMatch(puttOpen, /ScrollView/);
   assert.doesNotMatch(puttOpen, /statusHeader/);
   assert.match(watchSheet, /LazyVGrid/);
+  assert.match(watchSheet, /HStack\(spacing: 4\)/);
   assert.match(watchSheet, /Text\("Made it"\)/);
   assert.match(watchSheet, /layoutPriority\(1\)/);
   assert.ok(watchSheet.indexOf('LazyVGrid') < watchSheet.indexOf('Text("Made it")'));
   assert.ok(watchSheet.indexOf('Text("Made it")') < watchSheet.indexOf('if !session.putt.lengths'));
+  const actions = watchSheet.slice(watchSheet.indexOf('HStack(spacing: 4)'), watchSheet.indexOf('if !session.putt.lengths'));
+  assert.ok(actions.indexOf('Text("Add putt")') >= 0);
+  assert.ok(actions.indexOf('Text("Undo")') >= 0);
+  assert.ok(actions.indexOf('Text("Made it")') >= 0);
+  assert.ok(actions.indexOf('Text("Add putt")') < actions.indexOf('Text("Made it")'));
+  assert.ok(actions.indexOf('Text("Undo")') < actions.indexOf('Text("Made it")'));
   const madeBtn = watchSheet.slice(watchSheet.indexOf('session.madeIt()'), watchSheet.indexOf('if !session.putt.lengths'));
   assert.doesNotMatch(madeBtn, /\.disabled/);
   assert.doesNotMatch(watchSheet, /Text\("Hole Out"\)/);
