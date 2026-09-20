@@ -58,7 +58,7 @@ struct PuttSheetState {
   var holeNumber: Int = 1
   var lengths: [String] = []
   var labels: [String: String] = [
-    "inside_3": "Under 3 ft",
+    "inside_3": "0–3",
     "3_to_10": "3–10",
     "10_to_20": "10–20",
     "over_20": "20+",
@@ -597,6 +597,11 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     if let labels = message["labels"] as? [String: String] {
       next.labels = labels
     }
+    // Phone sends "Under 3 ft" for inside_3 — that overflows a Watch pill to a blank cell.
+    next.labels["inside_3"] = "0–3"
+    next.labels["3_to_10"] = next.labels["3_to_10"] ?? "3–10"
+    next.labels["10_to_20"] = next.labels["10_to_20"] ?? "10–20"
+    next.labels["over_20"] = next.labels["over_20"] ?? "20+"
     next.canAdd = message["canAdd"] as? Bool ?? (next.lengths.count < 5)
     next.canMake = true
     let incomingOpen = message["open"] as? Bool ?? false

@@ -1,6 +1,6 @@
 /**
  * Watch club-pick: map / top area ~60%, control band ~40%.
- * Back, Home, All clubs, and the wheel pills live in the control band.
+ * Back, Home, Putt, All clubs, and the wheel pills live in the control band.
  */
 
 export const WATCH_MAP_RATIO = 0.6;

@@ -136,10 +136,11 @@ test('Watch opens on the same top 3 as the phone; no scroll to hit one', () => {
   assert.match(pick, /Text\("All clubs"\)/);
   const headerAt = pick.indexOf('session.list.statusLine');
   const backHomeAt = pick.indexOf('session.leave("back")');
+  const puttAt = pick.indexOf('session.openPuttSheet()');
   const stripAt = pick.indexOf('ScrollView(.horizontal');
   const holeOutAt = pick.indexOf('session.madeIt()');
   const allClubsAt = pick.indexOf('Text("All clubs")');
-  assert.ok(headerAt >= 0 && backHomeAt > headerAt && stripAt > backHomeAt && holeOutAt > stripAt && allClubsAt > holeOutAt);
+  assert.ok(headerAt >= 0 && backHomeAt > headerAt && puttAt > backHomeAt && puttAt < stripAt && stripAt > backHomeAt && holeOutAt > stripAt && allClubsAt > holeOutAt);
   assert.equal(watchOneHomeOnly(), true);
   assert.equal(watchSameClubSharesRowWithAllClubs(), false);
   assert.equal(watchBackHomeAreTinyText(), false);
@@ -412,7 +413,9 @@ test('Watch putt chips use the Signal gate; Hole Out stays; no scorecard', () =>
   const pick = watchUi.slice(watchUi.indexOf('private var clubPick'), watchUi.indexOf('private var moreClubs'));
   const stripAt = pick.indexOf('ScrollView(.horizontal');
   const holeOutAt = pick.indexOf('session.madeIt()');
+  const puttAt = pick.indexOf('session.openPuttSheet()');
   assert.ok(stripAt >= 0 && holeOutAt > stripAt);
+  assert.ok(puttAt >= 0 && puttAt < stripAt);
   assert.match(pick, /Text\("Hole Out"\)/);
   assert.doesNotMatch(pick, /Text\("Made(?: it)?"\)/);
   const watchSheet = watchUi.slice(watchUi.indexOf('private var puttSheet'), watchUi.indexOf('private var clubPick'));
