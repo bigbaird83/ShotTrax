@@ -163,8 +163,8 @@ struct ContentView: View {
 
   @ViewBuilder
   private var puttSheet: some View {
-    // 2-col length pills only. Add / Undo / Made it share one reserved row
-    // so a small face cannot show pills + Add + Undo with Made it clipped.
+    // 2-col pills + Add/Undo. Made it is its own full-width row so a Series
+    // face cannot clip it off the Add/Undo HStack (TF 56: Doc never saw it).
     LazyVGrid(columns: [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4)], spacing: 4) {
       ForEach(watchPuttBuckets, id: \.id) { bucket in
         Button(action: { session.pickPuttLength(bucket.id) }) {
@@ -198,18 +198,18 @@ struct ContentView: View {
       }
       .buttonStyle(.bordered)
       .disabled(session.sending || session.putt.lengths.isEmpty)
-
-      Button(action: { session.madeIt() }) {
-        Text("Made it")
-          .font(.system(size: 12, weight: .black))
-          .lineLimit(1)
-          .minimumScaleFactor(0.7)
-          .frame(maxWidth: .infinity, minHeight: 36)
-      }
-      .buttonStyle(.borderedProminent)
-      .tint(Color("accent"))
-      .foregroundStyle(Color.black)
     }
+
+    Button(action: { session.madeIt() }) {
+      Text("Made it")
+        .font(.system(size: 13, weight: .black))
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+        .frame(maxWidth: .infinity, minHeight: 36)
+    }
+    .buttonStyle(.borderedProminent)
+    .tint(Color("accent"))
+    .foregroundStyle(Color.black)
     .layoutPriority(1)
     .fixedSize(horizontal: false, vertical: true)
 

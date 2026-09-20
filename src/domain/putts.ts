@@ -576,13 +576,22 @@ export function watchPuttSheetMadeItAlwaysEnabled(): true {
   return true;
 }
 
-/** Made it shares the Add/Undo row so a small face cannot clip it off. */
+/** Made it is a full-width row under Add/Undo so a Series face cannot clip it. */
 export function watchPuttSheetPinsMadeIt(): true {
   return true;
 }
 
+/** Same putt sheet as Add/Undo — not the club dock. Not the same HStack. */
 export function watchPuttSheetMadeItSitsWithAddUndo(): true {
   return true;
+}
+
+export function watchPuttSheetMadeItIsFullWidthRow(): true {
+  return true;
+}
+
+export function watchPuttSheetMadeItSharesAddUndoHStack(): false {
+  return false;
 }
 
 export function watchPuttSheetMadeItRequiresLength(): false {

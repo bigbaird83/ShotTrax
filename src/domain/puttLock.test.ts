@@ -44,7 +44,9 @@ import {
   watchPuttSheetAddPuttLabel,
   watchPuttSheetLengthLabel,
   watchPuttSheetMadeItAlwaysEnabled,
+  watchPuttSheetMadeItIsFullWidthRow,
   watchPuttSheetMadeItLabel,
+  watchPuttSheetMadeItSharesAddUndoHStack,
   watchPuttSheetPinsMadeIt,
   watchPuttSheetMadeItRequiresLength,
   watchPuttSheetUndoLabel,
@@ -307,6 +309,8 @@ test('Signal Lab: TF 49 putt sheet is pick → Made it on putt N≥1; Add putt i
   assert.match(watchSheet, /Text\("Add putt"\)/);
   assert.match(watchSheet, /session\.addPutt\(\)/);
   assert.match(watchSheet, /Text\("Made it"\)/);
+  const addUndo = watchSheet.slice(watchSheet.indexOf('HStack(spacing: 4)'), watchSheet.indexOf('session.madeIt()'));
+  assert.ok(addUndo.indexOf('Text("Made it")') < 0);
   assert.match(watchSheet, /session\.sending \|\|/);
   assert.doesNotMatch(watchSheet, /!session\.putt\.canMake/);
   const madeBtn = watchSheet.slice(watchSheet.indexOf('session.madeIt()'), watchSheet.indexOf('if !session.putt.lengths'));
@@ -317,6 +321,8 @@ test('Signal Lab: TF 49 putt sheet is pick → Made it on putt N≥1; Add putt i
   assert.doesNotMatch(watchSheet, /alert|Alert|sheet\(/);
   assert.equal(watchPuttSheetMadeItAlwaysEnabled(), true);
   assert.equal(watchPuttSheetPinsMadeIt(), true);
+  assert.equal(watchPuttSheetMadeItIsFullWidthRow(), true);
+  assert.equal(watchPuttSheetMadeItSharesAddUndoHStack(), false);
   assert.equal(watchPuttSheetMadeItRequiresLength(), false);
   assert.equal(watchPuttSheetAddPuttIsMissOnly(), true);
   assert.equal(watchClubPickHoleOutIsChipInOnly(), true);
@@ -348,6 +354,7 @@ test('Signal Lab: TF 49 putt sheet is pick → Made it on putt N≥1; Add putt i
   assert.doesNotMatch(madeFn, /attachWatchFix/);
   const applySheet = session.slice(session.indexOf('private func applyPuttSheet'), session.indexOf('private func persist'));
   assert.match(applySheet, /next\.canMake = true/);
+  assert.match(applySheet, /incomingOpen \|\| putterOwnsPuttSheet/);
   const addFn = session.slice(session.indexOf('func addPutt'), session.indexOf('func undoPutt'));
   assert.match(addFn, /next\.canMake = true/);
 });

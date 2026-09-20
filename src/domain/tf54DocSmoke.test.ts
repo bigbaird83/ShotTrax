@@ -11,6 +11,8 @@ import {
   playDockPuttAlwaysWhenUnfinished,
   playDockPuttUsesShowPuttPillsGate,
   watchPuttSheetMadeItAlwaysEnabled,
+  watchPuttSheetMadeItIsFullWidthRow,
+  watchPuttSheetMadeItSharesAddUndoHStack,
   watchPuttSheetMadeItSitsWithAddUndo,
   watchPuttSheetPinsMadeIt,
 } from './putts';
@@ -25,6 +27,8 @@ test('TF 54 A/E: Watch Made it is reserved on the putt sheet — always enabled,
   assert.equal(watchPuttSheetMadeItAlwaysEnabled(), true);
   assert.equal(watchPuttSheetPinsMadeIt(), true);
   assert.equal(watchPuttSheetMadeItSitsWithAddUndo(), true);
+  assert.equal(watchPuttSheetMadeItIsFullWidthRow(), true);
+  assert.equal(watchPuttSheetMadeItSharesAddUndoHStack(), false);
   assert.equal(canMakeCurrentPutt(emptyPuttSheetPick()), true);
 
   const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
@@ -44,21 +48,23 @@ test('TF 54 A/E: Watch Made it is reserved on the putt sheet — always enabled,
   assert.match(watchSheet, /layoutPriority\(1\)/);
   assert.ok(watchSheet.indexOf('LazyVGrid') < watchSheet.indexOf('Text("Made it")'));
   assert.ok(watchSheet.indexOf('Text("Made it")') < watchSheet.indexOf('if !session.putt.lengths'));
-  const actions = watchSheet.slice(watchSheet.indexOf('HStack(spacing: 4)'), watchSheet.indexOf('if !session.putt.lengths'));
-  assert.ok(actions.indexOf('Text("Add putt")') >= 0);
-  assert.ok(actions.indexOf('Text("Undo")') >= 0);
-  assert.ok(actions.indexOf('Text("Made it")') >= 0);
-  assert.ok(actions.indexOf('Text("Add putt")') < actions.indexOf('Text("Made it")'));
-  assert.ok(actions.indexOf('Text("Undo")') < actions.indexOf('Text("Made it")'));
+  const addUndo = watchSheet.slice(watchSheet.indexOf('HStack(spacing: 4)'), watchSheet.indexOf('session.madeIt()'));
+  assert.ok(addUndo.indexOf('Text("Add putt")') >= 0);
+  assert.ok(addUndo.indexOf('Text("Undo")') >= 0);
+  assert.ok(addUndo.indexOf('Text("Made it")') < 0);
+  assert.ok(watchSheet.indexOf('Text("Add putt")') < watchSheet.indexOf('Text("Made it")'));
+  assert.ok(watchSheet.indexOf('Text("Undo")') < watchSheet.indexOf('Text("Made it")'));
   const madeBtn = watchSheet.slice(watchSheet.indexOf('session.madeIt()'), watchSheet.indexOf('if !session.putt.lengths'));
+  assert.match(madeBtn, /maxWidth: \.infinity/);
   assert.doesNotMatch(madeBtn, /\.disabled/);
   assert.doesNotMatch(watchSheet, /Text\("Hole Out"\)/);
   assert.match(clubPick, /Text\("Hole Out"\)/);
   assert.doesNotMatch(clubPick, /Text\("Made it"\)/);
 
   const applySheet = session.slice(session.indexOf('private func applyPuttSheet'), session.indexOf('private func persist'));
-  assert.match(applySheet, /incomingOpen \|\| \(putt\.open && list\.selectedClubId == "club_putter"\)/);
+  assert.match(applySheet, /incomingOpen \|\| putterOwnsPuttSheet/);
   assert.match(applySheet, /next\.canMake = true/);
+  assert.match(session, /putterOwnsPuttSheet = true/);
 
   const watchStart = hole.indexOf('const onWatchPuttPick');
   const watchFn = hole.slice(watchStart, hole.indexOf('useWatchClubList', watchStart + 1));

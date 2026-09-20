@@ -1,5 +1,7 @@
 /** Watch → phone putt taps. Cart / unreachable must not drop puttPick. */
 
+import { addPuttLength, emptyPuttDraft, undoLastPutt, type PuttDraft, type PuttLengthId } from './putts';
+
 export const WATCH_PUTT_PICK_DEDUP_MAX = 48;
 
 export type WatchPuttPickQueueRow = {
@@ -36,6 +38,44 @@ export function watchPuttPickKeepsMadeLengthId(): true {
 /** Add / Undo / Made it change phone count + lengths. Length pick rides on Made it `lengthId`. */
 export function watchPuttActionsMustReachPhone(): readonly ['add', 'undo', 'made'] {
   return ['add', 'undo', 'made'];
+}
+
+/** Each Add putt must append. A stale draft (same starting state twice) stays at 1. */
+export function applyWatchPuttPickAdd(draft: PuttDraft, lengthId: PuttLengthId): PuttDraft {
+  return addPuttLength(draft, lengthId);
+}
+
+export function applyWatchPuttPickAdds(
+  lengthIds: readonly PuttLengthId[],
+  start: PuttDraft = emptyPuttDraft(),
+): PuttDraft {
+  return lengthIds.reduce((draft, lengthId) => applyWatchPuttPickAdd(draft, lengthId), start);
+}
+
+export function applyWatchPuttPick(
+  draft: PuttDraft,
+  msg: { action: 'add' | 'undo' | 'made'; lengthId?: PuttLengthId },
+): PuttDraft {
+  if (msg.action === 'add') {
+    if (!msg.lengthId) return draft;
+    return applyWatchPuttPickAdd(draft, msg.lengthId);
+  }
+  if (msg.action === 'undo') return undoLastPutt(draft);
+  return draft;
+}
+
+/** Listener must await the previous add before reading the draft. */
+export function watchPuttPickSerializesAdds(): true {
+  return true;
+}
+
+export function watchPuttPickAdvancesDraftOnEachAdd(): true {
+  return true;
+}
+
+/** Production EAS already lists ShotTraxxWatch. Stale wrist UI is a cook, not missing config. */
+export function watchTargetShipsInProductionEas(): true {
+  return true;
 }
 
 export function enqueueWatchPuttPick<T extends { at: string }>(queue: T[], next: T): T[] {

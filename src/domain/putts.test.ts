@@ -61,8 +61,10 @@ import {
   watchPuttSheetAddPuttLabel,
   watchPuttSheetLengthLabel,
   watchPuttSheetMadeItAlwaysEnabled,
+  watchPuttSheetMadeItIsFullWidthRow,
   watchPuttSheetMadeItLabel,
   watchPuttSheetMadeItRequiresLength,
+  watchPuttSheetMadeItSharesAddUndoHStack,
   watchPuttSheetPinsMadeIt,
   watchPuttSheetUndoLabel,
   watchPuttSheetUsesTwoColumnGrid,
@@ -570,6 +572,8 @@ test('TF 54: dock Putt + shrunken Hole Out; Watch Made it always on putt sheet',
   assert.equal(planPlayDockFinish({ putting: false, puttsDone: true }).showPutts, false);
   assert.equal(watchPuttSheetMadeItAlwaysEnabled(), true);
   assert.equal(watchPuttSheetPinsMadeIt(), true);
+  assert.equal(watchPuttSheetMadeItIsFullWidthRow(), true);
+  assert.equal(watchPuttSheetMadeItSharesAddUndoHStack(), false);
   assert.equal(watchPuttSheetMadeItRequiresLength(), false);
   assert.equal(canMakeCurrentPutt(emptyPuttSheetPick()), true);
 
@@ -592,6 +596,9 @@ test('TF 54: dock Putt + shrunken Hole Out; Watch Made it always on putt sheet',
   assert.match(watchSheet, /Text\("Undo"\)/);
   assert.match(watchSheet, /Text\("0–3"\)|watchPuttBuckets/);
   assert.ok(watchSheet.indexOf('LazyVGrid') < watchSheet.indexOf('Text("Made it")'));
+  const addUndo = watchSheet.slice(watchSheet.indexOf('HStack(spacing: 4)'), watchSheet.indexOf('session.madeIt()'));
+  assert.ok(addUndo.indexOf('Text("Made it")') < 0);
+  assert.match(watchSheet.slice(watchSheet.indexOf('session.madeIt()'), watchSheet.indexOf('if !session.putt.lengths')), /maxWidth: \.infinity/);
   assert.doesNotMatch(watchSheet, /!session\.putt\.canMake/);
   const madeAlways = watchSheet.slice(watchSheet.indexOf('session.madeIt()'), watchSheet.indexOf('if !session.putt.lengths'));
   assert.doesNotMatch(madeAlways, /\.disabled\(session\.sending\)/);

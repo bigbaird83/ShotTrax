@@ -125,6 +125,7 @@ import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, c
 import { useLiveFix } from '@/src/services/useLiveFix';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
 import { pushWatchPuttSheet } from '@/src/services/watchClub';
+import { applyWatchPuttPick } from '@/src/domain/watchPuttSync';
 import { MADE_IT_FEEDBACK, PHONE_UNAVAILABLE } from '@/src/domain/watchMessages';
 import { HoleOutBadge, QualityBadge } from '@/src/ui/Badge';
 import { BigButton } from '@/src/ui/BigButton';
@@ -332,11 +333,15 @@ export default function HoleScreen() {
   );
   const toastedRef = useRef<string | null>(null);
   const puttDraftRef = useRef(puttDraft);
-  puttDraftRef.current = puttDraft;
   const puttSheetHoleRef = useRef(puttSheetHole);
   puttSheetHoleRef.current = puttSheetHole;
   const puttOpenRef = useRef(puttOpen);
   puttOpenRef.current = puttOpen;
+
+  const writePuttDraft = useCallback((next: PuttDraft) => {
+    puttDraftRef.current = next;
+    setPuttDraft(next);
+  }, []);
 
   useEffect(() => {
     const last = shots[shots.length - 1];
@@ -626,13 +631,17 @@ export default function HoleScreen() {
       const lengths = row.puttLengths.filter(isPuttLengthId);
       const draft: PuttDraft = { putts: lengths.length, lengths };
       setPuttSheetHole(targetHole);
-      setPuttDraft(draft);
+      writePuttDraft(draft);
       setPuttOpen(true);
       await closeApproachBeforePutts(db, { roundId: id, holeNumber: targetHole });
       bump();
-      void pushWatchPuttSheet({ open: true, holeNumber: targetHole, lengths: draft.lengths });
+      void pushWatchPuttSheet({
+        open: true,
+        holeNumber: targetHole,
+        lengths: puttDraftRef.current.lengths,
+      });
     },
-    [readOnly, db, id, bump],
+    [readOnly, db, id, bump, writePuttDraft],
   );
 
   const saveDraft = useCallback(
@@ -706,17 +715,21 @@ export default function HoleScreen() {
     async (msg: { action: 'add' | 'undo' | 'made'; lengthId?: PuttLengthId }) => {
       if (readOnly) return { ok: false, feedback: PHONE_UNAVAILABLE };
       const target = puttOpenRef.current ? puttSheetHoleRef.current || holeNumber : holeNumber;
-      if (!puttOpenRef.current) setPuttSheetHole(target);
+      if (!puttOpenRef.current) {
+        setPuttSheetHole(target);
+        setPuttOpen(true);
+        puttOpenRef.current = true;
+      }
       if (msg.action === 'add' && msg.lengthId) {
-        const next = addPuttLength(puttDraftRef.current, msg.lengthId);
-        setPuttDraft(next);
+        const next = applyWatchPuttPick(puttDraftRef.current, msg);
+        writePuttDraft(next);
         saveDraft(target, next, false);
         void pushWatchPuttSheet({ open: true, holeNumber: target, lengths: next.lengths });
         return { ok: true, feedback: COPY.putts };
       }
       if (msg.action === 'undo') {
-        const next = undoLastPutt(puttDraftRef.current);
-        setPuttDraft(next);
+        const next = applyWatchPuttPick(puttDraftRef.current, msg);
+        writePuttDraft(next);
         saveDraft(target, next, false);
         void pushWatchPuttSheet({ open: true, holeNumber: target, lengths: next.lengths });
         return { ok: true, feedback: COPY.undoPutt };
@@ -744,7 +757,7 @@ export default function HoleScreen() {
       }
       return { ok: false, feedback: PHONE_UNAVAILABLE };
     },
-    [readOnly, holeNumber, saveDraft, applyMadeIt, db, id, bump, celebrateHoleOut],
+    [readOnly, holeNumber, saveDraft, applyMadeIt, db, id, bump, celebrateHoleOut, writePuttDraft],
   );
 
   useWatchClubList(
@@ -945,16 +958,16 @@ export default function HoleScreen() {
 
   const onAddPutt = (bucket: PuttLengthId) => {
     if (readOnly) return;
-    const next = addPuttLength(puttDraft, bucket);
-    setPuttDraft(next);
+    const next = addPuttLength(puttDraftRef.current, bucket);
+    writePuttDraft(next);
     saveDraft(puttSheetHole, next, false);
     hapticTap();
   };
 
   const onUndoPutt = () => {
     if (readOnly) return;
-    const next = undoLastPutt(puttDraft);
-    setPuttDraft(next);
+    const next = undoLastPutt(puttDraftRef.current);
+    writePuttDraft(next);
     saveDraft(puttSheetHole, next, false);
     hapticTap();
   };

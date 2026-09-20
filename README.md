@@ -138,7 +138,7 @@ Companion via `@bacons/apple-targets` (`targets/watch`, bundle `com.shottrax.app
 - Offline: Watch queues **one** pending `clubPick` until reachable, then flushes
 - **Undo** stays on the phone. **No** Watch motion, mic, or sensor auto-mark
 
-EAS credentials for `com.shottrax.app.watch` and `com.shottrax.app.watch.widget` are declared under `extra.eas.build.experimental.ios.appExtensions`.
+EAS credentials for `com.shottrax.app.watch` and `com.shottrax.app.watch.widget` are declared under `extra.eas.build.experimental.ios.appExtensions`. `@bacons/apple-targets` compiles `targets/watch` into the production IPA. If a TestFlight wrist UI lags the phone (Made it missing while source has it), recook the companion — the Watch target is already listed. No extra EAS flag.
 
 ## Maps (`react-native-maps`)
 
