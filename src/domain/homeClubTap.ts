@@ -28,15 +28,14 @@ export function homeClubTapUsesHouseStart(): false {
   return false;
 }
 
-/** Same club, All clubs, Watch bag, and wheel / Watch strip press use this 600-yard rule. */
+/** All clubs, Watch bag, and wheel / Watch strip press use this 600-yard rule. */
 export function homeClubTapPaths(): readonly [
-  'same_club',
   'all_clubs',
   'watch_bag',
   'wheel_tap',
   'watch_tap',
 ] {
-  return ['same_club', 'all_clubs', 'watch_bag', 'wheel_tap', 'watch_tap'];
+  return ['all_clubs', 'watch_bag', 'wheel_tap', 'watch_tap'];
 }
 
 /** Watch tap uses Watch if fresh and within 15/25 m gates. 600-yard check is on that chosen fix. */

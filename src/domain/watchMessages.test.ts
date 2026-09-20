@@ -297,6 +297,6 @@ test('puttPick add needs a bucket; Made it finishes; undo drops the last', () =>
     at: '2026-09-17T22:00:00.000Z',
   });
   assert.equal(made?.action, 'made');
-  assert.equal(MADE_IT_FEEDBACK, 'Made it ✓');
+  assert.equal(MADE_IT_FEEDBACK, 'Hole Out ✓');
   assert.equal(PUTTS_ON_WATCH, 'Putts');
 });

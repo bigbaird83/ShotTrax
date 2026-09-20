@@ -32,7 +32,14 @@ import { clubAverageFromShots, type ClubAverage } from '../domain/averages';
 import { rememberResolvedTee } from '../course/osmOverlay';
 import { isValidLatLng } from '../domain/latLng';
 import { clampPenaltyStrokes, scoreAfterPenalty } from '../domain/penalty';
-import { clampPutts, planMadeIt, parsePuttLengths, serializePuttLengths, type PuttLengthId } from '../domain/putts';
+import {
+  clampPutts,
+  planFinishHoleOut,
+  planMadeIt,
+  parsePuttLengths,
+  serializePuttLengths,
+  type PuttLengthId,
+} from '../domain/putts';
 import type { ShotEditSnapshot } from '../domain/shotEdit';
 import {
   confirmUndoAverageEligibleAt,
@@ -664,6 +671,12 @@ export function finishHolePutts(
 ): void {
   const planned = planMadeIt({ putts, lengths });
   if (!planned.ok) return;
+  updateHolePutts(db, holeId, planned.putts, planned.lengths, true);
+}
+
+/** Off-green hole-out. Current club is the shot. No fake putt yards. GIR stays unset. */
+export function finishHoleOut(db: SQLiteDatabase, holeId: string): void {
+  const planned = planFinishHoleOut();
   updateHolePutts(db, holeId, planned.putts, planned.lengths, true);
 }
 

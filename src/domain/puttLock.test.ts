@@ -30,6 +30,7 @@ test('Signal Lab: no auto-putts from GPS or leaving the green', () => {
   assert.equal(puttsFromWalkOff({ yards: 3, quality: 'good' }), null);
   assert.equal(puttsFromWalkOff({ yards: 80, quality: 'good' }), null);
   assert.equal(isNearOrOnGreen({ yards: 5, quality: 'good' }), true);
+  assert.equal(isNearOrOnGreen({ yards: 8, quality: 'forced' }), false);
   assert.equal(puttsFromWalkOff({ yards: 5, quality: 'good' }), null);
 });
 

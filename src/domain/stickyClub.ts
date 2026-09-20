@@ -1,9 +1,9 @@
 import type { Club } from './types';
 
 /**
- * Last marked club stays selected so Same club is one tap.
- * Say/tap a club marks GPS immediately (club=mark). Same club is the escape.
- * No logged shot → no Same club. Do not invent a leftover driver or wedge.
+ * Last marked club stays selected on the wheel. Re-tap that club to mark again.
+ * Same club is gone — the dock slot is Hole Out. Re-tap the club to mark again.
+ * No logged shot → no leftover driver or wedge invented.
  */
 export function sameClubVisibleWithoutShot(): false {
   return false;

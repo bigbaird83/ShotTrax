@@ -239,7 +239,7 @@ test('phone strip tap is the old chip mark, and the center pill is closest to ho
   });
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
-  const strip = hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.stickyClub'));
+  const strip = hole.slice(hole.indexOf('<ClubStrip'), hole.indexOf('COPY.addShot'));
   assert.match(strip, /applyWheelSelection/);
   assert.match(strip, /void markClub\(full\)/);
   const mark = hole.slice(hole.indexOf('const markClub'), hole.indexOf('const onMark'));

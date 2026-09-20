@@ -34,6 +34,7 @@ import {
   updateHolePar,
   updateHolePutts,
   finishHolePutts,
+  finishHoleOut,
   updateHoleScore,
 } from '@/src/db/repo';
 import { pinOrNull, formatFmbRow, hasApiFmb, yardsToGreenDepth } from '@/src/domain/greenDepth';
@@ -93,6 +94,7 @@ import {
   isPuttLengthId,
   madeItAdvancesHole,
   planMadeIt,
+  planPlayDockFinish,
   putterOpensPuttSheet,
   undoLastPutt,
   type PuttDraft,
@@ -123,8 +125,8 @@ import { useAmbientLight } from '@/src/ui/useAmbientLight';
 import { playThemeId } from '@/src/domain/playTheme';
 import { formatShotLockChip } from '@/src/domain/shotLock';
 import { HoleMap } from '@/src/ui/HoleMap';
-import { MarkCheck } from '@/src/ui/MarkCheck';
 import { FullSheet } from '@/src/ui/Sheet';
+import { PuttDock } from '@/src/ui/PuttDock';
 import { PuttSheetBody } from '@/src/ui/PuttSheetBody';
 import { ScorecardBody } from '@/src/ui/ScorecardBody';
 import { COLOR_THEMES, tapTarget, type, type ColorPalette } from '@/src/ui/theme';
@@ -349,6 +351,12 @@ export default function HoleScreen() {
     setMapFramed(false);
     setSelectedClubId(null);
   }, [holeNumber]);
+
+  useEffect(() => {
+    if (toast !== COPY.holeOut) return undefined;
+    const id = setTimeout(() => setToast(null), 1200);
+    return () => clearTimeout(id);
+  }, [toast]);
 
   useEffect(() => {
     if (!confirmUndo) return undefined;
@@ -593,6 +601,12 @@ export default function HoleScreen() {
     [db, id, bump],
   );
 
+  const celebrateHoleOut = useCallback(() => {
+    hapticMark();
+    setCheckNonce((n) => n + 1);
+    setToast(COPY.holeOut);
+  }, []);
+
   const applyMadeIt = useCallback(
     (targetHole: number, draft: PuttDraft) => {
       const planned = planMadeIt(draft);
@@ -600,6 +614,7 @@ export default function HoleScreen() {
       saveDraft(targetHole, planned, true);
       setPuttOpen(false);
       void pushWatchPuttSheet({ open: false, holeNumber: targetHole, lengths: planned.lengths });
+      celebrateHoleOut();
       if (!madeItAdvancesHole({ sheetHoleNumber: targetHole, currentHoleNumber: holeNumber })) {
         return true;
       }
@@ -611,7 +626,7 @@ export default function HoleScreen() {
       router.replace(`/round/${id}/hole/${dest.holeNumber}`);
       return true;
     },
-    [readOnly, round, saveDraft, holeNumber, id],
+    [readOnly, round, saveDraft, holeNumber, id, celebrateHoleOut],
   );
 
   useEffect(() => {
@@ -634,29 +649,45 @@ export default function HoleScreen() {
   const onWatchPuttPick = useCallback(
     async (msg: { action: 'add' | 'undo' | 'made'; lengthId?: PuttLengthId }) => {
       if (readOnly) return { ok: false, feedback: PHONE_UNAVAILABLE };
-      if (!puttOpenRef.current) {
-        await openPuttSheet(holeNumber);
-      }
-      const target = puttSheetHoleRef.current || holeNumber;
+      const target = puttOpenRef.current ? puttSheetHoleRef.current || holeNumber : holeNumber;
+      if (!puttOpenRef.current) setPuttSheetHole(target);
       if (msg.action === 'add' && msg.lengthId) {
         const next = addPuttLength(puttDraftRef.current, msg.lengthId);
         setPuttDraft(next);
         saveDraft(target, next, false);
+        void pushWatchPuttSheet({ open: puttOpenRef.current, holeNumber: target, lengths: next.lengths });
         return { ok: true, feedback: COPY.putts };
       }
       if (msg.action === 'undo') {
         const next = undoLastPutt(puttDraftRef.current);
         setPuttDraft(next);
         saveDraft(target, next, false);
+        void pushWatchPuttSheet({ open: puttOpenRef.current, holeNumber: target, lengths: next.lengths });
         return { ok: true, feedback: COPY.undoPutt };
       }
       if (msg.action === 'made') {
-        const ok = applyMadeIt(target, puttDraftRef.current);
-        return ok ? { ok: true, feedback: MADE_IT_FEEDBACK } : { ok: false, feedback: COPY.puttSheetLede };
+        const draft = puttDraftRef.current;
+        if (planMadeIt(draft).ok) {
+          const ok = applyMadeIt(target, draft);
+          return ok ? { ok: true, feedback: MADE_IT_FEEDBACK } : { ok: false, feedback: COPY.puttSheetLede };
+        }
+        const row = getHole(db, id, target);
+        const rnd = getRound(db, id);
+        if (!row || !rnd || row.puttsDone) {
+          return { ok: false, feedback: COPY.puttSheetLede };
+        }
+        await closeApproachBeforePutts(db, { roundId: id, holeNumber: target });
+        finishHoleOut(db, row.id);
+        bump();
+        celebrateHoleOut();
+        const dest = holeAfterDone(target, rnd.holeCount);
+        if (dest.kind === 'summary') router.replace(`/round/${id}/summary`);
+        else router.replace(playHrefAfterHoleChange(id, dest.holeNumber));
+        return { ok: true, feedback: MADE_IT_FEEDBACK };
       }
       return { ok: false, feedback: PHONE_UNAVAILABLE };
     },
-    [readOnly, openPuttSheet, holeNumber, saveDraft, applyMadeIt],
+    [readOnly, holeNumber, saveDraft, applyMadeIt, db, id, bump, celebrateHoleOut],
   );
 
   useWatchClubList(
@@ -873,8 +904,23 @@ export default function HoleScreen() {
 
   const onMadeIt = () => {
     if (readOnly) return;
-    hapticSelect();
     applyMadeIt(puttSheetHole, puttDraft);
+  };
+
+  const onFinishHole = () => {
+    if (readOnly || !hole || !round) return;
+    void (async () => {
+      await closeApproachBeforePutts(db, { roundId: id, holeNumber });
+      finishHoleOut(db, hole.id);
+      bump();
+      celebrateHoleOut();
+      const dest = holeAfterDone(holeNumber, round.holeCount);
+      if (dest.kind === 'summary') {
+        router.replace(`/round/${id}/summary`);
+        return;
+      }
+      router.replace(playHrefAfterHoleChange(id, dest.holeNumber));
+    })();
   };
 
   const onAddPenalty = () => {
@@ -1021,6 +1067,16 @@ export default function HoleScreen() {
   const catchUpSheet = planCatchUpSheet(placing);
   const hideHoleButtons = catchUpSheet.holeButtons === 'hidden';
   const catchUpFullScreen = catchUpSheet.map === 'fullscreen';
+  const dockFinish = planPlayDockFinish({
+    readOnly,
+    placing,
+    puttsDone: hole.puttsDone,
+    putting: putterOpensPuttSheet({ clubId: wheelSelectedId }),
+    toGreen: {
+      yards: playHeaderYards.yards,
+      quality: playHeaderYards.quality,
+    },
+  });
   const showFirstLaunchTip =
     !readOnly &&
     !catchUpFullScreen &&
@@ -1166,6 +1222,15 @@ export default function HoleScreen() {
                     </Text>
                   </Text>
                 </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={COPY.scorecard}
+                  onPress={() => setScorecardOpen(true)}
+                  style={styles.scorecardChip}>
+                  <Text style={styles.scorecardChipText} numberOfLines={1}>
+                    {COPY.scorecard}
+                  </Text>
+                </Pressable>
               </View>
               {playLayout.shotLine === 'header' ? (
                 <ScrollView
@@ -1234,7 +1299,16 @@ export default function HoleScreen() {
                   </Pressable>
                 </View>
               ) : null}
-              {toast ? <Text style={styles.overlayToast}>{toast}</Text> : null}
+              {toast ? (
+                <View
+                  pointerEvents="none"
+                  style={styles.overlayToast}
+                  key={toast === COPY.holeOut ? `hole-out-${checkNonce}` : 'overlay-toast'}
+                  testID={toast === COPY.holeOut ? 'hole-out-chip' : 'overlay-toast'}>
+                  {toast === COPY.holeOut ? <Text style={styles.holeOutCheck}>✓</Text> : null}
+                  <Text style={styles.overlayToastText}>{toast}</Text>
+                </View>
+              ) : null}
               {!readOnly && confirmUndoIsLive(confirmUndo, nowMs) ? (
                 <Pressable onPress={onConfirmUndo} style={styles.overlayLink}>
                   <Text style={styles.backLabel}>{COPY.undoLast}</Text>
@@ -1344,17 +1418,24 @@ export default function HoleScreen() {
             </View>
           </View>
           <View pointerEvents="box-none" style={styles.dockRow}>
-            {sticky ? (
-              <Pressable
-                accessibilityRole="button"
-                disabled={busy || readOnly || placing}
-                onPress={() => void onMark()}
-                style={styles.dockAction}>
-                <Text style={styles.dockActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-                  {`${COPY.stickyClub} · ${sticky.shortName}`}
-                </Text>
-                <MarkCheck nonce={checkNonce} />
-              </Pressable>
+            {dockFinish.showHoleOut ? (
+              <View pointerEvents="box-none" style={styles.dockHoleOutSlot}>
+                {dockFinish.showPutts ? (
+                  <PuttDock draft={puttDraft} disabled={readOnly} onAdd={onAddPutt} onUndo={onUndoPutt} />
+                ) : null}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={COPY.holeOut}
+                  disabled={readOnly || placing || busy}
+                  onPress={
+                    dockFinish.showPutts && puttDraft.lengths.length > 0 ? onMadeIt : onFinishHole
+                  }
+                  style={[styles.dockAction, styles.dockFinishHole]}>
+                  <Text style={styles.dockActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                    {COPY.holeOut}
+                  </Text>
+                </Pressable>
+              </View>
             ) : null}
             {!readOnly ? (
               <Pressable
@@ -1367,14 +1448,6 @@ export default function HoleScreen() {
                 </Text>
               </Pressable>
             ) : null}
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setScorecardOpen(true)}
-              style={[styles.dockAction, styles.dockScorecard]}>
-              <Text style={styles.dockScorecardText} numberOfLines={1}>
-                {COPY.scorecard}
-              </Text>
-            </Pressable>
             <Pressable
               accessibilityRole="button"
               disabled={readOnly || holeNumber <= 1}
@@ -1929,6 +2002,18 @@ function makeStyles(colors: ColorPalette) {
     justifyContent: 'center',
   },
   menuButtonText: { color: colors.cream, fontWeight: '800', fontSize: type.button },
+  scorecardChip: {
+    minHeight: 32,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.bgElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scorecardChipText: { color: colors.cream, fontWeight: '800', fontSize: type.tiny },
+  dockHoleOutSlot: { flex: 1.2, minWidth: 88, gap: 4 },
   back: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 },
   backLabel: { color: colors.cream, fontWeight: '800', fontSize: type.meta },
   allClubsFloat: {
@@ -1993,13 +2078,23 @@ function makeStyles(colors: ColorPalette) {
   },
   overlayToast: {
     marginTop: 6,
-    color: colors.cream,
-    fontSize: type.tiny,
-    fontWeight: '800',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     backgroundColor: colors.overlay,
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 6,
+  },
+  overlayToastText: {
+    color: colors.cream,
+    fontSize: type.tiny,
+    fontWeight: '800',
+  },
+  holeOutCheck: {
+    color: colors.lime,
+    fontSize: type.body,
+    fontWeight: '900',
   },
   firstLaunchTipRow: {
     marginTop: 6,
@@ -2045,6 +2140,7 @@ function makeStyles(colors: ColorPalette) {
     borderTopColor: colors.line,
   },
   dockRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'nowrap', gap: 6 },
+  dockFinishHole: { borderColor: colors.cream, borderWidth: 2, backgroundColor: colors.accentWash },
   dockStrip: { flex: 1, minWidth: 0, height: PHONE_WHEEL_STRIP_HEIGHT },
   dockChip: {
     flex: 1,

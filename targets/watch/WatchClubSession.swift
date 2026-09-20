@@ -191,6 +191,13 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   func addPutt(lengthId: String) {
     sending = true
     feedback = ""
+    if putt.lengths.count < 5 {
+      var next = putt
+      next.lengths.append(lengthId)
+      next.canMake = true
+      next.canAdd = next.lengths.count < 5
+      putt = next
+    }
     sendPick([
       "type": "puttPick",
       "action": "add",
@@ -313,16 +320,11 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       list.lastClubId = clubId
       UserDefaults.standard.set(clubId, forKey: "lastClubId")
     }
-    if ok, text == "Putts" {
-      var next = putt
-      next.open = true
-      next.holeNumber = list.holeNumber
-      next.canMake = next.lengths.count > 0
-      next.canAdd = next.lengths.count < 5
-      putt = next
-    }
-    if ok, (reply["feedback"] as? String)?.contains("Made it") == true {
+    if ok, (reply["feedback"] as? String)?.contains("Hole Out") == true {
       putt.open = false
+      putt.lengths = []
+      putt.canMake = false
+      putt.canAdd = true
     }
   }
 
