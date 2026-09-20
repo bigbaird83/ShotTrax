@@ -45,6 +45,9 @@ import {
   planPuttLengthSlots,
   planPlayDockFinish,
   playDockHoleOutLabel,
+  playDockPuttLabel,
+  playDockPuttOpensExistingSheet,
+  playDockPuttUsesShowPuttPillsGate,
   puttsLiveOnPlayDock,
   PUTT_LENGTHS,
   PUTT_MAX,
@@ -239,7 +242,7 @@ test('near / on green is live yards-to-green within 40 yd — never a putt recor
   assert.equal(isLivePuttProximityQuality('none'), false);
 });
 
-test('Signal: putt pills when putter or ≤40 yd good/soft; Hole Out stays either way', () => {
+test('Signal: dock Putt when putter or ≤40 yd good/soft; Hole Out stays either way', () => {
   assert.equal(puttPillsNearGreenYards(), 40);
   assert.equal(puttPillsUseYardsToGreen(), true);
   assert.deepEqual([...puttPillsProximityQualities()], ['good', 'soft']);
@@ -281,7 +284,10 @@ test('Signal: putt pills when putter or ≤40 yd good/soft; Hole Out stays eithe
   assert.doesNotMatch(dock, /playHeaderYards|onGreen:/);
   assert.match(hole, /const liveToGreen = yardsToGreen\(fix, green\)/);
   assert.match(hole, /from '@\/src\/sensing\/yardsToGreen'/);
-  assert.match(hole, /testID="play-dock-putts"|PuttDock/);
+  assert.match(hole, /testID="play-dock-putts"/);
+  assert.match(hole, /<PuttDock/);
+  assert.match(hole, /openPuttSheet\(holeNumber\)/);
+  assert.match(hole, /styles\.dockHoleOutShrunk/);
   assert.match(hole, /testID=\{toast === COPY\.holeOut \? 'hole-out-chip'/);
 });
 
@@ -307,8 +313,15 @@ test('Finish hole / putts live on the play dock — not buried in Scorecard', ()
   const play = hole.slice(0, hole.indexOf('<FullSheet'));
   const dock = hole.slice(hole.indexOf('style={[styles.dock'), hole.indexOf('<FullSheet'));
   assert.match(dock, /<PuttDock/);
+  assert.match(dock, /openPuttSheet\(holeNumber\)/);
   assert.match(dock, /COPY\.holeOut/);
   assert.match(dock, /onFinishHole|onMadeIt/);
+  const puttAt = dock.indexOf('<PuttDock');
+  const holeOutAt = dock.indexOf('testID="play-dock-hole-out"');
+  assert.ok(puttAt >= 0 && holeOutAt > puttAt);
+  assert.equal(playDockPuttOpensExistingSheet(), true);
+  assert.equal(playDockPuttUsesShowPuttPillsGate(), true);
+  assert.equal(playDockPuttLabel(), 'Putt');
   assert.match(play, /styles\.scorecardChip/);
   assert.doesNotMatch(dock, /COPY\.scorecard/);
   assert.match(hole, /finishHoleOut/);

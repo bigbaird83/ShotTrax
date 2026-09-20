@@ -4,7 +4,8 @@ import { PHONE_WHEEL_STRIP_HEIGHT } from './clubStrip';
  * Play screen: map fills the hole. A frosted two-row dock sits over the map.
  * Header is a thin overlay. Add shot still takes the full screen.
  * Same club is gone — that slot is Hole Out. Scorecard is a header chip.
- * Putt pills sit above Hole Out only when putter or ≤40 yd green (good/soft) — not a third dock row.
+ * A Putt button sits left of a shrunken Hole Out only when putter or ≤40 yd
+ * green (good/soft) — not a third dock row. Putt opens the existing sheet.
  */
 
 export const PLAY_MAP_MIN_RATIO = 0.6;
@@ -66,13 +67,30 @@ export function playShowsFatSayClub(): false {
   return false;
 }
 
-/** Wheel is the first dock row. Hole Out sits under it. All clubs floats above. */
+/** Wheel is the first dock row. Putt + Hole Out sit under it. All clubs floats above. */
 export function playChipRowIncludes(): readonly ['suggested'] {
   return ['suggested'];
 }
 
 export function playUnderWheelIncludes(): readonly ['hole_out'] {
   return ['hole_out'];
+}
+
+/** Dock Putt is the same action row as Hole Out — never a third dock row. */
+export function playDockPuttIsThirdRow(): false {
+  return false;
+}
+
+export function playDockPuttSitsLeftOfHoleOut(): true {
+  return true;
+}
+
+export function playDockShrinksHoleOutBesidePutt(): true {
+  return true;
+}
+
+export function playDockPuttOpensSheet(): true {
+  return true;
 }
 
 export function playScorecardIsHeaderChip(): true {
@@ -321,6 +339,18 @@ export const PLAY_DOCK_ACTION_MIN_HEIGHT = 52;
 
 export function playDockActionMinHeight(): number {
   return PLAY_DOCK_ACTION_MIN_HEIGHT;
+}
+
+/** Putt takes the wider share of the finish slot; Hole Out shrinks beside it. */
+export const PLAY_DOCK_PUTT_FLEX = 1.15;
+export const PLAY_DOCK_HOLE_OUT_SHRINK_FLEX = 0.72;
+
+export function playDockPuttFlex(): number {
+  return PLAY_DOCK_PUTT_FLEX;
+}
+
+export function playDockHoleOutShrinkFlex(): number {
+  return PLAY_DOCK_HOLE_OUT_SHRINK_FLEX;
 }
 
 /** Room above the glass dock so All clubs still floats over the map. */

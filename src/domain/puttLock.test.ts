@@ -35,6 +35,8 @@ import {
   planMadeIt,
   planMadeItFromPick,
   playDockKeepsHoleOutForOffGreen,
+  playDockPuttOpensExistingSheet,
+  playDockPuttUsesShowPuttPillsGate,
   puttLoggedWithoutLength,
   puttSheetCtaLabel,
   puttSheetDistanceTapCommits,
@@ -69,7 +71,7 @@ import {
   WATCH_ASSIST,
 } from '../sensing/assists';
 
-test('Signal Lab: putt pills are putter or ≤40 yd haversine to green centroid, good/soft only', () => {
+test('Signal Lab: dock Putt is putter or ≤40 yd haversine to green centroid, good/soft only', () => {
   assert.equal(NEAR_GREEN_YD, 40);
   assert.equal(puttPillsUseYardsToGreen(), true);
   assert.equal(puttPillsUseHydratedGreenCentroid(), true);
@@ -95,6 +97,8 @@ test('Signal Lab: putt pills are putter or ≤40 yd haversine to green centroid,
   const dock = hole.slice(hole.indexOf('const dockFinish'), hole.indexOf('const showFirstLaunchTip'));
   assert.match(dock, /toGreen: liveToGreen/);
   assert.doesNotMatch(dock, /playHeaderYards|polygon|greenEdge/);
+  assert.equal(playDockPuttUsesShowPuttPillsGate(), true);
+  assert.equal(playDockPuttOpensExistingSheet(), true);
   const watchPush = hole.slice(hole.indexOf('useWatchClubList'), hole.indexOf('if (!round || !hole)'));
   assert.match(watchPush, /yardsToGreen: liveToGreen\.yards/);
   assert.match(watchPush, /yardsQuality: liveToGreen\.quality/);
@@ -242,6 +246,14 @@ test('Signal Lab: TF 49 putt sheet is pick → Made it on putt N≥1; Add putt i
   assert.match(dock, /testID="play-dock-hole-out"/);
   assert.match(dock, /COPY\.holeOut/);
   assert.match(dock, /onFinishHole/);
+  assert.match(dock, /<PuttDock/);
+  assert.match(dock, /openPuttSheet\(holeNumber\)/);
+  assert.match(dock, /styles\.dockHoleOutShrunk/);
+  const puttAt = dock.indexOf('<PuttDock');
+  const holeOutAt = dock.indexOf('testID="play-dock-hole-out"');
+  assert.ok(puttAt >= 0 && holeOutAt > puttAt);
+  assert.doesNotMatch(dock, /onAdd=\{onAddPutt\}/);
+  assert.doesNotMatch(dock, /PUTT_LENGTHS/);
   const finish = hole.slice(hole.indexOf('const onFinishHole'), hole.indexOf('const onAddPenalty'));
   assert.match(finish, /finishHoleOut/);
   assert.doesNotMatch(finish, /addPlacedShot|insertNoGpsShot|club_putter/);

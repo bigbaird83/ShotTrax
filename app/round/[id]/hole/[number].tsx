@@ -77,7 +77,14 @@ import { confirmUndoIsLive, planConfirmUndo, type ConfirmUndoWindow } from '@/sr
 import { confirmPlaceToDraft, courseGreenCenterForLine, resolveAddShotFromPin } from '@/src/domain/placeToDrag';
 import { applyWheelSelection, resolveWheelHighlightId } from '@/src/domain/clubSelect';
 import { formatClubStripLabel, PHONE_WHEEL_PILL_HEIGHT, PHONE_WHEEL_STRIP_HEIGHT, planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
-import { PLAY_DOCK_ACTION_MIN_HEIGHT, PLAY_GLASS_DOCK_LIFT, planPlayLayout } from '@/src/domain/playLayout';
+import {
+  PLAY_CONTROL_MIN_TAP,
+  PLAY_DOCK_ACTION_MIN_HEIGHT,
+  PLAY_DOCK_HOLE_OUT_SHRINK_FLEX,
+  PLAY_DOCK_PUTT_FLEX,
+  PLAY_GLASS_DOCK_LIFT,
+  planPlayLayout,
+} from '@/src/domain/playLayout';
 import {
   firstLaunchTipHistoryRoundCount,
   firstLaunchTipSeenValue,
@@ -1499,9 +1506,15 @@ export default function HoleScreen() {
           </View>
           <View pointerEvents="box-none" style={styles.dockRow}>
             {dockFinish.showHoleOut ? (
-              <View pointerEvents="box-none" style={styles.dockHoleOutSlot}>
+              <View
+                pointerEvents="box-none"
+                style={[styles.dockHoleOutSlot, dockFinish.showPutts && styles.dockPuttHoleOutRow]}>
                 {dockFinish.showPutts ? (
-                  <PuttDock draft={puttDraft} disabled={readOnly} onAdd={onAddPutt} onUndo={onUndoPutt} />
+                  <PuttDock
+                    disabled={readOnly || placing || busy}
+                    onPress={() => void openPuttSheet(holeNumber)}
+                    style={[styles.dockAction, styles.dockPutt]}
+                  />
                 ) : null}
                 <Pressable
                   testID="play-dock-hole-out"
@@ -1511,7 +1524,11 @@ export default function HoleScreen() {
                   onPress={
                     dockFinish.showPutts && puttDraft.lengths.length > 0 ? () => onMadeIt() : onFinishHole
                   }
-                  style={[styles.dockAction, styles.dockFinishHole]}>
+                  style={[
+                    styles.dockAction,
+                    styles.dockFinishHole,
+                    dockFinish.showPutts && styles.dockHoleOutShrunk,
+                  ]}>
                   <Text style={styles.dockActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                     {COPY.holeOut}
                   </Text>
@@ -2126,6 +2143,9 @@ function makeStyles(colors: ColorPalette) {
   finishedHoleBad: { color: colors.red, fontWeight: '900' },
   finishedHoleFlag: { color: colors.lime, fontWeight: '900', fontSize: type.tiny },
   dockHoleOutSlot: { flex: 1.2, minWidth: 88, gap: 4 },
+  dockPuttHoleOutRow: { flexDirection: 'row', alignItems: 'center', minWidth: 108 },
+  dockPutt: { flex: PLAY_DOCK_PUTT_FLEX, minWidth: PLAY_CONTROL_MIN_TAP },
+  dockHoleOutShrunk: { flex: PLAY_DOCK_HOLE_OUT_SHRINK_FLEX, minWidth: PLAY_CONTROL_MIN_TAP, paddingHorizontal: 1 },
   back: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 },
   backLabel: { color: colors.cream, fontWeight: '800', fontSize: type.meta },
   allClubsFloat: {

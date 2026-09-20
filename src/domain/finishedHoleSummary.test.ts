@@ -230,6 +230,9 @@ test('Signal Lab: TF 48 chip sits in play header chrome; putt sheet / dock / Add
 
   const puttDock = readFileSync(new URL('../ui/PuttDock.tsx', import.meta.url), 'utf8');
   assert.doesNotMatch(puttDock, /planFinishedHoleMiniSummary|finished-hole-chip/);
+  assert.match(puttDock, /COPY\.putt/);
+  assert.match(puttDock, /testID="play-dock-putts"/);
+  assert.doesNotMatch(puttDock, /PUTT_LENGTHS|onAdd|onUndo/);
 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   assert.match(map, /scrollEnabled=\{framedForGestures\}/);

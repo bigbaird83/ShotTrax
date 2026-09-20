@@ -25,6 +25,7 @@ import {
   playDockRowCount,
   playEmptyMiddle,
   playHeaderEatsMap,
+  playInventThirdDock,
   playMapMinRatio,
   playChipRowIncludes,
   playShowsFatAllClubs,
@@ -66,7 +67,15 @@ import {
   watchShowsSayClub,
   PLAY_CONTROL_MIN_TAP,
   PLAY_DOCK_ACTION_MIN_HEIGHT,
+  PLAY_DOCK_HOLE_OUT_SHRINK_FLEX,
+  PLAY_DOCK_PUTT_FLEX,
   playDockActionMinHeight,
+  playDockHoleOutShrinkFlex,
+  playDockPuttFlex,
+  playDockPuttIsThirdRow,
+  playDockPuttOpensSheet,
+  playDockPuttSitsLeftOfHoleOut,
+  playDockShrinksHoleOutBesidePutt,
   playMenuIsButton,
   homeMenuIsButton,
   homeMenuOpensSettings,
@@ -814,4 +823,39 @@ test('P0: full-bleed MapView has real height under the glass dock; Add shot keep
     fallback.slice(fallback.indexOf('if (frameMiss)'), fallback.indexOf('YardsToGreenBadge')),
     /COPY\.waitingOnLocation/,
   );
+});
+
+test('Signal: dock Putt sits left of a shrunken Hole Out — not a third row', () => {
+  assert.equal(playDockRowCount(), 2);
+  assert.equal(playInventThirdDock(), false);
+  assert.equal(playDockPuttIsThirdRow(), false);
+  assert.equal(playDockPuttSitsLeftOfHoleOut(), true);
+  assert.equal(playDockShrinksHoleOutBesidePutt(), true);
+  assert.equal(playDockPuttOpensSheet(), true);
+  assert.equal(playDockPuttFlex(), PLAY_DOCK_PUTT_FLEX);
+  assert.equal(playDockHoleOutShrinkFlex(), PLAY_DOCK_HOLE_OUT_SHRINK_FLEX);
+  assert.ok(PLAY_DOCK_PUTT_FLEX > PLAY_DOCK_HOLE_OUT_SHRINK_FLEX);
+  assert.ok(PLAY_DOCK_HOLE_OUT_SHRINK_FLEX < 1);
+  assert.ok(PLAY_CONTROL_MIN_TAP >= 44);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const dock = hole.slice(hole.indexOf('style={[styles.dock'), hole.indexOf('<FullSheet'));
+  assert.equal((dock.match(/styles\.dockRow/g) ?? []).length, 2);
+  const puttAt = dock.indexOf('<PuttDock');
+  const holeOutAt = dock.indexOf('testID="play-dock-hole-out"');
+  assert.ok(puttAt >= 0 && holeOutAt > puttAt);
+  assert.match(dock, /openPuttSheet\(holeNumber\)/);
+  assert.match(dock, /styles\.dockPuttHoleOutRow/);
+  assert.match(dock, /styles\.dockPutt/);
+  assert.match(dock, /styles\.dockHoleOutShrunk/);
+  assert.match(dock, /PLAY_DOCK_PUTT_FLEX/);
+  assert.match(dock, /PLAY_DOCK_HOLE_OUT_SHRINK_FLEX/);
+  assert.match(dock, /PLAY_CONTROL_MIN_TAP/);
+  assert.doesNotMatch(dock, /onAdd=\{onAddPutt\}/);
+  assert.doesNotMatch(dock, /onUndo=\{onUndoPutt\}/);
+  assert.doesNotMatch(dock, /PUTT_LENGTHS/);
+
+  const layout = readFileSync(new URL('./playLayout.ts', import.meta.url), 'utf8');
+  assert.match(layout, /Putt button sits left of a shrunken Hole Out/);
+  assert.match(layout, /not a third dock row/);
 });
