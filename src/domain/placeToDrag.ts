@@ -80,13 +80,32 @@ export function dragTwoFingersPanAndZoom(): true {
   return true;
 }
 
-/** Second finger yields the overlay so MapView owns the pinch / pan. */
+/** Two fingers belong to MapView from the first touch. No overlay yield. */
 export function twoFingerOwnsMap(touchCount: number): boolean {
   return touchCount >= 2;
 }
 
-export function dragOverlayPointerEvents(mapOwnsGesture: boolean): 'none' | 'auto' {
-  return mapOwnsGesture ? 'none' : 'auto';
+/**
+ * Full-screen to-pin overlay must stay pass-through (or absent).
+ * `auto` above MapView steals iOS pan/pinch before JS can yield.
+ */
+export function dragOverlayPointerEvents(_mapOwnsGesture?: boolean): 'none' {
+  void _mapOwnsGesture;
+  return 'none';
+}
+
+/** TF 46 still shipped a map-covering layer. 46.1 must not. */
+export function addShotDragLayerStealsTwoFinger(): false {
+  return false;
+}
+
+export function addShotDragLayerCoversMap(): false {
+  return false;
+}
+
+/** One-finger move is the to-pin Marker, not a map-covering blocker. */
+export function addShotToPinUsesDraggableMarker(): true {
+  return true;
 }
 
 export function dragKeepsPinchZoom(): true {

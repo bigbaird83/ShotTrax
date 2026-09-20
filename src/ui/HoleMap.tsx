@@ -1,13 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  StyleSheet,
-  Text,
-  View,
-  type GestureResponderEvent,
-  type LayoutChangeEvent,
-  type StyleProp,
-  type ViewStyle,
-} from 'react-native';
+import { StyleSheet, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 import MapView, { Marker, Polygon, Polyline } from 'react-native-maps';
 import type { OsmFeature, OsmGolfKind, OsmOverlay } from '@/src/course/types';
 import { featuresForHole } from '@/src/course/osmOverlay';
@@ -192,55 +184,14 @@ function NativeHoleMap({
   const mapRef = useRef<MapView | null>(null);
   const framedOnce = useRef(false);
   const pendingLocked = useRef(false);
-  const dragLayerRef = useRef<View>(null);
   const [holeCameraReady, setHoleCameraReady] = useState(false);
   const [mapBox, setMapBox] = useState<{ width: number; height: number } | null>(null);
   const [mapsChrome, setMapsChrome] = useState(false);
-  const panStart = useRef<{ x: number; y: number } | null>(null);
   const toPinLive = Boolean(freezePan || onPlaceToDrag);
-  const [mapOwnsGesture, setMapOwnsGesture] = useState(false);
   const framedForGestures = holeMapKeepsScrollZoomOnceMounted();
-
-  const yieldToMapGesture = () => {
-    dragLayerRef.current?.setNativeProps({ pointerEvents: 'none' });
-    setMapOwnsGesture(true);
-  };
-
-  const releaseMapGesture = () => {
-    dragLayerRef.current?.setNativeProps({ pointerEvents: 'auto' });
-    setMapOwnsGesture(false);
-  };
 
   const revealMapsChrome = () => {
     if (allowMapsChrome) setMapsChrome(true);
-  };
-
-  const movedRef = useRef(false);
-
-  const coordFromTouch = (event: GestureResponderEvent, kind: 'drag' | 'tap') => {
-    const map = mapRef.current as
-      | (MapView & {
-          coordinateForPoint?: (point: { x: number; y: number }) => Promise<{
-            latitude: number;
-            longitude: number;
-          }>;
-        })
-      | null;
-    if (!map || typeof map.coordinateForPoint !== 'function') return;
-    void map
-      .coordinateForPoint({ x: event.nativeEvent.locationX, y: event.nativeEvent.locationY })
-      .then((point) => {
-        if (!point) return;
-        const next = { lat: point.latitude, lng: point.longitude };
-        if (!isValidLatLng(next)) return;
-        if (kind === 'tap') {
-          revealMapsChrome();
-          onPlacePoint?.(next);
-          return;
-        }
-        onPlaceToDrag?.(next);
-      })
-      .catch(() => undefined);
   };
 
   const closed = useMemo(() => shots.filter(hasClosedGpsTrail), [shots]);
@@ -371,10 +322,6 @@ function NativeHoleMap({
   }, [lockFrame, courseCardMiss, holeCameraReady, onFrameReady]);
 
   useEffect(() => {
-    if (!toPinLive) setMapOwnsGesture(false);
-  }, [toPinLive]);
-
-  useEffect(() => {
     if (lockFrame) {
       if (framedOnce.current) return;
       markFramedIfLive(frameLockedMap());
@@ -491,18 +438,7 @@ function NativeHoleMap({
       collapsable={false}
       style={[fullBleed ? styles.bleed : styles.wrap, style]}
       onLayout={onMapLayout}
-      pointerEvents="box-none"
-      onStartShouldSetResponderCapture={(event) => {
-        if (event.nativeEvent.touches.length >= 2) yieldToMapGesture();
-        return false;
-      }}
-      onTouchStart={(event) => {
-        if (event.nativeEvent.touches.length >= 2) yieldToMapGesture();
-      }}
-      onTouchEnd={(event) => {
-        if (event.nativeEvent.touches.length === 0) releaseMapGesture();
-      }}
-      onTouchCancel={() => releaseMapGesture()}>
+      pointerEvents="box-none">
       {mapCanPaint ? (
       <MapView
         key={mapPaintKey}
@@ -534,11 +470,6 @@ function NativeHoleMap({
         pitchEnabled={false}
         rotateEnabled={false}
         moveOnMarkerPress={false}
-        onPanDrag={(event) => {
-          if (!onPlaceToDrag || mapOwnsGesture) return;
-          const { latitude, longitude } = event.nativeEvent.coordinate;
-          onPlaceToDrag({ lat: latitude, lng: longitude });
-        }}
         onMapReady={() => {
           if (!lockFrame) return;
           if (framedOnce.current) return;
@@ -659,18 +590,21 @@ function NativeHoleMap({
         ) : null}
         {placedTo ? (
           <Marker
+            // One-finger drag is this Marker only. Do not put a map-covering
+            // View above MapView: iOS gives that layer the gesture stream and
+            // pan/pinch never reach the map on first Add shot or after edit.
             coordinate={toCoord(placedTo.lat, placedTo.lng)}
             pinColor="green"
             tappable={false}
             tracksViewChanges={false}
-            draggable={Boolean(onPlaceToDrag) && !mapOwnsGesture}
+            draggable={Boolean(onPlaceToDrag)}
             onDrag={(event) => {
-              if (!onPlaceToDrag || mapOwnsGesture) return;
+              if (!onPlaceToDrag) return;
               const { latitude, longitude } = event.nativeEvent.coordinate;
               onPlaceToDrag({ lat: latitude, lng: longitude });
             }}
             onDragEnd={(event) => {
-              if (!onPlaceToDrag || mapOwnsGesture) return;
+              if (!onPlaceToDrag) return;
               const { latitude, longitude } = event.nativeEvent.coordinate;
               onPlaceToDrag({ lat: latitude, lng: longitude });
             }}
@@ -739,48 +673,6 @@ function NativeHoleMap({
           </Marker>
         ) : null}
       </MapView>
-      ) : null}
-      {toPinLive ? (
-        <View
-          ref={dragLayerRef}
-          testID="to-pin-drag-layer"
-          style={styles.dragLayer}
-          pointerEvents={mapOwnsGesture ? 'none' : 'auto'}
-          onStartShouldSetResponder={(event) => {
-            if (event.nativeEvent.touches.length !== 1) {
-              yieldToMapGesture();
-              return false;
-            }
-            panStart.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY };
-            movedRef.current = false;
-            return false;
-          }}
-          onMoveShouldSetResponder={(event) => {
-            if (event.nativeEvent.touches.length !== 1) {
-              yieldToMapGesture();
-              return false;
-            }
-            return true;
-          }}
-          onResponderTerminationRequest={() => true}
-          onResponderMove={(event) => {
-            if (event.nativeEvent.touches.length !== 1) {
-              yieldToMapGesture();
-              return;
-            }
-            if (!panStart.current) return;
-            const dx = event.nativeEvent.pageX - panStart.current.x;
-            const dy = event.nativeEvent.pageY - panStart.current.y;
-            if (dx * dx + dy * dy <= 36) return;
-            movedRef.current = true;
-            coordFromTouch(event, 'drag');
-          }}
-          onResponderRelease={(event) => {
-            coordFromTouch(event, movedRef.current ? 'drag' : 'tap');
-            panStart.current = null;
-            movedRef.current = false;
-          }}
-        />
       ) : null}
       {showMapCover ? (
         <View pointerEvents="none" style={styles.mapCover} />
@@ -852,13 +744,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     backgroundColor: colors.bgElevated,
-  },
-  dragLayer: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
   },
   lineChip: {
     backgroundColor: 'rgba(11,26,18,0.88)',
