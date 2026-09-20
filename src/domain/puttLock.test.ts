@@ -149,7 +149,7 @@ test('Signal Lab: Hole Out closes on the last real mark — no invented putt GPS
   assert.doesNotMatch(watchFn, /addPlacedShot|insertNoGpsShot/);
 
   const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
-  const madeFn = session.slice(session.indexOf('func madeIt()'), session.indexOf('func madeIt()') + 220);
+  const madeFn = session.slice(session.indexOf('func madeIt()'), session.indexOf('/// Stretch: attach Watch GPS'));
   assert.doesNotMatch(madeFn, /attachWatchFix/);
   const pickFn = session.slice(session.indexOf('func pick(clubId: String)'), session.indexOf('func addPutt'));
   assert.match(pickFn, /attachWatchFix/);
@@ -230,7 +230,7 @@ test('Signal Lab: TF 49 putt sheet is pick → Made it on putt 1; Add putt is a 
   const pickLen = session.slice(session.indexOf('func pickPuttLength'), session.indexOf('func addPutt'));
   assert.match(pickLen, /next\.pending = lengthId/);
   assert.match(pickLen, /next\.canMake = true/);
-  const madeFn = session.slice(session.indexOf('func madeIt()'), session.indexOf('func madeIt()') + 420);
+  const madeFn = session.slice(session.indexOf('func madeIt()'), session.indexOf('/// Stretch: attach Watch GPS'));
   assert.match(madeFn, /payload\["lengthId"\] = pending/);
   assert.doesNotMatch(madeFn, /attachWatchFix/);
   const applySheet = session.slice(session.indexOf('private func applyPuttSheet'), session.indexOf('private func persist'));

@@ -421,7 +421,7 @@ test('Watch putt chips use the Signal gate; Hole Out stays; no scorecard', () =>
   assert.match(pickFn, /attachWatchFix/);
   assert.match(pickFn, /clubId != "club_putter"/);
   assert.ok(pickFn.indexOf('clubId != "club_putter"') < pickFn.indexOf('attachWatchFix'));
-  const madeFn = session.slice(session.indexOf('func madeIt()'), session.indexOf('func madeIt()') + 420);
+  const madeFn = session.slice(session.indexOf('func madeIt()'), session.indexOf('/// Stretch: attach Watch GPS'));
   assert.doesNotMatch(madeFn, /attachWatchFix/);
   assert.match(madeFn, /payload\["lengthId"\] = pending/);
   const pickLen = session.slice(session.indexOf('func pickPuttLength'), session.indexOf('func addPutt'));
