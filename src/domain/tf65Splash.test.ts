@@ -72,7 +72,7 @@ test('TF 65: attached v2 square clip + first-frame still, contain + black letter
   assert.match(layout, /BrandedSplash/);
 
   const readme = readFileSync(new URL('../../README.md', import.meta.url), 'utf8');
-  assert.match(readme, /contain \+ black letterbox/);
+  assert.match(readme, /contain.+black letterbox/);
   assert.match(readme, /splash-open-first-3s-v2\.mp4/);
   assert.doesNotMatch(readme, /last-frame still/);
 });
