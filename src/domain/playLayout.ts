@@ -700,9 +700,9 @@ export function signalLabGreensNorthHillsHydrate(): {
 }
 
 /**
- * Mountain Ranch Golf Club (Fairfield Bay) paints from its OSM hydrate
- * when Pro tee+green miss. 18/18 hole-ref + nearest OSM tee/green.
- * Thunderbird stays exclusive. Never invent from the clubhouse.
+ * Mountain Ranch Golf Club (Fairfield Bay) paints from golfapi.io
+ * tee + green when Pro tee+green miss. Thunderbird stays exclusive.
+ * Never invent from the clubhouse.
  */
 export function signalLabMountainRanchHydrate(): {
   mountainRanchFairfieldBayOnly: true;

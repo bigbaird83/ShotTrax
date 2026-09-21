@@ -389,22 +389,20 @@ test('matching is Thunderbird Heber Springs only — other AR hydrates never mat
   assert.equal(resolveCourseHydrateKey({ name: 'Greystone Country Club', city: 'Cabot' }), GREYSTONE_CABOT_AR_KEY);
 });
 
-test('Mountain Ranch OSM hydrate is 18 gated holes; clubhouse is never a pin', () => {
+test('Mountain Ranch golfapi hydrate is 18 gated holes; clubhouse is never a pin', () => {
   assert.ok(mountainRanchHydrate);
   assert.equal(mountainRanchHydrate?.courseKey, 'mountain-ranch-fairfield-bay-ar');
   assert.equal(mountainRanchHydrate?.displayName, 'Mountain Ranch Golf Club');
   assert.equal(mountainRanchHydrate?.locality, 'Fairfield Bay, AR');
-  assert.equal(mountainRanchHydrate?.source, 'osm');
-  assert.match(mountainRanchHydrate?.sourceRef ?? '', /hole\/way\/1158747222/);
-  assert.match(mountainRanchHydrate?.sourceRef ?? '', /tee\/way\/1158747223/);
-  assert.match(mountainRanchHydrate?.sourceRef ?? '', /green\/way\/1158747225/);
-  assert.match(mountainRanchHydrate?.sourceRef ?? '', /18\/18/);
+  assert.equal(mountainRanchHydrate?.source, 'golfapi');
+  assert.match(mountainRanchHydrate?.sourceRef ?? '', /golfapi\.io/);
+  assert.match(mountainRanchHydrate?.sourceRef ?? '', /012141520627858482448/);
   assert.deepEqual(mountainRanchHydrate?.holes[0]?.tee, {
-    lat: 35.6126927,
-    lng: -92.2884055,
-    label: 'default',
+    lat: 35.6125806,
+    lng: -92.2884427,
+    label: 'Blue',
   });
-  assert.deepEqual(mountainRanchHydrate?.holes[0]?.green, { lat: 35.6149737, lng: -92.2861298 });
+  assert.deepEqual(mountainRanchHydrate?.holes[0]?.green, { lat: 35.6149788, lng: -92.2861247 });
   assert.equal(mountainRanchHydrate?.holes.length, 18);
   assert.deepEqual(
     mountainRanchHydrate?.holes.map((hole) => hole.hole),

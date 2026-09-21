@@ -43,7 +43,7 @@ uploads CSV).
 
 1. Search **Thunderbird** / **Heber Springs** → Doc Thunderbird. golfapi.io
    tee + green. Daily pins from Doc sheets. No OpenGolf overwrite.
-2. Search **Mountain Ranch** / **Fairfield Bay** → existing 18/18 OSM hydrate.
+2. Search **Mountain Ranch** / **Fairfield Bay** → existing 18/18 golfapi hydrate.
 3. Zip / near-me in AR: Magnolia CC and Camden CC should appear with real
    tee→green on accepted holes. Quarantined holes miss-card.
 4. Empty / centroid-only / high-dist match → miss card. Nothing invented.

@@ -198,7 +198,7 @@ export function mountainRanchHoleSources(): CatalogHoleSource[] {
   return MOUNTAIN_RANCH_HOLES.map((hole) => ({
     hole,
     status: 'hydrated',
-    source: `osm golf=hole ref=${hole} + nearest OSM tee/green ways`,
+    source: `golfapi.io tee + green hole ${hole}`,
     needsDocPinSheet: false,
   }));
 }

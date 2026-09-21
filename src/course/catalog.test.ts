@@ -66,7 +66,7 @@ test('catalog search finds Thunderbird by name or Heber Springs and never invent
   assert.deepEqual(searchLocalCatalog('   '), []);
 });
 
-test('local catalog indexes Mountain Ranch (Fairfield Bay) as 18 OSM-hydrated holes', () => {
+test('local catalog indexes Mountain Ranch (Fairfield Bay) as 18 golfapi holes', () => {
   const entry = LOCAL_COURSE_CATALOG.find((row) => row.courseKey === MOUNTAIN_RANCH_FAIRFIELD_BAY_AR_KEY);
   assert.ok(entry);
   assert.equal(entry?.name, 'Mountain Ranch Golf Club');
@@ -187,8 +187,8 @@ test('catalog getCourse returns Thunderbird golfapi tee+green — never the club
   assert.equal(ranch?.holeCount, 18);
   assert.equal(ranch?.holes.length, 18);
   assert.equal(ranch?.tees.length, 0);
-  assert.deepEqual(ranch?.holes[0]?.teeCentroid, { lat: 35.6126927, lng: -92.2884055 });
-  assert.deepEqual(ranch?.holes[0]?.greenCentroid, { lat: 35.6149737, lng: -92.2861298 });
+  assert.deepEqual(ranch?.holes[0]?.teeCentroid, { lat: 35.6125806, lng: -92.2884427 });
+  assert.deepEqual(ranch?.holes[0]?.greenCentroid, { lat: 35.6149788, lng: -92.2861247 });
   for (const hole of ranch?.holes ?? []) {
     assert.equal(hole.teeCentroid != null, true);
     assert.equal(hole.greenCentroid != null, true);
