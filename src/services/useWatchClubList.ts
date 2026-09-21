@@ -57,6 +57,9 @@ export function useWatchClubList(
       get readOnly() {
         return ctxRef.current.readOnly;
       },
+      get openShotHoles() {
+        return ctxRef.current.openShotHoles;
+      },
       bump: () => ctxRef.current.bump(),
       onMarked: () => ctxRef.current.onMarked?.(),
       onPutter: () => ctxRef.current.onPutter?.(),

@@ -8,7 +8,11 @@ import {
   finishHoleScoreInventYards,
   finishedHoleDisplayScore,
   loggedHoleStrokes,
+  orphanGhostStrokesAfterDelete,
+  deletePuttRecomputesHoleScore,
+  deleteShotRecomputesHoleScore,
   planFinishHoleScore,
+  planRecomputeFinishedHoleScore,
   scorecardBlankWhenPuttsDone,
 } from './holeScore';
 import { planScorecard } from './scorecard';
@@ -48,6 +52,21 @@ test('Signal Lab: P0 Made it / Hole Out persist total strokes — never putts-on
   const empty = planFinishHoleScore({ shotCount: 0, putts: 0 });
   assert.equal(empty.ok, false);
   assert.equal(empty.score, null);
+
+  assert.equal(deleteShotRecomputesHoleScore(), true);
+  assert.equal(deletePuttRecomputesHoleScore(), true);
+  assert.equal(orphanGhostStrokesAfterDelete(), false);
+  // Doc H10 after deleting ghost 56°: 2 shots · 2 putts · Made it — not cached 9 · +5.
+  const afterGhosts = planRecomputeFinishedHoleScore({
+    puttsDone: true,
+    shotCount: 2,
+    putts: 2,
+  });
+  assert.equal(afterGhosts.write, true);
+  assert.equal(afterGhosts.score, 4);
+  assert.notEqual(afterGhosts.score, 9);
+  assert.equal(planRecomputeFinishedHoleScore({ puttsDone: false, shotCount: 2, putts: 2 }).write, false);
+  assert.equal(planRecomputeFinishedHoleScore({ puttsDone: true, shotCount: 0, putts: 0 }).score, null);
 });
 
 test('Signal Lab: scorecard / revisit reads posted or logged strokes — never blank when puttsDone', () => {
@@ -95,6 +114,21 @@ test('Signal Lab: close writes score; scorecard/revisit read posted or logged; c
   assert.match(finishOut, /persistCloseHoleScore/);
   assert.match(finishOut, /hole_out/);
   assert.doesNotMatch(finishOut, /INSERT INTO shots|insertShot|lat|lng|acceptFix/);
+
+  assert.match(repo, /persistRecomputedHoleScore/);
+  const recompute = repo.slice(
+    repo.indexOf('function persistRecomputedHoleScore'),
+    repo.indexOf('export function updateHolePutts'),
+  );
+  assert.match(recompute, /planRecomputeFinishedHoleScore/);
+  assert.match(recompute, /updateHoleScore/);
+  assert.match(recompute, /listShotsForHole/);
+  const deleteFn = repo.slice(repo.indexOf('export function deleteShotOnHole'), repo.indexOf('export function undoLastShot'));
+  assert.match(deleteFn, /persistRecomputedHoleScore/);
+  const undoFn = repo.slice(repo.indexOf('export function undoLastShot'), repo.indexOf('export function applyClosedShot'));
+  assert.match(undoFn, /persistRecomputedHoleScore/);
+  const puttsFn = repo.slice(repo.indexOf('export function updateHolePutts'), repo.indexOf('export function finishHolePutts'));
+  assert.match(puttsFn, /persistRecomputedHoleScore/);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const cardStart = hole.indexOf('<ScorecardBody');

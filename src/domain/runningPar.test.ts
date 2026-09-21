@@ -133,6 +133,14 @@ test('Signal Lab: blank and in-play holes do not invent strokes for the running 
   });
   assert.equal(even.line, 'thru 1, E');
   assert.equal(even.toParTone, 'even');
+
+  // Doc H10: after ghost delete, restamped 4 on par 4 — thru 1, E (not cached +5).
+  const afterGhosts = planRunningParBadge({
+    holes: [{ number: 10, par: 4, score: 4, puttsDone: true, shotCount: 2, putts: 2 }],
+  });
+  assert.equal(afterGhosts.line, 'thru 1, E');
+  assert.equal(afterGhosts.toPar, 0);
+  assert.notEqual(afterGhosts.toPar, 5);
 });
 
 test('Signal Lab: running ±par badge hides for Add-shot / catch-up / putt sheet and never blocks gestures', () => {

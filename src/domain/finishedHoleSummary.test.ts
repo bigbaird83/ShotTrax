@@ -137,6 +137,28 @@ test('Signal Lab: TF 48 finished-hole revisit is a thin chip — score vs par, s
   assert.equal(even.vsParTone, 'even');
   assert.equal(even.flag, COPY.madeIt);
 
+  // Doc H10 after deleting ghost 56° — chip is remaining marks, not cached 9 · +5.
+  const afterGhosts = planFinishedHoleMiniSummary({
+    puttsDone: true,
+    score: 4,
+    par: 4,
+    shotCount: 2,
+    putts: 2,
+    shots: [
+      { seq: 1, holeOut: false },
+      { seq: 2, holeOut: false },
+    ],
+  });
+  assert.equal(afterGhosts.visible, true);
+  assert.equal(afterGhosts.score, 4);
+  assert.equal(afterGhosts.vsPar, 'E');
+  assert.equal(afterGhosts.shotCount, 2);
+  assert.equal(afterGhosts.putts, 2);
+  assert.equal(afterGhosts.flag, COPY.madeIt);
+  assert.equal(afterGhosts.line, '4 · E · 2 shots · 2 putts · Made it');
+  assert.notEqual(afterGhosts.line.includes('9'), true);
+  assert.notEqual(afterGhosts.vsPar, '+5');
+
   const logged = planFinishedHoleMiniSummary({
     puttsDone: true,
     score: null,

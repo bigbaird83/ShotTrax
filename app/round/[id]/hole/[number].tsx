@@ -771,6 +771,7 @@ export default function HoleScreen() {
       holeNumber,
       readOnly,
       tee: holeTee,
+      openShotHoles: pendingShots.map((row) => row.number),
       bump,
       onMarked: () => setCheckNonce((n) => n + 1),
       onPutter: () => {

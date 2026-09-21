@@ -214,6 +214,11 @@ export function watchSelectedClubNeverVanishes(): true {
   return true;
 }
 
+/** Selection is a lime fill/border on the same pill — never filter the club out. */
+export function watchSelectedClubHighlightNeverHidesPill(): true {
+  return true;
+}
+
 /** If selected is already in the yards-left top-3, keep that window and highlight in place. */
 export function watchSelectedHighlightInPlace(): true {
   return true;

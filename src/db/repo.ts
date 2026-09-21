@@ -31,7 +31,7 @@ import {
 import { clubAverageFromShots, type ClubAverage } from '../domain/averages';
 import { rememberResolvedTee } from '../course/osmOverlay';
 import { isValidLatLng } from '../domain/latLng';
-import { planFinishHoleScore } from '../domain/holeScore';
+import { planFinishHoleScore, planRecomputeFinishedHoleScore } from '../domain/holeScore';
 import { clampPenaltyStrokes, scoreAfterPenalty, totalPenaltyStrokes } from '../domain/penalty';
 import {
   clampPutts,
@@ -665,6 +665,23 @@ function persistCloseHoleScore(db: SQLiteDatabase, holeId: string, putts: number
   updateHoleScore(db, holeId, planned.score);
 }
 
+/** Delete/edit on a finished hole — restamp posted score from remaining marks + putts. */
+function persistRecomputedHoleScore(db: SQLiteDatabase, holeId: string): void {
+  const row = db.getFirstSync<{ putts: number | null; putts_done: number | null }>(
+    'SELECT putts, putts_done FROM holes WHERE id = ?',
+    [holeId],
+  );
+  if (!row || (row.putts_done ?? 0) !== 1) return;
+  const planned = planRecomputeFinishedHoleScore({
+    puttsDone: true,
+    shotCount: listShotsForHole(db, holeId).length,
+    putts: clampPutts(row.putts ?? 0),
+    penaltyStrokes: totalPenaltyStrokes(listPenaltiesForHole(db, holeId)),
+  });
+  if (!planned.write) return;
+  updateHoleScore(db, holeId, planned.score);
+}
+
 export function updateHolePutts(
   db: SQLiteDatabase,
   holeId: string,
@@ -679,6 +696,7 @@ export function updateHolePutts(
     puttsDone ? 1 : 0,
     holeId,
   ]);
+  if (puttsDone) persistRecomputedHoleScore(db, holeId);
 }
 
 /** Made it: persist user-chosen buckets and mark putts entered. Walking off the green never calls this. */
@@ -842,6 +860,7 @@ export function insertOpenShot(
       args.suggested ? 1 : 0,
     ],
   );
+  persistRecomputedHoleScore(db, args.holeId);
   return id;
 }
 
@@ -954,6 +973,7 @@ export function deleteShotOnHole(
       db.runSync('UPDATE shots SET distance_yards = ? WHERE id = ?', [row.distanceYards, row.id]);
     }
     setRoundLastClub(db, args.roundId, plan.nextLastClubId);
+    persistRecomputedHoleScore(db, hole.id);
   });
   return { status: 'commit' };
 }
@@ -973,6 +993,7 @@ export function undoLastShot(
       reopenShot(db, plan.reopenShotId);
     }
     setRoundLastClub(db, roundId, plan.nextLastClubId);
+    persistRecomputedHoleScore(db, hole.id);
   });
   return { ok: true };
 }
@@ -1043,6 +1064,7 @@ export function insertNoGpsShot(
       plan.source,
     ],
   );
+  persistRecomputedHoleScore(db, args.holeId);
   return id;
 }
 
@@ -1087,6 +1109,7 @@ export function insertPlacedShot(
       confirmUndoAverageEligibleAt(nowMs),
     ],
   );
+  persistRecomputedHoleScore(db, args.holeId);
   return id;
 }
 

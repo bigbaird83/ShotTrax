@@ -443,5 +443,6 @@ test('phone confirm is required; Cancel is the default; no swipe delete', () => 
   assert.ok(repoStart >= 0 && repoEnd > repoStart);
   const repoFn = repo.slice(repoStart, repoEnd);
   assert.match(repoFn, /if \(!args\.confirmed\) return \{ status: 'cancel' \}/);
+  assert.match(repoFn, /persistRecomputedHoleScore/);
   assert.doesNotMatch(repoFn, /reopenShot/);
 });

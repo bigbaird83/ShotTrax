@@ -8,6 +8,7 @@ import type { GpsFix } from './types';
 import {
   CLUB_LIST_KEYS,
   PHONE_UNAVAILABLE,
+  QUEUED_WILL_SYNC,
   WATCH_MESSAGE_TYPES,
   clubListPayload,
   clubListPushKey,
@@ -191,6 +192,14 @@ test('clubPick may carry Watch GPS; Watch tap uses it when fresh, else phone', (
   assert.equal(parsed?.lat, 37.1);
   assert.equal(parsed?.lng, -122.2);
   assert.equal(parsed?.accuracyM, 4);
+  const stamped = parseClubPick({
+    type: 'clubPick',
+    clubId: 'club_50',
+    at: '2026-09-20T22:10:00.000Z',
+    holeNumber: 10,
+  });
+  assert.equal(stamped?.holeNumber, 10);
+  assert.equal(clubPickPayload({ clubId: 'club_50', at: '2026-09-20T22:10:00.000Z', holeNumber: 10 }).holeNumber, 10);
 });
 
 test('Watch Connectivity this cut is clubList, clubPick, puttSheet, puttPick, clubNav, and nearby start', () => {
@@ -258,9 +267,10 @@ test('Signal Lab: only a club tap, Watch tap, or Same club runs acceptFix', () =
   assert.equal(watchPayloadRunsAcceptFix(clubPickPayload({ clubId: 'club_7i', at })), true);
 });
 
-test('Watch feedback is marked ✓ or Phone unavailable — never silent fail', () => {
+test('Watch feedback is marked ✓, queued, or Phone unavailable — never silent fail', () => {
   assert.equal(formatClubMarkedFeedback('7i'), '7i marked ✓');
   assert.equal(PHONE_UNAVAILABLE, 'Phone unavailable');
+  assert.equal(QUEUED_WILL_SYNC, 'Queued · will sync');
 });
 
 test('Watch companion is club-pick only — no motion, mic, or auto-putt', () => {

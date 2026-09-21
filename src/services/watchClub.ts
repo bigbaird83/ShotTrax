@@ -22,6 +22,13 @@ import {
 } from '../domain/watchMessages';
 import type { PuttLengthId } from '../domain/putts';
 import {
+  drainWatchClubPickQueueForHole,
+  gateWatchClubPick,
+  queueWatchClubPickEvent,
+  watchClubPickShouldApply,
+  watchFinishShotOverlayBlocksClubPick,
+} from '../domain/watchClubQueue';
+import {
   drainWatchPuttPickQueue,
   forgetWatchPuttPickAt,
   queueWatchPuttPickEvent,
@@ -37,6 +44,8 @@ export type WatchClubContext = {
   holeNumber: number;
   readOnly: boolean;
   tee?: { lat: number; lng: number } | null;
+  /** Finish shot · Hole N on another hole — reject every Watch clubPick. */
+  openShotHoles?: number[];
   bump: () => void;
   onMarked?: () => void;
   onPutter?: () => void;
@@ -50,6 +59,7 @@ let context: WatchClubContext | null = null;
 let started = false;
 let lastJson = '';
 let lastPuttJson = '';
+let lastClubMark: { clubId: string; appliedAtMs: number } | null = null;
 
 function native() {
   return getWatchBridgeNative();
@@ -61,7 +71,10 @@ export function watchBridgeAvailable(): boolean {
 
 export function setWatchClubContext(next: WatchClubContext | null): void {
   context = next;
-  if (next) void flushPendingPuttPicks();
+  if (next) {
+    void flushPendingClubPicks(next.holeNumber);
+    void flushPendingPuttPicks();
+  }
 }
 
 export async function pushWatchClubList(msg: ClubListMessage): Promise<void> {
@@ -139,7 +152,22 @@ async function replyToken(token: string, payload: ClubPickReply | PuttPickReply)
   }
 }
 
+let clubPickTail: Promise<void> = Promise.resolve();
+
+function enqueueClubPick(work: () => Promise<void>): Promise<void> {
+  const run = clubPickTail.then(work, work);
+  clubPickTail = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
 async function handlePick(token: string, json: string): Promise<void> {
+  return enqueueClubPick(() => handlePickNow(token, json));
+}
+
+async function handlePickNow(token: string, json: string): Promise<void> {
   if (isWatchNearbyJson(json)) {
     const result = await handleWatchNearbyJson(json);
     await replyToken(token, result);
@@ -159,6 +187,15 @@ async function handlePick(token: string, json: string): Promise<void> {
   }
   const ctx = context;
   if (!ctx || ctx.readOnly) {
+    if (!ctx && intent.kind === 'club') {
+      queueWatchClubPickEvent({
+        token,
+        json,
+        at: intent.pick.at,
+        holeNumber: intent.pick.holeNumber ?? null,
+      });
+      return;
+    }
     await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
     return;
   }
@@ -186,15 +223,32 @@ async function handlePick(token: string, json: string): Promise<void> {
   }
 
   const pick = intent.pick;
+  const alreadyApplied = !watchClubPickShouldApply(pick.at);
+  const gate = gateWatchClubPick({
+    at: pick.at,
+    clubId: pick.clubId,
+    holeNumber: pick.holeNumber ?? null,
+    currentHole: ctx.holeNumber,
+    last: lastClubMark,
+    nowMs: Date.now(),
+    alreadyApplied,
+    openShotHoles: ctx.openShotHoles,
+  });
+  if (!gate.apply) {
+    const label = ctx.labelForClub(pick.clubId) ?? pick.clubId;
+    await replyToken(token, { ok: true, feedback: formatClubMarkedFeedback(label) });
+    return;
+  }
   ctx.onSelectClub?.(pick.clubId);
   const label = ctx.labelForClub(pick.clubId) ?? pick.clubId;
   const watchFix = watchFixFromPick(pick);
+  const markHole = pick.holeNumber ?? ctx.holeNumber;
   try {
     // Top-3 and bag taps share this mark. Same 600-yard tee check.
     // Watch GPS when fresh and within 15/25 m; phone fallback otherwise.
     const { plan } = await markShotWithClub(ctx.db, {
       roundId: ctx.roundId,
-      holeNumber: ctx.holeNumber,
+      holeNumber: markHole,
       clubId: pick.clubId,
       watchFix,
       tee: ctx.tee ?? null,
@@ -202,18 +256,21 @@ async function handlePick(token: string, json: string): Promise<void> {
     const waiting = promptForPlan(plan, () => {
       void (async () => {
         try {
-          const forced = await markShotWithClub(ctx.db, {
-            roundId: ctx.roundId,
-            holeNumber: ctx.holeNumber,
+          const live = context;
+          if (!live || live.holeNumber !== markHole) return;
+          const forced = await markShotWithClub(live.db, {
+            roundId: live.roundId,
+            holeNumber: markHole,
             clubId: pick.clubId,
             force: true,
             watchFix,
-            tee: ctx.tee ?? null,
+            tee: live.tee ?? null,
           });
           if (forced.plan.status === 'commit') {
+            lastClubMark = { clubId: pick.clubId, appliedAtMs: Date.now() };
             hapticMark();
-            ctx.bump();
-            ctx.onMarked?.();
+            live.bump();
+            live.onMarked?.();
           }
         } catch {
           hapticWarn();
@@ -221,11 +278,13 @@ async function handlePick(token: string, json: string): Promise<void> {
       })();
     });
     if (waiting) {
+      lastClubMark = { clubId: pick.clubId, appliedAtMs: Date.now() };
       hapticWarn();
       await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
       return;
     }
     if (plan.status === 'commit') {
+      lastClubMark = { clubId: pick.clubId, appliedAtMs: Date.now() };
       hapticMark();
       ctx.bump();
       ctx.onMarked?.();
@@ -237,6 +296,21 @@ async function handlePick(token: string, json: string): Promise<void> {
     hapticWarn();
     Alert.alert(COPY.waitingOnLocation, COPY.locationOff, [{ text: COPY.cancel, style: 'cancel' }]);
     await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
+  }
+}
+
+async function flushPendingClubPicks(holeNumber: number): Promise<void> {
+  const rows = drainWatchClubPickQueueForHole(holeNumber);
+  if (
+    watchFinishShotOverlayBlocksClubPick({
+      currentHole: holeNumber,
+      openShotHoles: context?.openShotHoles,
+    })
+  ) {
+    return;
+  }
+  for (const row of rows) {
+    await handlePick(row.token, row.json);
   }
 }
 

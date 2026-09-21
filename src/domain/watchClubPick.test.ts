@@ -46,6 +46,7 @@ import {
   watchCarryFromLabel,
   watchClubListKeepsFullBag,
   watchSelectedClubNeverVanishes,
+  watchSelectedClubHighlightNeverHidesPill,
   watchSelectedHighlightInPlace,
   watchStripNeverDropsBagClub,
   watchTop3ByRemainingYards,
@@ -315,7 +316,7 @@ test('Watch suggested strip shows carry, opens on the pick, and is not stacked r
   const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
   const pickUi = watchUi.slice(watchUi.indexOf('private var clubPick'), watchUi.indexOf('private var moreClubs'));
   const stripUi = pickUi.slice(pickUi.indexOf('ScrollView(.horizontal'), pickUi.indexOf('session.madeIt()'));
-  assert.match(stripUi, /onTapGesture/);
+  assert.match(stripUi, /session\.pick\(clubId: club.id\)/);
   assert.match(stripUi, /scrollTo\(stripWindowToken/);
   assert.match(stripUi, /anchor: \.leading/);
   assert.match(stripUi, /stripSelectedId/);
@@ -332,7 +333,7 @@ test('Watch suggested strip shows carry, opens on the pick, and is not stacked r
   assert.match(stripUi, /session\.pick\(clubId: club.id\)/);
   assert.match(stripUi, /session\.list\.label\(for: club\.id\)/);
   assert.doesNotMatch(stripUi, /top3\.enumerated\(\)|minHeight: index == 0|TabView/);
-  assert.doesNotMatch(stripUi, /Button\(action: \{ session\.pick/);
+  assert.match(stripUi, /Button\(action: \{ session\.pick/);
   assert.match(watchUi, /sorted \{ \$0\.carry < \$1\.carry \}/);
   assert.match(watchUi, /session\.list\.yardsToGreen/);
   assert.match(watchUi, /session\.list\.bag/);
@@ -519,7 +520,7 @@ test('a bag club under All clubs marks with the same rules as a top-3 tap', () =
   const top3Btn = watchUi.slice(watchUi.indexOf('ScrollView(.horizontal'), watchUi.indexOf('Text("All clubs")'));
   const bagBtn = watchUi.slice(watchUi.indexOf('ForEach(moreClubs'), watchUi.indexOf('private var moreClubs'));
   assert.match(top3Btn, /session\.pick\(clubId: club.id\)/);
-  assert.match(top3Btn, /onTapGesture/);
+  assert.match(top3Btn, /Button\(action: \{ session\.pick\(clubId: club.id\) \}\)/);
   assert.doesNotMatch(top3Btn, /DragGesture/);
   assert.doesNotMatch(top3Btn, /session\.select\(club\.id\)/);
   assert.match(bagBtn, /session\.pick\(clubId: clubId\)/);
@@ -685,6 +686,7 @@ test('P0: bag with Driver null + remaining ~330 keeps Driver in Watch top-3; nev
 
 test('P0: phone selected=Driver at 330 stays on Watch strip highlighted, not only 2i/3w', () => {
   assert.equal(watchSelectedClubNeverVanishes(), true);
+  assert.equal(watchSelectedClubHighlightNeverHidesPill(), true);
   assert.equal(watchSelectedHighlightInPlace(), true);
 
   const bagIds = ['club_driver', 'club_3w', 'club_2i', 'club_7i', 'club_pw', PUTTER_CLUB_ID];
