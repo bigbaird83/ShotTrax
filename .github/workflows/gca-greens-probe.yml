@@ -1,0 +1,32 @@
+# Read-only Golf Courses API Pro green-centers smoke (course 4 = Bowling Green CC).
+# Runs only when GitHub secret GOLF_COURSES_API_KEY is present.
+# Never fails the job / never blocks TF 60. Box TLS often fails (UNEXPECTED_EOF);
+# prefer the EAS `eas-build-post-install` hook for a real builder result.
+name: GCA greens Pro probe
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'scripts/gca-green-centers-probe.mjs'
+      - 'scripts/gca-green-centers-probe.test.ts'
+      - '.github/workflows/gca-greens-probe.yml'
+      - 'package.json'
+
+jobs:
+  probe:
+    name: Course 4 green-centers
+    runs-on: ubuntu-latest
+    if: ${{ secrets.GOLF_COURSES_API_KEY != '' }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Probe Bowling Green CC green-centers (read-only)
+        env:
+          GOLF_COURSES_API_KEY: ${{ secrets.GOLF_COURSES_API_KEY }}
+        run: node scripts/gca-green-centers-probe.mjs
+        continue-on-error: true

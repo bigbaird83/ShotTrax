@@ -51,6 +51,8 @@ Selecting a nearby course **starts** a new round (Start 9/18) or **attaches** pa
 
 `golfcoursesapi.com` may need **device / EAS smoke** — TLS fails on some boxes even when the client is correct.
 
+Read-only Pro greens probe (course 4 = Bowling Green CC): `npm run gca:greens-probe`. Prints `GCA_GREENS_PRO=200|403|TLS_FAIL|NO_KEY|OTHER`. Never invents greens; **403** leaves them blank. Wired as EAS `eas-build-post-install` (does not fail the build). See `NOTES.md`.
+
 ## OSM overlays
 
 Hole map draws Overpass `golf=green`, `golf=fairway`, `golf=tee`, and `golf=hole` around a real green pin or course coordinate. Unmapped / timeout / empty → no overlay. OSM par tags are ignored.
@@ -284,4 +286,5 @@ ShotTraxx **does not synthesize a fairway or fake points**.
 ```bash
 npm test          # domain tests + sensing smoke + course client, including yards-to-green, sticky club, F/M/B, drop
 npm run typecheck
+npm run gca:greens-probe   # read-only GCA Pro greens smoke (course 4). Needs GOLF_COURSES_API_KEY; exits 0 on NO_KEY / 403 / TLS_FAIL
 ```

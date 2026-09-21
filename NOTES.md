@@ -36,6 +36,28 @@ When a key is present:
 
 Auth: `Authorization: Bearer <key>` and `Accept: application/json`.
 
+### Pro greens probe (read-only, course 4)
+
+`scripts/gca-green-centers-probe.mjs` does `GET /api/v1/courses/4/green-centers` (Bowling Green CC, `green_centers_available=true`) with Bearer `GOLF_COURSES_API_KEY`. It never invents greens. On **403** greens stay blank (same as the client).
+
+Prints one machine line for EAS build logs / CI:
+
+```text
+GCA_GREENS_PRO=200|403|TLS_FAIL|NO_KEY|OTHER
+```
+
+Always exits 0 (does **not** block TF 60). Box TLS often fails (`UNEXPECTED_EOF`); EAS builders should work.
+
+```bash
+# local / CI — skip cleanly when the key is absent
+npm run gca:greens-probe
+# or: GOLF_COURSES_API_KEY=your_key node scripts/gca-green-centers-probe.mjs
+```
+
+Wired as the EAS `eas-build-post-install` npm hook (Expo lifecycle hook in `package.json`, not `eas.json`). Production EAS already injects `GOLF_COURSES_API_KEY`. Optional GitHub Action `.github/workflows/gca-greens-probe.yml` runs the same script only when that secret is present, and never fails the job.
+
+Zip search is out of scope.
+
 ## OSM overlay
 
 `src/course/osmOverlay.ts` queries Overpass for `golf=green|fairway|tee|hole` around a real green pin or course coordinate. Empty / timeout / unmapped → no overlay (never invented). OSM `par=*` tags are **not** used for scorecard par.
