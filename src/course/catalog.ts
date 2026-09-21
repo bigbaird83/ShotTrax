@@ -138,12 +138,17 @@ export const LOCAL_COURSE_CATALOG: readonly LocalCourseCatalogEntry[] = [
 
 export const THUNDERBIRD_HARD_MISS_HOLES = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
+/** Poisoned golfapi seed never paints. OSM or a Doc pin-sheet may, later. */
+export function thunderbirdHardMissUntilDocOrOsm(): true {
+  return true;
+}
+
 export function thunderbirdHoleSources(): CatalogHoleSource[] {
   return THUNDERBIRD_HARD_MISS_HOLES.map((hole) => ({
     hole,
-    status: 'hydrated',
-    source: 'golfapi.io tee + green; Doc pin sheets A–D daily pins',
-    needsDocPinSheet: false,
+    status: 'hard-miss',
+    source: 'HARD-MISS — poisoned golfapi seed blocked; OSM or Doc pin-sheet only',
+    needsDocPinSheet: true,
   }));
 }
 
@@ -152,16 +157,16 @@ export function thunderbirdCourseReport(): {
   holeCount: 9;
   hydratedHoles: number[];
   hardMissHoles: number[];
-  needsDocPinSheets: false;
-  needsDocTeePins: false;
+  needsDocPinSheets: true;
+  needsDocTeePins: true;
 } {
   return {
     searchableName: 'Thunderbird Country Club',
     holeCount: 9,
-    hydratedHoles: [...THUNDERBIRD_HARD_MISS_HOLES],
-    hardMissHoles: [],
-    needsDocPinSheets: false,
-    needsDocTeePins: false,
+    hydratedHoles: [],
+    hardMissHoles: [...THUNDERBIRD_HARD_MISS_HOLES],
+    needsDocPinSheets: true,
+    needsDocTeePins: true,
   };
 }
 

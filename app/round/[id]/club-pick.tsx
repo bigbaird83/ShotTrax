@@ -8,7 +8,7 @@ import type { OsmOverlay } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
 import { getHole, getRound, getThunderbirdPinSheet, listClubAverages, listClubs, listShotsForHole } from '@/src/db/repo';
 import { courseNeedsPinSheets } from '@/src/domain/missCard';
-import { thunderbirdDailyPin } from '@/src/domain/thunderbirdPins';
+import { thunderbirdCupOnGreen, thunderbirdDailyPin } from '@/src/domain/thunderbirdPins';
 import { courseTeeFromHole, resolvePlayHoleTee } from '@/src/domain/holeCamera';
 import { planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
 import { COPY, formatPickerLeftYards, formatSuggestedClubChip } from '@/src/domain/playerCopy';
@@ -144,7 +144,7 @@ export default function ClubPickScreen() {
   })
     ? thunderbirdDailyPin(holeNumber, pinSheet)
     : null;
-  const green = dailyPin ?? hydrated.green;
+  const green = thunderbirdCupOnGreen(hydrated.green, dailyPin);
   const fix = useLiveFix(!withoutGps);
 
   useEffect(() => {

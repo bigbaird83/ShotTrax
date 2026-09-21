@@ -2,6 +2,10 @@ import { decideCourseCardPaint } from '../domain/courseCardPaint';
 import { haversineYards } from '../domain/haversine';
 import { isCourseCardLatLng, type LatLng } from '../domain/latLng';
 import type { CourseHydrate, CourseHydrateHole, CourseHydrateMatch, CourseHydrateTee } from './hydrate';
+import {
+  isThunderbirdHeberSpringsIdentity,
+  thunderbirdGolfApiPaintBlocked,
+} from './thunderbirdLock';
 
 export const GOLFAPI_BASE = 'https://golfapi.io/api/v2.3';
 export const GOLFAPI_CACHE_SETTING_KEY = 'golfapi.hydrates';
@@ -275,6 +279,34 @@ export function mapGolfApiCourseToHydrate(args: {
   };
 }
 
+function blockedThunderbirdGolfApi(hydrate: CourseHydrate | null | undefined): boolean {
+  if (!hydrate || !thunderbirdGolfApiPaintBlocked()) return false;
+  return isThunderbirdHeberSpringsIdentity({
+    courseKey: hydrate.courseKey,
+    displayName: hydrate.displayName,
+    locality: hydrate.locality,
+    sourceRef: hydrate.sourceRef,
+  });
+}
+
+/** Drop poisoned Thunderbird rows so a restored SQLite blob cannot paint them. */
+function dropBlockedThunderbirdGolfApi(): boolean {
+  let dropped = false;
+  for (const [key, hydrate] of [...memory.entries()]) {
+    if (!blockedThunderbirdGolfApi(hydrate)) continue;
+    memory.delete(key);
+    dropped = true;
+  }
+  for (const [alias, key] of [...aliasToKey.entries()]) {
+    const hydrate = memory.get(key);
+    if (!hydrate || blockedThunderbirdGolfApi(hydrate)) {
+      aliasToKey.delete(alias);
+      dropped = true;
+    }
+  }
+  return dropped;
+}
+
 function rememberAliases(hydrate: CourseHydrate, aliases: string[]): void {
   memory.set(hydrate.courseKey, hydrate);
   for (const alias of aliases) {
@@ -313,6 +345,7 @@ export function restoreGolfApiCache(raw: string | null | undefined): void {
       if (typeof key === 'string' && memory.has(key)) aliasToKey.set(alias, key);
     }
   }
+  if (dropBlockedThunderbirdGolfApi()) flushPersist();
 }
 
 function safeJson(raw: string): unknown {
@@ -339,7 +372,7 @@ export function resetGolfApiCacheForTests(): void {
 }
 
 export function saveCachedGolfApiHydrate(hydrate: CourseHydrate, aliases: string[] = []): void {
-  if (!hydrate.holes.length) return;
+  if (!hydrate.holes.length || blockedThunderbirdGolfApi(hydrate)) return;
   rememberAliases(hydrate, aliases);
   flushPersist();
 }
@@ -347,7 +380,9 @@ export function saveCachedGolfApiHydrate(hydrate: CourseHydrate, aliases: string
 export function loadCachedGolfApiHydrate(courseKey: string | null | undefined): CourseHydrate | null {
   const key = trimKey(courseKey);
   if (!key) return null;
-  return memory.get(key) ?? (aliasToKey.has(key) ? memory.get(aliasToKey.get(key) ?? '') ?? null : null);
+  const hit = memory.get(key) ?? (aliasToKey.has(key) ? memory.get(aliasToKey.get(key) ?? '') ?? null : null);
+  if (blockedThunderbirdGolfApi(hit)) return null;
+  return hit;
 }
 
 /** Same on-device cache. Names match the runtime hydrate brief. */
@@ -355,13 +390,29 @@ export const loadCachedHydrate = loadCachedGolfApiHydrate;
 export const saveCachedHydrate = saveCachedGolfApiHydrate;
 
 export function resolveGolfApiHydrateKey(course: CourseHydrateMatch): string | null {
+  if (
+    thunderbirdGolfApiPaintBlocked() &&
+    isThunderbirdHeberSpringsIdentity({
+      courseKey: course.courseKey,
+      name: course.name,
+      city: course.city,
+      state: course.state,
+      locality: course.locality,
+    })
+  ) {
+    return null;
+  }
   const courseKey = trimKey(course.courseKey);
   if (courseKey && (memory.has(courseKey) || aliasToKey.has(courseKey))) {
-    return aliasToKey.get(courseKey) ?? courseKey;
+    const key = aliasToKey.get(courseKey) ?? courseKey;
+    if (blockedThunderbirdGolfApi(memory.get(key))) return null;
+    return key;
   }
   const nameCity = golfApiNameCityKey(course.name, course.city ?? course.locality);
   if (nameCity && (memory.has(nameCity) || aliasToKey.has(nameCity))) {
-    return aliasToKey.get(nameCity) ?? nameCity;
+    const key = aliasToKey.get(nameCity) ?? nameCity;
+    if (blockedThunderbirdGolfApi(memory.get(key))) return null;
+    return key;
   }
   return null;
 }
@@ -414,6 +465,18 @@ export async function fetchGolfApiHydrate(
   course: CourseHydrateMatch,
   deps: GolfApiFetchDeps = {},
 ): Promise<CourseHydrate | null> {
+  if (
+    thunderbirdGolfApiPaintBlocked() &&
+    isThunderbirdHeberSpringsIdentity({
+      courseKey: course.courseKey,
+      name: course.name,
+      city: course.city,
+      state: course.state,
+      locality: course.locality,
+    })
+  ) {
+    return null;
+  }
   if (!deps.skipCache) {
     const cachedKey = resolveGolfApiHydrateKey(course);
     const cached = loadCachedGolfApiHydrate(cachedKey ?? course.courseKey);
@@ -439,7 +502,7 @@ export async function fetchGolfApiHydrate(
     coordinates,
     fetchedAt: deps.now?.() ?? new Date().toISOString(),
   });
-  if (!hydrate) return null;
+  if (!hydrate || blockedThunderbirdGolfApi(hydrate)) return null;
   const aliases = [
     golfApiCourseKey(courseId),
     golfApiNameCityKey(course.name, course.city),

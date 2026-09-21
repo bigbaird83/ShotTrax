@@ -2,7 +2,6 @@ import { decideCourseCardPaint } from '../domain/courseCardPaint';
 import { haversineYards } from '../domain/haversine';
 import { isCourseCardLatLng, type LatLng } from '../domain/latLng';
 import {
-  loadThunderbirdPinBook,
   thunderbirdInventTees,
   thunderbirdMirrorHole,
   thunderbirdPinHoleFor,
@@ -20,6 +19,11 @@ import {
 } from './golfapi';
 import type { CourseDetail, HoleCourseData } from './types';
 import { loadOpenGolfHydrate, resolveOpenGolfHydrateKey } from './opengolf';
+import {
+  THUNDERBIRD_POISONED_GOLFAPI_COURSE_ID,
+  isThunderbirdHeberSpringsIdentity,
+  thunderbirdGolfApiPaintBlocked,
+} from './thunderbirdLock';
 import cypressOsm from './hydrates/cypress-creek-cabot-ar.json';
 import greystoneOsm from './hydrates/greystone-cabot-ar.json';
 import pleasantValleyOsm from './hydrates/pleasant-valley-lr-ar.json';
@@ -419,50 +423,32 @@ function pinSheetExtras(holeNumber: number): {
 }
 
 /**
- * golfapi tee/green win when present. Pin sheets only add front/back/depth/yards.
- * Empty OSM miss cards still fold Doc greens — tees stay null, never invented.
+ * Daily A–D pin-sheet fields fold onto a green that already exists.
+ * The poisoned golfapi seed is dropped. Pin sheets never invent a green or a tee.
  */
 export function foldThunderbirdPinSheets(hydrate: CourseHydrate): CourseHydrate {
   if (hydrate.courseKey !== THUNDERBIRD_HEBER_SPRINGS_AR_KEY) return hydrate;
   if (thunderbirdInventTees()) return hydrate;
-  const golfapiHoles = hydrate.source === 'golfapi' ? hydrate.holes.filter((hole) => hole.tee) : [];
-  if (golfapiHoles.length > 0) {
-    return {
-      ...hydrate,
-      holes: hydrate.holes.map((hole) => {
-        const extra = pinSheetExtras(hole.hole);
-        if (!extra) return hole;
-        return {
-          ...hole,
-          par: hole.par ?? extra.par,
-          yards: hole.yards ?? extra.yards,
-          greenFront: hole.greenFront ?? extra.greenFront,
-          greenBack: hole.greenBack ?? extra.greenBack,
-          greenDepthYards: hole.greenDepthYards ?? extra.greenDepthYards,
-          greenWidthYards: hole.greenWidthYards ?? extra.greenWidthYards,
-        };
-      }),
-    };
+  if (thunderbirdGolfApiPaintBlocked() && hydrate.source === 'golfapi') {
+    return { ...hydrate, holes: [] };
   }
-  const book = loadThunderbirdPinBook();
-  const holes: CourseHydrateHole[] = [];
-  for (let n = 1; n <= 9; n += 1) {
-    const pin = thunderbirdPinHoleFor(n, book);
-    const green = pin?.greenCenter;
-    if (!green || !isCourseCardLatLng(green) || isClubhousePin(green)) continue;
-    holes.push({
-      hole: n,
-      par: parsePar(pin.par),
-      yards: pin.whiteYards,
-      tee: null,
-      green: { lat: green.lat, lng: green.lng },
-      greenFront: pin.greenFront && isCourseCardLatLng(pin.greenFront) ? pin.greenFront : null,
-      greenBack: pin.greenBack && isCourseCardLatLng(pin.greenBack) ? pin.greenBack : null,
-      greenDepthYards: pin.greenDepthYards,
-      greenWidthYards: pin.greenWidthYards,
-    });
-  }
-  return { ...hydrate, holes };
+  return {
+    ...hydrate,
+    holes: hydrate.holes.map((hole) => {
+      if (!isCourseCardLatLng(hole.green) || isClubhousePin(hole.green)) return hole;
+      const extra = pinSheetExtras(hole.hole);
+      if (!extra) return hole;
+      return {
+        ...hole,
+        par: hole.par ?? extra.par,
+        yards: hole.yards ?? extra.yards,
+        greenFront: hole.greenFront ?? extra.greenFront,
+        greenBack: hole.greenBack ?? extra.greenBack,
+        greenDepthYards: hole.greenDepthYards ?? extra.greenDepthYards,
+        greenWidthYards: hole.greenWidthYards ?? extra.greenWidthYards,
+      };
+    }),
+  };
 }
 
 export function parseCourseHydrate(raw: unknown): CourseHydrate | null {
@@ -503,13 +489,27 @@ export function parseCourseHydrate(raw: unknown): CourseHydrate | null {
 export function loadCourseHydrate(courseKey: string | null | undefined): CourseHydrate | null {
   const key = asString(courseKey);
   if (!key) return null;
+  const thunderbirdKey =
+    key === THUNDERBIRD_HEBER_SPRINGS_AR_KEY ||
+    isThunderbirdHeberSpringsIdentity({ courseKey: key });
   const raw = REGISTRY[key];
   if (raw != null) {
     const parsed = parseCourseHydrate(raw);
     if (!parsed) return null;
+    if (thunderbirdKey && thunderbirdGolfApiPaintBlocked()) {
+      const poisoned =
+        parsed.source === 'golfapi' ||
+        parsed.sourceRef.includes(THUNDERBIRD_POISONED_GOLFAPI_COURSE_ID);
+      if (poisoned) return null;
+      if (parsed.source === 'osm' || parsed.source === 'manual_verified') {
+        return foldThunderbirdPinSheets(parsed);
+      }
+      return null;
+    }
     if (key === THUNDERBIRD_HEBER_SPRINGS_AR_KEY) return foldThunderbirdPinSheets(parsed);
     return parsed;
   }
+  if (thunderbirdKey && thunderbirdGolfApiPaintBlocked()) return null;
   return loadCachedGolfApiHydrate(key) ?? loadOpenGolfHydrate(key);
 }
 

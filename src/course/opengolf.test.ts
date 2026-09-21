@@ -115,20 +115,14 @@ test('Magnolia and Camden AR paint from OpenGolf centerlines; missing holes stay
   }
 });
 
-test('Thunderbird Heber hydrate is unchanged by OpenGolf — golfapi tee+green, no daily-pin invent', () => {
+test('Thunderbird Heber stays reserved from OpenGolf and the golfapi seed does not paint', () => {
   assert.equal(
     resolveCourseHydrateKey({ name: 'Thunderbird Country Club', city: 'Heber Springs', state: 'AR' }),
     THUNDERBIRD_HEBER_SPRINGS_AR_KEY,
   );
   assert.equal(loadOpenGolfHydrate(THUNDERBIRD_HEBER_SPRINGS_AR_KEY), null);
   const tb = loadCourseHydrate(THUNDERBIRD_HEBER_SPRINGS_AR_KEY);
-  assert.equal(tb?.courseKey, THUNDERBIRD_HEBER_SPRINGS_AR_KEY);
-  assert.equal(tb?.source, 'golfapi');
-  assert.equal(tb?.holes.length, 18);
-  assert.deepEqual(tb?.holes[0]?.tee, { lat: 35.5250149, lng: -92.0393432, label: 'Blue' });
-  assert.deepEqual(tb?.holes[0]?.green, { lat: 35.522655, lng: -92.0393088 });
-  assert.ok(tb?.holes[0]?.greenFront);
-  assert.ok(tb?.holes[0]?.greenBack);
+  assert.equal(tb, null);
   assert.equal(
     resolveCourseHydrateKey({ name: 'Mountain Ranch Golf Club', city: 'Fairfield Bay' }),
     MOUNTAIN_RANCH_FAIRFIELD_BAY_AR_KEY,

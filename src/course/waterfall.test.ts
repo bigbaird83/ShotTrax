@@ -133,16 +133,30 @@ test('bundled Pleasant Valley is a free hit and skips GCA and golfapi', async ()
   assert.deepEqual(log, ['osm']);
 });
 
-test('Thunderbird bundled seed skips GCA and a second golfapi buy', async () => {
+test('Thunderbird is HARD-MISS: golfapi seed, device cache, and network do not paint', async () => {
   const log: string[] = [];
   const match = {
     name: 'Thunderbird Country Club',
     city: 'Heber Springs',
     state: 'AR',
-    courseKey: 'gca-tb',
+    courseKey: 'local:thunderbird-heber-springs-ar',
   };
+  const poisoned = nineByTwoHit();
+  const cache = createMemoryCoursePaintCache();
+  await cache.put({
+    v: 1,
+    key: 'id:local:thunderbird-heber-springs-ar',
+    aliases: ['name:thunderbird country club|heber springs|ar'],
+    source: 'golfapi',
+    name: 'Thunderbird Country Club',
+    city: 'Heber Springs',
+    numHoles: 9,
+    nineByTwo: true,
+    fetchedAt: '2026-09-21T00:00:00Z',
+    holes: poisoned.holes,
+  });
   const result = await resolveCoursePaint(match, {
-    cache: createMemoryCoursePaintCache(),
+    cache,
     loadOsm: async () => {
       log.push('osm');
       return loadOsmOpenGolfCandidate(match);
@@ -153,16 +167,32 @@ test('Thunderbird bundled seed skips GCA and a second golfapi buy', async () => 
     },
     loadGolfApi: async () => {
       log.push('golfapi');
-      throw new Error('bundled Thunderbird must not refetch golfapi');
+      return poisoned;
     },
   });
-  assert.equal(result.ok, true);
-  assert.equal(result.source, 'golfapi');
-  assert.equal(result.fromCache, true);
-  assert.equal(result.nineByTwo, true);
-  assert.equal(result.holes[0]?.tee?.lat, 35.5250149);
-  assert.equal(result.holes[0]?.green?.lat, 35.522655);
-  assert.equal(result.holes.find((hole) => hole.hole === 10)?.tee?.lat, 35.5250149);
+  assert.equal(result.ok, false);
+  assert.equal(result.holes.length, 0);
+  assert.deepEqual(log, ['osm']);
+  assert.equal(await loadGolfApiPaintCandidate(match), null);
+
+  log.length = 0;
+  const osm = await resolveCoursePaint(match, {
+    cache: createMemoryCoursePaintCache(),
+    loadOsm: async () => {
+      log.push('osm');
+      return osmHit();
+    },
+    loadGca: async () => {
+      log.push('gca');
+      return gcaHit();
+    },
+    loadGolfApi: async () => {
+      log.push('golfapi');
+      return poisoned;
+    },
+  });
+  assert.equal(osm.ok, true);
+  assert.equal(osm.source, 'osm');
   assert.deepEqual(log, ['osm']);
 });
 
@@ -480,6 +510,51 @@ test('device paint cache round-trips through the SQLite persist hook', async () 
   assert.equal(restored?.source, 'golfapi');
   assert.deepEqual(restored?.holes[0]?.tee, TEE);
   assert.deepEqual(restored?.holes[0]?.green, GREEN);
+  resetCoursePaintCacheForTests();
+});
+
+test('device paint cache drops a poisoned Thunderbird golfapi row and keeps other courses', async () => {
+  resetCoursePaintCacheForTests();
+  const poisoned: CoursePaintCacheRecord = {
+    v: 1,
+    key: 'id:local:thunderbird-heber-springs-ar',
+    aliases: ['name:thunderbird country club|heber springs|ar'],
+    source: 'golfapi',
+    name: 'Thunderbird Country Club',
+    city: 'Heber Springs',
+    numHoles: 9,
+    nineByTwo: true,
+    fetchedAt: '2026-09-21T00:00:00Z',
+    holes: [{ hole: 1, tee: TEE, green: GREEN }],
+  };
+  const other: CoursePaintCacheRecord = {
+    v: 1,
+    key: 'id:device-1',
+    aliases: ['name:device cc|cabot|ar'],
+    source: 'golfapi',
+    name: 'Device CC',
+    city: 'Cabot',
+    numHoles: 18,
+    nineByTwo: false,
+    fetchedAt: '2026-09-21T00:00:00Z',
+    holes: [{ hole: 1, tee: TEE, green: GREEN }],
+  };
+  const blob = JSON.stringify({ v: 1, records: { [poisoned.key]: poisoned, [other.key]: other } });
+  let saved: string | null = null;
+  attachCoursePaintCachePersist({
+    load: () => blob,
+    save: (json) => {
+      saved = json;
+    },
+  });
+  assert.equal(await getSharedCoursePaintCache().get(poisoned.key), null);
+  assert.equal(await getSharedCoursePaintCache().get('name:thunderbird country club|heber springs|ar'), null);
+  const kept = await getSharedCoursePaintCache().get('name:device cc|cabot|ar');
+  assert.equal(kept?.name, 'Device CC');
+  assert.equal(kept?.source, 'golfapi');
+  assert.ok(saved);
+  assert.equal(saved.includes('Thunderbird'), false);
+  assert.equal(saved.includes('011141520629948893391'), false);
   resetCoursePaintCacheForTests();
 });
 

@@ -77,8 +77,8 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.nerdOut, 'Nerd out');
   assert.equal(COPY.nerdOutLede, 'Score vs par, putts, and club-book carries from saved rounds.');
   assert.equal(COPY.zipGeocodeMiss, 'Couldn’t find that zip.');
-  assert.equal(COPY.hardMissNeedPins, 'HARD-MISS — need tee pins.');
-  assert.equal(COPY.hardMissNeedPinsDetail, 'Greens are on file. Tees are not.');
+  assert.equal(COPY.hardMissNeedPins, 'HARD-MISS — need pins.');
+  assert.equal(COPY.hardMissNeedPinsDetail, 'Tee and green are not on file.');
   assert.equal(COPY.pinSheet, 'Pin sheet');
   assert.equal(COPY.liveBoard, 'Live board');
   assert.equal(COPY.scorecard, 'Scorecard');

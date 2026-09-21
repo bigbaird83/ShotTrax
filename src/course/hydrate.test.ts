@@ -303,54 +303,29 @@ test('matching is Pleasant Valley Little Rock only — Cypress and Greystone Cab
   assert.equal(resolveCourseHydrateKey({ name: 'Greystone Country Club', city: 'Cabot' }), GREYSTONE_CABOT_AR_KEY);
 });
 
-test('Thunderbird golfapi hydrate is 18 gated holes; tees and greens are never invented', () => {
-  assert.ok(thunderbirdHydrate);
-  assert.equal(thunderbirdHydrate?.courseKey, 'thunderbird-heber-springs-ar');
-  assert.equal(thunderbirdHydrate?.displayName, 'Thunderbird Country Club');
-  assert.equal(thunderbirdHydrate?.locality, 'Heber Springs, AR');
-  assert.equal(thunderbirdHydrate?.source, 'golfapi');
-  assert.match(thunderbirdHydrate?.sourceRef ?? '', /golfapi\.io/);
-  assert.match(thunderbirdHydrate?.sourceRef ?? '', /011141520629948893391/);
-  assert.equal(thunderbirdHydrate?.holes.length, 18);
-  assert.deepEqual(
-    thunderbirdHydrate?.holes.map((hole) => hole.hole),
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
-  );
-  assert.deepEqual(thunderbirdHydrate?.holes[0]?.tee, {
-    lat: 35.5250149,
-    lng: -92.0393432,
-    label: 'Blue',
-  });
-  assert.deepEqual(thunderbirdHydrate?.holes[0]?.green, { lat: 35.522655, lng: -92.0393088 });
-  assert.deepEqual(thunderbirdHydrate?.holes[0]?.greenFront, { lat: 35.5268675, lng: -92.0374626 });
-  assert.deepEqual(thunderbirdHydrate?.holes[0]?.greenBack, { lat: 35.5270325, lng: -92.0372374 });
-  assert.equal(thunderbirdHydrate?.holes[0]?.par, 4);
-  assert.equal(thunderbirdHydrate?.holes[0]?.yards, 267);
-  assert.equal(thunderbirdHydrate?.holes[0]?.greenDepthYards, 30);
-  assert.ok(hydrateHoleFor(thunderbirdHydrate, 10)?.tee);
-  assert.deepEqual(hydrateHoleFor(thunderbirdHydrate, 10)?.tee, thunderbirdHydrate?.holes[0]?.tee);
-  assert.deepEqual(hydrateHoleFor(thunderbirdHydrate, 10)?.green, thunderbirdHydrate?.holes[0]?.green);
-  for (const hole of thunderbirdHydrate?.holes ?? []) {
-    assert.ok(hole.tee);
-    const tee = { lat: hole.tee.lat, lng: hole.tee.lng };
-    const green = { lat: hole.green.lat, lng: hole.green.lng };
-    assert.equal(isClubhousePin(tee), false);
-    assert.equal(isClubhousePin(green), false);
-    assert.equal(hydrateHolePassesGates({ tee, green }), true);
-    assert.equal(decideCourseCardPaint({ tee, green, phone: null }).mount, true);
-    assert.ok(planCourseCardCamera({ tee, green, phone: null }));
-  }
-  assert.equal(signalLabThunderbirdHydrate().paintsViaHydrateWhenProMisses, true);
-  assert.equal(signalLabThunderbirdHydrate().hardMissAllNine, false);
+test('Thunderbird golfapi seed is HARD-MISS and does not paint tees or greens', () => {
+  assert.equal(thunderbirdHydrate, null);
+  const raw = JSON.parse(
+    readFileSync(new URL('./hydrates/thunderbird-heber-springs-ar.json', import.meta.url), 'utf8'),
+  ) as { source?: string; sourceRef?: string };
+  assert.equal(raw.source, 'golfapi');
+  assert.match(raw.sourceRef ?? '', /011141520629948893391/);
+  assert.equal(signalLabThunderbirdHydrate().paintsViaHydrateWhenProMisses, false);
+  assert.equal(signalLabThunderbirdHydrate().hardMissAllNine, true);
   assert.equal(signalLabThunderbirdHydrate().greensFromDocPinSheets, false);
-  assert.equal(signalLabThunderbirdHydrate().greensFromGolfApi, true);
+  assert.equal(signalLabThunderbirdHydrate().greensFromGolfApi, false);
   assert.equal(signalLabThunderbirdHydrate().neverInventTees, true);
-  assert.equal(signalLabThunderbirdHydrate().needsDocPinSheets, false);
-  assert.equal(signalLabThunderbirdHydrate().needsDocTeePins, false);
+  assert.equal(signalLabThunderbirdHydrate().needsDocPinSheets, true);
+  assert.equal(signalLabThunderbirdHydrate().needsDocTeePins, true);
+  assert.equal(signalLabThunderbirdHydrate().golfApiSeedBlocked, true);
+  assert.equal(signalLabThunderbirdHydrate().deviceGolfApiCacheBlocked, true);
+  assert.equal(signalLabThunderbirdHydrate().networkGolfApiBlocked, true);
   assert.equal(signalLabThunderbirdHydrate().neverInventUnlabeledGreens, true);
   assert.equal(inventGreenFromClubhouse(), false);
   assert.equal(inventGreenFromScorecardYards(), false);
   assert.equal(isClubhousePin(THUNDERBIRD_HEBER_CLUBHOUSE), true);
+  assert.equal(hydrateHoleFor(thunderbirdHydrate, 1), null);
+  assert.equal(hydrateHoleFor(thunderbirdHydrate, 10), null);
 });
 
 test('matching is Thunderbird Heber Springs only — other AR hydrates never match', () => {
@@ -381,10 +356,7 @@ test('matching is Thunderbird Heber Springs only — other AR hydrates never mat
     resolveCourseHydrateKey({ name: 'Thunderbird Country Club', city: 'Heber Springs' }),
     THUNDERBIRD_HEBER_SPRINGS_AR_KEY,
   );
-  assert.equal(
-    loadHydrateForCourse({ name: 'Thunderbird Country Club', city: 'Heber Springs' })?.courseKey,
-    THUNDERBIRD_HEBER_SPRINGS_AR_KEY,
-  );
+  assert.equal(loadHydrateForCourse({ name: 'Thunderbird Country Club', city: 'Heber Springs' }), null);
   assert.equal(resolveCourseHydrateKey({ name: 'Cypress Creek Golf Club', city: 'Cabot' }), CYPRESS_CREEK_CABOT_AR_KEY);
   assert.equal(resolveCourseHydrateKey({ name: 'Greystone Country Club', city: 'Cabot' }), GREYSTONE_CABOT_AR_KEY);
 });
@@ -648,11 +620,11 @@ test('layout apply fills thin Cypress, Greystone, and Pleasant Valley cards', ()
     tee: null,
     green: null,
   });
-  assert.equal(thunderbird.usedHydrate, true);
+  assert.equal(thunderbird.usedHydrate, false);
   assert.equal(thunderbird.courseKey, THUNDERBIRD_HEBER_SPRINGS_AR_KEY);
-  assert.deepEqual(thunderbird.tee, { lat: 35.5250149, lng: -92.0393432 });
-  assert.deepEqual(thunderbird.green, { lat: 35.522655, lng: -92.0393088 });
-  assert.equal(decideCourseCardPaint({ tee: thunderbird.tee, green: thunderbird.green, phone: null }).mount, true);
+  assert.equal(thunderbird.tee, null);
+  assert.equal(thunderbird.green, null);
+  assert.equal(decideCourseCardPaint({ tee: thunderbird.tee, green: thunderbird.green, phone: null }).mount, false);
 
   const thunderbirdLayout = applyCourseHydrateToLayout(
     {
@@ -663,14 +635,10 @@ test('layout apply fills thin Cypress, Greystone, and Pleasant Valley cards', ()
     },
     { name: 'Thunderbird Country Club', city: 'Heber Springs', state: 'AR' },
   );
-  assert.deepEqual(thunderbirdLayout.holes?.[0]?.teeCentroid, { lat: 35.5250149, lng: -92.0393432 });
-  assert.deepEqual(thunderbirdLayout.holes?.[0]?.greenCentroid, { lat: 35.522655, lng: -92.0393088 });
-  assert.deepEqual(thunderbirdLayout.holes?.[0]?.greenFront, { lat: 35.5268675, lng: -92.0374626 });
-  assert.equal(thunderbirdLayout.holes?.[0]?.par, 4);
-  assert.equal(thunderbirdLayout.holes?.[0]?.yards, 267);
-  assert.equal(thunderbirdLayout.holes?.length, 18);
-  assert.notDeepEqual(thunderbirdLayout.holes?.[0]?.teeCentroid, THUNDERBIRD_HEBER_CLUBHOUSE);
-  assert.notDeepEqual(thunderbirdLayout.holes?.[0]?.greenCentroid, THUNDERBIRD_HEBER_CLUBHOUSE);
+  assert.equal(thunderbirdLayout.holes?.[0]?.teeCentroid, null);
+  assert.equal(thunderbirdLayout.holes?.[0]?.greenCentroid, null);
+  assert.equal(thunderbirdLayout.holes?.[0]?.greenFront ?? null, null);
+  assert.equal(thunderbirdLayout.holes?.length, 1);
 
   const northHills = resolveHydrateTeeGreen({
     name: 'The Greens at North Hills',
@@ -752,7 +720,7 @@ test('prefetch meters unique hydrate once and golfapi does not invent without a 
     console.log = original;
   }
   const hydrateLogs = logs.filter((row) => Array.isArray(row) && row[0] === '[Signal Lab] hydrate');
-  assert.equal(hydrateLogs.length, 6);
+  assert.equal(hydrateLogs.length, 5);
   const payloads = hydrateLogs.map((row) => (row as unknown[])[1] as { courseKey?: string; holes?: number });
   assert.deepEqual(
     payloads.map((row) => row.courseKey).sort(),
@@ -762,8 +730,11 @@ test('prefetch meters unique hydrate once and golfapi does not invent without a 
       GREYSTONE_CABOT_AR_KEY,
       MOUNTAIN_RANCH_FAIRFIELD_BAY_AR_KEY,
       PLEASANT_VALLEY_LR_AR_KEY,
-      THUNDERBIRD_HEBER_SPRINGS_AR_KEY,
     ].sort(),
+  );
+  assert.equal(
+    payloads.some((row) => row.courseKey === THUNDERBIRD_HEBER_SPRINGS_AR_KEY),
+    false,
   );
   assert.equal(
     payloads.every((row) => row.holes === 18),

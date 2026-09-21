@@ -195,10 +195,10 @@ test('getCourse fills a miss from the golfapi cache and does not invent', async 
       course: {
         courseID: '99',
         clubName: 'Cache Hit CC',
-        city: 'Heber Springs',
+        city: 'Conway',
         state: 'AR',
-        latitude: '35.52505',
-        longitude: '-92.03984',
+        latitude: '35.1',
+        longitude: '-92.4',
         parsMen: [4],
         tees: [{ teeName: 'Blue', length1: 267 }],
       },
@@ -210,7 +210,7 @@ test('getCourse fills a miss from the golfapi cache and does not invent', async 
       },
     });
     assert.ok(seeded);
-    saveCachedHydrate(seeded!, ['88', 'namecity:cache hit cc|heber springs']);
+    saveCachedHydrate(seeded!, ['88', 'namecity:cache hit cc|conway']);
     const client = createCourseDataClient({
       getKey: () => 'gca-key',
       fetch: async (input) => {
@@ -226,7 +226,7 @@ test('getCourse fills a miss from the golfapi cache and does not invent', async 
             data: {
               id: 88,
               name: 'Cache Hit CC',
-              city: 'Heber Springs',
+              city: 'Conway',
               state: 'AR',
               scorecard: { teeboxes: [{ holes: [{ hole: 1, par: 4 }] }] },
             },

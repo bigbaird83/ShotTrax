@@ -7,8 +7,10 @@ import {
   parseThunderbirdPinCsv,
   parseThunderbirdPinRow,
   resolveThunderbirdPinSheet,
+  thunderbirdCupOnGreen,
   thunderbirdDailyPin,
   thunderbirdInventTees,
+  thunderbirdPinSheetsInventGreens,
   thunderbirdMirrorHole,
   thunderbirdPinHoleFor,
   thunderbirdPinSheetFromWeekday,
@@ -22,6 +24,12 @@ const csvPath = new URL('../course/hydrates/thunderbird-pin-sheets.csv', import.
 test('Thunderbird pin ingest keeps real coords only — tees stay HARD-MISS', () => {
   assert.equal(thunderbirdInventTees(), false);
   assert.equal(thunderbirdTeesStayHardMiss(), true);
+  assert.equal(thunderbirdPinSheetsInventGreens(), false);
+  assert.equal(thunderbirdCupOnGreen(null, { lat: 35.5269366, lng: -92.0374439 }), null);
+  assert.deepEqual(
+    thunderbirdCupOnGreen({ lat: 35.2, lng: -92.1 }, { lat: 35.5269366, lng: -92.0374439 }),
+    { lat: 35.5269366, lng: -92.0374439 },
+  );
   assert.equal(thunderbirdMirrorHole(1), 1);
   assert.equal(thunderbirdMirrorHole(10), 1);
   assert.equal(thunderbirdMirrorHole(18), 9);

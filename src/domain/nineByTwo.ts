@@ -8,8 +8,8 @@ import { hydrateHolePassesGates } from '../course/hydrate';
  * is a 9-hole loop played twice. That is a PASS. It is not a hard miss and
  * it is not a cue to invent or “fix” the back nine.
  *
- * Thunderbird Country Club (Heber Springs) is the exemplar: the bundled
- * golfapi hydrate already stores that mirror. Do not rewrite those GPS values.
+ * The rule is for other courses. Thunderbird Country Club (Heber Springs)
+ * is HARD-MISS until OSM or a Doc pin-sheet: its golfapi seed does not paint.
  */
 export type NineByTwoHole = {
   hole: number;

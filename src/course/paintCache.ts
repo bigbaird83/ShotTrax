@@ -1,4 +1,5 @@
 import type { LatLng } from '../domain/latLng';
+import { thunderbirdPaintCacheRecordBlocked } from './thunderbirdLock';
 
 /**
  * Shared course-paint cache.
@@ -193,16 +194,30 @@ export function serializeCoursePaintCache(): string {
   return JSON.stringify({ v: 1, records });
 }
 
+function forgetPaintRecord(record: CoursePaintCacheRecord): void {
+  const keys = new Set([record.key, ...record.aliases]);
+  for (const key of keys) {
+    if (memory.get(key) === record || memory.get(key)?.key === record.key) memory.delete(key);
+  }
+  flushPersist();
+}
+
 export function restoreCoursePaintCache(raw: string | null | undefined): void {
   const record = asRecord(raw ? safeJson(raw) : null);
   const rows = asRecord(record?.records);
   if (!rows) return;
+  let dropped = false;
   for (const value of Object.values(rows)) {
     const parsed = parseCoursePaintCacheRecord(value);
     if (!parsed) continue;
+    if (thunderbirdPaintCacheRecordBlocked(parsed)) {
+      dropped = true;
+      continue;
+    }
     memory.set(parsed.key, parsed);
     for (const alias of parsed.aliases) memory.set(alias, parsed);
   }
+  if (dropped) flushPersist();
 }
 
 function flushPersist(): void {
@@ -339,13 +354,18 @@ export function getSharedCoursePaintCache(): CoursePaintCache {
   return {
     async get(key: string) {
       const local = memory.get(key);
+      if (local && thunderbirdPaintCacheRecordBlocked(local)) {
+        forgetPaintRecord(local);
+        return null;
+      }
       if (local) return local;
       const remote = await remoteGet(key, {});
-      if (!remote) return null;
+      if (!remote || thunderbirdPaintCacheRecordBlocked(remote)) return null;
       rememberLocal(remote);
       return remote;
     },
     async put(record: CoursePaintCacheRecord) {
+      if (thunderbirdPaintCacheRecordBlocked(record)) return;
       rememberLocal(record);
       await remotePut(record, {});
     },
