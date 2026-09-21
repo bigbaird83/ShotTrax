@@ -1,0 +1,244 @@
+{
+  "courseKey": "mountain-ranch-fairfield-bay-ar",
+  "displayName": "Mountain Ranch Golf Club",
+  "locality": "Fairfield Bay, AR",
+  "source": "osm",
+  "sourceRef": "osm:hole/way/1158747222 Mtn Ranch (Fairfield Bay); 18/18 OSM tee+green paired to golf=hole ref; no leisure=golf_course outline; Pro API unauthenticated (no key); H1=hole/way/1158747222+tee/way/1158747223+#1_Tee+green/way/1158747225+#1_Green; H2=hole/way/1158803505+tee/way/1158803506+#2_Tee+green/way/1158803511+#2_Green; H3=hole/way/1158803513+tee/way/1161566953+green/way/1161566954; H4=hole/way/1161566963+tee/way/1161566956+green/way/1161566958; H5=hole/way/1239734068+tee/way/1161568045+green/way/1161568049; H6=hole/way/1239734072+tee/way/1239734070+green/way/1239734071; H7=hole/way/1239737188+tee/way/1239734073+green/way/1239734080; H8=hole/way/1239737194+tee/way/1239734081+green/way/1239737193; H9=hole/way/1239737203+tee/way/1239737195+green/way/1239737199; H10=hole/way/1239792747+tee/way/1239792741+green/way/1239792742; H11=hole/way/1239802827+tee/way/1239792748+green/way/1239792749; H12=hole/way/1239802836+tee/way/1239802828+green/way/1239802834; H13=hole/way/1239802841+tee/way/1239802840+green/way/1239802837; H14=hole/way/1239802850+tee/way/1239802848+green/way/1239802847; H15=hole/way/1239802858+tee/way/1239802857+green/way/1239802851; H16=hole/way/1239802863+tee/way/1239802862+green/way/1239802859; H17=hole/way/1239802873+tee/way/1239802864+green/way/1239802866; H18=hole/way/1239802882+tee/way/1239802874+green/way/1239802881; nearest unlabeled tee/green to hole-way ends (same caveat as Greystone nearest-tee); spans 132-515 yd GATE PASS",
+  "fetchedAt": "2026-09-21T01:00:00Z",
+  "holes": [
+    {
+      "hole": 1,
+      "par": 4,
+      "tee": {
+        "lat": 35.6126927,
+        "lng": -92.2884055,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.6149737,
+        "lng": -92.2861298
+      }
+    },
+    {
+      "hole": 2,
+      "par": 5,
+      "tee": {
+        "lat": 35.6150501,
+        "lng": -92.2855953,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.6192661,
+        "lng": -92.2851316
+      }
+    },
+    {
+      "hole": 3,
+      "par": 3,
+      "tee": {
+        "lat": 35.619826,
+        "lng": -92.2860165,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.6208136,
+        "lng": -92.2865617
+      }
+    },
+    {
+      "hole": 4,
+      "par": 4,
+      "tee": {
+        "lat": 35.6213764,
+        "lng": -92.2866808,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.6222923,
+        "lng": -92.2837665
+      }
+    },
+    {
+      "hole": 5,
+      "par": 4,
+      "tee": {
+        "lat": 35.622346,
+        "lng": -92.2827969,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.6204646,
+        "lng": -92.2802311
+      }
+    },
+    {
+      "hole": 6,
+      "par": 3,
+      "tee": {
+        "lat": 35.6203291,
+        "lng": -92.2796861,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.6209946,
+        "lng": -92.2783997
+      }
+    },
+    {
+      "hole": 7,
+      "par": 4,
+      "tee": {
+        "lat": 35.6205941,
+        "lng": -92.2781529,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.6189933,
+        "lng": -92.281141
+      }
+    },
+    {
+      "hole": 8,
+      "par": 5,
+      "tee": {
+        "lat": 35.6182878,
+        "lng": -92.2821493,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.614429,
+        "lng": -92.2841322
+      }
+    },
+    {
+      "hole": 9,
+      "par": 4,
+      "tee": {
+        "lat": 35.6136166,
+        "lng": -92.2848594,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.6117175,
+        "lng": -92.2874098
+      }
+    },
+    {
+      "hole": 10,
+      "par": 4,
+      "tee": {
+        "lat": 35.6111965,
+        "lng": -92.2887207,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.6085056,
+        "lng": -92.2897493
+      }
+    },
+    {
+      "hole": 11,
+      "par": 4,
+      "tee": {
+        "lat": 35.6077989,
+        "lng": -92.289899,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.606055,
+        "lng": -92.2929506
+      }
+    },
+    {
+      "hole": 12,
+      "par": 4,
+      "tee": {
+        "lat": 35.6061428,
+        "lng": -92.2935176,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.6043021,
+        "lng": -92.2954962
+      }
+    },
+    {
+      "hole": 13,
+      "par": 3,
+      "tee": {
+        "lat": 35.603636,
+        "lng": -92.2959296,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.6028169,
+        "lng": -92.2968171
+      }
+    },
+    {
+      "hole": 14,
+      "par": 5,
+      "tee": {
+        "lat": 35.6016181,
+        "lng": -92.2967814,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.5987834,
+        "lng": -92.299343
+      }
+    },
+    {
+      "hole": 15,
+      "par": 4,
+      "tee": {
+        "lat": 35.6004262,
+        "lng": -92.2999677,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.6026839,
+        "lng": -92.2989549
+      }
+    },
+    {
+      "hole": 16,
+      "par": 3,
+      "tee": {
+        "lat": 35.6034244,
+        "lng": -92.2984854,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.6047189,
+        "lng": -92.2981278
+      }
+    },
+    {
+      "hole": 17,
+      "par": 4,
+      "tee": {
+        "lat": 35.6067444,
+        "lng": -92.2976065,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.6087495,
+        "lng": -92.2945165
+      }
+    },
+    {
+      "hole": 18,
+      "par": 5,
+      "tee": {
+        "lat": 35.6092597,
+        "lng": -92.2932707,
+        "label": "default"
+      },
+      "green": {
+        "lat": 35.6116506,
+        "lng": -92.2891863
+      }
+    }
+  ]
+}

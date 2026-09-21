@@ -628,6 +628,68 @@ export function signalLabPleasantValleyHydrate(): {
 }
 
 /**
+ * Thunderbird Country Club (Heber Springs) is catalog-indexed.
+ * OSM has a course outline and unlabeled greens only — no numbered
+ * tee/green/hole. Pro miss + OSM miss → miss card. Never invent pins.
+ */
+export function signalLabThunderbirdHydrate(): {
+  thunderbirdHeberSpringsOnly: true;
+  paintsViaHydrateWhenProMisses: false;
+  neverInventFromClubhouse: true;
+  neverInventFromScorecardYards: true;
+  neverInventUnlabeledGreens: true;
+  hardMissAllNine: true;
+  needsDocPinSheets: true;
+  cypressStillExclusive: true;
+  greystoneStillExclusive: true;
+  pleasantValleyStillExclusive: true;
+} {
+  return {
+    thunderbirdHeberSpringsOnly: true,
+    paintsViaHydrateWhenProMisses: false,
+    neverInventFromClubhouse: true,
+    neverInventFromScorecardYards: true,
+    neverInventUnlabeledGreens: true,
+    hardMissAllNine: true,
+    needsDocPinSheets: true,
+    cypressStillExclusive: true,
+    greystoneStillExclusive: true,
+    pleasantValleyStillExclusive: true,
+  };
+}
+
+/**
+ * Mountain Ranch Golf Club (Fairfield Bay) paints from its OSM hydrate
+ * when Pro tee+green miss. 18/18 hole-ref + nearest OSM tee/green.
+ * Thunderbird stays miss-carded. Never invent from the clubhouse.
+ */
+export function signalLabMountainRanchHydrate(): {
+  mountainRanchFairfieldBayOnly: true;
+  paintsViaHydrateWhenProMisses: true;
+  neverInventFromClubhouse: true;
+  neverInventFromScorecardYards: true;
+  thunderbirdStillExclusive: true;
+  cypressStillExclusive: true;
+  greystoneStillExclusive: true;
+  pleasantValleyStillExclusive: true;
+  prefetchAllEighteenOnce: true;
+  meterUniqueHydrateOnce: true;
+} {
+  return {
+    mountainRanchFairfieldBayOnly: true,
+    paintsViaHydrateWhenProMisses: true,
+    neverInventFromClubhouse: true,
+    neverInventFromScorecardYards: true,
+    thunderbirdStillExclusive: true,
+    cypressStillExclusive: true,
+    greystoneStillExclusive: true,
+    pleasantValleyStillExclusive: true,
+    prefetchAllEighteenOnce: true,
+    meterUniqueHydrateOnce: true,
+  };
+}
+
+/**
  * Signal Lab build 36 — Add shot gesture lock.
  * 1. First frame is course tee + green center only.
  * 2. After that, do not reframe.
