@@ -179,6 +179,7 @@ test('Pleasant Valley OSM+Doc hydrate is 18 gated holes; clubhouse is never a pi
 test('hydrate gates match the miss card: null, ~0,0, same-point, past 700 yd', () => {
   const hole1 = hydrate?.holes[0];
   assert.ok(hole1);
+  assert.ok(hole1.tee);
   const tee = { lat: hole1.tee.lat, lng: hole1.tee.lng };
   const green = { lat: hole1.green.lat, lng: hole1.green.lng };
   assert.equal(hydrateHolePassesGates({ tee: null, green }), false);

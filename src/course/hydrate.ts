@@ -332,12 +332,15 @@ function parseHydrateHole(raw: unknown): CourseHydrateHole | null {
   if (!record) return null;
   const hole = asFiniteNumber(record.hole);
   if (hole == null || !Number.isInteger(hole) || hole < 1 || hole > 18) return null;
+  const teeRecord = asRecord(record.tee);
   const teePoint = pointFrom(record.tee);
   const greenPoint = pointFrom(record.green);
   if (!greenPoint || isClubhousePin(greenPoint)) return null;
-  if (teePoint && isClubhousePin(teePoint)) return null;
-  if (teePoint && !hydrateHolePassesGates({ tee: teePoint, green: greenPoint })) return null;
-  const teeRecord = asRecord(record.tee);
+  // Provided tee must pass gates. Omitted tee is allowed (Thunderbird greens).
+  if (teeRecord) {
+    if (!teePoint || isClubhousePin(teePoint)) return null;
+    if (!hydrateHolePassesGates({ tee: teePoint, green: greenPoint })) return null;
+  }
   const label = asString(teeRecord?.label) ?? 'default';
   return {
     hole,
