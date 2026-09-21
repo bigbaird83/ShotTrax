@@ -47,3 +47,6 @@ yarn-error.*
 # OpenGolf ingest intermediates (runtime uses catalog.json + holes/*.json)
 src/course/hydrates/opengolf/pack.json
 src/course/hydrates/opengolf/pack.json.gz
+
+# golfapi hydrate probe artifact (CI upload only — do not commit candidates)
+golfapi-probe-out/
