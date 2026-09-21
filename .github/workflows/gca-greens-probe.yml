@@ -19,6 +19,13 @@ on:
         options:
           - north-hills
           - smoke
+  # Same-repo pull_request often has no Actions secret; push to main does.
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/gca-green-centers-probe.mjs'
+      - 'scripts/gca-north-hills-probe.mjs'
+      - '.github/workflows/gca-greens-probe.yml'
   pull_request:
     paths:
       - 'scripts/gca-green-centers-probe.mjs'
