@@ -28,11 +28,15 @@ export function ScorecardBody({
   holes,
   currentHoleNumber,
   onBack,
+  onShare,
+  onNerdOut,
   onSelectHole,
 }: {
   holes: HoleIn[];
   currentHoleNumber?: number;
   onBack: () => void;
+  onShare?: () => void;
+  onNerdOut?: () => void;
   onSelectHole?: (holeNumber: number) => void;
 }) {
   const colors = useColors();
@@ -87,6 +91,8 @@ export function ScorecardBody({
           );
         })}
       </View>
+      {onShare ? <BigButton label={COPY.share} variant="secondary" onPress={onShare} /> : null}
+      {onNerdOut ? <BigButton label={COPY.nerdOut} variant="ghost" onPress={onNerdOut} /> : null}
       <BigButton label={COPY.back} variant="secondary" onPress={onBack} />
     </View>
   );

@@ -824,7 +824,10 @@ test('P0: full-bleed MapView has real height under the glass dock; Add shot keep
   assert.equal(signalLabThunderbirdHydrate().neverInventFromClubhouse, true);
   assert.equal(signalLabThunderbirdHydrate().neverInventUnlabeledGreens, true);
   assert.equal(signalLabThunderbirdHydrate().hardMissAllNine, true);
-  assert.equal(signalLabThunderbirdHydrate().needsDocPinSheets, true);
+  assert.equal(signalLabThunderbirdHydrate().needsDocPinSheets, false);
+  assert.equal(signalLabThunderbirdHydrate().needsDocTeePins, true);
+  assert.equal(signalLabThunderbirdHydrate().greensFromDocPinSheets, true);
+  assert.equal(signalLabThunderbirdHydrate().neverInventTees, true);
   assert.equal(signalLabMountainRanchHydrate().mountainRanchFairfieldBayOnly, true);
   assert.equal(signalLabMountainRanchHydrate().paintsViaHydrateWhenProMisses, true);
   assert.equal(signalLabMountainRanchHydrate().neverInventFromClubhouse, true);

@@ -1,10 +1,24 @@
 import * as Linking from 'expo-linking';
 import { InteractionManager, Share } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
-import { ensureRoundShareToken, getClubMap, getHole, getRound, listHoles, listShotsForHole } from '../db/repo';
+import {
+  ensureRoundShareToken,
+  getClubMap,
+  getHole,
+  getRound,
+  listHoles,
+  listShotsForHole,
+  putShareBoard,
+} from '../db/repo';
+import { encodeScoreSnapshot, formatLiveBoardShare, normalizeShareBoardCode } from '../domain/liveBoard';
+import {
+  planScorecardImageLines,
+  renderScorecardPng,
+} from '../domain/scorecardImage';
 import {
   formatShareScorecard,
   planSpectatorPayload,
+  shareSheetContent,
   type SpectatorHoleInput,
   type SpectatorPayload,
 } from '../domain/spectator';
@@ -17,11 +31,23 @@ export function waitForShareHost(run: () => void): void {
   });
 }
 
+async function writeScorecardPngFile(png: Uint8Array): Promise<string | null> {
+  try {
+    const { File, Paths } = await import('expo-file-system');
+    const file = new File(Paths.cache, 'shottrax-scorecard.png');
+    file.write(png);
+    const uri = file.uri;
+    return uri.startsWith('file:') ? uri : `file://${uri}`;
+  } catch {
+    return null;
+  }
+}
+
 function planRoundShare(
   db: SQLiteDatabase,
   roundId: string,
   args?: { currentHoleNumber?: number },
-): { payload: SpectatorPayload; message: string } | null {
+): { payload: SpectatorPayload; message: string; holes: { hole: number; score: number | null }[] } | null {
   const round = getRound(db, roundId);
   if (!round) return null;
   const clubs = getClubMap(db);
@@ -50,11 +76,13 @@ function planRoundShare(
     currentHoleNumber: getHole(db, round.id, current)?.number ?? current,
     holes: input,
   });
+  const cardHoles = holes.map((hole) => ({ hole: hole.number, score: hole.score }));
   return {
     payload,
+    holes: cardHoles,
     message: formatShareScorecard({
       courseName: payload.courseName,
-      holes: holes.map((hole) => ({ hole: hole.number, score: hole.score })),
+      holes: cardHoles,
       lastClubYards: payload.live?.lastClubYards ?? null,
     }),
   };
@@ -68,9 +96,16 @@ export function buildRoundSpectatorPayload(
   return planRoundShare(db, roundId, args)?.payload ?? null;
 }
 
-/** Token-only link. Never pasted into Messages — `?p=` stays out of the share sheet. */
+/** Token-only link. Never pasted into Messages as a `?p=` body. */
 export function spectatorShareUrl(payload: SpectatorPayload): string {
   return Linking.createURL(`/s/${payload.token}`);
+}
+
+export function liveBoardShareUrl(payload: SpectatorPayload): string {
+  const snapshot = encodeScoreSnapshot(
+    payload.holes.map((row) => ({ hole: row.hole, score: row.score })),
+  );
+  return Linking.createURL(`/s/${payload.token}`, snapshot ? { queryParams: { h: snapshot } } : undefined);
 }
 
 export function formatRoundShareMessage(
@@ -81,6 +116,34 @@ export function formatRoundShareMessage(
   return planRoundShare(db, roundId, args)?.message ?? null;
 }
 
+export function publishRoundScoreboard(
+  db: SQLiteDatabase,
+  roundId: string,
+  args?: { currentHoleNumber?: number },
+): SpectatorPayload | null {
+  const planned = planRoundShare(db, roundId, args);
+  if (!planned) return null;
+  putShareBoard(db, planned.payload);
+  void putSharedPayload(planned.payload.token, planned.payload);
+  return planned.payload;
+}
+
+async function presentShare(
+  content: { message: string; title: string; url?: string },
+  options?: { anchor?: number },
+): Promise<boolean> {
+  try {
+    await new Promise<void>((resolve, reject) => {
+      waitForShareHost(() => {
+        Share.share(content, options).then(() => resolve(), reject);
+      });
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function shareRoundSnapshot(
   db: SQLiteDatabase,
   roundId: string,
@@ -88,16 +151,39 @@ export async function shareRoundSnapshot(
 ): Promise<boolean> {
   const planned = planRoundShare(db, roundId, args);
   if (!planned) return false;
-  void putSharedPayload(planned.payload.token, planned.payload);
-  const options = args?.anchor != null ? { anchor: args.anchor } : undefined;
+  publishRoundScoreboard(db, roundId, args);
+  let imageUrl: string | null = null;
   try {
-    await new Promise<void>((resolve, reject) => {
-      waitForShareHost(() => {
-        Share.share({ message: planned.message, title: 'ShotTraxx' }, options).then(() => resolve(), reject);
-      });
-    });
-    return true;
+    const png = renderScorecardPng(
+      planScorecardImageLines({
+        courseName: planned.payload.courseName,
+        holes: planned.holes,
+        lastClubYards: planned.payload.live?.lastClubYards ?? null,
+      }),
+    );
+    imageUrl = await writeScorecardPngFile(png);
   } catch {
-    return false;
+    imageUrl = null;
   }
+  const options = args?.anchor != null ? { anchor: args.anchor } : undefined;
+  return presentShare(shareSheetContent({ message: planned.message, imageUrl }), options);
+}
+
+export async function shareLiveBoard(
+  db: SQLiteDatabase,
+  roundId: string,
+  args?: { currentHoleNumber?: number; anchor?: number | null },
+): Promise<boolean> {
+  const planned = planRoundShare(db, roundId, args);
+  if (!planned) return false;
+  publishRoundScoreboard(db, roundId, args);
+  const code = normalizeShareBoardCode(planned.payload.token) ?? planned.payload.token;
+  const message = formatLiveBoardShare({
+    courseName: planned.payload.courseName,
+    code,
+    url: liveBoardShareUrl(planned.payload),
+    holes: planned.holes,
+  });
+  const options = args?.anchor != null ? { anchor: args.anchor } : undefined;
+  return presentShare(shareSheetContent({ message }), options);
 }

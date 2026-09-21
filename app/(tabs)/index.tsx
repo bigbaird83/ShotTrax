@@ -353,6 +353,18 @@ export default function HomeScreen() {
         </View>
       )}
 
+      <BigButton
+        label={COPY.nerdOut}
+        variant="ghost"
+        onPress={() =>
+          router.push({
+            pathname: '/nerd-out',
+            params: active ? { roundId: active.id } : undefined,
+          })
+        }
+      />
+      <BigButton label={COPY.liveBoardWatch} variant="ghost" onPress={() => router.push('/board')} />
+
       <Text style={styles.section}>{COPY.roundHistory}</Text>
       {rounds.length === 0 ? (
         <EmptyPanel title={COPY.noRounds} hint={COPY.firstRoundHint} />

@@ -2,13 +2,21 @@ import { router } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
-import { getColorTheme, getCourseDistanceUnit, setColorTheme, setCourseDistanceUnit } from '@/src/db/repo';
+import {
+  getColorTheme,
+  getCourseDistanceUnit,
+  getThunderbirdPinSheet,
+  setColorTheme,
+  setCourseDistanceUnit,
+  setThunderbirdPinSheet,
+} from '@/src/db/repo';
 import { COPY } from '@/src/domain/playerCopy';
 import type { CourseDistanceUnit } from '@/src/domain/courseDistance';
 import { COLOR_THEME_IDS, type ColorThemeId } from '@/src/domain/colorTheme';
 import { BigButton } from '@/src/ui/BigButton';
 import { useColors } from '@/src/ui/ColorThemeProvider';
 import { Screen } from '@/src/ui/Screen';
+import { ThunderbirdPinSheetPicker } from '@/src/ui/ThunderbirdPinSheetPicker';
 import { tapTarget, type, type ColorPalette } from '@/src/ui/theme';
 
 export default function SettingsScreen() {
@@ -17,6 +25,7 @@ export default function SettingsScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const unit = getCourseDistanceUnit(db);
   const themeId = getColorTheme(db);
+  const pinSheet = getThunderbirdPinSheet(db);
 
   const setUnit = (next: CourseDistanceUnit) => {
     setCourseDistanceUnit(db, next);
@@ -50,6 +59,13 @@ export default function SettingsScreen() {
           </Pressable>
         ))}
       </View>
+      <ThunderbirdPinSheetPicker
+        selected={pinSheet}
+        onSelect={(sheet) => {
+          setThunderbirdPinSheet(db, sheet);
+          bump();
+        }}
+      />
       <Text style={styles.label}>{COPY.courseDistanceSetting}</Text>
       <View style={styles.row}>
         <Pressable

@@ -29,8 +29,10 @@ import {
   listRounds,
   listShotsForHole,
   markFirstLaunchTipSeen,
+  getThunderbirdPinSheet,
   saveHoleTee,
   setHoleGreen,
+  setThunderbirdPinSheet,
   updateHolePar,
   updateHolePutts,
   finishHolePutts,
@@ -121,8 +123,10 @@ import type { Club, PenaltyReason } from '@/src/domain/types';
 import { lastLandingMark, markToGreen, planPlayHeaderYards, toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
 import { yardsToGreen } from '@/src/sensing/yardsToGreen';
 import { describeGpsSource } from '@/src/services/location';
+import { courseNeedsPinSheets, planMissCardCopy } from '@/src/domain/missCard';
+import { thunderbirdDailyPin, thunderbirdPinHoleFor } from '@/src/domain/thunderbirdPins';
 import { MENU_SHARE_FALLBACK_MS, toastFromShareAttempt } from '@/src/domain/spectator';
-import { shareRoundSnapshot } from '@/src/services/shareRound';
+import { publishRoundScoreboard, shareRoundSnapshot } from '@/src/services/shareRound';
 import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, undoShotEdit, deleteHoleShot } from '@/src/services/shotActions';
 import { useLiveFix } from '@/src/services/useLiveFix';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
@@ -139,6 +143,7 @@ import { useAmbientLight } from '@/src/ui/useAmbientLight';
 import { playThemeId } from '@/src/domain/playTheme';
 import { formatShotLockChip } from '@/src/domain/shotLock';
 import { HoleMap } from '@/src/ui/HoleMap';
+import { ThunderbirdPinSheetPicker } from '@/src/ui/ThunderbirdPinSheetPicker';
 import { FullSheet } from '@/src/ui/Sheet';
 import { FinishedPuttRows } from '@/src/ui/FinishedPuttRows';
 import { PuttDock } from '@/src/ui/PuttDock';
@@ -425,6 +430,12 @@ export default function HoleScreen() {
     round?.courseLat != null && round.courseLng != null
       ? { lat: round.courseLat, lng: round.courseLng }
       : null;
+  const needPins = courseNeedsPinSheets({
+    courseApiId: round?.courseApiId,
+    name: round?.courseName,
+    location: isCourseCardLatLng(courseLocation) ? courseLocation : null,
+  });
+  const missCopy = planMissCardCopy({ needPins });
   const overlay =
     osmOverlay ??
     cachedOsmOverlay({ courseId: round?.courseApiId, holeNumber, green: proGreen });
@@ -445,23 +456,27 @@ export default function HoleScreen() {
     green: proGreen,
   });
   const holeTee = hydrated.tee;
-  const green = hydrated.green;
+  const pinSheet = getThunderbirdPinSheet(db);
+  const tbHole = needPins ? thunderbirdPinHoleFor(holeNumber) : null;
+  const dailyPin = needPins ? thunderbirdDailyPin(holeNumber, pinSheet) : null;
+  const greenCenter = hydrated.green;
+  const green = dailyPin ?? greenCenter;
   const pins = {
     front: pinOrNull(
       hole?.greenFrontLat != null && hole.greenFrontLng != null
         ? { lat: hole.greenFrontLat, lng: hole.greenFrontLng }
-        : null,
+        : tbHole?.greenFront,
     ),
-    middle: pinOrNull(green),
+    middle: pinOrNull(greenCenter),
     back: pinOrNull(
       hole?.greenBackLat != null && hole.greenBackLng != null
         ? { lat: hole.greenBackLat, lng: hole.greenBackLng }
-        : null,
+        : tbHole?.greenBack,
     ),
-    depthYards: hole?.greenDepthYards ?? null,
+    depthYards: hole?.greenDepthYards ?? tbHole?.greenDepthYards ?? null,
   };
   const toGreenDisplay = toGreenDisplayFromHole({
-    courseYards: hole?.yards ?? null,
+    courseYards: hole?.yards ?? tbHole?.whiteYards ?? null,
     green,
     shots,
   });
@@ -730,9 +745,14 @@ export default function HoleScreen() {
   const queueMenuShare = useCallback(() => {
     pendingShareRef.current = true;
     setMenuOpen(false);
+    setScorecardOpen(false);
     if (shareFallbackRef.current) clearTimeout(shareFallbackRef.current);
     shareFallbackRef.current = setTimeout(openQueuedShare, MENU_SHARE_FALLBACK_MS);
   }, [openQueuedShare]);
+
+  useEffect(() => {
+    publishRoundScoreboard(db, id, { currentHoleNumber: holeNumber });
+  }, [db, id, holeNumber, revision]);
 
   useEffect(
     () => () => {
@@ -1255,6 +1275,7 @@ export default function HoleScreen() {
           }}
           fmb={fmb}
           osmOverlay={overlay}
+          missCopy={missCopy}
           placedFrom={placeMode === 'edit-from' || placeMode === 'edit-to' ? placeFrom : addShotFrom}
           placedTo={placeToDraft ?? placeTo}
           lineFrom={placeMode === 'edit-from' || placeMode === 'edit-to' ? placeFrom : addShotFrom}
@@ -1369,6 +1390,15 @@ export default function HoleScreen() {
                   </Text>
                 </Pressable>
               </View>
+              {needPins ? (
+                <ThunderbirdPinSheetPicker
+                  selected={pinSheet}
+                  onSelect={(sheet) => {
+                    setThunderbirdPinSheet(db, sheet);
+                    bump();
+                  }}
+                />
+              ) : null}
               {playLayout.shotLine === 'header' ? (
                 <ScrollView
                   horizontal
@@ -1721,9 +1751,25 @@ export default function HoleScreen() {
             }}
           />
           <BigButton
+            label={COPY.nerdOut}
+            variant="ghost"
+            onPress={() => {
+              setMenuOpen(false);
+              router.push({ pathname: '/nerd-out', params: { roundId: id } });
+            }}
+          />
+          <BigButton
             label={COPY.share}
             variant="ghost"
             onPress={queueMenuShare}
+          />
+          <BigButton
+            label={COPY.liveBoard}
+            variant="ghost"
+            onPress={() => {
+              setMenuOpen(false);
+              router.push(`/round/${id}/board`);
+            }}
           />
           <BigButton
             label={COPY.undoLast}
@@ -1766,6 +1812,7 @@ export default function HoleScreen() {
       <FullSheet
         visible={scorecardOpen}
         title={COPY.scorecard}
+        onDismiss={openQueuedShare}
         onClose={dismissScorecard}>
         <ScrollView contentContainerStyle={styles.sheetPad}>
           <ScorecardBody
@@ -1788,6 +1835,11 @@ export default function HoleScreen() {
               goToHole(nextNumber);
             }}
             onBack={dismissScorecard}
+            onShare={queueMenuShare}
+            onNerdOut={() => {
+              setScorecardOpen(false);
+              router.push({ pathname: '/nerd-out', params: { roundId: id } });
+            }}
           />
         </ScrollView>
       </FullSheet>
@@ -1882,6 +1934,7 @@ export default function HoleScreen() {
               quality: playHeaderYards.quality,
             }}
             osmOverlay={osmOverlay}
+            missCopy={missCopy}
             lockFrame
             hideYardsOverlay
             showPhonePin={false}

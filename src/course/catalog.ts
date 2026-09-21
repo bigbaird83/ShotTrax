@@ -76,9 +76,9 @@ export const THUNDERBIRD_HARD_MISS_HOLES = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 export function thunderbirdHoleSources(): CatalogHoleSource[] {
   return THUNDERBIRD_HARD_MISS_HOLES.map((hole) => ({
     hole,
-    status: 'hard-miss',
-    source: 'none — OSM greens unlabeled, no tee/hole ref, no Pro pin',
-    needsDocPinSheet: true,
+    status: 'hydrated',
+    source: 'doc pin sheet green + daily pins A–D; tee HARD-MISS',
+    needsDocPinSheet: false,
   }));
 }
 
@@ -87,14 +87,16 @@ export function thunderbirdCourseReport(): {
   holeCount: 9;
   hydratedHoles: number[];
   hardMissHoles: number[];
-  needsDocPinSheets: true;
+  needsDocPinSheets: false;
+  needsDocTeePins: true;
 } {
   return {
     searchableName: 'Thunderbird Country Club',
     holeCount: 9,
-    hydratedHoles: [],
+    hydratedHoles: [...THUNDERBIRD_HARD_MISS_HOLES],
     hardMissHoles: [...THUNDERBIRD_HARD_MISS_HOLES],
-    needsDocPinSheets: true,
+    needsDocPinSheets: false,
+    needsDocTeePins: true,
   };
 }
 
@@ -225,13 +227,13 @@ export function catalogCourseDetail(id: string | null | undefined): CourseDetail
     holes.push({
       holeNumber: n,
       par: hyd.par,
-      yards: null,
+      yards: hyd.yards,
       handicap: null,
       greenCentroid: { lat: hyd.green.lat, lng: hyd.green.lng },
-      greenFront: null,
-      greenBack: null,
-      greenDepthYards: null,
-      teeCentroid: { lat: hyd.tee.lat, lng: hyd.tee.lng },
+      greenFront: hyd.greenFront,
+      greenBack: hyd.greenBack,
+      greenDepthYards: hyd.greenDepthYards,
+      teeCentroid: hyd.tee ? { lat: hyd.tee.lat, lng: hyd.tee.lng } : null,
     });
   }
   return {
@@ -241,7 +243,7 @@ export function catalogCourseDetail(id: string | null | undefined): CourseDetail
     location: entry.location,
     holes,
     tees: [],
-    greenCentersAvailable: false,
+    greenCentersAvailable: holes.some((hole) => hole.greenCentroid != null),
   };
 }
 

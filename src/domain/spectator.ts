@@ -103,9 +103,25 @@ export async function toastFromShareAttempt(open: () => Promise<boolean>): Promi
   }
 }
 
-/** Messages / the share sheet get a scorecard, never Share.url. */
+/** Messages / the share sheet get a scorecard, never a spectator URL. */
 export function shareSheetPassesUrl(): false {
   return false;
+}
+
+/** Local PNG only. Spectator `?p=` / http(s) / shottrax links stay out. */
+export function shareSheetContent(args: {
+  message: string;
+  imageUrl?: string | null;
+}): { message: string; title: 'ShotTraxx'; url?: string } {
+  const url = args.imageUrl?.trim() ?? '';
+  const localPng =
+    /^file:\/\//i.test(url) &&
+    /\.png$/i.test(url) &&
+    !shareMessageIncludesPayloadQuery(url) &&
+    !/shottrax:\/\//i.test(url);
+  return localPng
+    ? { message: args.message, title: 'ShotTraxx', url }
+    : { message: args.message, title: 'ShotTraxx' };
 }
 
 /** Full `?p=` spectator body must never land in the share text. */
@@ -245,7 +261,7 @@ export function planSpectatorPayload(args: {
           score: current.score,
           shots: current.shots,
         }),
-    holes: args.finished ? holes : [],
+    holes,
   };
 }
 
@@ -326,7 +342,7 @@ export function parseSpectatorPayload(raw: unknown): SpectatorPayload | null {
     courseName: asString(rec.courseName),
     finished,
     live: finished ? null : live,
-    holes: finished ? holes : [],
+    holes,
   };
 }
 

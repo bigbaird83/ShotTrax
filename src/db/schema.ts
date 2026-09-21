@@ -210,6 +210,12 @@ export function migrate(db: SQLiteDatabase): void {
       key TEXT PRIMARY KEY NOT NULL,
       value TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS share_boards (
+      token TEXT PRIMARY KEY NOT NULL,
+      payload_json TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
 
   ensureColumn(db, 'holes', 'green_lat', 'REAL');
