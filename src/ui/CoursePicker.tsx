@@ -67,7 +67,6 @@ export function CoursePicker({
   const [detail, setDetail] = useState<CourseDetail | null>(null);
 
   const onFind = useCallback(async () => {
-    if (!configured) return;
     setBusy(true);
     setError(null);
     try {
@@ -101,20 +100,20 @@ export function CoursePicker({
     } finally {
       setBusy(false);
     }
-  }, [configured, query, lastPlayedAtByCourse]);
+  }, [query, lastPlayedAtByCourse]);
 
   useEffect(() => {
     onRefreshReady?.(onFind);
   }, [onFind, onRefreshReady]);
 
   useEffect(() => {
-    if (!configured || !autoFind) return;
+    if (!autoFind) return;
     const delay = planCourseSearchParams(query) ? 280 : 0;
     const timer = setTimeout(() => {
       void onFind();
     }, delay);
     return () => clearTimeout(timer);
-  }, [configured, autoFind, onFind, query]);
+  }, [autoFind, onFind, query]);
 
   const pickCourse = async (course: CourseSummary) => {
     setTeeBusy(true);
@@ -139,7 +138,7 @@ export function CoursePicker({
     }
   };
 
-  const emptyNearby = configured && results != null && results.length === 0 && !busy;
+  const emptyNearby = results != null && results.length === 0 && !busy;
   const needsLocation = error === COPY.nearbyNeedsLocation;
   const showList = showNearbyCourseList(selected);
   const listed = planCourseList({
@@ -170,7 +169,7 @@ export function CoursePicker({
             />
           ) : null}
           <Text style={styles.label}>{COPY.nearbyHint}</Text>
-          {!configured ? <Text style={styles.meta}>{COPY.nearbyUnavailable}</Text> : null}
+          {!configured && emptyNearby ? <Text style={styles.meta}>{COPY.nearbyUnavailable}</Text> : null}
           {error && !emptyNearby ? <Text style={styles.warn}>{error}</Text> : null}
           {busy ? <Text style={styles.meta}>{COPY.nearbyBusy}</Text> : null}
           {emptyNearby ? (

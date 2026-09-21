@@ -122,6 +122,7 @@ import {
   signalLabCypressBlankMap,
   signalLabCypressHydrate,
   signalLabGreystoneHydrate,
+  signalLabThunderbirdHydrate,
   signalLabPleasantValleyHydrate,
 } from './playLayout';
 import { PHONE_WHEEL_PILL_HEIGHT } from './clubStrip';
@@ -817,6 +818,12 @@ test('P0: full-bleed MapView has real height under the glass dock; Add shot keep
   assert.equal(signalLabPleasantValleyHydrate().cypressStillExclusive, true);
   assert.equal(signalLabPleasantValleyHydrate().greystoneStillExclusive, true);
   assert.equal(signalLabPleasantValleyHydrate().neverInventFromClubhouse, true);
+  assert.equal(signalLabThunderbirdHydrate().thunderbirdHeberSpringsOnly, true);
+  assert.equal(signalLabThunderbirdHydrate().paintsViaHydrateWhenProMisses, false);
+  assert.equal(signalLabThunderbirdHydrate().neverInventFromClubhouse, true);
+  assert.equal(signalLabThunderbirdHydrate().neverInventUnlabeledGreens, true);
+  assert.equal(signalLabThunderbirdHydrate().hardMissAllNine, true);
+  assert.equal(signalLabThunderbirdHydrate().needsDocPinSheets, true);
   assert.match(map, /collapsable=\{false\}/);
   const userLoc = map.slice(map.indexOf('showsUserLocation='), map.indexOf('showsMyLocationButton'));
   assert.match(userLoc, /holeMapUserLocationVisible\(\{/);

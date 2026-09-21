@@ -1,4 +1,11 @@
 import { getGolfCoursesApiKey } from './config';
+import {
+  catalogCourseDetail,
+  isLocalCatalogId,
+  mergeCatalogSummaries,
+  nearbyLocalCatalog,
+  searchLocalCatalog,
+} from './catalog';
 import { fetchOsmOverlay } from './osmOverlay';
 import {
   mergeGreenCenters,
@@ -79,8 +86,9 @@ export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataCli
 
     async nearbyCourses(from: LatLng, radiusKm = DEFAULT_RADIUS_KM): Promise<CourseSummary[]> {
       const key = getKey();
-      if (!key) return [];
       const radius = Math.min(MAX_RADIUS_KM, Math.max(1, radiusKm));
+      const local = nearbyLocalCatalog(from, radius);
+      if (!key) return local;
       const query = new URLSearchParams({
         lat: String(from.lat),
         lng: String(from.lng),
@@ -93,13 +101,15 @@ export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataCli
       if (status < 200 || status >= 300) {
         throw new GolfCoursesApiError('Couldn’t load courses nearby.', status);
       }
-      return parseNearbyCourses(json);
+      return mergeCatalogSummaries(parseNearbyCourses(json), local);
     },
 
     async searchCourses(query: string): Promise<CourseSummary[]> {
       const key = getKey();
       const params = planCourseSearchParams(query);
-      if (!key || !params) return [];
+      if (!params) return [];
+      const local = searchLocalCatalog(params.q);
+      if (!key) return local;
       const search = new URLSearchParams({ q: params.q });
       const { status, json } = await apiGet(`/courses?${search.toString()}`, key, fetchImpl);
       if (status === 403) {
@@ -108,12 +118,14 @@ export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataCli
       if (status < 200 || status >= 300) {
         throw new GolfCoursesApiError('Couldn’t find that course.', status);
       }
-      return parseNearbyCourses(json);
+      return mergeCatalogSummaries(parseNearbyCourses(json), local);
     },
 
     async getCourse(id: string): Promise<CourseDetail | null> {
+      if (!id.trim()) return null;
+      if (isLocalCatalogId(id)) return catalogCourseDetail(id);
       const key = getKey();
-      if (!key || !id.trim()) return null;
+      if (!key) return catalogCourseDetail(id);
       const encoded = encodeURIComponent(id);
       const detailRes = await apiGet(`/courses/${encoded}`, key, fetchImpl);
       if (detailRes.status === 404) return null;

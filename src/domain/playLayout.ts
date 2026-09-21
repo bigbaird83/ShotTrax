@@ -628,6 +628,37 @@ export function signalLabPleasantValleyHydrate(): {
 }
 
 /**
+ * Thunderbird Country Club (Heber Springs) is catalog-indexed.
+ * OSM has a course outline and unlabeled greens only — no numbered
+ * tee/green/hole. Pro miss + OSM miss → miss card. Never invent pins.
+ */
+export function signalLabThunderbirdHydrate(): {
+  thunderbirdHeberSpringsOnly: true;
+  paintsViaHydrateWhenProMisses: false;
+  neverInventFromClubhouse: true;
+  neverInventFromScorecardYards: true;
+  neverInventUnlabeledGreens: true;
+  hardMissAllNine: true;
+  needsDocPinSheets: true;
+  cypressStillExclusive: true;
+  greystoneStillExclusive: true;
+  pleasantValleyStillExclusive: true;
+} {
+  return {
+    thunderbirdHeberSpringsOnly: true,
+    paintsViaHydrateWhenProMisses: false,
+    neverInventFromClubhouse: true,
+    neverInventFromScorecardYards: true,
+    neverInventUnlabeledGreens: true,
+    hardMissAllNine: true,
+    needsDocPinSheets: true,
+    cypressStillExclusive: true,
+    greystoneStillExclusive: true,
+    pleasantValleyStillExclusive: true,
+  };
+}
+
+/**
  * Signal Lab build 36 — Add shot gesture lock.
  * 1. First frame is course tee + green center only.
  * 2. After that, do not reframe.

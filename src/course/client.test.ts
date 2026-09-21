@@ -17,9 +17,12 @@ test('client is unconfigured without a key and does not call the network', async
   const nearby = await client.nearbyCourses({ lat: 37, lng: -122 });
   const searched = await client.searchCourses('pebble');
   const course = await client.getCourse('4');
+  const catalog = await client.searchCourses('thunderbird');
   assert.deepEqual(nearby, []);
   assert.deepEqual(searched, []);
   assert.equal(course, null);
+  assert.equal(catalog.length, 1);
+  assert.equal(catalog[0].name, 'Thunderbird Country Club');
   assert.equal(calls, 0);
 });
 

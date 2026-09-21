@@ -1,0 +1,20 @@
+{
+  "courseKey": "thunderbird-heber-springs-ar",
+  "displayName": "Thunderbird Country Club",
+  "locality": "Heber Springs, AR",
+  "source": "osm",
+  "sourceRef": "osm:way/296944937 Thunderbird Golf Course (Nominatim); Golf Courses / Pro API unauthenticated (no key in env) — no scorecard/green-centers used; 0 golf=tee; 0 golf=hole; 8 unlabeled golf=green ways (628029888, 628029892, 628029896, 628029897, 628029899, 628029900, 628029901, 628029902) unused — no hole refs, never paired; hole count 9 from club listing (plays as 18); HARD-MISS H1–H9 need Doc pin sheets",
+  "fetchedAt": "2026-09-21T00:53:48Z",
+  "holes": [],
+  "holeSources": [
+    { "hole": 1, "status": "hard-miss", "source": "none — OSM greens unlabeled, no tee/hole ref, no Pro pin", "needsDocPinSheet": true },
+    { "hole": 2, "status": "hard-miss", "source": "none — OSM greens unlabeled, no tee/hole ref, no Pro pin", "needsDocPinSheet": true },
+    { "hole": 3, "status": "hard-miss", "source": "none — OSM greens unlabeled, no tee/hole ref, no Pro pin", "needsDocPinSheet": true },
+    { "hole": 4, "status": "hard-miss", "source": "none — OSM greens unlabeled, no tee/hole ref, no Pro pin", "needsDocPinSheet": true },
+    { "hole": 5, "status": "hard-miss", "source": "none — OSM greens unlabeled, no tee/hole ref, no Pro pin", "needsDocPinSheet": true },
+    { "hole": 6, "status": "hard-miss", "source": "none — OSM greens unlabeled, no tee/hole ref, no Pro pin", "needsDocPinSheet": true },
+    { "hole": 7, "status": "hard-miss", "source": "none — OSM greens unlabeled, no tee/hole ref, no Pro pin", "needsDocPinSheet": true },
+    { "hole": 8, "status": "hard-miss", "source": "none — OSM greens unlabeled, no tee/hole ref, no Pro pin", "needsDocPinSheet": true },
+    { "hole": 9, "status": "hard-miss", "source": "none — OSM greens unlabeled, no tee/hole ref, no Pro pin", "needsDocPinSheet": true }
+  ]
+}
