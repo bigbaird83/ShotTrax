@@ -1,11 +1,17 @@
-import { useEffect, useRef } from 'react';
-import { AccessibilityInfo, Animated, StyleSheet, Text, View } from 'react-native';
+import { useEventListener } from 'expo';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import * as SplashScreen from 'expo-splash-screen';
-import { colors } from './theme';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AccessibilityInfo, Image, StyleSheet, View } from 'react-native';
 
-const HOLD_MS = 1100;
-const FADE_MS = 280;
+/** Doc’s open clip, already trimmed to the first 3.0s. */
+const OPEN_CLIP = require('../../assets/splash/splash-open-3s.mp4') as number;
+/** Last frame of the 3s clip — Reduce Motion still (no motion). */
+const OPEN_STILL = require('../../assets/splash/splash-open-still.png');
+
+const SPLASH_BG = '#000000';
 const REDUCE_MOTION_MS = 400;
+const FAILSAFE_MS = 4500;
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -13,107 +19,111 @@ type Props = {
   onDone: () => void;
 };
 
-/** Short branded open. Brand mark: ShotTraxx. Kept under ~2s. */
+function hideNativeSplash() {
+  void SplashScreen.hideAsync().catch(() => {});
+}
+
+/** JS branded open after the static Expo splash. Muted 3s Doc clip, then onDone. */
 export function BrandedSplash({ onDone }: Props) {
-  const opacity = useRef(new Animated.Value(0)).current;
-  const scale = useRef(new Animated.Value(0.92)).current;
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
+  const finishedRef = useRef(false);
+  const [reduceMotion, setReduceMotion] = useState<boolean | null>(null);
+
+  const finish = useCallback(() => {
+    if (finishedRef.current) return;
+    finishedRef.current = true;
+    hideNativeSplash();
+    onDoneRef.current();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-    const finish = () => {
-      if (!cancelled) onDoneRef.current();
-    };
-
-    void SplashScreen.hideAsync().catch(() => {});
-
-    const run = async () => {
-      let reduce = false;
-      try {
-        reduce = await AccessibilityInfo.isReduceMotionEnabled();
-      } catch {
-        reduce = false;
-      }
-      if (cancelled) return;
-      if (reduce) {
-        opacity.setValue(1);
-        scale.setValue(1);
-        timeout = setTimeout(finish, REDUCE_MOTION_MS);
-        return;
-      }
-      Animated.sequence([
-        Animated.parallel([
-          Animated.timing(opacity, { toValue: 1, duration: FADE_MS, useNativeDriver: true }),
-          Animated.spring(scale, { toValue: 1, friction: 7, useNativeDriver: true }),
-        ]),
-        Animated.delay(HOLD_MS),
-        Animated.timing(opacity, { toValue: 0, duration: FADE_MS, useNativeDriver: true }),
-      ]).start(({ finished }) => {
-        if (finished) finish();
+    void AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => {
+        if (!cancelled) setReduceMotion(enabled);
+      })
+      .catch(() => {
+        if (!cancelled) setReduceMotion(false);
       });
-    };
-    void run();
-
     return () => {
       cancelled = true;
-      if (timeout) clearTimeout(timeout);
     };
-  }, [opacity, scale]);
+  }, []);
+
+  useEffect(() => {
+    if (reduceMotion === null) return;
+    const timeout = setTimeout(finish, FAILSAFE_MS);
+    return () => clearTimeout(timeout);
+  }, [reduceMotion, finish]);
+
+  if (reduceMotion === null) {
+    // Native Expo splash stays up — no JS black frame while we pick a path.
+    return null;
+  }
+
+  if (reduceMotion) {
+    return <StillSplash onDone={finish} />;
+  }
+
+  return <VideoSplash onDone={finish} />;
+}
+
+function StillSplash({ onDone }: { onDone: () => void }) {
+  useEffect(() => {
+    hideNativeSplash();
+    const timeout = setTimeout(onDone, REDUCE_MOTION_MS);
+    return () => clearTimeout(timeout);
+  }, [onDone]);
 
   return (
-    <Animated.View
+    <View
       pointerEvents="auto"
       accessibilityRole="image"
       accessibilityLabel="ShotTraxx"
-      style={[styles.wrap, StyleSheet.absoluteFill, { opacity }]}>
-      <Animated.View style={[styles.markWrap, { transform: [{ scale }] }]}>
-        <View style={styles.mark}>
-          <View style={styles.markInner} />
-        </View>
-        <Text style={styles.brand}>ShotTraxx</Text>
-        <Text style={styles.tag}>GPS shot tracker</Text>
-      </Animated.View>
-    </Animated.View>
+      style={[styles.wrap, StyleSheet.absoluteFill]}>
+      <Image source={OPEN_STILL} style={StyleSheet.absoluteFill} resizeMode="contain" />
+    </View>
+  );
+}
+
+function VideoSplash({ onDone }: { onDone: () => void }) {
+  const player = useVideoPlayer(OPEN_CLIP, (instance) => {
+    instance.loop = false;
+    instance.muted = true;
+    instance.audioMixingMode = 'mixWithOthers';
+    instance.play();
+  });
+
+  useEventListener(player, 'playToEnd', onDone);
+  useEventListener(player, 'statusChange', ({ status, error }) => {
+    if (status === 'error' || error) onDone();
+  });
+
+  return (
+    <View
+      pointerEvents="auto"
+      accessibilityRole="image"
+      accessibilityLabel="ShotTraxx"
+      style={[styles.wrap, StyleSheet.absoluteFill]}>
+      <VideoView
+        player={player}
+        style={StyleSheet.absoluteFill}
+        contentFit="contain"
+        nativeControls={false}
+        playsInline
+        allowsPictureInPicture={false}
+        allowsVideoFrameAnalysis={false}
+        fullscreenOptions={{ enable: false }}
+        onFirstFrameRender={hideNativeSplash}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
-    backgroundColor: colors.bg,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: SPLASH_BG,
     zIndex: 1000,
-  },
-  markWrap: { alignItems: 'center', gap: 12 },
-  mark: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    borderWidth: 3,
-    borderColor: colors.lime,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgElevated,
-  },
-  markInner: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: colors.lime,
-  },
-  brand: {
-    color: colors.cream,
-    fontSize: 40,
-    fontWeight: '900',
-    letterSpacing: 1.2,
-  },
-  tag: {
-    color: colors.muted,
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
   },
 });

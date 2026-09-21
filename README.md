@@ -31,7 +31,7 @@ To install a store-signed build with Watch on a physical iPhone, use **TestFligh
 
 ## Splash
 
-Cold start shows the native Expo splash, then a short JS branded open (**ShotTraxx**, under ~2s). It is not a video.
+Cold start still shows the native Expo splash (`splash-icon.png`). After JS boots, `BrandedSplash` plays Doc’s muted 3.0s open clip (`assets/splash/splash-open-3s.mp4`) and then enters the app. Reduce Motion skips the clip and shows the last-frame still, then the same onDone path.
 
 ## Golf Courses API (course picker)
 
