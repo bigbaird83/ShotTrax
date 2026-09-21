@@ -79,6 +79,8 @@ type Props = {
   showPhonePin?: boolean;
   /** Play / edit may reveal Legal and compass after a tap. Add shot never does. */
   allowMapsChrome?: boolean;
+  /** HARD-MISS / need-pins copy. Default is the generic tee+green miss. */
+  missCopy?: { title: string; detail?: string | null };
 };
 
 class MapGuard extends Component<{ children: ReactNode; fallback: ReactNode }, { failed: boolean }> {
@@ -120,6 +122,7 @@ function TrailFallback({
   hasGreen,
   hideYardsOverlay,
   frameMiss,
+  missCopy,
 }: {
   holeNumber: number;
   yardsToGreen?: YardsToGreenResult;
@@ -127,6 +130,7 @@ function TrailFallback({
   hasGreen?: boolean;
   hideYardsOverlay?: boolean;
   frameMiss?: boolean;
+  missCopy?: { title: string; detail?: string | null };
 }) {
   const yardsOnCard = Boolean(yardsToGreen && yardsToGreen.yards != null && Number.isFinite(yardsToGreen.yards));
   const waiting =
@@ -143,7 +147,8 @@ function TrailFallback({
     return (
       <View style={styles.missCard} testID="course-card-miss">
         <Text style={styles.holeBadgeText}>Hole {holeNumber}</Text>
-        <Text style={styles.missMsg}>{COPY.courseCardMissingFrame}</Text>
+        <Text style={styles.missMsg}>{missCopy?.title ?? COPY.courseCardMissingFrame}</Text>
+        {missCopy?.detail ? <Text style={styles.missDetail}>{missCopy.detail}</Text> : null}
       </View>
     );
   }
@@ -186,6 +191,7 @@ function NativeHoleMap({
   onFrameReady,
   showPhonePin,
   allowMapsChrome = true,
+  missCopy,
 }: Props) {
   const mapRef = useRef<MapView | null>(null);
   const framedOnce = useRef(false);
@@ -433,6 +439,7 @@ function NativeHoleMap({
           hasGreen={Boolean(green)}
           hideYardsOverlay={hideYardsOverlay}
           frameMiss={Boolean(lockFrame)}
+          missCopy={missCopy}
         />
       </View>
     );
@@ -739,6 +746,7 @@ export function HoleMap(props: Props) {
       hasFix={Boolean(props.userFix)}
       hasGreen={Boolean(props.green)}
       hideYardsOverlay={props.hideYardsOverlay}
+      missCopy={props.missCopy}
     />
   );
 
@@ -838,6 +846,7 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   missMsg: { color: colors.cream, fontSize: type.body, lineHeight: 22, fontWeight: '700' },
+  missDetail: { color: colors.muted, fontSize: type.meta, lineHeight: 20, fontWeight: '700' },
   fallbackMsg: { color: colors.muted, fontSize: type.meta, lineHeight: 20 },
   userDot: {
     width: 16,

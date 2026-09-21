@@ -14,7 +14,11 @@ import {
   showNearbyCourseList,
 } from '@/src/domain/coursePick';
 import { type CourseDistanceUnit } from '@/src/domain/courseDistance';
+import { courseNeedsPinSheets } from '@/src/domain/missCard';
+import type { LatLng } from '@/src/domain/latLng';
+import { parseUsZip } from '@/src/domain/zipGeocode';
 import { getCurrentFix } from '@/src/services/location';
+import { geocodeUsZip } from '@/src/services/geocodeZip';
 import { BigButton } from './BigButton';
 import { EmptyPanel } from './EmptyPanel';
 import { useColors } from './ColorThemeProvider';
@@ -62,6 +66,7 @@ export function CoursePicker({
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<CourseSummary[] | null>(null);
   const [listPhoneFix, setListPhoneFix] = useState<GpsFix | null>(null);
+  const [listFrom, setListFrom] = useState<LatLng | null>(null);
   const [listNowMs, setListNowMs] = useState<number | null>(null);
   const [tees, setTees] = useState<TeeSet[] | null>(null);
   const [detail, setDetail] = useState<CourseDetail | null>(null);
@@ -70,16 +75,44 @@ export function CoursePicker({
     setBusy(true);
     setError(null);
     try {
-      const rawFix = await getCurrentFix().catch(() => null);
+      const zipQuery = parseUsZip(query);
+      const rawFix = zipQuery ? null : await getCurrentFix().catch(() => null);
       const nowMs = Date.now();
       const plan = planNearbyCourseSearch({ query, phoneFix: rawFix, nowMs });
-      setListPhoneFix(rawFix);
       setListNowMs(nowMs);
       if (plan.mode === 'needs_location') {
+        setListPhoneFix(rawFix);
+        setListFrom(null);
         setResults([]);
         setError(COPY.nearbyNeedsLocation);
         return;
       }
+      if (plan.mode === 'zip') {
+        const geo = await geocodeUsZip(plan.zip);
+        if (!geo.ok) {
+          setListPhoneFix(null);
+          setListFrom(null);
+          setResults(null);
+          setError(COPY.zipGeocodeMiss);
+          return;
+        }
+        const found = await getCourseDataClient().nearbyCourses(geo.from);
+        const listed = planCourseList({
+          courses: found,
+          lastPlayedAtByCourse,
+          from: geo.from,
+          nowMs,
+        });
+        setListPhoneFix(null);
+        setListFrom(geo.from);
+        setResults(listed);
+        if (listed.length === 0) {
+          setError(COPY.nearbyEmpty);
+        }
+        return;
+      }
+      setListPhoneFix(rawFix);
+      setListFrom(null);
       const found =
         plan.mode === 'search'
           ? await getCourseDataClient().searchCourses(plan.q)
@@ -138,13 +171,15 @@ export function CoursePicker({
     }
   };
 
-  const emptyNearby = results != null && results.length === 0 && !busy;
+  const zipMiss = error === COPY.zipGeocodeMiss;
+  const emptyNearby = results != null && results.length === 0 && !busy && !zipMiss;
   const needsLocation = error === COPY.nearbyNeedsLocation;
   const showList = showNearbyCourseList(selected);
   const listed = planCourseList({
     courses: results ?? [],
     lastPlayedAtByCourse,
     phoneFix: listPhoneFix,
+    from: listFrom,
     nowMs: listNowMs ?? undefined,
   });
 
@@ -171,6 +206,7 @@ export function CoursePicker({
           <Text style={styles.label}>{COPY.nearbyHint}</Text>
           {!configured && emptyNearby ? <Text style={styles.meta}>{COPY.nearbyUnavailable}</Text> : null}
           {error && !emptyNearby ? <Text style={styles.warn}>{error}</Text> : null}
+          {zipMiss ? <Text style={styles.meta}>{COPY.zipGeocodeMissHint}</Text> : null}
           {busy ? <Text style={styles.meta}>{COPY.nearbyBusy}</Text> : null}
           {emptyNearby ? (
             <EmptyPanel
@@ -183,6 +219,15 @@ export function CoursePicker({
         <View style={styles.selected}>
           <Text style={styles.selectedName}>{selected.name}</Text>
           <Text style={styles.meta}>{placeLine(selected)}</Text>
+          {courseNeedsPinSheets({
+            courseApiId: selected.id,
+            name: selected.name,
+            city: selected.city,
+            state: selected.state,
+            location: selected.location,
+          }) ? (
+            <Text style={styles.warn}>{COPY.hardMissNeedPins}</Text>
+          ) : null}
           {selectedTee ? (
             <>
               <Text style={styles.meta}>{formatTeeMeta(selectedTee)}</Text>
@@ -223,6 +268,15 @@ export function CoursePicker({
                     {card.lastPlayed ? <Text style={styles.chip}>{card.lastPlayed}</Text> : null}
                   </View>
                   <Text style={styles.meta}>{placeLine(course)}</Text>
+                  {courseNeedsPinSheets({
+                    courseApiId: course.id,
+                    name: course.name,
+                    city: course.city,
+                    state: course.state,
+                    location: course.location,
+                  }) ? (
+                    <Text style={styles.warn}>{COPY.hardMissNeedPins}</Text>
+                  ) : null}
                 </Pressable>
               );
             })

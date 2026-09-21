@@ -1,91 +1,30 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { findNodeHandle, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { getCourseDataClient } from '@/src/course/client';
+import { useMemo, useRef, useState } from 'react';
+import { findNodeHandle, Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatParLabel, formatSiLabel, formatTeeMeta } from '@/src/course/layout';
-import { teePointForHole, teePointFromHoleFeature } from '@/src/course/osmOverlay';
-import type { OsmOverlay } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
-import { getRound, listClubAverages, listHoles, listPenaltiesForHole, listShotsForHole } from '@/src/db/repo';
-import { lockHoleCamera, resolveHoleTee, shotPinsForHoleCamera } from '@/src/domain/holeCamera';
+import { getRound, listHoles, listPenaltiesForHole, listShotsForHole } from '@/src/db/repo';
 import { finishedHoleDisplayScore } from '@/src/domain/holeScore';
-import { planNerdOut } from '@/src/domain/nerdOut';
 import { formatPenaltyRow, totalPenaltyStrokes } from '@/src/domain/penalty';
 import { COPY, holeOutClosedOnShot } from '@/src/domain/playerCopy';
 import { holeClosedByShot } from '@/src/domain/putts';
 import { toastFromShareAttempt } from '@/src/domain/spectator';
 import { shareRoundSnapshot } from '@/src/services/shareRound';
 import { reconcileHoleScore } from '@/src/domain/scoreReconcile';
-import { useLiveFix } from '@/src/services/useLiveFix';
 import { BigButton } from '@/src/ui/BigButton';
-import { HoleMap } from '@/src/ui/HoleMap';
 import { Screen } from '@/src/ui/Screen';
-import { FullSheet } from '@/src/ui/Sheet';
 import { useColors } from '@/src/ui/ColorThemeProvider';
 import { type ColorPalette } from '@/src/ui/theme';
-
-const NERD_TRAIL_TO_GREEN = { yards: null, quality: 'none' as const };
 
 export default function RoundSummaryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { db, revision } = useDb();
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const [nerdOpen, setNerdOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const shareAnchorRef = useRef<View>(null);
-  const [osmOverlay, setOsmOverlay] = useState<OsmOverlay | null>(null);
   const round = useMemo(() => getRound(db, id), [db, id, revision]);
   const holes = useMemo(() => (round ? listHoles(db, round.id) : []), [db, round, revision]);
-  const averages = useMemo(() => listClubAverages(db), [db, revision]);
-  const fix = useLiveFix(nerdOpen);
-  const nerd = useMemo(
-    () =>
-      planNerdOut({
-        holeScores: holes.map((hole) => hole.score),
-        holePutts: holes.map((hole) => hole.putts),
-        clubs: averages.map((row) => ({
-          id: row.club.id,
-          name: row.club.name,
-          shortName: row.club.shortName,
-          count: row.count,
-          avgYards: row.avgYards,
-          typicalCarryYards: row.typicalCarryYards,
-          carrySource: row.carrySource,
-        })),
-      }),
-    [holes, averages],
-  );
-
-  useEffect(() => {
-    if (!nerdOpen || !round) {
-      setOsmOverlay(null);
-      return;
-    }
-    const location =
-      round.courseLat != null && round.courseLng != null
-        ? { lat: round.courseLat, lng: round.courseLng }
-        : null;
-    if (!location) {
-      setOsmOverlay(null);
-      return;
-    }
-    let live = true;
-    void getCourseDataClient()
-      .fetchOsmOverlay({
-        courseId: round.courseApiId,
-        location,
-      })
-      .then((overlay) => {
-        if (live) setOsmOverlay(overlay);
-      })
-      .catch(() => {
-        if (live) setOsmOverlay(null);
-      });
-    return () => {
-      live = false;
-    };
-  }, [nerdOpen, round]);
 
   if (!round) {
     return (
@@ -188,7 +127,16 @@ export default function RoundSummaryScreen() {
         );
       })}
 
-      <BigButton label={COPY.nerdOut} variant="secondary" onPress={() => setNerdOpen(true)} />
+      <BigButton
+        label={COPY.nerdOut}
+        variant="secondary"
+        onPress={() => router.push({ pathname: '/nerd-out', params: { roundId: id } })}
+      />
+      <BigButton
+        label={COPY.liveBoard}
+        variant="secondary"
+        onPress={() => router.push(`/round/${id}/board`)}
+      />
       <View ref={shareAnchorRef} collapsable={false}>
         <BigButton
           label={COPY.share}
@@ -203,74 +151,6 @@ export default function RoundSummaryScreen() {
       </View>
       {toast ? <Text style={styles.warn}>{toast}</Text> : null}
       <BigButton label={COPY.home} variant="ghost" onPress={() => router.replace('/')} />
-
-      <FullSheet visible={nerdOpen} title={COPY.nerdOut} onClose={() => setNerdOpen(false)}>
-        <ScrollView contentContainerStyle={styles.nerdPad}>
-          <Text style={styles.muted}>{COPY.nerdOutLede}</Text>
-          <Text style={styles.nerdLabel}>{COPY.score}</Text>
-          <Text style={styles.nerdValue}>{nerd.score ?? '—'}</Text>
-          <Text style={styles.nerdLabel}>{COPY.putts}</Text>
-          <Text style={styles.nerdValue}>{nerd.putts}</Text>
-          {holes.map((hole) => {
-            const shots = listShotsForHole(db, hole.id);
-            const green =
-              hole.greenLat != null && hole.greenLng != null
-                ? { lat: hole.greenLat, lng: hole.greenLng }
-                : null;
-            const camera = lockHoleCamera({
-              tee: resolveHoleTee({
-                holeTee: teePointFromHoleFeature(osmOverlay, hole.number, green),
-                osmTee: teePointForHole(osmOverlay, hole.number),
-                green,
-              }),
-              green,
-              shotPins: shotPinsForHoleCamera(shots),
-              phone: fix ? { lat: fix.lat, lng: fix.lng } : null,
-            });
-            if (!camera) return null;
-            return (
-              <View key={`trail-${hole.id}`} style={styles.nerdTrail}>
-                <Text style={styles.nerdLabel}>
-                  {formatParLabel(hole.par)} · Hole {hole.number}
-                </Text>
-                <HoleMap
-                  holeNumber={hole.number}
-                  shots={shots}
-                  userFix={fix}
-                  green={green}
-                  yardsToGreen={NERD_TRAIL_TO_GREEN}
-                  osmOverlay={osmOverlay}
-                  lockFrame
-                  hideYardsOverlay
-                  frameEpoch={`nerd-${hole.number}`}
-                  heading={camera.heading}
-                  framePoints={camera.points.map((point) => ({
-                    latitude: point.lat,
-                    longitude: point.lng,
-                  }))}
-                />
-              </View>
-            );
-          })}
-          {nerd.clubs.map((row) => (
-            <View key={row.id} style={styles.nerdRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.holeTitle}>{row.name}</Text>
-                <Text style={styles.muted}>
-                  {row.kind === 'live'
-                    ? `${row.count} shot${row.count === 1 ? '' : 's'}`
-                    : row.kind === 'estimated'
-                      ? COPY.estimated
-                      : row.kind === 'typed'
-                        ? COPY.typicalCarry
-                        : COPY.noClosedShots}
-                </Text>
-              </View>
-              <Text style={styles.score}>{row.yards != null ? `${row.yards}` : '—'}</Text>
-            </View>
-          ))}
-        </ScrollView>
-      </FullSheet>
     </Screen>
   );
 }
@@ -297,18 +177,5 @@ function makeStyles(colors: ColorPalette) {
   holeNum: { color: colors.cream, fontSize: 22, fontWeight: '900', width: 28 },
   holeTitle: { color: colors.cream, fontSize: 18, fontWeight: '700' },
   score: { color: colors.cream, fontSize: 24, fontWeight: '900' },
-  nerdPad: { padding: 16, gap: 10, paddingBottom: 40 },
-  nerdLabel: { color: colors.muted, fontSize: 14, fontWeight: '800' },
-  nerdValue: { color: colors.cream, fontSize: 36, fontWeight: '900' },
-  nerdTrail: { gap: 8 },
-  nerdRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: colors.bgElevated,
-    padding: 12,
-    borderRadius: 14,
-    minHeight: 64,
-  },
   });
 }

@@ -24,7 +24,18 @@ test('nerd out uses stored score and putts only', () => {
   assert.equal(out.putts, 5);
   assert.equal(nerdOutShowsGir(), false);
   assert.equal(nerdOutShowsStrokesGained(), false);
-  assert.deepEqual(Object.keys(out).sort(), ['clubs', 'putts', 'score']);
+  assert.deepEqual(Object.keys(out).sort(), [
+    'clubs',
+    'holesScored',
+    'marks',
+    'putts',
+    'puttsPerHole',
+    'score',
+    'toPar',
+  ]);
+  assert.equal(out.toPar, null);
+  assert.equal(out.holesScored, 3);
+  assert.equal(out.puttsPerHole, 1.7);
   assert.equal('gir' in out, false);
   assert.equal('strokesGained' in out, false);
 });
@@ -126,11 +137,11 @@ test('nerd out club carries are the same club-book numbers', () => {
 test('nerd out trail uses the tee-to-green lock, even from home', () => {
   assert.equal(nerdOutShowsTrail(), true);
   assert.equal(nerdOutTrailUsesHoleCamera(), true);
-  const summary = readFileSync(new URL('../../app/round/[id]/summary.tsx', import.meta.url), 'utf8');
-  assert.match(summary, /lockHoleCamera/);
-  assert.match(summary, /lockFrame/);
-  assert.match(summary, /shotPinsForHoleCamera/);
-  assert.match(summary, /resolveHoleTee/);
-  assert.match(summary, /phone: fix/);
-  assert.doesNotMatch(summary, /lockFrame=\{false\}/);
+  const page = readFileSync(new URL('../../app/nerd-out.tsx', import.meta.url), 'utf8');
+  assert.match(page, /lockHoleCamera/);
+  assert.match(page, /lockFrame/);
+  assert.match(page, /shotPinsForHoleCamera/);
+  assert.match(page, /resolveHoleTee/);
+  assert.match(page, /phone: fix/);
+  assert.doesNotMatch(page, /lockFrame=\{false\}/);
 });

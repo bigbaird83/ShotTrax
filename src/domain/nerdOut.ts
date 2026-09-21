@@ -1,5 +1,6 @@
 import type { CarrySource } from './carryFill';
 import { isPutterClubId } from './defaultBag';
+import { scorecardMark, type ScorecardMark } from './scorecard';
 
 export type ClubBookKind = 'live' | 'typed' | 'estimated' | null;
 
@@ -26,6 +27,14 @@ export type NerdOutClub = ClubBookCarry & {
   shortName: string;
 };
 
+export type NerdOutMarks = Record<Exclude<ScorecardMark, null>, number>;
+
+export type NerdOutLifetime = {
+  finishedRounds: number;
+  puttsPerRound: number | null;
+  scoredHoles: number;
+};
+
 /**
  * Same number the club book / Averages tab shows.
  * Live average only after real GPS or Placed shots (`count > 0`).
@@ -49,23 +58,45 @@ export function clubBookCarry(args: {
   return { yards: null, kind: null, count: 0 };
 }
 
+function emptyMarks(): NerdOutMarks {
+  return { eagle: 0, birdie: 0, par: 0, bogey: 0, double: 0 };
+}
+
 /**
  * End-of-round stats from stored hole scores / putts and the club book.
  * Club carries are `clubBookCarry` on those same rows — nothing invented.
- * Putter is omitted. No GIR. No strokes gained.
+ * Putter is omitted. No GIR. No strokes gained. Vs par only when both exist.
  */
 export function planNerdOut(args: {
   holeScores: (number | null)[];
   holePutts: number[];
+  holePars?: (number | null)[];
   clubs: ClubBookRow[];
 }): {
   score: number | null;
+  toPar: number | null;
   putts: number;
+  puttsPerHole: number | null;
+  holesScored: number;
+  marks: NerdOutMarks;
   clubs: NerdOutClub[];
 } {
   const scored = args.holeScores.filter((score): score is number => score != null);
   const score = scored.length === 0 ? null : scored.reduce((sum, n) => sum + n, 0);
   const putts = args.holePutts.reduce((sum, n) => sum + n, 0);
+  const pars = args.holePars ?? [];
+  let toParSum = 0;
+  let toParN = 0;
+  const marks = emptyMarks();
+  args.holeScores.forEach((holeScore, index) => {
+    const mark = scorecardMark(holeScore, pars[index] ?? null);
+    if (mark) marks[mark] += 1;
+    if (holeScore == null || pars[index] == null) return;
+    const par = pars[index];
+    if (par == null || scorecardMark(holeScore, par) == null) return;
+    toParSum += holeScore - par;
+    toParN += 1;
+  });
   const clubs: NerdOutClub[] = args.clubs
     .filter((club) => !isPutterClubId(club.id))
     .map((club) => ({
@@ -74,7 +105,32 @@ export function planNerdOut(args: {
       shortName: club.shortName,
       ...clubBookCarry(club),
     }));
-  return { score, putts, clubs };
+  return {
+    score,
+    toPar: toParN === 0 ? null : toParSum,
+    putts,
+    puttsPerHole: scored.length === 0 ? null : Math.round((putts / scored.length) * 10) / 10,
+    holesScored: scored.length,
+    marks,
+    clubs,
+  };
+}
+
+/** Finished-round rollup from stored scores/putts only. */
+export function planNerdOutLifetime(
+  rounds: { finished: boolean; holePutts: number[]; holeScores: (number | null)[] }[],
+): NerdOutLifetime {
+  const finished = rounds.filter((round) => round.finished);
+  const putts = finished.reduce((sum, round) => sum + round.holePutts.reduce((n, p) => n + p, 0), 0);
+  const scoredHoles = rounds.reduce(
+    (sum, round) => sum + round.holeScores.filter((score) => score != null).length,
+    0,
+  );
+  return {
+    finishedRounds: finished.length,
+    puttsPerRound: finished.length === 0 ? null : Math.round((putts / finished.length) * 10) / 10,
+    scoredHoles,
+  };
 }
 
 export function nerdOutShowsGir(): false {

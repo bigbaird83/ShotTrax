@@ -121,8 +121,9 @@ import type { Club, PenaltyReason } from '@/src/domain/types';
 import { lastLandingMark, markToGreen, planPlayHeaderYards, toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
 import { yardsToGreen } from '@/src/sensing/yardsToGreen';
 import { describeGpsSource } from '@/src/services/location';
+import { courseNeedsPinSheets, planMissCardCopy } from '@/src/domain/missCard';
 import { MENU_SHARE_FALLBACK_MS, toastFromShareAttempt } from '@/src/domain/spectator';
-import { shareRoundSnapshot } from '@/src/services/shareRound';
+import { publishRoundScoreboard, shareRoundSnapshot } from '@/src/services/shareRound';
 import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, undoShotEdit, deleteHoleShot } from '@/src/services/shotActions';
 import { useLiveFix } from '@/src/services/useLiveFix';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
@@ -425,6 +426,13 @@ export default function HoleScreen() {
     round?.courseLat != null && round.courseLng != null
       ? { lat: round.courseLat, lng: round.courseLng }
       : null;
+  const missCopy = planMissCardCopy({
+    needPins: courseNeedsPinSheets({
+      courseApiId: round?.courseApiId,
+      name: round?.courseName,
+      location: isCourseCardLatLng(courseLocation) ? courseLocation : null,
+    }),
+  });
   const overlay =
     osmOverlay ??
     cachedOsmOverlay({ courseId: round?.courseApiId, holeNumber, green: proGreen });
@@ -730,9 +738,14 @@ export default function HoleScreen() {
   const queueMenuShare = useCallback(() => {
     pendingShareRef.current = true;
     setMenuOpen(false);
+    setScorecardOpen(false);
     if (shareFallbackRef.current) clearTimeout(shareFallbackRef.current);
     shareFallbackRef.current = setTimeout(openQueuedShare, MENU_SHARE_FALLBACK_MS);
   }, [openQueuedShare]);
+
+  useEffect(() => {
+    publishRoundScoreboard(db, id, { currentHoleNumber: holeNumber });
+  }, [db, id, holeNumber, revision]);
 
   useEffect(
     () => () => {
@@ -1255,6 +1268,7 @@ export default function HoleScreen() {
           }}
           fmb={fmb}
           osmOverlay={overlay}
+          missCopy={missCopy}
           placedFrom={placeMode === 'edit-from' || placeMode === 'edit-to' ? placeFrom : addShotFrom}
           placedTo={placeToDraft ?? placeTo}
           lineFrom={placeMode === 'edit-from' || placeMode === 'edit-to' ? placeFrom : addShotFrom}
@@ -1721,9 +1735,25 @@ export default function HoleScreen() {
             }}
           />
           <BigButton
+            label={COPY.nerdOut}
+            variant="ghost"
+            onPress={() => {
+              setMenuOpen(false);
+              router.push({ pathname: '/nerd-out', params: { roundId: id } });
+            }}
+          />
+          <BigButton
             label={COPY.share}
             variant="ghost"
             onPress={queueMenuShare}
+          />
+          <BigButton
+            label={COPY.liveBoard}
+            variant="ghost"
+            onPress={() => {
+              setMenuOpen(false);
+              router.push(`/round/${id}/board`);
+            }}
           />
           <BigButton
             label={COPY.undoLast}
@@ -1766,6 +1796,7 @@ export default function HoleScreen() {
       <FullSheet
         visible={scorecardOpen}
         title={COPY.scorecard}
+        onDismiss={openQueuedShare}
         onClose={dismissScorecard}>
         <ScrollView contentContainerStyle={styles.sheetPad}>
           <ScorecardBody
@@ -1788,6 +1819,11 @@ export default function HoleScreen() {
               goToHole(nextNumber);
             }}
             onBack={dismissScorecard}
+            onShare={queueMenuShare}
+            onNerdOut={() => {
+              setScorecardOpen(false);
+              router.push({ pathname: '/nerd-out', params: { roundId: id } });
+            }}
           />
         </ScrollView>
       </FullSheet>
@@ -1882,6 +1918,7 @@ export default function HoleScreen() {
               quality: playHeaderYards.quality,
             }}
             osmOverlay={osmOverlay}
+            missCopy={missCopy}
             lockFrame
             hideYardsOverlay
             showPhonePin={false}

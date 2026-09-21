@@ -31,6 +31,8 @@ import {
 import { clubAverageFromShots, type ClubAverage } from '../domain/averages';
 import { rememberResolvedTee } from '../course/osmOverlay';
 import { isValidLatLng } from '../domain/latLng';
+import { newShareBoardCode, normalizeShareBoardCode } from '../domain/liveBoard';
+import { parseSpectatorPayload, type SpectatorPayload } from '../domain/spectator';
 import { planFinishHoleScore, planRecomputeFinishedHoleScore } from '../domain/holeScore';
 import { clampPenaltyStrokes, scoreAfterPenalty, totalPenaltyStrokes } from '../domain/penalty';
 import {
@@ -606,9 +608,38 @@ export function getRoundShareToken(db: SQLiteDatabase, roundId: string): string 
 export function ensureRoundShareToken(db: SQLiteDatabase, roundId: string): string {
   const existing = getRoundShareToken(db, roundId);
   if (existing) return existing;
-  const token = newId().replace(/-/g, '').slice(0, 16);
+  let token = newShareBoardCode();
+  for (let i = 0; i < 8; i += 1) {
+    const taken = db.getFirstSync<{ id: string }>('SELECT id FROM rounds WHERE share_token = ?', [token]);
+    if (!taken) break;
+    token = newShareBoardCode();
+  }
   db.runSync('UPDATE rounds SET share_token = ? WHERE id = ?', [token, roundId]);
   return token;
+}
+
+export function putShareBoard(db: SQLiteDatabase, payload: SpectatorPayload): void {
+  const token = normalizeShareBoardCode(payload.token);
+  if (!token) return;
+  db.runSync(
+    'INSERT INTO share_boards (token, payload_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(token) DO UPDATE SET payload_json = excluded.payload_json, updated_at = excluded.updated_at',
+    [token, JSON.stringify(payload), new Date().toISOString()],
+  );
+}
+
+export function getShareBoard(db: SQLiteDatabase, token: string): SpectatorPayload | null {
+  const key = normalizeShareBoardCode(token);
+  if (!key) return null;
+  const row = db.getFirstSync<{ payload_json: string }>(
+    'SELECT payload_json FROM share_boards WHERE token = ?',
+    [key],
+  );
+  if (!row?.payload_json) return null;
+  try {
+    return parseSpectatorPayload(JSON.parse(row.payload_json) as unknown);
+  } catch {
+    return null;
+  }
 }
 
 export function listHoles(db: SQLiteDatabase, roundId: string): Hole[] {

@@ -3,6 +3,7 @@ import { haversineYards } from './haversine';
 import { isValidLatLng, type LatLng } from './latLng';
 import type { GpsFix } from './types';
 import { phoneFixForNearbyCourses } from './watchNearby';
+import { parseUsZip } from './zipGeocode';
 
 /** Start 9/18 always needs a real picked course. Typed names do not start a round. */
 export function courseNameIsOptional(): false {
@@ -28,7 +29,7 @@ export function courseSearchPlaceholder(): typeof COURSE_SEARCH_PLACEHOLDER {
   return COURSE_SEARCH_PLACEHOLDER;
 }
 
-/** Golf Courses API text search. Name, city, state, and zip all go through `q`. */
+/** Golf Courses API text search. Name, city, and state go through `q`. Zip geocodes, then nearby. */
 export function courseSearchQueryParam(): 'q' {
   return 'q';
 }
@@ -68,7 +69,7 @@ function playedAt(
 
 export type CourseListSort = 'distance' | 'name';
 
-/** Distance sort uses a fresh phone fix only. Never Watch. Never invented. */
+/** Distance sort uses a fresh phone fix, or the geocoded zip point. Never Watch. Never invented. */
 export function courseListDistanceSortUsesPhoneFix(): true {
   return true;
 }
@@ -120,9 +121,11 @@ export function planCourseList<T extends {
   phoneFix?: GpsFix | null;
   watchFix?: GpsFix | null;
   nowMs?: number;
+  /** Zip search-near origin. Wins over phone when valid. Never invented. */
+  from?: LatLng | null;
 }): T[] {
-  const phone = phoneFixForCourseList(args);
-  const sort = phone ? 'distance' : 'name';
+  const from = isValidLatLng(args.from) ? args.from : phoneFixForCourseList(args);
+  const sort = from ? 'distance' : 'name';
   return args.courses
     .map((course, index) => ({
       course,
@@ -139,9 +142,9 @@ export function planCourseList<T extends {
       } else if (b.played) {
         return 1;
       }
-      if (sort === 'distance' && phone) {
-        const aYd = a.location ? haversineYards(phone, a.location) : Number.POSITIVE_INFINITY;
-        const bYd = b.location ? haversineYards(phone, b.location) : Number.POSITIVE_INFINITY;
+      if (sort === 'distance' && from) {
+        const aYd = a.location ? haversineYards(from, a.location) : Number.POSITIVE_INFINITY;
+        const bYd = b.location ? haversineYards(from, b.location) : Number.POSITIVE_INFINITY;
         if (aYd !== bYd) return aYd - bYd;
       }
       const byName = nameKey(a.course).localeCompare(nameKey(b.course));
@@ -153,10 +156,11 @@ export function planCourseList<T extends {
 
 export type NearbyCourseSearchPlan =
   | { mode: 'search'; q: string }
+  | { mode: 'zip'; zip: string }
   | { mode: 'nearby'; from: LatLng }
   | { mode: 'needs_location' };
 
-/** Nearby without a fresh phone fix does not invent a point or an order. */
+/** Nearby without a fresh phone fix does not invent a point or an order. Zip is its own path. */
 export function planNearbyCourseSearch(args: {
   query?: string | null;
   phoneFix?: GpsFix | null;
@@ -164,6 +168,8 @@ export function planNearbyCourseSearch(args: {
   nowMs?: number;
 }): NearbyCourseSearchPlan {
   const q = parseCourseSearchQuery(args.query);
+  const zip = parseUsZip(q);
+  if (zip) return { mode: 'zip', zip };
   if (q) return { mode: 'search', q };
   const phone = phoneFixForCourseList(args);
   if (!phone) return { mode: 'needs_location' };
