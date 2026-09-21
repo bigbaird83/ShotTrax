@@ -328,7 +328,8 @@ test('Thunderbird golfapi hydrate is 18 gated holes; tees and greens are never i
   assert.equal(thunderbirdHydrate?.holes[0]?.yards, 267);
   assert.equal(thunderbirdHydrate?.holes[0]?.greenDepthYards, 30);
   assert.ok(hydrateHoleFor(thunderbirdHydrate, 10)?.tee);
-  assert.notDeepEqual(hydrateHoleFor(thunderbirdHydrate, 10)?.green, thunderbirdHydrate?.holes[0]?.green);
+  assert.deepEqual(hydrateHoleFor(thunderbirdHydrate, 10)?.tee, thunderbirdHydrate?.holes[0]?.tee);
+  assert.deepEqual(hydrateHoleFor(thunderbirdHydrate, 10)?.green, thunderbirdHydrate?.holes[0]?.green);
   for (const hole of thunderbirdHydrate?.holes ?? []) {
     assert.ok(hole.tee);
     const tee = { lat: hole.tee.lat, lng: hole.tee.lng };
