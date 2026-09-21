@@ -1,0 +1,36 @@
+# Read-only golfapi.io hydrate probe for Thunderbird Country Club (Heber Springs, AR).
+# Mystic Creek, Cypress Creek, and North Hills are not requested.
+# Never invents GPS. Never prints GOLFAPI_KEY. NO_KEY exits 0.
+# Candidates land in the artifact only. Bundled thunderbird-*.json is not overwritten.
+name: golfapi hydrate probe
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    name: Thunderbird golfapi hydrate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Probe Thunderbird
+        env:
+          GOLFAPI_KEY: ${{ secrets.GOLFAPI_KEY }}
+          OUT_DIR: golfapi-probe-out
+        run: node scripts/golfapi-hydrate-probe.mjs
+
+      - name: Upload golfapi probe artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golfapi-probe-out
+          path: golfapi-probe-out/
+          if-no-files-found: warn
