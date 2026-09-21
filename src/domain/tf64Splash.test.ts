@@ -21,7 +21,7 @@ test('TF 64: Expo splash + BrandedSplash stills are the first frame of Doc’s 3
   assert.equal(splashPlugin[1].dark?.backgroundColor, '#000000');
 
   const splashIcon = readFileSync(new URL('../../assets/images/splash-icon.png', import.meta.url));
-  const still = readFileSync(new URL('../../assets/splash/splash-open-still.png', import.meta.url));
+  const still = readFileSync(new URL('../../assets/splash/splash-first-frame-v2.png', import.meta.url));
   assert.equal(splashIcon.equals(still), true, 'native splash and Reduce Motion still must be the same first frame');
 
   const { width, height } = pngSize(splashIcon);
