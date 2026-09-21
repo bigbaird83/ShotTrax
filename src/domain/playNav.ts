@@ -35,3 +35,13 @@ export function playHrefIsAllClubs(href: string): boolean {
 export function allClubsOnlyViaControl(): true {
   return true;
 }
+
+/** Settings back label. Never Expo folder paths like (tabs) or round/[id]. */
+export function expoStackBackTitle(routeName: string | undefined): 'Home' | 'Round' {
+  if (routeName === 'round/[id]') return 'Round';
+  return 'Home';
+}
+
+export function expoTitleLooksLikeFolderPath(title: string): boolean {
+  return /[()[\]]/.test(title);
+}

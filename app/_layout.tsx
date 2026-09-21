@@ -7,6 +7,7 @@ import { startWatchClubBridge } from '@/src/services/watchClub';
 import { useWatchNearbyStart } from '@/src/services/useWatchNearbyStart';
 import { BrandedSplash } from '@/src/ui/BrandedSplash';
 import { ColorThemeProvider, useColors, useColorTheme } from '@/src/ui/ColorThemeProvider';
+import { expoStackBackTitle } from '@/src/domain/playNav';
 import { colors as fallbackColors } from '@/src/ui/theme';
 
 export { ErrorBoundary } from 'expo-router';
@@ -48,7 +49,14 @@ function ThemedNavigation() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false, title: 'Home' }} />
           <Stack.Screen name="round/[id]" options={{ headerShown: false, title: 'Round' }} />
           <Stack.Screen name="s/[token]" options={{ title: 'ShotTraxx' }} />
-          <Stack.Screen name="settings" options={{ title: 'Settings' }} />
+          <Stack.Screen
+            name="settings"
+            options={({ navigation }) => {
+              const state = navigation.getState();
+              const prev = state.routes[state.index - 1]?.name;
+              return { title: 'Settings', headerBackTitle: expoStackBackTitle(prev) };
+            }}
+          />
         </Stack>
       </ThemeProvider>
     </View>
