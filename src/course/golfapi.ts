@@ -30,6 +30,12 @@ type GolfApiTeeSet = {
 export type GolfApiFetchDeps = {
   fetchImpl?: typeof fetch;
   now?: () => string;
+  /**
+   * Skip the on-device golfapi blob. Used when that blob was already tried
+   * in this resolve and failed sanity, so last resort can buy a fresh card.
+   * A passing cache hit must not set this.
+   */
+  skipCache?: boolean;
 };
 
 type PersistHooks = {
@@ -408,9 +414,11 @@ export async function fetchGolfApiHydrate(
   course: CourseHydrateMatch,
   deps: GolfApiFetchDeps = {},
 ): Promise<CourseHydrate | null> {
-  const cachedKey = resolveGolfApiHydrateKey(course);
-  const cached = loadCachedGolfApiHydrate(cachedKey ?? course.courseKey);
-  if (cached && cached.holes.length > 0) return cached;
+  if (!deps.skipCache) {
+    const cachedKey = resolveGolfApiHydrateKey(course);
+    const cached = loadCachedGolfApiHydrate(cachedKey ?? course.courseKey);
+    if (cached && cached.holes.length > 0) return cached;
+  }
 
   const key = getGolfApiKey();
   if (!key) return null;

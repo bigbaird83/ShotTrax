@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createCourseDataClient } from './client';
-import { resetGolfApiCacheForTests } from './golfapi';
+import { resetGolfApiCacheForTests, saveCachedGolfApiHydrate } from './golfapi';
 import {
   attachCoursePaintCachePersist,
   createHttpCoursePaintCache,
@@ -15,6 +15,7 @@ import {
   cacheShortCircuitsPaidSources,
   gcaProCoordsPass,
   golfApiIsLastResort,
+  loadGolfApiPaintCandidate,
   loadOsmOpenGolfCandidate,
   resolveCoursePaint,
   type PaintCandidate,
@@ -289,6 +290,142 @@ test('both miss calls golfapi once, caches, and the second resolve makes 0 sourc
   assert.deepEqual(log, []);
   assert.ok(gets > getsBefore);
   assert.equal(puts, putsBefore);
+});
+
+test('failed bundled golfapi seed fetches the network once and a PASS is cached', async () => {
+  resetCoursePaintCacheForTests();
+  resetGolfApiCacheForTests();
+  const names = ['GOLFAPI_KEY', 'EXPO_PUBLIC_GOLFAPI_KEY', 'GOLF_API_IO_KEY', 'EXPO_PUBLIC_GOLF_API_IO_KEY'];
+  const prev = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const match = {
+    name: 'Bad Seed CC',
+    city: 'Nowhereville',
+    state: 'ZZ',
+    courseKey: 'bad-seed-id',
+  };
+  try {
+    process.env.GOLFAPI_KEY = 'test-key';
+    saveCachedGolfApiHydrate(
+      {
+        courseKey: 'golfapi:bad-seed',
+        displayName: 'Bad Seed CC',
+        locality: 'Nowhereville, ZZ',
+        source: 'golfapi',
+        sourceRef: 'test failed seed',
+        fetchedAt: '2026-09-21T00:00:00Z',
+        numHoles: 18,
+        holes: [
+          {
+            hole: 1,
+            par: 4,
+            yards: 100,
+            tee: { lat: 35.0, lng: -92.0, label: 'Blue' },
+            green: { lat: 35.0, lng: -92.0 },
+            greenFront: null,
+            greenBack: null,
+            greenDepthYards: null,
+            greenWidthYards: null,
+          },
+        ],
+      },
+      ['bad-seed-id', 'namecity:bad seed cc|nowhereville'],
+    );
+    let coordinateCalls = 0;
+    const cache = createMemoryCoursePaintCache();
+    const result = await resolveCoursePaint(match, {
+      cache,
+      now: () => '2026-09-21T12:00:00Z',
+      loadOsm: async () => null,
+      loadGca: async () => null,
+      loadGolfApi: () =>
+        loadGolfApiPaintCandidate(match, {
+          fetchImpl: async (input) => {
+            const url = String(input);
+            if (url.includes('/courses?')) {
+              return new Response(
+                JSON.stringify([
+                  {
+                    courseID: 'bad-refresh-1',
+                    clubName: 'Bad Seed CC',
+                    city: 'Nowhereville',
+                    state: 'ZZ',
+                    numHoles: 18,
+                    parsMen: [4],
+                    tees: [{ teeName: 'Blue', length1: 267 }],
+                  },
+                ]),
+                { status: 200 },
+              );
+            }
+            if (url.includes('/coordinates/')) {
+              coordinateCalls += 1;
+              return new Response(
+                JSON.stringify({
+                  coordinates: [
+                    { poi: 1, location: 2, hole: 1, latitude: GREEN.lat, longitude: GREEN.lng },
+                    { poi: 12, location: 2, hole: 1, latitude: TEE.lat, longitude: TEE.lng },
+                  ],
+                }),
+                { status: 200 },
+              );
+            }
+            return new Response(
+              JSON.stringify({
+                courseID: 'bad-refresh-1',
+                clubName: 'Bad Seed CC',
+                city: 'Nowhereville',
+                state: 'ZZ',
+                numHoles: 18,
+                parsMen: [4],
+                tees: [{ teeName: 'Blue', length1: 267 }],
+              }),
+              { status: 200 },
+            );
+          },
+        }),
+    });
+    assert.equal(coordinateCalls, 1);
+    assert.equal(result.ok, true);
+    assert.equal(result.source, 'golfapi');
+    assert.equal(result.fromCache, false);
+    assert.equal(result.nineByTwo, false);
+    assert.equal(result.holes[0]?.tee?.lat, TEE.lat);
+    assert.equal(result.holes[0]?.green?.lat, GREEN.lat);
+    assert.notEqual(result.holes[0]?.tee?.lat, result.holes[0]?.green?.lat);
+    const stored = await cache.get('id:bad-seed-id');
+    assert.equal(stored?.source, 'golfapi');
+    assert.equal(stored?.holes[0]?.tee?.lat, TEE.lat);
+    assert.equal(stored?.holes[0]?.green?.lat, GREEN.lat);
+
+    let secondCalls = 0;
+    const again = await resolveCoursePaint(match, {
+      cache,
+      loadOsm: async () => {
+        secondCalls += 1;
+        return osmHit();
+      },
+      loadGca: async () => {
+        secondCalls += 1;
+        return gcaHit();
+      },
+      loadGolfApi: async () => {
+        secondCalls += 1;
+        throw new Error('passing cache must not refetch golfapi');
+      },
+    });
+    assert.equal(again.ok, true);
+    assert.equal(again.fromCache, true);
+    assert.equal(again.source, 'golfapi');
+    assert.equal(secondCalls, 0);
+    assert.equal(coordinateCalls, 1);
+  } finally {
+    resetCoursePaintCacheForTests();
+    resetGolfApiCacheForTests();
+    for (const name of names) {
+      if (prev[name] == null) delete process.env[name];
+      else process.env[name] = prev[name];
+    }
+  }
 });
 
 test('golfapi 9-hole card without a back nine does not invent holes 10–18', async () => {

@@ -163,14 +163,21 @@ export function loadBundledGolfApiCandidate(course: CourseHydrateMatch): PaintCa
   return { source: 'golfapi', numHoles, holes: toHoles(bundled) };
 }
 
-/** Bundled / device golfapi hydrate, else one runtime fetch. No key → null. */
+/**
+ * Last resort. A bundled/seed card that passes sanity is returned with no
+ * network. If that seed was already rejected in this resolve, fetch golfapi
+ * instead of returning the same failed card. No key / thin GPS → null.
+ */
 export async function loadGolfApiPaintCandidate(
   course: CourseHydrateMatch,
   deps: GolfApiFetchDeps = {},
 ): Promise<PaintCandidate | null> {
   const seeded = loadBundledGolfApiCandidate(course);
-  if (seeded) return seeded;
-  const hydrate = await fetchGolfApiHydrate(course, deps);
+  if (seeded && candidatePasses(seeded).ok) return seeded;
+  const hydrate = await fetchGolfApiHydrate(course, {
+    ...deps,
+    skipCache: seeded != null,
+  });
   if (!hydrate || hydrate.source !== 'golfapi' || hydrate.holes.length === 0) return null;
   return {
     source: 'golfapi',
