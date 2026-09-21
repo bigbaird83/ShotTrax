@@ -6,6 +6,8 @@ import { shouldAutoOpenClubPick } from './putts';
 import {
   allClubsHref,
   allClubsOnlyViaControl,
+  expoStackBackTitle,
+  expoTitleLooksLikeFolderPath,
   playHrefAfterHoleChange,
   playHrefAfterRoundStart,
   playHrefIsAllClubs,
@@ -50,4 +52,27 @@ test('round start and Prev/Next land on play/hole, not All clubs', () => {
   assert.doesNotMatch(home, /club-pick/);
   assert.match(watch, /playHrefAfterRoundStart/);
   assert.doesNotMatch(watch.slice(watch.indexOf('router.push'), watch.indexOf('return { ok: true, feedback: tee')), /club-pick/);
+});
+
+test('Settings back titles are Home / Round — never Expo folder paths', () => {
+  assert.equal(expoStackBackTitle('(tabs)'), 'Home');
+  assert.equal(expoStackBackTitle('round/[id]'), 'Round');
+  assert.equal(expoStackBackTitle(undefined), 'Home');
+  assert.equal(expoTitleLooksLikeFolderPath('Home'), false);
+  assert.equal(expoTitleLooksLikeFolderPath('Round'), false);
+  assert.equal(expoTitleLooksLikeFolderPath('(tabs)'), true);
+  assert.equal(expoTitleLooksLikeFolderPath('round/[id]'), true);
+  assert.equal(expoTitleLooksLikeFolderPath(expoStackBackTitle('(tabs)')), false);
+  assert.equal(expoTitleLooksLikeFolderPath(expoStackBackTitle('round/[id]')), false);
+
+  const layout = readFileSync(new URL('../../app/_layout.tsx', import.meta.url), 'utf8');
+  const round = readFileSync(new URL('../../app/round/[id]/_layout.tsx', import.meta.url), 'utf8');
+  assert.match(layout, /name="\(tabs\)"[\s\S]*title: 'Home'/);
+  assert.match(layout, /name="round\/\[id\]"[\s\S]*title: 'Round'/);
+  assert.match(layout, /headerBackTitle: expoStackBackTitle/);
+  assert.match(round, /name="hole\/\[number\]"[\s\S]*title: 'Hole'/);
+  assert.doesNotMatch(layout, /title: '\(tabs\)'/);
+  assert.doesNotMatch(layout, /title: 'round\/\[id\]'/);
+  assert.doesNotMatch(layout, /headerBackTitle: '\(tabs\)'/);
+  assert.doesNotMatch(layout, /headerBackTitle: 'round\/\[id\]'/);
 });

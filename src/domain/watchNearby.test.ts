@@ -22,6 +22,10 @@ import {
   phoneFixForNearbyCourses,
   planNearbyCourses,
   planWatchCoursePick,
+  watchCoursePickRepeatsNameAsRow,
+  watchCoursePickShowsOneName,
+  watchNearbyHidesCourseNameFeedback,
+  watchNearbyNavTitle,
   watchStartsFromBuiltListWithoutPhoneFix,
   watchShowsBag,
   watchShowsScoring,
@@ -359,6 +363,45 @@ test('Watch nearby UI is a short list — no search, bag, settings, or scoring',
   assert.match(service, /phoneFixForNearbyCourses|planNearbyCourses/);
   assert.doesNotMatch(service, /acceptFix\(|forceMark\(/);
   assert.match(service, /getLastLiveFix|phoneFix/);
+});
+
+test('Watch course pick shows one name and Holes/Tees — never Courses near you after select', () => {
+  assert.equal(watchCoursePickShowsOneName(), true);
+  assert.equal(watchCoursePickRepeatsNameAsRow(), false);
+  assert.equal(watchNearbyNavTitle({}), 'Courses near you');
+  assert.equal(watchNearbyNavTitle({ courseId: 'c1' }), 'Holes');
+  assert.equal(watchNearbyNavTitle({ courseId: 'c1', holeCount: 9, hasTees: true }), 'Tees');
+  assert.equal(watchNearbyNavTitle({ courseId: 'c1', holeCount: 18, hasTees: true }), 'Tees');
+  assert.equal(watchNearbyNavTitle({ courseId: 'c1', holeCount: 9, hasTees: false }), 'Holes');
+  assert.equal(watchNearbyHidesCourseNameFeedback({ feedback: 'Cypress Creek Country Club', courseName: 'Cypress Creek Country Club' }), true);
+  assert.equal(watchNearbyHidesCourseNameFeedback({ feedback: 'Phone unavailable', courseName: 'Cypress Creek Country Club' }), false);
+  assert.equal(watchNearbyHidesCourseNameFeedback({ feedback: 'Cypress Creek Country Club' }), false);
+
+  const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+  const start = watchUi.slice(watchUi.indexOf('private var nearbyStart'), watchUi.indexOf('private var puttSheet'));
+  const header = watchUi.slice(watchUi.indexOf('private var nearbyNavTitle'), watchUi.indexOf('private var nearbyStart'));
+  assert.equal((start.match(/if let name = session\.nearby\.courseName/g) ?? []).length, 1);
+  assert.equal((start.match(/Text\(name\)/g) ?? []).length, 1);
+  assert.ok(start.indexOf('if let name = session.nearby.courseName') < start.indexOf('pickHoleCount(9)'));
+  assert.ok(start.indexOf('Text(name)') < start.indexOf('ForEach(session.nearby.tees)'));
+  assert.ok(start.indexOf('ForEach(session.nearby.tees)') < start.indexOf('ForEach(session.nearby.courses)'));
+  assert.match(start, /if session\.nearby\.courseId != nil \{/);
+  assert.match(start, /Color\("cream"\)/);
+  assert.doesNotMatch(start, /Color\.orange/);
+  assert.match(header, /return "Holes"/);
+  assert.match(header, /return "Tees"/);
+  assert.match(header, /return "Courses near you"/);
+  assert.match(header, /nearbyShowsFeedback/);
+  assert.match(header, /session\.feedback != session\.nearby\.courseName/);
+  assert.match(watchUi, /Text\(session\.showsNearby \? nearbyNavTitle/);
+  const list = start.slice(start.indexOf('} else {'));
+  assert.match(list, /ForEach\(session\.nearby\.courses\)/);
+  assert.doesNotMatch(list, /session\.nearby\.courseName/);
+  assert.match(session, /nearby\.courseName = name/);
+  const pickFn = session.slice(session.indexOf('func pickCourse'), session.indexOf('func pickTee'));
+  assert.match(pickFn, /nearby\.courseName = name/);
+  assert.match(session, /func pickCourse/);
 });
 
 test('build 26 locks stay: delete confirm, 60% map, one-line header, 600-yard tee start, 5s Undo, privacy strings', () => {
