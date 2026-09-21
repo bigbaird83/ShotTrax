@@ -80,6 +80,36 @@ export function planWatchCoursePick(args: {
 
 export type WatchOpenFace = 'hole' | 'select_course' | 'nearby' | 'hole_count' | 'tees';
 
+/** Nav after a course pick — never leave “Courses near you” on holes/tees. */
+export type WatchNearbyNavTitle = 'Courses near you' | 'Holes' | 'Tees';
+
+export function watchNearbyNavTitle(args: {
+  courseId?: string | null;
+  holeCount?: 9 | 18 | null;
+  hasTees?: boolean;
+}): WatchNearbyNavTitle {
+  if (!args.courseId) return 'Courses near you';
+  if ((args.holeCount === 9 || args.holeCount === 18) && args.hasTees) return 'Tees';
+  return 'Holes';
+}
+
+/** Picked course is one cream name through holes → tees. */
+export function watchCoursePickShowsOneName(): true {
+  return true;
+}
+
+export function watchCoursePickRepeatsNameAsRow(): false {
+  return false;
+}
+
+/** Phone pick reply echoes the course name — hide that orange duplicate. */
+export function watchNearbyHidesCourseNameFeedback(args: {
+  feedback: string;
+  courseName?: string | null;
+}): boolean {
+  return Boolean(args.courseName && args.feedback === args.courseName);
+}
+
 export function watchFirstScreenIsSelectCourse(): true {
   return true;
 }

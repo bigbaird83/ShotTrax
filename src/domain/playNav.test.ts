@@ -51,3 +51,11 @@ test('round start and Prev/Next land on play/hole, not All clubs', () => {
   assert.match(watch, /playHrefAfterRoundStart/);
   assert.doesNotMatch(watch.slice(watch.indexOf('router.push'), watch.indexOf('return { ok: true, feedback: tee')), /club-pick/);
 });
+
+test('Settings back title is Home — never (tabs)', () => {
+  const layout = readFileSync(new URL('../../app/_layout.tsx', import.meta.url), 'utf8');
+  assert.match(layout, /name="\(tabs\)"[\s\S]*title: 'Home'/);
+  assert.match(layout, /name="settings"[\s\S]*headerBackTitle: 'Home'/);
+  assert.doesNotMatch(layout, /headerBackTitle: '\(tabs\)'/);
+  assert.doesNotMatch(layout, /title: '\(tabs\)'/);
+});

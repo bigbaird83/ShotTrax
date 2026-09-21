@@ -104,10 +104,26 @@ struct ContentView: View {
     .buttonStyle(.plain)
   }
 
+  /// After a course pick: Holes / Tees. List only is "Courses near you".
+  private var nearbyNavTitle: String {
+    if session.nearby.courseId != nil {
+      if session.nearby.holeCount != nil, !session.nearby.tees.isEmpty {
+        return "Tees"
+      }
+      return "Holes"
+    }
+    return "Courses near you"
+  }
+
+  /// Pick reply echoes the course name in orange — hide that so the title is once.
+  private var nearbyShowsFeedback: Bool {
+    !session.feedback.isEmpty && session.feedback != session.nearby.courseName
+  }
+
   @ViewBuilder
   private var statusHeader: some View {
     HStack(alignment: .firstTextBaseline, spacing: 6) {
-      Text(session.showsNearby ? "Courses near you" : session.putt.open ? "Hole \(session.putt.holeNumber) · Putts" : session.list.statusLine)
+      Text(session.showsNearby ? nearbyNavTitle : session.putt.open ? "Hole \(session.putt.holeNumber) · Putts" : session.list.statusLine)
         .font(.footnote.weight(.bold))
         .foregroundStyle(Color("cream"))
       if !session.showsNearby, !session.putt.open, session.list.showSoft {
@@ -119,7 +135,7 @@ struct ContentView: View {
           .clipShape(Capsule())
       }
     }
-    if !session.feedback.isEmpty {
+    if nearbyShowsFeedback {
       Text(session.feedback)
         .font(.footnote.weight(.bold))
         .foregroundStyle(session.feedback.contains("✓") ? Color("accent") : Color.orange)
@@ -128,40 +144,39 @@ struct ContentView: View {
 
   @ViewBuilder
   private var nearbyStart: some View {
-    if session.nearby.courseId != nil, session.nearby.holeCount == nil {
+    if session.nearby.courseId != nil {
+      // One cream title through holes → tees. Never orange + leftover white row.
       if let name = session.nearby.courseName {
         Text(name)
           .font(.footnote.weight(.bold))
           .foregroundStyle(Color("cream"))
+          .lineLimit(2)
       }
-      Button(action: { session.pickHoleCount(9) }) {
-        Text("9")
-          .font(.headline.weight(.heavy))
-          .frame(maxWidth: .infinity, minHeight: 40)
-      }
-      .buttonStyle(.bordered)
-      .disabled(session.sending)
-      Button(action: { session.pickHoleCount(18) }) {
-        Text("18")
-          .font(.headline.weight(.heavy))
-          .frame(maxWidth: .infinity, minHeight: 40)
-      }
-      .buttonStyle(.bordered)
-      .disabled(session.sending)
-    } else if !session.nearby.tees.isEmpty {
-      if let name = session.nearby.courseName {
-        Text(name)
-          .font(.footnote.weight(.bold))
-          .foregroundStyle(Color("cream"))
-      }
-      ForEach(session.nearby.tees) { tee in
-        Button(action: { session.pickTee(name: tee.name) }) {
-          Text(tee.name)
+      if session.nearby.holeCount == nil {
+        Button(action: { session.pickHoleCount(9) }) {
+          Text("9")
             .font(.headline.weight(.heavy))
             .frame(maxWidth: .infinity, minHeight: 40)
         }
         .buttonStyle(.bordered)
         .disabled(session.sending)
+        Button(action: { session.pickHoleCount(18) }) {
+          Text("18")
+            .font(.headline.weight(.heavy))
+            .frame(maxWidth: .infinity, minHeight: 40)
+        }
+        .buttonStyle(.bordered)
+        .disabled(session.sending)
+      } else if !session.nearby.tees.isEmpty {
+        ForEach(session.nearby.tees) { tee in
+          Button(action: { session.pickTee(name: tee.name) }) {
+            Text(tee.name)
+              .font(.headline.weight(.heavy))
+              .frame(maxWidth: .infinity, minHeight: 40)
+          }
+          .buttonStyle(.bordered)
+          .disabled(session.sending)
+        }
       }
     } else {
       ForEach(session.nearby.courses) { course in

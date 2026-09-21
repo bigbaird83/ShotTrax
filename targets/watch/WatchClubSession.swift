@@ -140,6 +140,9 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     sending = true
     feedback = ""
     nearby.courseId = courseId
+    if let name = nearby.courses.first(where: { $0.id == courseId })?.name {
+      nearby.courseName = name
+    }
     sendPick([
       "type": "nearbyCoursePick",
       "courseId": courseId,
