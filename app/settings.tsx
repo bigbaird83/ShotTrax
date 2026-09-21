@@ -82,6 +82,8 @@ export default function SettingsScreen() {
         </Pressable>
       </View>
       <BigButton label={COPY.bag} variant="secondary" onPress={() => router.push('/bag')} />
+      <Text style={styles.creditsTitle}>{COPY.credits}</Text>
+      <Text style={styles.credits}>{COPY.courseDataCredits}</Text>
     </Screen>
   );
 }
@@ -107,5 +109,7 @@ function makeStyles(colors: ColorPalette) {
     chipOn: { borderColor: colors.cream, backgroundColor: colors.accentWash },
     chipText: { color: colors.cream, fontSize: type.button, fontWeight: '800' },
     chipTextOn: { color: colors.cream },
+    creditsTitle: { color: colors.cream, fontSize: type.body, fontWeight: '800', marginTop: 8 },
+    credits: { color: colors.muted, fontSize: type.meta, fontWeight: '600' },
   });
 }

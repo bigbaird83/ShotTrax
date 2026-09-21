@@ -1,0 +1,188 @@
+{
+  "generatedAt": "2026-09-21T12:00:00Z",
+  "source": "OpenGolf OSM hole centerlines + OpenGolfAPI course match",
+  "license": "ODbL-1.0",
+  "attribution": [
+    "OpenStreetMap contributors",
+    "OpenGolf"
+  ],
+  "matchDistMaxM": 1000,
+  "centerlineOnly": true,
+  "neverInventDailyPins": true,
+  "thunderbirdHeberProtected": true,
+  "thunderbirdHeberInPack": false,
+  "reservedOverwriteInPack": false,
+  "counts": {
+    "rows": 123294,
+    "highMatchDist": 17549,
+    "missingHoleNumber": 2316,
+    "missingCoords": 0,
+    "gateFail": 9,
+    "reservedOverwrite": 72,
+    "thunderbirdHeber": 0,
+    "duplicateHole": 5537,
+    "acceptedHoles": 96535,
+    "acceptedCourses": 7797,
+    "emptyCourse": 1276
+  },
+  "staged": {
+    "arCourses": 78,
+    "arHoles": 914,
+    "fullUsCourses": 7797,
+    "fullUsHoles": 96535
+  },
+  "size": {
+    "packJsonBytes": 5930210,
+    "packGzipBytes": 2242344,
+    "catalogJsonBytes": 879909,
+    "shardJsonBytes": {
+      "AL": 7039,
+      "AR": 50743,
+      "AZ": 136232,
+      "CA": 445569,
+      "CO": 117957,
+      "CT": 131768,
+      "DC": 2602,
+      "DE": 18738,
+      "FL": 331854,
+      "GA": 139585,
+      "IA": 100587,
+      "ID": 39912,
+      "IL": 232382,
+      "IN": 114023,
+      "KS": 52804,
+      "KY": 52997,
+      "LA": 39318,
+      "MA": 253616,
+      "MD": 27923,
+      "ME": 73401,
+      "MI": 340458,
+      "MN": 167063,
+      "MO": 75695,
+      "MS": 31606,
+      "MT": 19942,
+      "NC": 183952,
+      "ND": 17781,
+      "NE": 28211,
+      "NH": 65437,
+      "NJ": 119712,
+      "NM": 28308,
+      "NV": 55016,
+      "NY": 355554,
+      "OH": 265831,
+      "OK": 90384,
+      "OR": 14405,
+      "PA": 280096,
+      "RI": 43268,
+      "SC": 137268,
+      "SD": 17335,
+      "TN": 26731,
+      "TX": 15247,
+      "UT": 68071,
+      "VA": 160552,
+      "VT": 45635,
+      "WA": 122623,
+      "WI": 170090,
+      "WV": 31653,
+      "WY": 30108
+    }
+  },
+  "samples": [
+    {
+      "reason": "missing-hole-number",
+      "state": "AL",
+      "city": "Dothan",
+      "course": "Dothan Country Club",
+      "hole": null,
+      "match_dist_m": 581.6
+    },
+    {
+      "reason": "missing-hole-number",
+      "state": "AL",
+      "city": "Dothan",
+      "course": "Dothan Country Club",
+      "hole": null,
+      "match_dist_m": 207.5
+    },
+    {
+      "reason": "missing-hole-number",
+      "state": "AL",
+      "city": "Dothan",
+      "course": "Dothan Country Club",
+      "hole": null,
+      "match_dist_m": 364.6
+    },
+    {
+      "reason": "missing-hole-number",
+      "state": "AL",
+      "city": "Dothan",
+      "course": "Dothan Country Club",
+      "hole": null,
+      "match_dist_m": 292.2
+    },
+    {
+      "reason": "missing-hole-number",
+      "state": "AL",
+      "city": "Dothan",
+      "course": "Dothan Country Club",
+      "hole": null,
+      "match_dist_m": 346
+    },
+    {
+      "reason": "missing-hole-number",
+      "state": "AL",
+      "city": "Dothan",
+      "course": "Dothan Country Club",
+      "hole": null,
+      "match_dist_m": 358.1
+    },
+    {
+      "reason": "missing-hole-number",
+      "state": "AL",
+      "city": "Dothan",
+      "course": "Dothan Country Club",
+      "hole": null,
+      "match_dist_m": 388.4
+    },
+    {
+      "reason": "missing-hole-number",
+      "state": "AL",
+      "city": "Dothan",
+      "course": "Dothan Country Club",
+      "hole": null,
+      "match_dist_m": 294.7
+    },
+    {
+      "reason": "missing-hole-number",
+      "state": "AL",
+      "city": "Dothan",
+      "course": "Dothan Country Club",
+      "hole": null,
+      "match_dist_m": 444
+    },
+    {
+      "reason": "high-match-dist",
+      "state": "AL",
+      "city": "Florence",
+      "course": "Blackberry Trails Golf Course",
+      "hole": "4.0",
+      "match_dist_m": 1074
+    },
+    {
+      "reason": "high-match-dist",
+      "state": "AL",
+      "city": "Florence",
+      "course": "Blackberry Trails Golf Course",
+      "hole": "13.0",
+      "match_dist_m": 1033.3
+    },
+    {
+      "reason": "high-match-dist",
+      "state": "AL",
+      "city": "Florence",
+      "course": "Blackberry Trails Golf Course",
+      "hole": "14.0",
+      "match_dist_m": 1500.2
+    }
+  ]
+}

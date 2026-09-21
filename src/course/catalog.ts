@@ -2,13 +2,24 @@ import { METERS_PER_YARD } from '../config/sensing';
 import { haversineYards } from '../domain/haversine';
 import { isValidLatLng, type LatLng } from '../domain/latLng';
 import {
+  CYPRESS_CREEK_CABOT_AR_KEY,
+  CYPRESS_CREEK_CLUBHOUSE,
+  GREYSTONE_CABOT_AR_KEY,
+  GREYSTONE_CABOT_CLUBHOUSE,
   MOUNTAIN_RANCH_FAIRFIELD_BAY_AR_KEY,
   MOUNTAIN_RANCH_FAIRFIELD_BAY_CLUBHOUSE,
+  PLEASANT_VALLEY_LR_AR_KEY,
+  PLEASANT_VALLEY_LR_CLUBHOUSE,
   THUNDERBIRD_HEBER_CLUBHOUSE,
   THUNDERBIRD_HEBER_SPRINGS_AR_KEY,
   hydrateHoleFor,
   loadCourseHydrate,
 } from './hydrate';
+import {
+  nearbyOpenGolfCatalog,
+  openGolfCatalogEntryById,
+  searchOpenGolfCatalog,
+} from './opengolf';
 import type { CourseDetail, CourseSummary, HoleCourseData } from './types';
 
 export const LOCAL_CATALOG_ID_PREFIX = 'local:';
@@ -68,6 +79,45 @@ export const LOCAL_COURSE_CATALOG: readonly LocalCourseCatalogEntry[] = [
     location: MOUNTAIN_RANCH_FAIRFIELD_BAY_CLUBHOUSE,
     holeCount: 18,
     aliases: ['Mountain Ranch', 'Mountain Ranch GC', 'Mountain Ranch Golf Club at Fairfield Bay'],
+  },
+  {
+    id: `${LOCAL_CATALOG_ID_PREFIX}${CYPRESS_CREEK_CABOT_AR_KEY}`,
+    courseKey: CYPRESS_CREEK_CABOT_AR_KEY,
+    name: 'Cypress Creek Golf Club',
+    club: 'Cypress Creek Golf Club',
+    city: 'Cabot',
+    state: 'AR',
+    country: 'US',
+    locality: 'Cabot, AR',
+    location: CYPRESS_CREEK_CLUBHOUSE,
+    holeCount: 18,
+    aliases: ['Cypress Creek', 'Cypress Creek at Greystone', 'Cypress Creek CC'],
+  },
+  {
+    id: `${LOCAL_CATALOG_ID_PREFIX}${GREYSTONE_CABOT_AR_KEY}`,
+    courseKey: GREYSTONE_CABOT_AR_KEY,
+    name: 'Greystone Country Club',
+    club: 'Greystone Country Club',
+    city: 'Cabot',
+    state: 'AR',
+    country: 'US',
+    locality: 'Cabot, AR',
+    location: GREYSTONE_CABOT_CLUBHOUSE,
+    holeCount: 18,
+    aliases: ['Greystone', 'Greystone CC', 'Greystone Cabot'],
+  },
+  {
+    id: `${LOCAL_CATALOG_ID_PREFIX}${PLEASANT_VALLEY_LR_AR_KEY}`,
+    courseKey: PLEASANT_VALLEY_LR_AR_KEY,
+    name: 'Pleasant Valley Country Club',
+    club: 'Pleasant Valley Country Club',
+    city: 'Little Rock',
+    state: 'AR',
+    country: 'US',
+    locality: 'Little Rock, AR',
+    location: PLEASANT_VALLEY_LR_CLUBHOUSE,
+    holeCount: 18,
+    aliases: ['Pleasant Valley', 'Pleasant Valley CC'],
   },
 ];
 
@@ -155,7 +205,10 @@ export function isLocalCatalogId(id: string | null | undefined): boolean {
 export function catalogEntryById(id: string | null | undefined): LocalCourseCatalogEntry | null {
   const value = id?.trim() ?? '';
   if (!value) return null;
-  return LOCAL_COURSE_CATALOG.find((entry) => entry.id === value || entry.courseKey === value) ?? null;
+  return (
+    LOCAL_COURSE_CATALOG.find((entry) => entry.id === value || entry.courseKey === value) ??
+    openGolfCatalogEntryById(value)
+  );
 }
 
 export function catalogEntryToSummary(
@@ -177,24 +230,25 @@ export function catalogEntryToSummary(
 export function searchLocalCatalog(query: string): CourseSummary[] {
   const tokens = queryTokens(query);
   if (tokens.length === 0) return [];
-  return LOCAL_COURSE_CATALOG.filter((entry) => {
+  const reserved = LOCAL_COURSE_CATALOG.filter((entry) => {
     const bag = catalogBag(entry);
     return tokens.every((token) => bag.includes(token));
   }).map((entry) => catalogEntryToSummary(entry));
+  return mergeCatalogSummaries(reserved, searchOpenGolfCatalog(query));
 }
 
 export function nearbyLocalCatalog(from: LatLng, radiusKm: number): CourseSummary[] {
   if (!isValidLatLng(from)) return [];
   const radiusM = Math.max(1000, radiusKm * 1000);
-  const out: CourseSummary[] = [];
+  const reserved: CourseSummary[] = [];
   for (const entry of LOCAL_COURSE_CATALOG) {
     const yards = haversineYards(from, entry.location);
     const meters = yards * METERS_PER_YARD;
     if (meters <= radiusM) {
-      out.push(catalogEntryToSummary(entry, Math.round(meters)));
+      reserved.push(catalogEntryToSummary(entry, Math.round(meters)));
     }
   }
-  return out;
+  return mergeCatalogSummaries(reserved, nearbyOpenGolfCatalog(from, radiusKm));
 }
 
 function emptyHole(holeNumber: number): HoleCourseData {

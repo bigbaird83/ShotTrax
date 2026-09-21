@@ -9,6 +9,7 @@ import {
 } from '../domain/thunderbirdPins';
 import type { CourseLayoutSeed } from './layout';
 import { rememberResolvedTee } from './osmOverlay';
+import { loadOpenGolfHydrate, resolveOpenGolfHydrateKey } from './opengolf';
 import cypressOsm from './hydrates/cypress-creek-cabot-ar.json';
 import greystoneOsm from './hydrates/greystone-cabot-ar.json';
 import pleasantValleyOsm from './hydrates/pleasant-valley-lr-ar.json';
@@ -319,7 +320,7 @@ export function resolveCourseHydrateKey(course: CourseHydrateMatch): string | nu
   if (matchesPleasantValleyLR(course)) return PLEASANT_VALLEY_LR_AR_KEY;
   if (matchesThunderbirdHeberSprings(course)) return THUNDERBIRD_HEBER_SPRINGS_AR_KEY;
   if (matchesMountainRanchFairfieldBay(course)) return MOUNTAIN_RANCH_FAIRFIELD_BAY_AR_KEY;
-  return null;
+  return resolveOpenGolfHydrateKey(course);
 }
 
 function parsePar(value: unknown): number | null {
@@ -416,11 +417,13 @@ export function loadCourseHydrate(courseKey: string | null | undefined): CourseH
   const key = asString(courseKey);
   if (!key) return null;
   const raw = REGISTRY[key];
-  if (raw == null) return null;
-  const parsed = parseCourseHydrate(raw);
-  if (!parsed) return null;
-  if (key === THUNDERBIRD_HEBER_SPRINGS_AR_KEY) return foldThunderbirdPinSheets(parsed);
-  return parsed;
+  if (raw != null) {
+    const parsed = parseCourseHydrate(raw);
+    if (!parsed) return null;
+    if (key === THUNDERBIRD_HEBER_SPRINGS_AR_KEY) return foldThunderbirdPinSheets(parsed);
+    return parsed;
+  }
+  return loadOpenGolfHydrate(key);
 }
 
 export function loadHydrateForCourse(course: CourseHydrateMatch): CourseHydrate | null {

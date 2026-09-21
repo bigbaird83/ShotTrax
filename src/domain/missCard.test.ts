@@ -56,6 +56,8 @@ test('Thunderbird Heber Springs is HARD-MISS need tee pins — greens from Doc, 
   assert.match(picker, /COPY\.hardMissNeedPins/);
   assert.match(picker, /ThunderbirdPinSheetPicker/);
   assert.match(settings, /ThunderbirdPinSheetPicker/);
+  assert.match(settings, /COPY\.courseDataCredits/);
+  assert.match(settings, /COPY\.credits/);
   assert.match(hole, /ThunderbirdPinSheetPicker/);
   assert.match(hole, /thunderbirdDailyPin/);
   assert.doesNotMatch(hole, /inventGreen|unlabeled green|THUNDERBIRD_HEBER_CLUBHOUSE/);

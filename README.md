@@ -187,7 +187,13 @@ A 5-digit US ZIP (or ZIP+4) in the course search box geocodes to a point, then u
 
 ## Thunderbird CC (Heber Springs)
 
-Searchable. OSM outline only; unlabeled greens unused. Miss card: **HARD-MISS — need pin sheets.** A Doc pin-sheet CSV (greens + A–D daily pins; 10–18 mirror 1–9) was requested for ingest — **tees stay HARD-MISS** and are never invented. Greens/pins fold in only from that file’s real lat/lon. Player copy stays “Course outline only. Tees and greens are not on file.”
+Searchable. Doc pin-sheet greens + A–D daily pins fold into the hydrate (10–18 mirror 1–9). **Tees stay HARD-MISS** and are never invented. OpenGolf/OSM follow ingest does **not** overwrite this card — Thunderbird is centroid-only in that dump. Miss card: **HARD-MISS — need tee pins.**
+
+## OpenGolf / OSM follow ingest
+
+US hole centerlines (OpenGolf + OSM `golf=hole`) hydrate tee + green when the Pro card misses. One representative tee and the putting-surface center only — never daily pins. Rows with `match_dist_m` over 1 km are quarantined. Empty / unlabeled / gate-fail holes stay a miss card. Derived DB is ODbL (see `ATTRIBUTION.md` / `NOTICE`). Credits also sit on Settings.
+
+Regenerate from the source CSV: `npm run opengolf:ingest`. Smoke notes: `src/course/hydrates/opengolf/SMOKE.md`.
 
 ## Penalties (`hole_penalties`)
 
