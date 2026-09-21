@@ -1,15 +1,15 @@
 import { useEventListener } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import * as SplashScreen from 'expo-splash-screen';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Image, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { AccessibilityInfo, Image, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { SPLASH_BG, SPLASH_RESIZE_MODE, splashLetterboxSize } from '@/src/domain/splashLetterbox';
 
-/** Doc’s open clip, already trimmed to the first 3.0s. */
-const OPEN_CLIP = require('../../assets/splash/splash-open-3s.mp4') as number;
-/** First frame of the 3s clip — native Expo splash, pre-video, and Reduce Motion. */
-const OPEN_STILL = require('../../assets/splash/splash-open-still.png');
+/** Doc’s open clip, first 3.0s, muted. Square 960² — contain + black letterbox, never cover. */
+const OPEN_CLIP = require('../../assets/splash/splash-open-first-3s-v2.mp4') as number;
+/** First frame of the 3s clip — Expo native splash, pre-video, and Reduce Motion. */
+const OPEN_STILL = require('../../assets/splash/splash-first-frame-v2.png');
 
-const SPLASH_BG = '#000000';
 const REDUCE_MOTION_MS = 400;
 const FAILSAFE_MS = 4500;
 
@@ -69,12 +69,9 @@ export function BrandedSplash({ onDone }: Props) {
   return <VideoSplash onDone={finish} />;
 }
 
-function StillSplash({ onDone }: { onDone: () => void }) {
-  useEffect(() => {
-    hideNativeSplash();
-    const timeout = setTimeout(onDone, REDUCE_MOTION_MS);
-    return () => clearTimeout(timeout);
-  }, [onDone]);
+function LetterboxedSplash({ children }: { children?: ReactNode }) {
+  const { width, height } = useWindowDimensions();
+  const square = splashLetterboxSize(width, height);
 
   return (
     <View
@@ -82,9 +79,22 @@ function StillSplash({ onDone }: { onDone: () => void }) {
       accessibilityRole="image"
       accessibilityLabel="ShotTraxx"
       style={[styles.wrap, StyleSheet.absoluteFill]}>
-      <Image source={OPEN_STILL} style={StyleSheet.absoluteFill} resizeMode="contain" />
+      <View style={[styles.mark, square]}>
+        <Image source={OPEN_STILL} style={StyleSheet.absoluteFill} resizeMode={SPLASH_RESIZE_MODE} />
+        {children}
+      </View>
     </View>
   );
+}
+
+function StillSplash({ onDone }: { onDone: () => void }) {
+  useEffect(() => {
+    hideNativeSplash();
+    const timeout = setTimeout(onDone, REDUCE_MOTION_MS);
+    return () => clearTimeout(timeout);
+  }, [onDone]);
+
+  return <LetterboxedSplash />;
 }
 
 function VideoSplash({ onDone }: { onDone: () => void }) {
@@ -101,16 +111,11 @@ function VideoSplash({ onDone }: { onDone: () => void }) {
   });
 
   return (
-    <View
-      pointerEvents="auto"
-      accessibilityRole="image"
-      accessibilityLabel="ShotTraxx"
-      style={[styles.wrap, StyleSheet.absoluteFill]}>
-      <Image source={OPEN_STILL} style={StyleSheet.absoluteFill} resizeMode="contain" />
+    <LetterboxedSplash>
       <VideoView
         player={player}
         style={StyleSheet.absoluteFill}
-        contentFit="contain"
+        contentFit={SPLASH_RESIZE_MODE}
         nativeControls={false}
         playsInline
         allowsPictureInPicture={false}
@@ -118,13 +123,18 @@ function VideoSplash({ onDone }: { onDone: () => void }) {
         fullscreenOptions={{ enable: false }}
         onFirstFrameRender={hideNativeSplash}
       />
-    </View>
+    </LetterboxedSplash>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
+    alignItems: 'center',
     backgroundColor: SPLASH_BG,
+    justifyContent: 'center',
     zIndex: 1000,
+  },
+  mark: {
+    overflow: 'hidden',
   },
 });

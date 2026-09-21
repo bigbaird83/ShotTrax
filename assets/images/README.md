@@ -1,6 +1,6 @@
 # App icons (Build 36 locked)
 
-Night-green diorama, illuminated pin, three neon lime radar arcs into the light, white **Shot** over lime **Traxx**. Home-screen icon is this Build 36 art. Splash / launch still is the first frame of Doc’s 3s open clip (960², black field) — same pixels as `assets/splash/splash-open-still.png`.
+Night-green diorama, illuminated pin, three neon lime radar arcs into the light, white **Shot** over lime **Traxx**. Home-screen icon is this Build 36 art. Splash / launch still is the first frame of Doc’s 3s open clip (960², black field) — same pixels as `assets/splash/splash-first-frame-v2.png`. Expo and JS show it with `contain` + black letterbox (never `cover`).
 
 | File | Wired from |
 | --- | --- |
