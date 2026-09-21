@@ -775,6 +775,10 @@ test('prefetch meters unique hydrate once and golfapi does not invent without a 
     for (const name of previous.names) delete process.env[name];
     assert.equal(getGolfApiKey(), null);
     assert.equal(await fetchGolfApiCypressHydrate(), null);
+    process.env.GOLFAPI_KEY = 'test-key';
+    const bundled = await fetchGolfApiCypressHydrate();
+    assert.equal(bundled?.courseKey, CYPRESS_CREEK_CABOT_AR_KEY);
+    assert.equal(bundled?.holes.length, 18);
   } finally {
     previous.restore();
   }
@@ -797,6 +801,10 @@ test('Start Round / hole load apply hydrate before MapView for Cypress', () => {
 
   const watch = readFileSync(new URL('../services/watchNearby.ts', import.meta.url), 'utf8');
   assert.match(watch, /applyCourseHydrateToLayout/);
+  assert.match(watch, /courseKey: detail\.id/);
+
+  const client = readFileSync(new URL('./client.ts', import.meta.url), 'utf8');
+  assert.match(client, /fillCourseDetailFromGolfApi/);
 });
 
 function GOLFAPI_KEY_NAMES_SNAPSHOT(): { names: string[]; restore: () => void } {

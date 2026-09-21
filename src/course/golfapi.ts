@@ -341,6 +341,10 @@ export function loadCachedGolfApiHydrate(courseKey: string | null | undefined): 
   return memory.get(key) ?? (aliasToKey.has(key) ? memory.get(aliasToKey.get(key) ?? '') ?? null : null);
 }
 
+/** Same on-device cache. Names match the runtime hydrate brief. */
+export const loadCachedHydrate = loadCachedGolfApiHydrate;
+export const saveCachedHydrate = saveCachedGolfApiHydrate;
+
 export function resolveGolfApiHydrateKey(course: CourseHydrateMatch): string | null {
   const courseKey = trimKey(course.courseKey);
   if (courseKey && (memory.has(courseKey) || aliasToKey.has(courseKey))) {

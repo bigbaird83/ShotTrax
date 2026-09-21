@@ -6,6 +6,7 @@ import {
   nearbyLocalCatalog,
   searchLocalCatalog,
 } from './catalog';
+import { fillCourseDetailFromGolfApi } from './hydrate';
 import { fetchOsmOverlay } from './osmOverlay';
 import {
   mergeGreenCenters,
@@ -137,10 +138,22 @@ export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataCli
 
       const greensRes = await apiGet(`/courses/${encoded}/green-centers`, key, fetchImpl);
       if (greensRes.status === 403 || greensRes.status === 404) {
-        return detail;
+        return fillCourseDetailFromGolfApi(detail, {
+          name: detail.name,
+          city: detail.city,
+          state: detail.state,
+          location: detail.location,
+          courseKey: detail.id,
+        });
       }
       if (greensRes.status < 200 || greensRes.status >= 300) {
-        return detail;
+        return fillCourseDetailFromGolfApi(detail, {
+          name: detail.name,
+          city: detail.city,
+          state: detail.state,
+          location: detail.location,
+          courseKey: detail.id,
+        });
       }
       const greens = parseGreenCenters(greensRes.json);
       const holes = mergeGreenCenters(detail.holes, greens);
@@ -148,11 +161,20 @@ export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataCli
         ...tee,
         holes: mergeGreenCenters(tee.holes, greens),
       }));
-      return {
-        ...detail,
-        holes,
-        tees,
-      };
+      return fillCourseDetailFromGolfApi(
+        {
+          ...detail,
+          holes,
+          tees,
+        },
+        {
+          name: detail.name,
+          city: detail.city,
+          state: detail.state,
+          location: detail.location,
+          courseKey: detail.id,
+        },
+      );
     },
 
     fetchOsmOverlay(query: OsmOverlayQuery) {

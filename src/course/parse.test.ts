@@ -119,6 +119,8 @@ test('parseCourseDetail reads teeboxes scorecard and keeps missing par/green bla
   });
   assert.ok(detail);
   assert.equal(detail?.id, '4');
+  assert.equal(detail?.city, 'Bowling Green');
+  assert.equal(detail?.state, 'Kentucky');
   assert.deepEqual(detail?.location, { lat: 37.0132, lng: -86.43378 });
   assert.equal(detail?.holeCount, 18);
   assert.equal(detail?.greenCentersAvailable, true);

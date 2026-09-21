@@ -4,9 +4,11 @@ User-facing name is **ShotTraxx** (`expo.name`, iOS `CFBundleDisplayName`, Andro
 
 ## golfapi.io runtime hydrate (unknown courses)
 
-When a picked course has no bundled tee/green, ShotTraxx can fetch golfapi.io once and cache the hydrate on-device (`settings.golfapi.hydrates`). Next open of that course reads the cache only. Bundled hydrates (Thunderbird, North Hills, Mountain Ranch, Cypress, …) still win. No key / thin GPS → miss card. Never invents tee/green.
+When a picked course has no bundled tee/green, ShotTraxx can fetch golfapi.io once (`GET /courses?country=US`, then `/courses/{id}` + `/coordinates/{id}`) and cache the hydrate on-device (`settings.golfapi.hydrates`). Next open of that course reads the cache only — zero API calls. Bundled hydrates (Thunderbird, North Hills, Mountain Ranch, Cypress, …) still win as the default cache seed. No key / thin GPS → miss card. Never invents tee/green.
 
-EAS / GitHub secret name: **`GOLFAPI_KEY`** (also `EXPO_PUBLIC_GOLFAPI_KEY` for local Metro). `app.config.js` copies it into `expo.extra.golfApiKey`. Do not commit a key. Do not call golfapi from CI without a key.
+The fill runs on course pick (`getCourse`, watch nearby Start, catalog prefetch) so Start Round can persist a hydrated layout without a new TestFlight. No cloud backend in v1.
+
+EAS / GitHub secret name: **`GOLFAPI_KEY`** (also `EXPO_PUBLIC_GOLFAPI_KEY` for local Metro). Set it on EAS for production / preview / development like `GOLF_COURSES_API_KEY`. `app.config.js` copies it into `expo.extra.golfApiKey`. Do not commit a key. Do not call golfapi from CI without a key.
 
 ## Golf Courses API (nearby courses, par, green centroids)
 

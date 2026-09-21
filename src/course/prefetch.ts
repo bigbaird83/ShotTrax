@@ -181,6 +181,7 @@ export async function prefetchCourseCard(
   let hydrated = applyCourseHydrateToLayout(layout, {
     name: layout.name,
     location: layout.location ?? null,
+    courseKey: layout.apiId,
   });
   const miss = !hydrated.holes?.length || hydrated.holes.some((hole) => !hole.teeCentroid || !hole.greenCentroid);
   if (miss && getGolfApiKey()) {

@@ -4,11 +4,18 @@ import {
   fetchGolfApiHydrate,
   getGolfApiKey,
   loadCachedGolfApiHydrate,
+  loadCachedHydrate,
   mapGolfApiCourseToHydrate,
   resetGolfApiCacheForTests,
   saveCachedGolfApiHydrate,
+  saveCachedHydrate,
 } from './golfapi';
-import { inventGreenFromClubhouse, inventGreenFromScorecardYards } from './hydrate';
+import {
+  fillCourseDetailFromGolfApi,
+  inventGreenFromClubhouse,
+  inventGreenFromScorecardYards,
+} from './hydrate';
+import type { CourseDetail } from './types';
 
 const THUNDERBIRD_COURSE = {
   courseID: '011141520629948893391',
@@ -87,6 +94,7 @@ test('golfapi fetch is null without a key and cache hit skips the network', asyn
     );
     assert.equal(cached?.courseKey, seeded?.courseKey);
     assert.equal(loadCachedGolfApiHydrate(seeded!.courseKey)?.holes.length, 2);
+    assert.equal(loadCachedHydrate(seeded!.courseKey)?.holes.length, 2);
     assert.equal(calls, 0);
   } finally {
     resetGolfApiCacheForTests();
@@ -142,6 +150,91 @@ test('golfapi fetch maps mocked search + coords and does not invent on empty GPS
     );
     assert.equal(thin, null);
     assert.equal(inventGreenFromClubhouse(), false);
+  } finally {
+    resetGolfApiCacheForTests();
+    for (const name of names) {
+      if (prev[name] == null) delete process.env[name];
+      else process.env[name] = prev[name];
+    }
+  }
+});
+
+const MISS_DETAIL: CourseDetail = {
+  id: '99',
+  name: 'Unknown CC',
+  holeCount: 2,
+  location: null,
+  city: 'Heber Springs',
+  state: 'AR',
+  holes: [
+    {
+      holeNumber: 1,
+      par: 4,
+      yards: null,
+      handicap: null,
+      greenCentroid: null,
+      greenFront: null,
+      greenBack: null,
+      greenDepthYards: null,
+      teeCentroid: null,
+    },
+  ],
+  tees: [],
+  greenCentersAvailable: false,
+};
+
+test('fillCourseDetailFromGolfApi cache hit skips network and empty coords do not invent', async () => {
+  resetGolfApiCacheForTests();
+  const names = ['GOLFAPI_KEY', 'EXPO_PUBLIC_GOLFAPI_KEY', 'GOLF_API_IO_KEY', 'EXPO_PUBLIC_GOLF_API_IO_KEY'];
+  const prev = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  let calls = 0;
+  try {
+    process.env.GOLFAPI_KEY = 'test-key';
+    const seeded = mapGolfApiCourseToHydrate({
+      course: THUNDERBIRD_COURSE,
+      coordinates: THUNDERBIRD_COORDS,
+    });
+    assert.ok(seeded);
+    saveCachedHydrate(seeded!, ['99', 'namecity:unknown cc|heber springs']);
+    const filled = await fillCourseDetailFromGolfApi(
+      MISS_DETAIL,
+      { name: 'Unknown CC', city: 'Heber Springs', courseKey: '99' },
+      {
+        fetchImpl: async () => {
+          calls += 1;
+          throw new Error('cache should skip');
+        },
+      },
+    );
+    assert.equal(filled?.holes[0]?.teeCentroid?.lat, 35.5250149);
+    assert.equal(filled?.holes[0]?.greenCentroid?.lat, 35.522655);
+    assert.equal(calls, 0);
+
+    resetGolfApiCacheForTests();
+    const thinCourse = {
+      courseID: 'thin-1',
+      clubName: 'Unknown Thin CC',
+      city: 'Nowhere',
+      state: 'AR',
+    };
+    const thin = await fillCourseDetailFromGolfApi(
+      { ...MISS_DETAIL, id: 'thin-1', name: 'Unknown Thin CC', city: 'Nowhere' },
+      { name: 'Unknown Thin CC', city: 'Nowhere', courseKey: 'thin-1' },
+      {
+        fetchImpl: async (input) => {
+          calls += 1;
+          const url = String(input);
+          if (url.includes('/coordinates/')) {
+            return new Response(JSON.stringify({ coordinates: [] }), { status: 200 });
+          }
+          return new Response(JSON.stringify(thinCourse), { status: 200 });
+        },
+      },
+    );
+    assert.equal(thin?.holes[0]?.greenCentroid, null);
+    assert.equal(thin?.holes[0]?.teeCentroid, null);
+    assert.equal(inventGreenFromClubhouse(), false);
+    assert.equal(inventGreenFromScorecardYards(), false);
   } finally {
     resetGolfApiCacheForTests();
     for (const name of names) {

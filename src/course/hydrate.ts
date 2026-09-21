@@ -13,8 +13,12 @@ import {
   fetchGolfApiHydrate,
   getGolfApiKey as readGolfApiKey,
   loadCachedGolfApiHydrate,
+  loadCachedHydrate,
   resolveGolfApiHydrateKey,
+  saveCachedHydrate,
+  type GolfApiFetchDeps,
 } from './golfapi';
+import type { CourseDetail, HoleCourseData } from './types';
 import { loadOpenGolfHydrate, resolveOpenGolfHydrateKey } from './opengolf';
 import cypressOsm from './hydrates/cypress-creek-cabot-ar.json';
 import greystoneOsm from './hydrates/greystone-cabot-ar.json';
@@ -650,12 +654,107 @@ export function getGolfApiKey(): string | null {
   return readGolfApiKey();
 }
 
+function emptyCourseHole(holeNumber: number): HoleCourseData {
+  return {
+    holeNumber,
+    par: null,
+    yards: null,
+    handicap: null,
+    greenCentroid: null,
+    greenFront: null,
+    greenBack: null,
+    greenDepthYards: null,
+    teeCentroid: null,
+  };
+}
+
+function applyHydrateToCourseHole(
+  hole: HoleCourseData,
+  hydrate: CourseHydrate,
+  match: CourseHydrateMatch,
+): HoleCourseData {
+  const hyd = hydrateHoleFor(hydrate, hole.holeNumber);
+  const resolved = resolveHydrateTeeGreen({
+    ...match,
+    holeNumber: hole.holeNumber,
+    tee: isCourseCardLatLng(hole.teeCentroid) ? hole.teeCentroid : null,
+    green: isCourseCardLatLng(hole.greenCentroid) ? hole.greenCentroid : null,
+  });
+  return {
+    ...hole,
+    par: hole.par ?? hyd?.par ?? null,
+    yards: hole.yards ?? hyd?.yards ?? null,
+    greenCentroid: resolved.green,
+    greenFront: hole.greenFront ?? hyd?.greenFront ?? null,
+    greenBack: hole.greenBack ?? hyd?.greenBack ?? null,
+    greenDepthYards: hole.greenDepthYards ?? hyd?.greenDepthYards ?? null,
+    teeCentroid: resolved.tee,
+  };
+}
+
+/** True when any hole is missing a gated tee+green pair. */
+export function courseDetailNeedsHydrate(detail: CourseDetail): boolean {
+  if (detail.holes.length === 0) return true;
+  return detail.holes.some(
+    (hole) =>
+      !hydrateHolePassesGates({
+        tee: hole.teeCentroid,
+        green: hole.greenCentroid,
+      }),
+  );
+}
+
 /**
- * Runtime golfapi.io fetch for a miss card. No key / miss / thin → null.
- * Bundled / cached hydrates win. Never invents tee/green.
+ * Fill a miss-card CourseDetail from bundled / cached / runtime golfapi.
+ * Existing sane Pro coords win. No key / thin GPS → unchanged. Never invents.
+ */
+export async function fillCourseDetailFromGolfApi(
+  detail: CourseDetail | null,
+  match: CourseHydrateMatch = {},
+  deps: GolfApiFetchDeps = {},
+): Promise<CourseDetail | null> {
+  if (!detail) return null;
+  const resolvedMatch: CourseHydrateMatch = {
+    name: match.name ?? detail.name,
+    city: match.city ?? detail.city,
+    state: match.state ?? detail.state,
+    locality: match.locality,
+    location: match.location ?? detail.location,
+    courseKey: match.courseKey ?? detail.id,
+  };
+  let hydrate = loadHydrateForCourse(resolvedMatch);
+  if (!hydrateIsUsable(hydrate) && courseDetailNeedsHydrate(detail) && readGolfApiKey()) {
+    hydrate = await fetchGolfApiHydrate(resolvedMatch, deps);
+  }
+  if (!hydrateIsUsable(hydrate) || !hydrate) return detail;
+  prefetchCourseHydrateOnce({ ...resolvedMatch, courseId: detail.id });
+
+  const existing = detail.holes;
+  const byNumber = new Map(existing.map((hole) => [hole.holeNumber, hole]));
+  const numbers = new Set<number>([
+    ...existing.map((hole) => hole.holeNumber),
+    ...hydrate.holes.map((hole) => hole.hole),
+  ]);
+  const holes = [...numbers]
+    .filter((n) => Number.isInteger(n) && n >= 1 && n <= 18)
+    .sort((a, b) => a - b)
+    .map((n) => applyHydrateToCourseHole(byNumber.get(n) ?? emptyCourseHole(n), hydrate, resolvedMatch));
+  const tees = detail.tees.map((tee) => ({
+    ...tee,
+    holes: tee.holes.map((hole) => applyHydrateToCourseHole(hole, hydrate, resolvedMatch)),
+  }));
+  return { ...detail, holes, tees };
+}
+
+/**
+ * Runtime golfapi.io fetch for a miss card. No key → null.
+ * Bundled Cypress wins (no network) when a key is present. Never invents.
  */
 export async function fetchGolfApiCypressHydrate(): Promise<CourseHydrate | null> {
+  if (!readGolfApiKey()) return null;
+  const bundled = loadCourseHydrate(CYPRESS_CREEK_CABOT_AR_KEY);
+  if (hydrateIsUsable(bundled)) return bundled;
   return fetchGolfApiHydrate({ name: 'Cypress Creek Golf Club', city: 'Cabot', state: 'AR' });
 }
 
-export { fetchGolfApiHydrate };
+export { fetchGolfApiHydrate, loadCachedHydrate, saveCachedHydrate };

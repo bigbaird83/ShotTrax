@@ -39,7 +39,7 @@ Nearby course search, hole par, and green centroids are behind [Golf Courses API
 
 **EAS secret name:** `GOLF_COURSES_API_KEY` (set for production, preview, and development). `app.config.js` copies it into `expo.extra.golfCoursesApiKey` so the app can read it on EAS builds via `expo-constants`. **Never commit a key. Do not invent a second secret name in git.**
 
-Unknown courses can also hydrate tee + green from **golfapi.io** at runtime (`GOLFAPI_KEY` / `EXPO_PUBLIC_GOLFAPI_KEY` → `expo.extra.golfApiKey`). First miss fetches once and caches on-device; replay is cache-only. Bundled hydrates still win. Thin GPS / no key stays a miss — never invented.
+Unknown courses can also hydrate tee + green from **golfapi.io** at runtime (`GOLFAPI_KEY` / `EXPO_PUBLIC_GOLFAPI_KEY` → `expo.extra.golfApiKey`; set that EAS secret for production / preview / development like GCA). First miss fetches once on pick and caches on-device; replay is cache-only. Bundled hydrates still win. Thin GPS / no key stays a miss — never invented.
 
 Expo client JS only inlines `EXPO_PUBLIC_*`. For local Expo Go, CoS must also set `EXPO_PUBLIC_GOLF_COURSES_API_KEY` in `.env` **or** map that public name from the existing `GOLF_COURSES_API_KEY` secret in the Expo dashboard (same value).
 

@@ -337,6 +337,8 @@ export function catalogCourseDetail(id: string | null | undefined): CourseDetail
     name: entry.name,
     holeCount: entry.holeCount,
     location: entry.location,
+    city: entry.city,
+    state: entry.state,
     holes,
     tees: [],
     greenCentersAvailable: holes.some((hole) => hole.greenCentroid != null),
