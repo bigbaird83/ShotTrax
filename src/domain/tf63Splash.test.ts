@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, statSync } from 'node:fs';
 import { test } from 'node:test';
 
-test('TF 62: BrandedSplash plays Doc 3s muted open clip; Reduce Motion uses last-frame still', () => {
+test('TF 63: BrandedSplash plays Doc 3s muted open clip; Reduce Motion uses last-frame still', () => {
   const branded = readFileSync(new URL('../ui/BrandedSplash.tsx', import.meta.url), 'utf8');
   assert.match(branded, /splash-open-3s\.mp4/);
   assert.match(branded, /splash-open-still\.png/);
