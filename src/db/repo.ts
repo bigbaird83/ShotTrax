@@ -1320,6 +1320,16 @@ export function getClubMap(db: SQLiteDatabase): Record<string, Club> {
   return map;
 }
 
+export const GOLFAPI_HYDRATE_SETTING_KEY = 'golfapi.hydrates';
+
+export function getGolfApiHydrateCache(db: SQLiteDatabase): string | null {
+  return getSetting(db, GOLFAPI_HYDRATE_SETTING_KEY);
+}
+
+export function setGolfApiHydrateCache(db: SQLiteDatabase, json: string): void {
+  setSetting(db, GOLFAPI_HYDRATE_SETTING_KEY, json);
+}
+
 export function getSetting(db: SQLiteDatabase, key: string): string | null {
   const row = db.getFirstSync<{ value: string }>('SELECT value FROM settings WHERE key = ?', [key]);
   return row?.value ?? null;

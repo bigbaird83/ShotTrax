@@ -2,6 +2,12 @@
 
 User-facing name is **ShotTraxx** (`expo.name`, iOS `CFBundleDisplayName`, Android `label`). Bundle ID `com.shottrax.app` and Expo slug `shottrax` stay unchanged. Home-screen icon files under `assets/images/` are the locked Build 36 night-green Shot/Traxx mark (illuminated pin, three lime arcs). Splash still is the first frame of Doc’s 3s open clip, shown with contain + black letterbox.
 
+## golfapi.io runtime hydrate (unknown courses)
+
+When a picked course has no bundled tee/green, ShotTraxx can fetch golfapi.io once and cache the hydrate on-device (`settings.golfapi.hydrates`). Next open of that course reads the cache only. Bundled hydrates (Thunderbird, North Hills, Mountain Ranch, Cypress, …) still win. No key / thin GPS → miss card. Never invents tee/green.
+
+EAS / GitHub secret name: **`GOLFAPI_KEY`** (also `EXPO_PUBLIC_GOLFAPI_KEY` for local Metro). `app.config.js` copies it into `expo.extra.golfApiKey`. Do not commit a key. Do not call golfapi from CI without a key.
+
 ## Golf Courses API (nearby courses, par, green centroids)
 
 Nearby courses, hole par, and green centroids come from [Golf Courses API](https://golfcoursesapi.com/) (Pro green-centers). **Do not hardcode the key.**

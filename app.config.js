@@ -8,8 +8,9 @@
  * are the locked Build 36 night-green Shot/Traxx mark. `splash-icon.png` is
  * the first frame of Doc’s 3s open clip (same still as splash-first-frame-v2).
  *
- * Secret name (EAS dashboard, production / preview / development):
+ * Secret names (EAS dashboard, production / preview / development):
  *   GOLF_COURSES_API_KEY
+ *   GOLFAPI_KEY (golfapi.io runtime hydrate; optional)
  *
  * Do not commit a key. Do not invent a second secret name in git.
  * Local Expo Go: set EXPO_PUBLIC_GOLF_COURSES_API_KEY in `.env`, or the same
@@ -30,6 +31,13 @@ module.exports = ({ config }) => {
     trimKey(process.env.EXPO_PUBLIC_GOLF_COURSES_API_KEY) ??
     trimKey(extra.golfCoursesApiKey) ??
     null;
+  const golfApiKey =
+    trimKey(process.env.GOLFAPI_KEY) ??
+    trimKey(process.env.EXPO_PUBLIC_GOLFAPI_KEY) ??
+    trimKey(process.env.GOLF_API_IO_KEY) ??
+    trimKey(process.env.EXPO_PUBLIC_GOLF_API_IO_KEY) ??
+    trimKey(extra.golfApiKey) ??
+    null;
   const shareSyncUrl =
     trimKey(process.env.EXPO_PUBLIC_SHARE_SYNC_URL) ??
     trimKey(extra.shareSyncUrl) ??
@@ -40,6 +48,7 @@ module.exports = ({ config }) => {
     extra: {
       ...extra,
       golfCoursesApiKey,
+      golfApiKey,
       shareSyncUrl,
     },
   };

@@ -9,6 +9,12 @@ import {
 } from '../domain/thunderbirdPins';
 import type { CourseLayoutSeed } from './layout';
 import { rememberResolvedTee } from './osmOverlay';
+import {
+  fetchGolfApiHydrate,
+  getGolfApiKey as readGolfApiKey,
+  loadCachedGolfApiHydrate,
+  resolveGolfApiHydrateKey,
+} from './golfapi';
 import { loadOpenGolfHydrate, resolveOpenGolfHydrateKey } from './opengolf';
 import cypressOsm from './hydrates/cypress-creek-cabot-ar.json';
 import greystoneOsm from './hydrates/greystone-cabot-ar.json';
@@ -105,13 +111,6 @@ const CLUBHOUSE_PINS: readonly LatLng[] = [
   THUNDERBIRD_HEBER_CLUBHOUSE,
   MOUNTAIN_RANCH_FAIRFIELD_BAY_CLUBHOUSE,
   GREENS_NORTH_HILLS_SHERWOOD_CLUBHOUSE,
-];
-
-const GOLFAPI_KEY_NAMES = [
-  'GOLFAPI_KEY',
-  'EXPO_PUBLIC_GOLFAPI_KEY',
-  'GOLF_API_IO_KEY',
-  'EXPO_PUBLIC_GOLF_API_IO_KEY',
 ];
 
 const metered = new Set<string>();
@@ -357,7 +356,7 @@ export function resolveCourseHydrateKey(course: CourseHydrateMatch): string | nu
   if (matchesThunderbirdHeberSprings(course)) return THUNDERBIRD_HEBER_SPRINGS_AR_KEY;
   if (matchesMountainRanchFairfieldBay(course)) return MOUNTAIN_RANCH_FAIRFIELD_BAY_AR_KEY;
   if (matchesGreensNorthHillsSherwood(course)) return GREENS_NORTH_HILLS_SHERWOOD_AR_KEY;
-  return resolveOpenGolfHydrateKey(course);
+  return resolveGolfApiHydrateKey(course) ?? resolveOpenGolfHydrateKey(course);
 }
 
 function parsePar(value: unknown): number | null {
@@ -502,7 +501,7 @@ export function loadCourseHydrate(courseKey: string | null | undefined): CourseH
     if (key === THUNDERBIRD_HEBER_SPRINGS_AR_KEY) return foldThunderbirdPinSheets(parsed);
     return parsed;
   }
-  return loadOpenGolfHydrate(key);
+  return loadCachedGolfApiHydrate(key) ?? loadOpenGolfHydrate(key);
 }
 
 export function loadHydrateForCourse(course: CourseHydrateMatch): CourseHydrate | null {
@@ -646,26 +645,17 @@ export function applyCourseHydrateToLayout(
   return { ...layout, holes };
 }
 
-function trimKey(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
 /** Optional golfapi.io key. Absent → no fetch, never invent. */
 export function getGolfApiKey(): string | null {
-  for (const name of GOLFAPI_KEY_NAMES) {
-    const key = trimKey(process.env[name]);
-    if (key) return key;
-  }
-  return null;
+  return readGolfApiKey();
 }
 
 /**
- * Cypress-only golfapi.io fetch. No key / miss / thin → null.
- * Never invents tee/green from the clubhouse or scorecard yards.
+ * Runtime golfapi.io fetch for a miss card. No key / miss / thin → null.
+ * Bundled / cached hydrates win. Never invents tee/green.
  */
 export async function fetchGolfApiCypressHydrate(): Promise<CourseHydrate | null> {
-  if (!getGolfApiKey()) return null;
-  return null;
+  return fetchGolfApiHydrate({ name: 'Cypress Creek Golf Club', city: 'Cabot', state: 'AR' });
 }
+
+export { fetchGolfApiHydrate };

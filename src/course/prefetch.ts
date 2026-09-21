@@ -7,6 +7,7 @@ import {
   rememberResolvedTee,
   resolveOverlayTee,
 } from './osmOverlay';
+import { fetchGolfApiHydrate, getGolfApiKey } from './golfapi';
 import { applyCourseHydrateToLayout, prefetchCourseHydrateOnce } from './hydrate';
 import type { CourseLayoutSeed } from './layout';
 import type { OsmOverlay, OsmOverlayQuery } from './types';
@@ -177,10 +178,25 @@ export async function prefetchCourseCard(
   layout: CourseLayoutSeed,
   deps?: PrefetchDeps,
 ): Promise<PrefetchHoleFrame[]> {
-  const hydrated = applyCourseHydrateToLayout(layout, {
+  let hydrated = applyCourseHydrateToLayout(layout, {
     name: layout.name,
     location: layout.location ?? null,
   });
+  const miss = !hydrated.holes?.length || hydrated.holes.some((hole) => !hole.teeCentroid || !hole.greenCentroid);
+  if (miss && getGolfApiKey()) {
+    const fetched = await fetchGolfApiHydrate({
+      name: layout.name,
+      location: layout.location ?? null,
+      courseKey: layout.apiId,
+    });
+    if (fetched) {
+      hydrated = applyCourseHydrateToLayout(hydrated, {
+        name: layout.name,
+        location: layout.location ?? null,
+        courseKey: fetched.courseKey,
+      });
+    }
+  }
   rememberLayoutHoles(hydrated);
   prefetchCourseHydrateOnce({
     name: hydrated.name,
