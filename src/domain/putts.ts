@@ -594,6 +594,31 @@ export function playDockHoleOutCallsMadeIt(): false {
 }
 
 /** Watch putt-sheet Made it is always on. Empty length never gates it. */
+/** Watch putt sheet Back/Cancel returns to hole play — no Made/Add, no invent GPS. */
+export function watchPuttSheetHasBackOrCancel(): true {
+  return true;
+}
+
+export function watchPuttSheetBackLabel(): 'Back' {
+  return 'Back';
+}
+
+export function watchPuttSheetBackReturnsToHolePlay(): true {
+  return true;
+}
+
+export function watchPuttSheetBackCallsMade(): false {
+  return false;
+}
+
+export function watchPuttSheetBackCallsAdd(): false {
+  return false;
+}
+
+export function watchPuttSheetBackInventGps(): false {
+  return false;
+}
+
 export function watchPuttSheetMadeItAlwaysEnabled(): true {
   return true;
 }

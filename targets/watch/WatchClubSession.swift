@@ -80,6 +80,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   @Published var sending = false
   @Published var nearbyFromHome = false
   private var receivedClubList = false
+  /// Watch Back/Cancel on the putt sheet. Blocks phone keep-alive from reopening.
+  private var userClosedPutt = false
 
   var hasLiveHole: Bool {
     receivedClubList || !list.bag.isEmpty
@@ -193,6 +195,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     // Putter opens the putt sheet locally so Made is on-screen without
     // waiting on a phone push (TF 53/56: Doc never saw Made).
     if clubId == "club_putter" {
+      userClosedPutt = false
       var sheet = putt
       sheet.open = true
       if sheet.holeNumber < 1 {
@@ -227,6 +230,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
 
   /// Dedicated Putt control — opens the sheet without selecting putter on the wheel.
   func openPuttSheet() {
+    userClosedPutt = false
     var sheet = putt
     sheet.open = true
     if sheet.holeNumber < 1 {
@@ -241,6 +245,16 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       "clubId": "club_putter",
       "at": isoNow(),
     ], keepPending: false)
+  }
+
+  /// Back/Cancel — return to hole play. No Made/Add and no invent GPS.
+  func closePuttSheet() {
+    userClosedPutt = true
+    var sheet = putt
+    sheet.open = false
+    sheet.pending = nil
+    putt = sheet
+    syncRoundStay()
   }
 
   func pickPuttLength(_ lengthId: String) {
@@ -641,6 +655,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       next.lastClubId = nil
       lastClubTapId = nil
       lastClubTapAt = Date.distantPast
+      userClosedPutt = false
     }
     list = next
     persist(next)
@@ -668,7 +683,12 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     let incomingOpen = message["open"] as? Bool ?? false
     // Phone add/undo can race puttOpen=false and close a Watch-opened sheet
     // (dedicated Putt does not select putter on the wheel). Keep it up.
-    next.open = incomingOpen || putt.open
+    // Watch Back/Cancel stays closed — no Made/Add, no invent GPS.
+    if userClosedPutt {
+      next.open = false
+    } else {
+      next.open = incomingOpen || putt.open
+    }
     if next.canAdd, next.lengths == priorLengths {
       next.pending = priorPending
     }

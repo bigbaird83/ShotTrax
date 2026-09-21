@@ -44,12 +44,28 @@ struct ContentView: View {
         }
       } else if session.putt.open {
         // Compact title only. Fixed 2×2 — Ultra clipped 0–3 and Made.
+        // Back/Cancel returns to hole play — no Made/Add, no invent GPS.
         VStack(alignment: .leading, spacing: 4) {
-          Text("Hole \(session.putt.holeNumber) · Putts")
-            .font(.system(size: 12, weight: .heavy))
-            .foregroundStyle(Color("cream"))
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
+          HStack(spacing: 6) {
+            Button(action: { session.closePuttSheet() }) {
+              Text("Back")
+                .font(.system(size: 12, weight: .heavy))
+                .foregroundStyle(Color("cream"))
+                .lineLimit(1)
+                .padding(.horizontal, 8)
+                .frame(minHeight: 24)
+                .overlay(
+                  Capsule()
+                    .stroke(Color("cream"), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            Text("Hole \(session.putt.holeNumber) · Putts")
+              .font(.system(size: 12, weight: .heavy))
+              .foregroundStyle(Color("cream"))
+              .lineLimit(1)
+              .minimumScaleFactor(0.8)
+          }
           if !session.feedback.isEmpty {
             Text(session.feedback)
               .font(.system(size: 11, weight: .bold))
@@ -309,21 +325,23 @@ struct ContentView: View {
                 )
             }
             .buttonStyle(.plain)
+            // TF 59: compact Putt pill on the Back/Home row. A tall full-width
+            // Putt shoved the top-3 club strip off-screen on Ultra.
+            Button(action: { session.openPuttSheet() }) {
+              Text("Putt")
+                .font(.system(size: 13, weight: .heavy))
+                .foregroundStyle(Color("cream"))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .padding(.horizontal, 10)
+                .frame(minHeight: 32)
+                .overlay(
+                  Capsule()
+                    .stroke(Color("cream"), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
           }
-
-          Button(action: { session.openPuttSheet() }) {
-            Text("Putt")
-              .font(.system(size: 15, weight: .heavy))
-              .foregroundStyle(Color("cream"))
-              .lineLimit(1)
-              .minimumScaleFactor(0.7)
-              .frame(maxWidth: .infinity, minHeight: 40)
-              .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                  .stroke(Color("cream"), lineWidth: 1)
-              )
-          }
-          .buttonStyle(.plain)
 
           GeometryReader { wheelGeo in
             let visible = min(3, max(stripClubs.count, 1))
@@ -361,6 +379,7 @@ struct ContentView: View {
             }
           }
           .frame(height: 52)
+          .layoutPriority(1)
 
           Button(action: { session.madeIt() }) {
             Text("Hole Out")

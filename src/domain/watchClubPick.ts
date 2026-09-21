@@ -69,6 +69,29 @@ export function watchPuttControlIsClubWheel(): false {
   return false;
 }
 
+/** TF 59: dedicated Putt is a compact pill on the Back/Home row — never a tall full-width row. */
+export function watchPuttControlSharesNavRow(): true {
+  return true;
+}
+
+export function watchPuttControlIsCompactPill(): true {
+  return true;
+}
+
+export function watchPuttControlIsFullWidthRow(): false {
+  return false;
+}
+
+/** A tall Putt must never shove the top-3 club strip off-screen. */
+export function watchPuttControlPushesClubStripOffScreen(): false {
+  return false;
+}
+
+/** Crown-scroll the rest of the bag is backup. Primary three stay readable. */
+export function watchPrimaryThreeVisibleWithoutScroll(): true {
+  return true;
+}
+
 /** Dedicated Putt opens the sheet only — never Watch GPS or invented yards. */
 export function watchPuttControlAttachWatchFix(): false {
   return false;
