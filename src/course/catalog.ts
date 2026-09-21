@@ -4,6 +4,8 @@ import { isValidLatLng, type LatLng } from '../domain/latLng';
 import {
   CYPRESS_CREEK_CABOT_AR_KEY,
   CYPRESS_CREEK_CLUBHOUSE,
+  GREENS_NORTH_HILLS_SHERWOOD_AR_KEY,
+  GREENS_NORTH_HILLS_SHERWOOD_CLUBHOUSE,
   GREYSTONE_CABOT_AR_KEY,
   GREYSTONE_CABOT_CLUBHOUSE,
   MOUNTAIN_RANCH_FAIRFIELD_BAY_AR_KEY,
@@ -68,6 +70,19 @@ export const LOCAL_COURSE_CATALOG: readonly LocalCourseCatalogEntry[] = [
     aliases: ['Thunderbird Golf Course', 'Thunderbird CC', 'Thunderbird'],
   },
   {
+    id: `${LOCAL_CATALOG_ID_PREFIX}${GREENS_NORTH_HILLS_SHERWOOD_AR_KEY}`,
+    courseKey: GREENS_NORTH_HILLS_SHERWOOD_AR_KEY,
+    name: 'The Greens at North Hills',
+    club: 'The Greens at North Hills',
+    city: 'Sherwood',
+    state: 'AR',
+    country: 'US',
+    locality: 'Sherwood, AR',
+    location: GREENS_NORTH_HILLS_SHERWOOD_CLUBHOUSE,
+    holeCount: 18,
+    aliases: ['Greens at North Hills', 'North Hills', 'The Greens At North Hills'],
+  },
+  {
     id: `${LOCAL_CATALOG_ID_PREFIX}${MOUNTAIN_RANCH_FAIRFIELD_BAY_AR_KEY}`,
     courseKey: MOUNTAIN_RANCH_FAIRFIELD_BAY_AR_KEY,
     name: 'Mountain Ranch Golf Club',
@@ -127,7 +142,7 @@ export function thunderbirdHoleSources(): CatalogHoleSource[] {
   return THUNDERBIRD_HARD_MISS_HOLES.map((hole) => ({
     hole,
     status: 'hydrated',
-    source: 'doc pin sheet green + daily pins A–D; tee HARD-MISS',
+    source: 'golfapi.io tee + green; Doc pin sheets A–D daily pins',
     needsDocPinSheet: false,
   }));
 }
@@ -138,15 +153,42 @@ export function thunderbirdCourseReport(): {
   hydratedHoles: number[];
   hardMissHoles: number[];
   needsDocPinSheets: false;
-  needsDocTeePins: true;
+  needsDocTeePins: false;
 } {
   return {
     searchableName: 'Thunderbird Country Club',
     holeCount: 9,
     hydratedHoles: [...THUNDERBIRD_HARD_MISS_HOLES],
-    hardMissHoles: [...THUNDERBIRD_HARD_MISS_HOLES],
+    hardMissHoles: [],
     needsDocPinSheets: false,
-    needsDocTeePins: true,
+    needsDocTeePins: false,
+  };
+}
+
+export const GREENS_NORTH_HILLS_HOLES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18] as const;
+
+export function greensNorthHillsHoleSources(): CatalogHoleSource[] {
+  return GREENS_NORTH_HILLS_HOLES.map((hole) => ({
+    hole,
+    status: 'hydrated',
+    source: `golfapi.io tee + green hole ${hole}`,
+    needsDocPinSheet: false,
+  }));
+}
+
+export function greensNorthHillsCourseReport(): {
+  searchableName: string;
+  holeCount: 18;
+  hydratedHoles: number[];
+  hardMissHoles: number[];
+  needsDocPinSheets: false;
+} {
+  return {
+    searchableName: 'The Greens at North Hills',
+    holeCount: 18,
+    hydratedHoles: [...GREENS_NORTH_HILLS_HOLES],
+    hardMissHoles: [],
+    needsDocPinSheets: false,
   };
 }
 

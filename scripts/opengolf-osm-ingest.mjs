@@ -121,6 +121,7 @@ function isReservedIdentity(row) {
   if (/pleasant valley/.test(name) && (/little rock/.test(bag) || (/\bar\b/.test(bag) && !/\bcabot\b/.test(bag)))) {
     return true;
   }
+  if (/north hills/.test(name) && /\bsherwood\b/.test(bag)) return true;
   return false;
 }
 

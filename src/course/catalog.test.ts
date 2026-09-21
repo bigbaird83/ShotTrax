@@ -5,6 +5,8 @@ import {
   LOCAL_COURSE_CATALOG,
   catalogCourseDetail,
   catalogEntryById,
+  greensNorthHillsCourseReport,
+  greensNorthHillsHoleSources,
   mergeCatalogSummaries,
   mountainRanchCourseReport,
   mountainRanchHoleSources,
@@ -15,6 +17,8 @@ import {
 } from './catalog';
 import { createCourseDataClient } from './client';
 import {
+  GREENS_NORTH_HILLS_SHERWOOD_AR_KEY,
+  GREENS_NORTH_HILLS_SHERWOOD_CLUBHOUSE,
   MOUNTAIN_RANCH_FAIRFIELD_BAY_AR_KEY,
   MOUNTAIN_RANCH_FAIRFIELD_BAY_CLUBHOUSE,
   THUNDERBIRD_HEBER_CLUBHOUSE,
@@ -22,7 +26,7 @@ import {
   inventGreenFromClubhouse,
 } from './hydrate';
 
-test('local catalog indexes Thunderbird Country Club (Heber Springs) as 9 pin-sheet greens, tees HARD-MISS', () => {
+test('local catalog indexes Thunderbird Country Club (Heber Springs) as golfapi tee+green', () => {
   const entry = LOCAL_COURSE_CATALOG.find((row) => row.courseKey === THUNDERBIRD_HEBER_SPRINGS_AR_KEY);
   assert.ok(entry);
   assert.equal(entry?.name, 'Thunderbird Country Club');
@@ -36,9 +40,9 @@ test('local catalog indexes Thunderbird Country Club (Heber Springs) as 9 pin-sh
   assert.equal(report.searchableName, 'Thunderbird Country Club');
   assert.equal(report.holeCount, 9);
   assert.deepEqual(report.hydratedHoles, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
-  assert.deepEqual(report.hardMissHoles, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  assert.deepEqual(report.hardMissHoles, []);
   assert.equal(report.needsDocPinSheets, false);
-  assert.equal(report.needsDocTeePins, true);
+  assert.equal(report.needsDocTeePins, false);
   assert.equal(
     thunderbirdHoleSources().every((row) => row.status === 'hydrated' && !row.needsDocPinSheet),
     true,
@@ -92,17 +96,55 @@ test('catalog search finds Mountain Ranch by name or Fairfield Bay', () => {
   assert.deepEqual(searchLocalCatalog('thunderbird fairfield'), []);
 });
 
+test('local catalog indexes The Greens at North Hills (Sherwood) as 18 golfapi holes', () => {
+  const entry = LOCAL_COURSE_CATALOG.find((row) => row.courseKey === GREENS_NORTH_HILLS_SHERWOOD_AR_KEY);
+  assert.ok(entry);
+  assert.equal(entry?.name, 'The Greens at North Hills');
+  assert.equal(entry?.city, 'Sherwood');
+  assert.equal(entry?.state, 'AR');
+  assert.equal(entry?.holeCount, 18);
+  assert.deepEqual(entry?.location, GREENS_NORTH_HILLS_SHERWOOD_CLUBHOUSE);
+  assert.deepEqual(entry?.aliases, ['Greens at North Hills', 'North Hills', 'The Greens At North Hills']);
+  assert.equal(inventGreenFromClubhouse(), false);
+
+  const report = greensNorthHillsCourseReport();
+  assert.equal(report.searchableName, 'The Greens at North Hills');
+  assert.equal(report.holeCount, 18);
+  assert.deepEqual(report.hydratedHoles, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]);
+  assert.deepEqual(report.hardMissHoles, []);
+  assert.equal(report.needsDocPinSheets, false);
+  assert.equal(
+    greensNorthHillsHoleSources().every((row) => row.status === 'hydrated' && !row.needsDocPinSheet),
+    true,
+  );
+});
+
+test('catalog search finds North Hills by name or Sherwood and never invents another club', () => {
+  const byName = searchLocalCatalog('north hills');
+  assert.equal(byName.some((row) => row.id === 'local:greens-north-hills-sherwood-ar'), true);
+  assert.equal(searchLocalCatalog('greens at north hills')[0]?.id, 'local:greens-north-hills-sherwood-ar');
+  assert.equal(searchLocalCatalog('Sherwood').some((row) => row.id === 'local:greens-north-hills-sherwood-ar'), true);
+  assert.equal(
+    searchLocalCatalog('The Greens At North Hills').some((row) => row.id === 'local:greens-north-hills-sherwood-ar'),
+    true,
+  );
+  assert.deepEqual(searchLocalCatalog('north hills cabot'), []);
+  assert.deepEqual(searchLocalCatalog('north hills pittsburgh'), []);
+});
+
 test('catalog nearby includes Thunderbird only when the phone is in range', () => {
   const near = nearbyLocalCatalog(THUNDERBIRD_HEBER_CLUBHOUSE, 5);
   assert.equal(near.some((row) => row.name === 'Thunderbird Country Club'), true);
   assert.equal(near.find((row) => row.name === 'Thunderbird Country Club')?.distanceMeters, 0);
   const ranch = nearbyLocalCatalog(MOUNTAIN_RANCH_FAIRFIELD_BAY_CLUBHOUSE, 5);
   assert.equal(ranch.some((row) => row.name === 'Mountain Ranch Golf Club'), true);
+  const hills = nearbyLocalCatalog(GREENS_NORTH_HILLS_SHERWOOD_CLUBHOUSE, 5);
+  assert.equal(hills.some((row) => row.name === 'The Greens at North Hills'), true);
   assert.equal(nearbyLocalCatalog({ lat: 37, lng: -122 }, 25).length > 0, true);
   assert.deepEqual(nearbyLocalCatalog({ lat: 0.2, lng: 0.2 }, 25), []);
 });
 
-test('catalog getCourse returns 9 Doc greens — null tees, never the clubhouse', () => {
+test('catalog getCourse returns Thunderbird golfapi tee+green — never the clubhouse', () => {
   const detail = catalogCourseDetail('local:thunderbird-heber-springs-ar');
   assert.ok(detail);
   assert.equal(detail?.name, 'Thunderbird Country Club');
@@ -111,11 +153,12 @@ test('catalog getCourse returns 9 Doc greens — null tees, never the clubhouse'
   assert.equal(detail?.tees.length, 0);
   assert.equal(detail?.greenCentersAvailable, true);
   assert.deepEqual(detail?.location, THUNDERBIRD_HEBER_CLUBHOUSE);
-  assert.deepEqual(detail?.holes[0]?.greenCentroid, { lat: 35.52695, lng: -92.03735 });
+  assert.deepEqual(detail?.holes[0]?.teeCentroid, { lat: 35.5250149, lng: -92.0393432 });
+  assert.deepEqual(detail?.holes[0]?.greenCentroid, { lat: 35.522655, lng: -92.0393088 });
   assert.equal(detail?.holes[0]?.par, 4);
   assert.equal(detail?.holes[0]?.yards, 267);
   for (const hole of detail?.holes ?? []) {
-    assert.equal(hole.teeCentroid, null);
+    assert.equal(hole.teeCentroid != null, true);
     assert.equal(hole.greenCentroid != null, true);
     assert.equal(hole.par != null, true);
     assert.notDeepEqual(hole.teeCentroid, THUNDERBIRD_HEBER_CLUBHOUSE);
@@ -123,6 +166,20 @@ test('catalog getCourse returns 9 Doc greens — null tees, never the clubhouse'
   }
   assert.equal(catalogCourseDetail('4'), null);
   assert.equal(catalogEntryById(THUNDERBIRD_HEBER_SPRINGS_AR_KEY)?.name, 'Thunderbird Country Club');
+
+  const hills = catalogCourseDetail('local:greens-north-hills-sherwood-ar');
+  assert.ok(hills);
+  assert.equal(hills?.name, 'The Greens at North Hills');
+  assert.equal(hills?.holeCount, 18);
+  assert.equal(hills?.holes.length, 18);
+  assert.deepEqual(hills?.holes[0]?.teeCentroid, { lat: 34.8216237, lng: -92.2303544 });
+  assert.deepEqual(hills?.holes[0]?.greenCentroid, { lat: 34.8207099, lng: -92.2254161 });
+  for (const hole of hills?.holes ?? []) {
+    assert.equal(hole.teeCentroid != null, true);
+    assert.equal(hole.greenCentroid != null, true);
+    assert.notDeepEqual(hole.teeCentroid, GREENS_NORTH_HILLS_SHERWOOD_CLUBHOUSE);
+    assert.notDeepEqual(hole.greenCentroid, GREENS_NORTH_HILLS_SHERWOOD_CLUBHOUSE);
+  }
 
   const ranch = catalogCourseDetail('local:mountain-ranch-fairfield-bay-ar');
   assert.ok(ranch);
@@ -165,8 +222,14 @@ test('unconfigured client still searches the local catalog and does not call the
   assert.deepEqual(far, []);
   const detail = await client.getCourse('local:thunderbird-heber-springs-ar');
   assert.equal(detail?.holeCount, 9);
-  assert.equal(detail?.holes[0]?.teeCentroid, null);
-  assert.deepEqual(detail?.holes[0]?.greenCentroid, { lat: 35.52695, lng: -92.03735 });
+  assert.deepEqual(detail?.holes[0]?.teeCentroid, { lat: 35.5250149, lng: -92.0393432 });
+  assert.deepEqual(detail?.holes[0]?.greenCentroid, { lat: 35.522655, lng: -92.0393088 });
+  const hills = await client.searchCourses('greens north hills sherwood');
+  assert.equal(hills.some((row) => row.name === 'The Greens at North Hills'), true);
+  const hillsDetail = await client.getCourse('local:greens-north-hills-sherwood-ar');
+  assert.equal(hillsDetail?.holeCount, 18);
+  assert.equal(hillsDetail?.holes[0]?.teeCentroid != null, true);
+  assert.equal(hillsDetail?.holes[0]?.greenCentroid != null, true);
   assert.equal(
     (await client.searchCourses('pebble')).some((row) => /pebble/i.test(row.name)),
     true,

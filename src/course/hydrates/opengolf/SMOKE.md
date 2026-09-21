@@ -12,8 +12,8 @@ uploads CSV).
 - Missing hole number/ref is quarantined — never assigned in order.
 - Tee→green must pass the same 5–700 yd paint gates. Fail → miss card.
 - Thunderbird CC (Heber Springs, AR) is **absent** in this dump
-  (centroid-only). Ingest skips any Thunderbird+Heber identity. Doc TF 63
-  pin-sheet greens + A–D stay. Tees stay HARD-MISS.
+  (centroid-only). Ingest skips any Thunderbird+Heber identity. golfapi.io
+  tee + green stay. Doc TF 63 pin sheets still supply daily A–D pins.
 - Cypress Creek (Cabot), Greystone (Cabot), Pleasant Valley (Little Rock),
   and Mountain Ranch (Fairfield Bay) stay on their hand-verified hydrates.
 
@@ -41,8 +41,8 @@ uploads CSV).
 
 ## Smoke
 
-1. Search **Thunderbird** / **Heber Springs** → Doc Thunderbird. Greens from
-   pin sheets. Tees HARD-MISS. No OpenGolf overwrite.
+1. Search **Thunderbird** / **Heber Springs** → Doc Thunderbird. golfapi.io
+   tee + green. Daily pins from Doc sheets. No OpenGolf overwrite.
 2. Search **Mountain Ranch** / **Fairfield Bay** → existing 18/18 OSM hydrate.
 3. Zip / near-me in AR: Magnolia CC and Camden CC should appear with real
    tee→green on accepted holes. Quarantined holes miss-card.

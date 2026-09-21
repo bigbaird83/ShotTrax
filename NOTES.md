@@ -64,7 +64,7 @@ Zip search is out of scope.
 
 ## OpenGolf / OSM follow ingest
 
-`scripts/opengolf-osm-ingest.mjs` turns the OpenGolf US hole CSV into `catalog.json` + lazy `holes/{ST}.json`. Centerline tee/green only. `match_dist_m` > 1000 m is quarantined. Thunderbird Heber Springs and the other hand-verified AR hydrates are never overwritten. ODbL attribution: `ATTRIBUTION.md`, `NOTICE`, Settings credits. Smoke: `src/course/hydrates/opengolf/SMOKE.md`.
+`scripts/opengolf-osm-ingest.mjs` turns the OpenGolf US hole CSV into `catalog.json` + lazy `holes/{ST}.json`. Centerline tee/green only. `match_dist_m` > 1000 m is quarantined. Thunderbird Heber Springs, The Greens at North Hills (Sherwood), and the other hand-verified AR hydrates are never overwritten. ODbL attribution: `ATTRIBUTION.md`, `NOTICE`, Settings credits. Smoke: `src/course/hydrates/opengolf/SMOKE.md`.
 
 ## Yards to green (sensing)
 

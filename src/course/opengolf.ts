@@ -25,6 +25,7 @@ export const OPEN_GOLF_RESERVED_KEYS = [
   'pleasant-valley-lr-ar',
   'thunderbird-heber-springs-ar',
   'mountain-ranch-fairfield-bay-ar',
+  'greens-north-hills-sherwood-ar',
 ] as const;
 
 /** Same Nominatim pin as hydrate.ts — never a tee or green. */
@@ -177,6 +178,7 @@ export function isReservedOpenGolfIdentity(row: {
   if (/pleasant valley/.test(name) && (/little rock/.test(bag) || (/\bar\b/.test(bag) && !/\bcabot\b/.test(bag)))) {
     return true;
   }
+  if (/north hills/.test(name) && /\bsherwood\b/.test(bag)) return true;
   return false;
 }
 

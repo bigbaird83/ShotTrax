@@ -2,19 +2,243 @@
   "courseKey": "thunderbird-heber-springs-ar",
   "displayName": "Thunderbird Country Club",
   "locality": "Heber Springs, AR",
-  "source": "osm",
-  "sourceRef": "osm:way/296944937 Thunderbird Golf Course (Nominatim); Golf Courses / Pro API unauthenticated (no key in env) — no scorecard/green-centers used; 0 golf=tee; 0 golf=hole; 8 unlabeled golf=green ways (628029888, 628029892, 628029896, 628029897, 628029899, 628029900, 628029901, 628029902) unused — no hole refs, never paired; hole count 9 from club listing (plays as 18); Doc pin sheets A–D greens + daily pins H1–H9 (10–18 mirror 1–9); tees HARD-MISS — no tee pins",
-  "fetchedAt": "2026-09-21T00:53:48Z",
-  "holes": [],
-  "holeSources": [
-    { "hole": 1, "status": "hard-miss", "source": "none — OSM greens unlabeled, no tee/hole ref, no Pro pin", "needsDocPinSheet": true },
-    { "hole": 2, "status": "hard-miss", "source": "none — OSM greens unlabeled, no tee/hole ref, no Pro pin", "needsDocPinSheet": true },
-    { "hole": 3, "status": "hard-miss", "source": "none — OSM greens unlabeled, no tee/hole ref, no Pro pin", "needsDocPinSheet": true },
-    { "hole": 4, "status": "hard-miss", "source": "none — OSM greens unlabeled, no tee/hole ref, no Pro pin", "needsDocPinSheet": true },
-    { "hole": 5, "status": "hard-miss", "source": "none — OSM greens unlabeled, no tee/hole ref, no Pro pin", "needsDocPinSheet": true },
-    { "hole": 6, "status": "hard-miss", "source": "none — OSM greens unlabeled, no tee/hole ref, no Pro pin", "needsDocPinSheet": true },
-    { "hole": 7, "status": "hard-miss", "source": "none — OSM greens unlabeled, no tee/hole ref, no Pro pin", "needsDocPinSheet": true },
-    { "hole": 8, "status": "hard-miss", "source": "none — OSM greens unlabeled, no tee/hole ref, no Pro pin", "needsDocPinSheet": true },
-    { "hole": 9, "status": "hard-miss", "source": "none — OSM greens unlabeled, no tee/hole ref, no Pro pin", "needsDocPinSheet": true }
+  "source": "golfapi",
+  "sourceRef": "golfapi.io courseID=011141520629948893391 club=Thunderbird Country Club coords=90 cached",
+  "fetchedAt": "2026-09-21T14:12:17Z",
+  "holes": [
+    {
+      "hole": 1,
+      "par": 4,
+      "tee": {
+        "lat": 35.5250149,
+        "lng": -92.0393432,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 35.522655,
+        "lng": -92.0393088
+      }
+    },
+    {
+      "hole": 2,
+      "par": 3,
+      "tee": {
+        "lat": 35.5224589,
+        "lng": -92.039042,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 35.5226358,
+        "lng": -92.0379452
+      }
+    },
+    {
+      "hole": 3,
+      "par": 4,
+      "tee": {
+        "lat": 35.522675,
+        "lng": -92.0388013,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 35.5256459,
+        "lng": -92.0382581
+      }
+    },
+    {
+      "hole": 4,
+      "par": 3,
+      "tee": {
+        "lat": 35.5258498,
+        "lng": -92.035863,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 35.5266649,
+        "lng": -92.0338731
+      }
+    },
+    {
+      "hole": 5,
+      "par": 4,
+      "tee": {
+        "lat": 35.526909,
+        "lng": -92.0339488,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 35.527852,
+        "lng": -92.037833
+      }
+    },
+    {
+      "hole": 6,
+      "par": 5,
+      "tee": {
+        "lat": 35.5279918,
+        "lng": -92.0386126,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 35.5265105,
+        "lng": -92.0354307
+      }
+    },
+    {
+      "hole": 7,
+      "par": 4,
+      "tee": {
+        "lat": 35.5261284,
+        "lng": -92.035764,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 35.5251716,
+        "lng": -92.0390883
+      }
+    },
+    {
+      "hole": 8,
+      "par": 5,
+      "tee": {
+        "lat": 35.5259409,
+        "lng": -92.0364909,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 35.5281036,
+        "lng": -92.0389736
+      }
+    },
+    {
+      "hole": 9,
+      "par": 3,
+      "tee": {
+        "lat": 35.5263405,
+        "lng": -92.038754,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 35.5251691,
+        "lng": -92.0390737
+      }
+    },
+    {
+      "hole": 10,
+      "par": 4,
+      "tee": {
+        "lat": 35.5250149,
+        "lng": -92.0393432,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 35.522655,
+        "lng": -92.0393088
+      }
+    },
+    {
+      "hole": 11,
+      "par": 3,
+      "tee": {
+        "lat": 35.5224589,
+        "lng": -92.039042,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 35.5226358,
+        "lng": -92.0379452
+      }
+    },
+    {
+      "hole": 12,
+      "par": 4,
+      "tee": {
+        "lat": 35.522675,
+        "lng": -92.0388013,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 35.5256459,
+        "lng": -92.0382581
+      }
+    },
+    {
+      "hole": 13,
+      "par": 3,
+      "tee": {
+        "lat": 35.5258498,
+        "lng": -92.035863,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 35.5266649,
+        "lng": -92.0338731
+      }
+    },
+    {
+      "hole": 14,
+      "par": 4,
+      "tee": {
+        "lat": 35.526909,
+        "lng": -92.0339488,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 35.527852,
+        "lng": -92.037833
+      }
+    },
+    {
+      "hole": 15,
+      "par": 5,
+      "tee": {
+        "lat": 35.5279918,
+        "lng": -92.0386126,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 35.5265105,
+        "lng": -92.0354307
+      }
+    },
+    {
+      "hole": 16,
+      "par": 4,
+      "tee": {
+        "lat": 35.5261284,
+        "lng": -92.035764,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 35.5251716,
+        "lng": -92.0390883
+      }
+    },
+    {
+      "hole": 17,
+      "par": 5,
+      "tee": {
+        "lat": 35.5259409,
+        "lng": -92.0364909,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 35.5281036,
+        "lng": -92.0389736
+      }
+    },
+    {
+      "hole": 18,
+      "par": 3,
+      "tee": {
+        "lat": 35.5263405,
+        "lng": -92.038754,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 35.5251691,
+        "lng": -92.0390737
+      }
+    }
   ]
 }

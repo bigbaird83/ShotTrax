@@ -187,7 +187,11 @@ A 5-digit US ZIP (or ZIP+4) in the course search box geocodes to a point, then u
 
 ## Thunderbird CC (Heber Springs)
 
-Searchable. Doc pin-sheet greens + A–D daily pins fold into the hydrate (10–18 mirror 1–9). **Tees stay HARD-MISS** and are never invented. OpenGolf/OSM follow ingest does **not** overwrite this card — Thunderbird is centroid-only in that dump. Miss card: **HARD-MISS — need tee pins.**
+Searchable. golfapi.io supplies tee + green for all 18 coords (9-hole track played as 18). Doc pin sheets still fold daily A–D pins (10–18 mirror 1–9). Tees and greens are never invented. OpenGolf/OSM follow ingest does **not** overwrite this card.
+
+## The Greens at North Hills (Sherwood)
+
+Searchable (Greens at North Hills / North Hills / The Greens At North Hills). golfapi.io tee + green for 18 holes. Matcher is name + Sherwood only — other North Hills clubs do not match. Never invent.
 
 ## OpenGolf / OSM follow ingest
 
