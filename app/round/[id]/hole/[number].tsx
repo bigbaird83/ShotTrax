@@ -121,6 +121,7 @@ import type { Club, PenaltyReason } from '@/src/domain/types';
 import { lastLandingMark, markToGreen, planPlayHeaderYards, toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
 import { yardsToGreen } from '@/src/sensing/yardsToGreen';
 import { describeGpsSource } from '@/src/services/location';
+import { toastAfterShareAttempt } from '@/src/domain/spectator';
 import { shareRoundSnapshot } from '@/src/services/shareRound';
 import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, undoShotEdit, deleteHoleShot } from '@/src/services/shotActions';
 import { useLiveFix } from '@/src/services/useLiveFix';
@@ -1686,7 +1687,10 @@ export default function HoleScreen() {
             variant="ghost"
             onPress={() => {
               setMenuOpen(false);
-              void shareRoundSnapshot(db, id, { currentHoleNumber: holeNumber });
+              void shareRoundSnapshot(db, id, { currentHoleNumber: holeNumber }).then((opened) => {
+                const fail = toastAfterShareAttempt(opened);
+                if (fail) setToast(fail);
+              });
             }}
           />
           <BigButton

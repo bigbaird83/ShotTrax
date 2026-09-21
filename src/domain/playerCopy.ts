@@ -33,6 +33,7 @@ export const COPY = {
   courseCardMissingFrame: 'Need the course tee and green for this hole.',
   approximate: 'Approximate',
   share: 'Share',
+  shareFail: "Couldn't open share",
   shareLive: 'Share live',
   spectatorTitle: 'ShotTraxx',
   spectatorLive: 'Live',

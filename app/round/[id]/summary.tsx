@@ -13,6 +13,7 @@ import { planNerdOut } from '@/src/domain/nerdOut';
 import { formatPenaltyRow, totalPenaltyStrokes } from '@/src/domain/penalty';
 import { COPY, holeOutClosedOnShot } from '@/src/domain/playerCopy';
 import { holeClosedByShot } from '@/src/domain/putts';
+import { toastAfterShareAttempt } from '@/src/domain/spectator';
 import { shareRoundSnapshot } from '@/src/services/shareRound';
 import { reconcileHoleScore } from '@/src/domain/scoreReconcile';
 import { useLiveFix } from '@/src/services/useLiveFix';
@@ -31,6 +32,7 @@ export default function RoundSummaryScreen() {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [nerdOpen, setNerdOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const [osmOverlay, setOsmOverlay] = useState<OsmOverlay | null>(null);
   const round = useMemo(() => getRound(db, id), [db, id, revision]);
   const holes = useMemo(() => (round ? listHoles(db, round.id) : []), [db, round, revision]);
@@ -190,9 +192,13 @@ export default function RoundSummaryScreen() {
         label={COPY.share}
         variant="secondary"
         onPress={() => {
-          void shareRoundSnapshot(db, id);
+          void shareRoundSnapshot(db, id).then((opened) => {
+            const fail = toastAfterShareAttempt(opened);
+            if (fail) setToast(fail);
+          });
         }}
       />
+      {toast ? <Text style={styles.warn}>{toast}</Text> : null}
       <BigButton label={COPY.home} variant="ghost" onPress={() => router.replace('/')} />
 
       <FullSheet visible={nerdOpen} title={COPY.nerdOut} onClose={() => setNerdOpen(false)}>

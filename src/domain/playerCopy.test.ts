@@ -43,6 +43,7 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(lockFrameEmptyStateWaitsForPhone(), false);
   assert.doesNotMatch(COPY.courseCardMissingFrame, /location|GPS|phone|fix/i);
   assert.equal(COPY.share, 'Share');
+  assert.equal(COPY.shareFail, "Couldn't open share");
   assert.equal(COPY.longPressGreen, 'Long-press to set the green');
   assert.equal(COPY.pickClub, 'Pick a club');
   assert.equal(COPY.pickClubLede, 'Picking a club marks where you hit from.');

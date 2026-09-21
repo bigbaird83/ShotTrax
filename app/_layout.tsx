@@ -46,9 +46,9 @@ function ThemedNavigation() {
             contentStyle: { backgroundColor: colors.bg },
           }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false, title: 'Home' }} />
-          <Stack.Screen name="round/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="round/[id]" options={{ headerShown: false, title: 'Round' }} />
           <Stack.Screen name="s/[token]" options={{ title: 'ShotTraxx' }} />
-          <Stack.Screen name="settings" options={{ title: 'Settings', headerBackTitle: 'Home' }} />
+          <Stack.Screen name="settings" options={{ title: 'Settings' }} />
         </Stack>
       </ThemeProvider>
     </View>

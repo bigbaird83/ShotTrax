@@ -14,6 +14,8 @@ import {
   planSpectatorHoleRow,
   planSpectatorLive,
   planSpectatorPayload,
+  shareFailToast,
+  toastAfterShareAttempt,
   spectatorInventsFromCardYards,
   spectatorKeepsApproximateOnSoftForced,
   spectatorNeedsViewerLocation,
@@ -215,4 +217,29 @@ test('share surfaces use the spectator helper and do not upload a live trail', (
   assert.doesNotMatch(hole, /getCurrentFix\(\).*share/);
   assert.doesNotMatch(spectator, /getCurrentFix/);
   assert.doesNotMatch(spectator, /expo-location/);
+});
+
+test('Menu Share toasts Couldn’t open share when Share.share fails — never a GPS trail', () => {
+  assert.equal(shareFailToast(), "Couldn't open share");
+  assert.equal(COPY.shareFail, "Couldn't open share");
+  assert.equal(toastAfterShareAttempt(false), COPY.shareFail);
+  assert.equal(toastAfterShareAttempt(true), null);
+  assert.doesNotMatch(COPY.shareFail, /lat|lng|GPS|trail/i);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const summary = readFileSync(new URL('../../app/round/[id]/summary.tsx', import.meta.url), 'utf8');
+  const share = readFileSync(new URL('../services/shareRound.ts', import.meta.url), 'utf8');
+  const menuShare = hole.slice(hole.indexOf('label={COPY.share}'), hole.indexOf('label={COPY.undoLast}'));
+  const summaryShare = summary.slice(summary.indexOf('label={COPY.share}'), summary.indexOf('label={COPY.home}'));
+  assert.match(menuShare, /shareRoundSnapshot/);
+  assert.match(menuShare, /toastAfterShareAttempt/);
+  assert.match(menuShare, /setToast\(fail\)/);
+  assert.match(summaryShare, /shareRoundSnapshot/);
+  assert.match(summaryShare, /toastAfterShareAttempt/);
+  assert.match(summaryShare, /setToast\(fail\)/);
+  assert.match(share, /Share\.share/);
+  assert.match(share, /catch \{/);
+  assert.match(share, /return false/);
+  assert.doesNotMatch(share, /lat|lng/);
+  assert.doesNotMatch(menuShare, /getCurrentFix/);
 });
