@@ -804,7 +804,11 @@ test('Start Round / hole load apply hydrate before MapView for Cypress', () => {
   assert.match(watch, /courseKey: detail\.id/);
 
   const client = readFileSync(new URL('./client.ts', import.meta.url), 'utf8');
-  assert.match(client, /fillCourseDetailFromGolfApi/);
+  assert.match(client, /resolveCoursePaint/);
+  const osmAt = client.indexOf('loadOsm:');
+  const gcaAt = client.indexOf('loadGca:');
+  const golfAt = client.indexOf('loadGolfApi:');
+  assert.ok(osmAt > 0 && gcaAt > osmAt && golfAt > gcaAt);
 });
 
 function GOLFAPI_KEY_NAMES_SNAPSHOT(): { names: string[]; restore: () => void } {

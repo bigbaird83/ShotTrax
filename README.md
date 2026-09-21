@@ -39,7 +39,7 @@ Nearby course search, hole par, and green centroids are behind [Golf Courses API
 
 **EAS secret name:** `GOLF_COURSES_API_KEY` (set for production, preview, and development). `app.config.js` copies it into `expo.extra.golfCoursesApiKey` so the app can read it on EAS builds via `expo-constants`. **Never commit a key. Do not invent a second secret name in git.**
 
-Unknown courses can also hydrate tee + green from **golfapi.io** at runtime (`GOLFAPI_KEY` / `EXPO_PUBLIC_GOLFAPI_KEY` → `expo.extra.golfApiKey`; set that EAS secret for production / preview / development like GCA). First miss fetches once on pick and caches on-device; replay is cache-only. Bundled hydrates still win. Thin GPS / no key stays a miss — never invented.
+Unknown courses paint tee + green in a fixed order: **OSM / OpenGolf**, then **GCA Pro** greens (tees only when the payload has them; scorecard-only stays a miss), then **golfapi.io** as the last resort (`GOLFAPI_KEY` / `EXPO_PUBLIC_GOLFAPI_KEY` → `expo.extra.golfApiKey`). A pass is cached on-device (`settings.course.paint.cache`). Set `EXPO_PUBLIC_COURSE_PAINT_CACHE_URL` to a JSON GET/PUT host so a second phone does not buy the same course again. Cache keys are `id:<courseId>` and `name:<name>|<city>|<state>`. A 9-hole loop whose holes 10–18 exactly mirror 1–9 is a **9×2 pass** (Thunderbird Heber Springs) — those GPS values are not rewritten. Thin GPS / no key stays a miss. Never invented. Do not call golfapi from CI without the secret.
 
 Expo client JS only inlines `EXPO_PUBLIC_*`. For local Expo Go, CoS must also set `EXPO_PUBLIC_GOLF_COURSES_API_KEY` in `.env` **or** map that public name from the existing `GOLF_COURSES_API_KEY` secret in the Expo dashboard (same value).
 
@@ -54,6 +54,18 @@ Selecting a nearby course **starts** a new round (Start 9/18) or **attaches** pa
 `golfcoursesapi.com` may need **device / EAS smoke** — TLS fails on some boxes even when the client is correct.
 
 Read-only Pro greens probe (course 4 = Bowling Green CC): `npm run gca:greens-probe`. Prints `GCA_GREENS_PRO=200|403|TLS_FAIL|NO_KEY|OTHER`. Never invents greens; **403** leaves them blank. Wired as EAS `eas-build-post-install` (does not fail the build). See `NOTES.md`.
+
+## Course paint waterfall
+
+`resolveCoursePaint` in `src/course/waterfall.ts`:
+
+1. Shared cache hit (device SQLite, then `EXPO_PUBLIC_COURSE_PAINT_CACHE_URL` when set) — skips GCA and golfapi
+2. OSM / OpenGolf / manual-verified tee + green, if they pass sanity
+3. Bundled golfapi seed (already paid) — skips GCA
+4. GCA Pro green-centers (tees if present). No coordinates → miss
+5. golfapi.io once, only after both miss, then write the cache
+
+9×2: `numHoles = 9` and holes 10–18 tee+green exactly equal 1–9 is a pass (`src/domain/nineByTwo.ts`). Thunderbird’s bundled GPS is left as stored.
 
 ## OSM overlays
 

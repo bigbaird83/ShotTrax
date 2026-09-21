@@ -85,6 +85,8 @@ export type CourseHydrate = {
   source: CourseHydrateSource;
   sourceRef: string;
   fetchedAt: string;
+  /** 9 or 18 when the source says so. Absent → unknown. Never invented. */
+  numHoles?: number | null;
   holes: CourseHydrateHole[];
 };
 
@@ -484,6 +486,8 @@ export function parseCourseHydrate(raw: unknown): CourseHydrate | null {
     holes.push(parsed);
   }
   holes.sort((a, b) => a.hole - b.hole);
+  const numHolesRaw = asFiniteNumber(record.numHoles);
+  const numHoles = numHolesRaw === 9 || numHolesRaw === 18 ? numHolesRaw : null;
   return {
     courseKey,
     displayName,
@@ -491,6 +495,7 @@ export function parseCourseHydrate(raw: unknown): CourseHydrate | null {
     source: source as CourseHydrateSource,
     sourceRef,
     fetchedAt,
+    numHoles,
     holes,
   };
 }

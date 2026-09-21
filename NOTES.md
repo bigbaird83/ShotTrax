@@ -2,11 +2,27 @@
 
 User-facing name is **ShotTraxx** (`expo.name`, iOS `CFBundleDisplayName`, Android `label`). Bundle ID `com.shottrax.app` and Expo slug `shottrax` stay unchanged. Home-screen icon files under `assets/images/` are the locked Build 36 night-green Shot/Traxx mark (illuminated pin, three lime arcs). Splash still is the first frame of Doc’s 3s open clip, shown with contain + black letterbox.
 
-## golfapi.io runtime hydrate (unknown courses)
+## Course paint waterfall
 
-When a picked course has no bundled tee/green, ShotTraxx can fetch golfapi.io once (`GET /courses?country=US`, then `/courses/{id}` + `/coordinates/{id}`) and cache the hydrate on-device (`settings.golfapi.hydrates`). Next open of that course reads the cache only — zero API calls. Bundled hydrates (Thunderbird, North Hills, Mountain Ranch, Cypress, …) still win as the default cache seed. No key / thin GPS → miss card. Never invents tee/green.
+Tee/green paint for any course, in this order (`resolveCoursePaint`):
 
-The fill runs on course pick (`getCourse`, watch nearby Start, catalog prefetch) so Start Round can persist a hydrated layout without a new TestFlight. No cloud backend in v1.
+1. **Cache** — device SQLite `settings.course.paint.cache`, then the optional JSON host. A hit skips GCA Pro and golfapi (zero paid calls).
+2. **OSM / OpenGolf** — bundled centerlines and manual-verified cards. Paint when tee + green pass the card sanity gates. A 9×2 mirror counts (below).
+3. **Bundled golfapi seed** — Thunderbird, North Hills, Mountain Ranch, and any card already in `settings.golfapi.hydrates`. This is not a new purchase. It skips GCA Pro.
+4. **GCA Pro** — `GET /courses/:id/green-centers`. Greens paint when coordinates come back. Tees paint only when that payload already has them. Scorecard par/yards with no coordinates is still a miss.
+5. **golfapi.io last** — only after OSM and GCA both hard-miss. Same tee+green sanity. One search + course + coordinates fetch. A pass is written to the shared cache so the next resolve does not pay again.
+
+Never invent a tee or a green. A miss stays a miss. Bundled hydrates (Thunderbird, North Hills, Mountain Ranch, Cypress, …) still seed the card. CI must not call golfapi without `GOLFAPI_KEY`.
+
+**9×2.** When a source has `numHoles = 9` and holes 10–18 tee+green exactly equal holes 1–9, that is a **9×2 PASS** (the loop played twice), not a hard miss and not a cue to invent or rewrite GPS. Thunderbird Country Club (Heber Springs) is the exemplar. Its bundled hydrate is unchanged.
+
+**Cache keys.** `id:<courseId>` and `name:<normalized name>|<city>|<state>`. The record stores source, `numHoles`, `nineByTwo`, and the real tee/green pairs. A hit is ignored when the stored name/city disagrees.
+
+**Server cache.** Optional `EXPO_PUBLIC_COURSE_PAINT_CACHE_URL` (copied to `expo.extra.coursePaintCacheUrl`). JSON `GET/PUT /{key}`, same pattern as share sync. Not a secret. When the URL is unset there is no multi-user host in this repo — the phone keeps the SQLite copy, and a second device buys golfapi once. Point the URL at any JSON object store to share PASSes.
+
+## golfapi.io runtime hydrate (last resort)
+
+golfapi runs only after OSM/OpenGolf and GCA Pro hard-miss (`GET /courses?country=US`, then `/courses/{id}` + `/coordinates/{id}`). The on-device golfapi blob remains `settings.golfapi.hydrates`. The paint waterfall also writes `settings.course.paint.cache` and, when configured, the shared JSON host. Next open of that course reads the cache only. No key / thin GPS → miss card. Never invents tee/green.
 
 EAS / GitHub secret name: **`GOLFAPI_KEY`** (also `EXPO_PUBLIC_GOLFAPI_KEY` for local Metro). Set it on EAS for production / preview / development like `GOLF_COURSES_API_KEY`. `app.config.js` copies it into `expo.extra.golfApiKey`. Do not commit a key. Do not call golfapi from CI without a key.
 

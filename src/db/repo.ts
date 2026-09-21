@@ -36,6 +36,7 @@ import {
 } from '../domain/thunderbirdPins';
 import { clubAverageFromShots, type ClubAverage } from '../domain/averages';
 import { rememberResolvedTee } from '../course/osmOverlay';
+import { COURSE_PAINT_CACHE_SETTING_KEY } from '../course/paintCache';
 import { isValidLatLng } from '../domain/latLng';
 import { newShareBoardCode, normalizeShareBoardCode } from '../domain/liveBoard';
 import { parseSpectatorPayload, type SpectatorPayload } from '../domain/spectator';
@@ -1321,6 +1322,15 @@ export function getClubMap(db: SQLiteDatabase): Record<string, Club> {
 }
 
 export const GOLFAPI_HYDRATE_SETTING_KEY = 'golfapi.hydrates';
+export { COURSE_PAINT_CACHE_SETTING_KEY };
+
+export function getCoursePaintCache(db: SQLiteDatabase): string | null {
+  return getSetting(db, COURSE_PAINT_CACHE_SETTING_KEY);
+}
+
+export function setCoursePaintCache(db: SQLiteDatabase, json: string): void {
+  setSetting(db, COURSE_PAINT_CACHE_SETTING_KEY, json);
+}
 
 export function getGolfApiHydrateCache(db: SQLiteDatabase): string | null {
   return getSetting(db, GOLFAPI_HYDRATE_SETTING_KEY);
