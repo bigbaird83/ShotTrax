@@ -443,11 +443,16 @@ export function parseCourseDetail(json: unknown): CourseDetail | null {
       asRecord(record.scorecard)?.hole_count ??
       asRecord(record.scorecard)?.holeCount,
   );
+  const locationRecord = asRecord(record.location);
   return {
     id,
     name,
     holeCount: holeCount != null && Number.isInteger(holeCount) ? holeCount : holes.length || null,
     location: parseCourseLocation(record),
+    city: asString(pick(record, ['city'])) ?? asString(locationRecord ? pick(locationRecord, ['city']) : undefined),
+    state:
+      asString(pick(record, ['state', 'region'])) ??
+      asString(locationRecord ? pick(locationRecord, ['state', 'region']) : undefined),
     holes,
     tees,
     greenCentersAvailable: asBoolean(pick(record, ['green_centers_available', 'greenCentersAvailable'])),

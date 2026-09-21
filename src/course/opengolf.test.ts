@@ -52,6 +52,11 @@ test('OpenGolf ingest locks: centerline only, quarantine high match_dist, never 
     isReservedOpenGolfIdentity({ name: 'Regulation At Pleasant Valley Country Club', city: 'Little Rock', state: 'AR' }),
     true,
   );
+  assert.equal(
+    isReservedOpenGolfIdentity({ name: 'The Greens At North Hills', city: 'Sherwood', state: 'AR' }),
+    true,
+  );
+  assert.equal(isReservedOpenGolfIdentity({ name: 'North Hills Country Club', city: 'Pittsburgh', state: 'PA' }), false);
 });
 
 test('OpenGolf catalog ships US holes and keeps Thunderbird / Mountain Ranch reserved', () => {
@@ -110,7 +115,7 @@ test('Magnolia and Camden AR paint from OpenGolf centerlines; missing holes stay
   }
 });
 
-test('Thunderbird Heber hydrate is unchanged by OpenGolf — Doc greens, null tees, no daily-pin invent', () => {
+test('Thunderbird Heber hydrate is unchanged by OpenGolf — golfapi tee+green, no daily-pin invent', () => {
   assert.equal(
     resolveCourseHydrateKey({ name: 'Thunderbird Country Club', city: 'Heber Springs', state: 'AR' }),
     THUNDERBIRD_HEBER_SPRINGS_AR_KEY,
@@ -118,14 +123,19 @@ test('Thunderbird Heber hydrate is unchanged by OpenGolf — Doc greens, null te
   assert.equal(loadOpenGolfHydrate(THUNDERBIRD_HEBER_SPRINGS_AR_KEY), null);
   const tb = loadCourseHydrate(THUNDERBIRD_HEBER_SPRINGS_AR_KEY);
   assert.equal(tb?.courseKey, THUNDERBIRD_HEBER_SPRINGS_AR_KEY);
-  assert.equal(tb?.holes.length, 9);
-  assert.deepEqual(tb?.holes[0]?.green, { lat: 35.52695, lng: -92.03735 });
-  assert.equal(tb?.holes[0]?.tee, null);
+  assert.equal(tb?.source, 'golfapi');
+  assert.equal(tb?.holes.length, 18);
+  assert.deepEqual(tb?.holes[0]?.tee, { lat: 35.5250149, lng: -92.0393432, label: 'Blue' });
+  assert.deepEqual(tb?.holes[0]?.green, { lat: 35.522655, lng: -92.0393088 });
   assert.ok(tb?.holes[0]?.greenFront);
   assert.ok(tb?.holes[0]?.greenBack);
   assert.equal(
     resolveCourseHydrateKey({ name: 'Mountain Ranch Golf Club', city: 'Fairfield Bay' }),
     MOUNTAIN_RANCH_FAIRFIELD_BAY_AR_KEY,
+  );
+  assert.equal(
+    resolveCourseHydrateKey({ name: 'The Greens at North Hills', city: 'Sherwood' }),
+    'greens-north-hills-sherwood-ar',
   );
   assert.equal(searchLocalCatalog('thunderbird heber springs')[0]?.id, 'local:thunderbird-heber-springs-ar');
 });

@@ -628,36 +628,38 @@ export function signalLabPleasantValleyHydrate(): {
 }
 
 /**
- * Thunderbird Country Club (Heber Springs) is catalog-indexed.
- * Doc pin sheets supply greens + daily pins A–D. Tees are still
- * missing — map miss-cards. Never invent tees or unlabeled OSM greens.
+ * Thunderbird Country Club (Heber Springs) paints from golfapi.io
+ * tee + green (18 coords on a 9-hole track). Doc pin sheets still
+ * supply daily A–D pins. Never invent tees or unlabeled OSM greens.
  */
 export function signalLabThunderbirdHydrate(): {
   thunderbirdHeberSpringsOnly: true;
-  paintsViaHydrateWhenProMisses: false;
+  paintsViaHydrateWhenProMisses: true;
   neverInventFromClubhouse: true;
   neverInventFromScorecardYards: true;
   neverInventUnlabeledGreens: true;
   neverInventTees: true;
-  greensFromDocPinSheets: true;
-  hardMissAllNine: true;
+  greensFromDocPinSheets: false;
+  greensFromGolfApi: true;
+  hardMissAllNine: false;
   needsDocPinSheets: false;
-  needsDocTeePins: true;
+  needsDocTeePins: false;
   cypressStillExclusive: true;
   greystoneStillExclusive: true;
   pleasantValleyStillExclusive: true;
 } {
   return {
     thunderbirdHeberSpringsOnly: true,
-    paintsViaHydrateWhenProMisses: false,
+    paintsViaHydrateWhenProMisses: true,
     neverInventFromClubhouse: true,
     neverInventFromScorecardYards: true,
     neverInventUnlabeledGreens: true,
     neverInventTees: true,
-    greensFromDocPinSheets: true,
-    hardMissAllNine: true,
+    greensFromDocPinSheets: false,
+    greensFromGolfApi: true,
+    hardMissAllNine: false,
     needsDocPinSheets: false,
-    needsDocTeePins: true,
+    needsDocTeePins: false,
     cypressStillExclusive: true,
     greystoneStillExclusive: true,
     pleasantValleyStillExclusive: true,
@@ -665,9 +667,42 @@ export function signalLabThunderbirdHydrate(): {
 }
 
 /**
- * Mountain Ranch Golf Club (Fairfield Bay) paints from its OSM hydrate
- * when Pro tee+green miss. 18/18 hole-ref + nearest OSM tee/green.
- * Thunderbird stays miss-carded. Never invent from the clubhouse.
+ * The Greens at North Hills (Sherwood) paints from golfapi.io tee + green.
+ * Name + Sherwood only — other North Hills clubs stay unmatched.
+ * Never invent from the clubhouse or scorecard yards.
+ */
+export function signalLabGreensNorthHillsHydrate(): {
+  greensNorthHillsSherwoodOnly: true;
+  paintsViaHydrateWhenProMisses: true;
+  neverInventFromClubhouse: true;
+  neverInventFromScorecardYards: true;
+  neverMatchOtherNorthHills: true;
+  thunderbirdStillExclusive: true;
+  cypressStillExclusive: true;
+  greystoneStillExclusive: true;
+  pleasantValleyStillExclusive: true;
+  prefetchAllEighteenOnce: true;
+  meterUniqueHydrateOnce: true;
+} {
+  return {
+    greensNorthHillsSherwoodOnly: true,
+    paintsViaHydrateWhenProMisses: true,
+    neverInventFromClubhouse: true,
+    neverInventFromScorecardYards: true,
+    neverMatchOtherNorthHills: true,
+    thunderbirdStillExclusive: true,
+    cypressStillExclusive: true,
+    greystoneStillExclusive: true,
+    pleasantValleyStillExclusive: true,
+    prefetchAllEighteenOnce: true,
+    meterUniqueHydrateOnce: true,
+  };
+}
+
+/**
+ * Mountain Ranch Golf Club (Fairfield Bay) paints from golfapi.io
+ * tee + green when Pro tee+green miss. Thunderbird stays exclusive.
+ * Never invent from the clubhouse.
  */
 export function signalLabMountainRanchHydrate(): {
   mountainRanchFairfieldBayOnly: true;

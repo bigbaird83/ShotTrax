@@ -9,6 +9,7 @@ import {
   signalLabPleasantValleyHydrate,
   signalLabThunderbirdHydrate,
   signalLabMountainRanchHydrate,
+  signalLabGreensNorthHillsHydrate,
 } from '../domain/playLayout';
 import { GREYSTONE_CABOT, PLEASANT_VALLEY_LITTLE_ROCK } from '../domain/reproCourseCard';
 import {
@@ -22,6 +23,8 @@ import {
   THUNDERBIRD_HEBER_SPRINGS_AR_KEY,
   MOUNTAIN_RANCH_FAIRFIELD_BAY_AR_KEY,
   MOUNTAIN_RANCH_FAIRFIELD_BAY_CLUBHOUSE,
+  GREENS_NORTH_HILLS_SHERWOOD_AR_KEY,
+  GREENS_NORTH_HILLS_SHERWOOD_CLUBHOUSE,
   applyCourseHydrateToLayout,
   fetchGolfApiCypressHydrate,
   getGolfApiKey,
@@ -37,6 +40,7 @@ import {
   matchesPleasantValleyLR,
   matchesThunderbirdHeberSprings,
   matchesMountainRanchFairfieldBay,
+  matchesGreensNorthHillsSherwood,
   parseCourseHydrate,
   prefetchCourseHydrateOnce,
   resetHydrateMeterForTests,
@@ -49,6 +53,7 @@ const greystoneHydrate = loadCourseHydrate(GREYSTONE_CABOT_AR_KEY);
 const pleasantValleyHydrate = loadCourseHydrate(PLEASANT_VALLEY_LR_AR_KEY);
 const thunderbirdHydrate = loadCourseHydrate(THUNDERBIRD_HEBER_SPRINGS_AR_KEY);
 const mountainRanchHydrate = loadCourseHydrate(MOUNTAIN_RANCH_FAIRFIELD_BAY_AR_KEY);
+const greensNorthHillsHydrate = loadCourseHydrate(GREENS_NORTH_HILLS_SHERWOOD_AR_KEY);
 
 test('Cypress OSM hydrate is 18 gated holes; clubhouse is never a pin', () => {
   assert.ok(hydrate);
@@ -80,6 +85,7 @@ test('Cypress OSM hydrate is 18 gated holes; clubhouse is never a pin', () => {
   assert.equal(isClubhousePin(PLEASANT_VALLEY_LR_CLUBHOUSE), true);
   assert.equal(isClubhousePin(THUNDERBIRD_HEBER_CLUBHOUSE), true);
   assert.equal(isClubhousePin(MOUNTAIN_RANCH_FAIRFIELD_BAY_CLUBHOUSE), true);
+  assert.equal(isClubhousePin(GREENS_NORTH_HILLS_SHERWOOD_CLUBHOUSE), true);
   for (const hole of hydrate?.holes ?? []) {
     assert.ok(hole.tee);
     const tee = { lat: hole.tee.lat, lng: hole.tee.lng };
@@ -197,6 +203,8 @@ test('hydrate gates match the miss card: null, ~0,0, same-point, past 700 yd', (
   assert.equal(hydrateHolePassesGates({ tee, green: THUNDERBIRD_HEBER_CLUBHOUSE }), false);
   assert.equal(hydrateHolePassesGates({ tee: MOUNTAIN_RANCH_FAIRFIELD_BAY_CLUBHOUSE, green }), false);
   assert.equal(hydrateHolePassesGates({ tee, green: MOUNTAIN_RANCH_FAIRFIELD_BAY_CLUBHOUSE }), false);
+  assert.equal(hydrateHolePassesGates({ tee: GREENS_NORTH_HILLS_SHERWOOD_CLUBHOUSE, green }), false);
+  assert.equal(hydrateHolePassesGates({ tee, green: GREENS_NORTH_HILLS_SHERWOOD_CLUBHOUSE }), false);
   assert.equal(
     hydrateHolePassesGates({
       tee,
@@ -295,40 +303,50 @@ test('matching is Pleasant Valley Little Rock only — Cypress and Greystone Cab
   assert.equal(resolveCourseHydrateKey({ name: 'Greystone Country Club', city: 'Cabot' }), GREYSTONE_CABOT_AR_KEY);
 });
 
-test('Thunderbird hydrate folds Doc pin-sheet greens; tees stay null', () => {
+test('Thunderbird golfapi hydrate is 18 gated holes; tees and greens are never invented', () => {
   assert.ok(thunderbirdHydrate);
   assert.equal(thunderbirdHydrate?.courseKey, 'thunderbird-heber-springs-ar');
   assert.equal(thunderbirdHydrate?.displayName, 'Thunderbird Country Club');
   assert.equal(thunderbirdHydrate?.locality, 'Heber Springs, AR');
-  assert.equal(thunderbirdHydrate?.source, 'osm');
-  assert.match(thunderbirdHydrate?.sourceRef ?? '', /way\/296944937/);
-  assert.match(thunderbirdHydrate?.sourceRef ?? '', /Doc pin sheets A–D/);
-  assert.match(thunderbirdHydrate?.sourceRef ?? '', /tees HARD-MISS/);
-  assert.match(thunderbirdHydrate?.sourceRef ?? '', /628029888/);
-  assert.equal(thunderbirdHydrate?.holes.length, 9);
+  assert.equal(thunderbirdHydrate?.source, 'golfapi');
+  assert.match(thunderbirdHydrate?.sourceRef ?? '', /golfapi\.io/);
+  assert.match(thunderbirdHydrate?.sourceRef ?? '', /011141520629948893391/);
+  assert.equal(thunderbirdHydrate?.holes.length, 18);
   assert.deepEqual(
     thunderbirdHydrate?.holes.map((hole) => hole.hole),
-    [1, 2, 3, 4, 5, 6, 7, 8, 9],
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
   );
-  assert.deepEqual(thunderbirdHydrate?.holes[0]?.green, { lat: 35.52695, lng: -92.03735 });
+  assert.deepEqual(thunderbirdHydrate?.holes[0]?.tee, {
+    lat: 35.5250149,
+    lng: -92.0393432,
+    label: 'Blue',
+  });
+  assert.deepEqual(thunderbirdHydrate?.holes[0]?.green, { lat: 35.522655, lng: -92.0393088 });
   assert.deepEqual(thunderbirdHydrate?.holes[0]?.greenFront, { lat: 35.5268675, lng: -92.0374626 });
   assert.deepEqual(thunderbirdHydrate?.holes[0]?.greenBack, { lat: 35.5270325, lng: -92.0372374 });
   assert.equal(thunderbirdHydrate?.holes[0]?.par, 4);
   assert.equal(thunderbirdHydrate?.holes[0]?.yards, 267);
   assert.equal(thunderbirdHydrate?.holes[0]?.greenDepthYards, 30);
-  assert.equal(thunderbirdHydrate?.holes[0]?.tee, null);
+  assert.ok(hydrateHoleFor(thunderbirdHydrate, 10)?.tee);
+  assert.deepEqual(hydrateHoleFor(thunderbirdHydrate, 10)?.tee, thunderbirdHydrate?.holes[0]?.tee);
   assert.deepEqual(hydrateHoleFor(thunderbirdHydrate, 10)?.green, thunderbirdHydrate?.holes[0]?.green);
   for (const hole of thunderbirdHydrate?.holes ?? []) {
-    assert.equal(hole.tee, null);
-    assert.equal(isClubhousePin(hole.green), false);
-    assert.equal(hydrateHolePassesGates({ tee: hole.tee, green: hole.green }), false);
+    assert.ok(hole.tee);
+    const tee = { lat: hole.tee.lat, lng: hole.tee.lng };
+    const green = { lat: hole.green.lat, lng: hole.green.lng };
+    assert.equal(isClubhousePin(tee), false);
+    assert.equal(isClubhousePin(green), false);
+    assert.equal(hydrateHolePassesGates({ tee, green }), true);
+    assert.equal(decideCourseCardPaint({ tee, green, phone: null }).mount, true);
+    assert.ok(planCourseCardCamera({ tee, green, phone: null }));
   }
-  assert.equal(signalLabThunderbirdHydrate().paintsViaHydrateWhenProMisses, false);
-  assert.equal(signalLabThunderbirdHydrate().hardMissAllNine, true);
-  assert.equal(signalLabThunderbirdHydrate().greensFromDocPinSheets, true);
+  assert.equal(signalLabThunderbirdHydrate().paintsViaHydrateWhenProMisses, true);
+  assert.equal(signalLabThunderbirdHydrate().hardMissAllNine, false);
+  assert.equal(signalLabThunderbirdHydrate().greensFromDocPinSheets, false);
+  assert.equal(signalLabThunderbirdHydrate().greensFromGolfApi, true);
   assert.equal(signalLabThunderbirdHydrate().neverInventTees, true);
   assert.equal(signalLabThunderbirdHydrate().needsDocPinSheets, false);
-  assert.equal(signalLabThunderbirdHydrate().needsDocTeePins, true);
+  assert.equal(signalLabThunderbirdHydrate().needsDocTeePins, false);
   assert.equal(signalLabThunderbirdHydrate().neverInventUnlabeledGreens, true);
   assert.equal(inventGreenFromClubhouse(), false);
   assert.equal(inventGreenFromScorecardYards(), false);
@@ -358,6 +376,7 @@ test('matching is Thunderbird Heber Springs only — other AR hydrates never mat
   assert.equal(matchesGreystoneCabot({ name: 'Thunderbird Country Club', city: 'Heber Springs' }), false);
   assert.equal(matchesPleasantValleyLR({ name: 'Thunderbird Country Club', city: 'Heber Springs' }), false);
   assert.equal(matchesThunderbirdHeberSprings({ name: 'Mountain Ranch Golf Club', city: 'Fairfield Bay' }), false);
+  assert.equal(matchesThunderbirdHeberSprings({ name: 'The Greens at North Hills', city: 'Sherwood' }), false);
   assert.equal(
     resolveCourseHydrateKey({ name: 'Thunderbird Country Club', city: 'Heber Springs' }),
     THUNDERBIRD_HEBER_SPRINGS_AR_KEY,
@@ -370,22 +389,20 @@ test('matching is Thunderbird Heber Springs only — other AR hydrates never mat
   assert.equal(resolveCourseHydrateKey({ name: 'Greystone Country Club', city: 'Cabot' }), GREYSTONE_CABOT_AR_KEY);
 });
 
-test('Mountain Ranch OSM hydrate is 18 gated holes; clubhouse is never a pin', () => {
+test('Mountain Ranch golfapi hydrate is 18 gated holes; clubhouse is never a pin', () => {
   assert.ok(mountainRanchHydrate);
   assert.equal(mountainRanchHydrate?.courseKey, 'mountain-ranch-fairfield-bay-ar');
   assert.equal(mountainRanchHydrate?.displayName, 'Mountain Ranch Golf Club');
   assert.equal(mountainRanchHydrate?.locality, 'Fairfield Bay, AR');
-  assert.equal(mountainRanchHydrate?.source, 'osm');
-  assert.match(mountainRanchHydrate?.sourceRef ?? '', /hole\/way\/1158747222/);
-  assert.match(mountainRanchHydrate?.sourceRef ?? '', /tee\/way\/1158747223/);
-  assert.match(mountainRanchHydrate?.sourceRef ?? '', /green\/way\/1158747225/);
-  assert.match(mountainRanchHydrate?.sourceRef ?? '', /18\/18/);
+  assert.equal(mountainRanchHydrate?.source, 'golfapi');
+  assert.match(mountainRanchHydrate?.sourceRef ?? '', /golfapi\.io/);
+  assert.match(mountainRanchHydrate?.sourceRef ?? '', /012141520627858482448/);
   assert.deepEqual(mountainRanchHydrate?.holes[0]?.tee, {
-    lat: 35.6126927,
-    lng: -92.2884055,
-    label: 'default',
+    lat: 35.6125806,
+    lng: -92.2884427,
+    label: 'Blue',
   });
-  assert.deepEqual(mountainRanchHydrate?.holes[0]?.green, { lat: 35.6149737, lng: -92.2861298 });
+  assert.deepEqual(mountainRanchHydrate?.holes[0]?.green, { lat: 35.6149788, lng: -92.2861247 });
   assert.equal(mountainRanchHydrate?.holes.length, 18);
   assert.deepEqual(
     mountainRanchHydrate?.holes.map((hole) => hole.hole),
@@ -424,6 +441,7 @@ test('matching is Mountain Ranch Fairfield Bay only — Thunderbird and Cabot ne
   assert.equal(matchesMountainRanchFairfieldBay({ name: 'Cypress Creek Golf Club', city: 'Cabot' }), false);
   assert.equal(matchesCypressCreekCabot({ name: 'Mountain Ranch Golf Club', city: 'Fairfield Bay' }), false);
   assert.equal(matchesThunderbirdHeberSprings({ name: 'Mountain Ranch Golf Club', city: 'Fairfield Bay' }), false);
+  assert.equal(matchesMountainRanchFairfieldBay({ name: 'The Greens at North Hills', city: 'Sherwood' }), false);
   assert.equal(
     resolveCourseHydrateKey({ name: 'Mountain Ranch Golf Club', city: 'Fairfield Bay' }),
     MOUNTAIN_RANCH_FAIRFIELD_BAY_AR_KEY,
@@ -431,6 +449,74 @@ test('matching is Mountain Ranch Fairfield Bay only — Thunderbird and Cabot ne
   assert.equal(
     loadHydrateForCourse({ name: 'Mountain Ranch Golf Club', city: 'Fairfield Bay' })?.courseKey,
     MOUNTAIN_RANCH_FAIRFIELD_BAY_AR_KEY,
+  );
+});
+
+test('Greens at North Hills golfapi hydrate is 18 gated holes; clubhouse is never a pin', () => {
+  assert.ok(greensNorthHillsHydrate);
+  assert.equal(greensNorthHillsHydrate?.courseKey, 'greens-north-hills-sherwood-ar');
+  assert.equal(greensNorthHillsHydrate?.displayName, 'The Greens at North Hills');
+  assert.equal(greensNorthHillsHydrate?.locality, 'Sherwood, AR');
+  assert.equal(greensNorthHillsHydrate?.source, 'golfapi');
+  assert.match(greensNorthHillsHydrate?.sourceRef ?? '', /golfapi\.io/);
+  assert.match(greensNorthHillsHydrate?.sourceRef ?? '', /012141520629628765160/);
+  assert.deepEqual(greensNorthHillsHydrate?.holes[0]?.tee, {
+    lat: 34.8216237,
+    lng: -92.2303544,
+    label: 'Blue',
+  });
+  assert.deepEqual(greensNorthHillsHydrate?.holes[0]?.green, { lat: 34.8207099, lng: -92.2254161 });
+  assert.equal(greensNorthHillsHydrate?.holes.length, 18);
+  assert.deepEqual(
+    greensNorthHillsHydrate?.holes.map((hole) => hole.hole),
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
+  );
+  assert.equal(signalLabGreensNorthHillsHydrate().paintsViaHydrateWhenProMisses, true);
+  assert.equal(signalLabGreensNorthHillsHydrate().neverMatchOtherNorthHills, true);
+  assert.equal(signalLabGreensNorthHillsHydrate().thunderbirdStillExclusive, true);
+  assert.equal(inventGreenFromClubhouse(), false);
+  assert.equal(inventGreenFromScorecardYards(), false);
+  for (const hole of greensNorthHillsHydrate?.holes ?? []) {
+    assert.ok(hole.tee);
+    const tee = { lat: hole.tee.lat, lng: hole.tee.lng };
+    const green = { lat: hole.green.lat, lng: hole.green.lng };
+    assert.equal(isClubhousePin(tee), false);
+    assert.equal(isClubhousePin(green), false);
+    assert.equal(hydrateHolePassesGates({ tee, green }), true);
+    assert.equal(decideCourseCardPaint({ tee, green, phone: null }).mount, true);
+    assert.ok(planCourseCardCamera({ tee, green, phone: null }));
+  }
+});
+
+test('matching is Greens at North Hills Sherwood only — other North Hills clubs never match', () => {
+  assert.equal(
+    matchesGreensNorthHillsSherwood({ name: 'The Greens at North Hills', city: 'Sherwood', state: 'AR' }),
+    true,
+  );
+  assert.equal(matchesGreensNorthHillsSherwood({ name: 'Greens at North Hills', locality: 'Sherwood, AR' }), true);
+  assert.equal(matchesGreensNorthHillsSherwood({ name: 'North Hills', city: 'Sherwood' }), true);
+  assert.equal(matchesGreensNorthHillsSherwood({ name: 'The Greens At North Hills', city: 'Sherwood' }), true);
+  assert.equal(matchesGreensNorthHillsSherwood({ courseKey: GREENS_NORTH_HILLS_SHERWOOD_AR_KEY }), true);
+  assert.equal(matchesGreensNorthHillsSherwood({ name: 'The Greens at North Hills' }), false);
+  assert.equal(matchesGreensNorthHillsSherwood({ name: 'North Hills Country Club', city: 'Pittsburgh' }), false);
+  assert.equal(matchesGreensNorthHillsSherwood({ name: 'North Hills', city: 'Knoxville' }), false);
+  assert.equal(matchesGreensNorthHillsSherwood({ name: 'North Hills Country Club' }), false);
+  assert.equal(
+    matchesGreensNorthHillsSherwood({ name: 'The Greens at North Hills', location: GREENS_NORTH_HILLS_SHERWOOD_CLUBHOUSE }),
+    false,
+  );
+  assert.equal(matchesGreensNorthHillsSherwood({ name: 'Thunderbird Country Club', city: 'Heber Springs' }), false);
+  assert.equal(matchesGreensNorthHillsSherwood({ name: 'Mountain Ranch Golf Club', city: 'Fairfield Bay' }), false);
+  assert.equal(matchesGreensNorthHillsSherwood({ name: 'Cypress Creek Golf Club', city: 'Cabot' }), false);
+  assert.equal(matchesThunderbirdHeberSprings({ name: 'The Greens at North Hills', city: 'Sherwood' }), false);
+  assert.equal(matchesCypressCreekCabot({ name: 'The Greens at North Hills', city: 'Sherwood' }), false);
+  assert.equal(
+    resolveCourseHydrateKey({ name: 'The Greens at North Hills', city: 'Sherwood' }),
+    GREENS_NORTH_HILLS_SHERWOOD_AR_KEY,
+  );
+  assert.equal(
+    loadHydrateForCourse({ name: 'The Greens at North Hills', city: 'Sherwood' })?.courseKey,
+    GREENS_NORTH_HILLS_SHERWOOD_AR_KEY,
   );
 });
 
@@ -564,9 +650,9 @@ test('layout apply fills thin Cypress, Greystone, and Pleasant Valley cards', ()
   });
   assert.equal(thunderbird.usedHydrate, true);
   assert.equal(thunderbird.courseKey, THUNDERBIRD_HEBER_SPRINGS_AR_KEY);
-  assert.equal(thunderbird.tee, null);
-  assert.deepEqual(thunderbird.green, { lat: 35.52695, lng: -92.03735 });
-  assert.equal(decideCourseCardPaint({ tee: thunderbird.tee, green: thunderbird.green, phone: null }).mount, false);
+  assert.deepEqual(thunderbird.tee, { lat: 35.5250149, lng: -92.0393432 });
+  assert.deepEqual(thunderbird.green, { lat: 35.522655, lng: -92.0393088 });
+  assert.equal(decideCourseCardPaint({ tee: thunderbird.tee, green: thunderbird.green, phone: null }).mount, true);
 
   const thunderbirdLayout = applyCourseHydrateToLayout(
     {
@@ -577,13 +663,40 @@ test('layout apply fills thin Cypress, Greystone, and Pleasant Valley cards', ()
     },
     { name: 'Thunderbird Country Club', city: 'Heber Springs', state: 'AR' },
   );
-  assert.equal(thunderbirdLayout.holes?.[0]?.teeCentroid, null);
-  assert.deepEqual(thunderbirdLayout.holes?.[0]?.greenCentroid, { lat: 35.52695, lng: -92.03735 });
+  assert.deepEqual(thunderbirdLayout.holes?.[0]?.teeCentroid, { lat: 35.5250149, lng: -92.0393432 });
+  assert.deepEqual(thunderbirdLayout.holes?.[0]?.greenCentroid, { lat: 35.522655, lng: -92.0393088 });
   assert.deepEqual(thunderbirdLayout.holes?.[0]?.greenFront, { lat: 35.5268675, lng: -92.0374626 });
   assert.equal(thunderbirdLayout.holes?.[0]?.par, 4);
   assert.equal(thunderbirdLayout.holes?.[0]?.yards, 267);
+  assert.equal(thunderbirdLayout.holes?.length, 18);
   assert.notDeepEqual(thunderbirdLayout.holes?.[0]?.teeCentroid, THUNDERBIRD_HEBER_CLUBHOUSE);
   assert.notDeepEqual(thunderbirdLayout.holes?.[0]?.greenCentroid, THUNDERBIRD_HEBER_CLUBHOUSE);
+
+  const northHills = resolveHydrateTeeGreen({
+    name: 'The Greens at North Hills',
+    city: 'Sherwood',
+    holeNumber: 1,
+    tee: null,
+    green: null,
+  });
+  assert.equal(northHills.usedHydrate, true);
+  assert.equal(northHills.courseKey, GREENS_NORTH_HILLS_SHERWOOD_AR_KEY);
+  assert.deepEqual(northHills.tee, {
+    lat: greensNorthHillsHydrate!.holes[0].tee!.lat,
+    lng: greensNorthHillsHydrate!.holes[0].tee!.lng,
+  });
+  assert.deepEqual(northHills.green, greensNorthHillsHydrate!.holes[0].green);
+  assert.equal(decideCourseCardPaint({ tee: northHills.tee, green: northHills.green, phone: null }).mount, true);
+
+  const northHillsLayout = applyCourseHydrateToLayout(
+    { apiId: 'local:greens-north-hills-sherwood-ar', name: 'The Greens at North Hills', location: GREENS_NORTH_HILLS_SHERWOOD_CLUBHOUSE, holes: [] },
+    { name: 'The Greens at North Hills', city: 'Sherwood', state: 'AR' },
+  );
+  assert.equal(northHillsLayout.holes?.length, 18);
+  assert.deepEqual(northHillsLayout.holes?.[0]?.teeCentroid, northHills.tee);
+  assert.deepEqual(northHillsLayout.holes?.[0]?.greenCentroid, northHills.green);
+  assert.notDeepEqual(northHillsLayout.holes?.[0]?.teeCentroid, GREENS_NORTH_HILLS_SHERWOOD_CLUBHOUSE);
+  assert.notDeepEqual(northHillsLayout.holes?.[0]?.greenCentroid, GREENS_NORTH_HILLS_SHERWOOD_CLUBHOUSE);
 
   const ranchLive = resolveHydrateTeeGreen({
     name: 'Mountain Ranch Golf Club',
@@ -633,16 +746,19 @@ test('prefetch meters unique hydrate once and golfapi does not invent without a 
     prefetchCourseHydrateOnce({ name: 'Thunderbird Country Club', city: 'Heber Springs' });
     prefetchCourseHydrateOnce({ name: 'Mountain Ranch Golf Club', city: 'Fairfield Bay' });
     prefetchCourseHydrateOnce({ name: 'Mountain Ranch Golf Club', city: 'Fairfield Bay' });
+    prefetchCourseHydrateOnce({ name: 'The Greens at North Hills', city: 'Sherwood' });
+    prefetchCourseHydrateOnce({ name: 'The Greens at North Hills', city: 'Sherwood' });
   } finally {
     console.log = original;
   }
   const hydrateLogs = logs.filter((row) => Array.isArray(row) && row[0] === '[Signal Lab] hydrate');
-  assert.equal(hydrateLogs.length, 5);
+  assert.equal(hydrateLogs.length, 6);
   const payloads = hydrateLogs.map((row) => (row as unknown[])[1] as { courseKey?: string; holes?: number });
   assert.deepEqual(
     payloads.map((row) => row.courseKey).sort(),
     [
       CYPRESS_CREEK_CABOT_AR_KEY,
+      GREENS_NORTH_HILLS_SHERWOOD_AR_KEY,
       GREYSTONE_CABOT_AR_KEY,
       MOUNTAIN_RANCH_FAIRFIELD_BAY_AR_KEY,
       PLEASANT_VALLEY_LR_AR_KEY,
@@ -650,11 +766,7 @@ test('prefetch meters unique hydrate once and golfapi does not invent without a 
     ].sort(),
   );
   assert.equal(
-    payloads.find((row) => row.courseKey === THUNDERBIRD_HEBER_SPRINGS_AR_KEY)?.holes,
-    9,
-  );
-  assert.equal(
-    payloads.filter((row) => row.courseKey !== THUNDERBIRD_HEBER_SPRINGS_AR_KEY).every((row) => row.holes === 18),
+    payloads.every((row) => row.holes === 18),
     true,
   );
 
@@ -663,6 +775,10 @@ test('prefetch meters unique hydrate once and golfapi does not invent without a 
     for (const name of previous.names) delete process.env[name];
     assert.equal(getGolfApiKey(), null);
     assert.equal(await fetchGolfApiCypressHydrate(), null);
+    process.env.GOLFAPI_KEY = 'test-key';
+    const bundled = await fetchGolfApiCypressHydrate();
+    assert.equal(bundled?.courseKey, CYPRESS_CREEK_CABOT_AR_KEY);
+    assert.equal(bundled?.holes.length, 18);
   } finally {
     previous.restore();
   }
@@ -685,6 +801,10 @@ test('Start Round / hole load apply hydrate before MapView for Cypress', () => {
 
   const watch = readFileSync(new URL('../services/watchNearby.ts', import.meta.url), 'utf8');
   assert.match(watch, /applyCourseHydrateToLayout/);
+  assert.match(watch, /courseKey: detail\.id/);
+
+  const client = readFileSync(new URL('./client.ts', import.meta.url), 'utf8');
+  assert.match(client, /fillCourseDetailFromGolfApi/);
 });
 
 function GOLFAPI_KEY_NAMES_SNAPSHOT(): { names: string[]; restore: () => void } {

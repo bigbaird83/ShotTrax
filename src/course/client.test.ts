@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createCourseDataClient } from './client';
+import {
+  mapGolfApiCourseToHydrate,
+  resetGolfApiCacheForTests,
+  saveCachedHydrate,
+} from './golfapi';
 import { fetchOsmOverlay } from './osmOverlay';
 import { GOLF_COURSES_API_BASE } from './client';
 
@@ -137,31 +142,105 @@ test('getCourse loads scorecard then Pro green-centers', async () => {
 });
 
 test('getCourse keeps greens blank on 403 Pro-only green-centers — never invents', async () => {
-  const client = createCourseDataClient({
-    getKey: () => 'free-key',
-    fetch: async (input) => {
-      const url = String(input);
-      if (url.includes('green-centers')) {
+  const names = ['GOLFAPI_KEY', 'EXPO_PUBLIC_GOLFAPI_KEY', 'GOLF_API_IO_KEY', 'EXPO_PUBLIC_GOLF_API_IO_KEY'];
+  const prev = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  try {
+    for (const name of names) delete process.env[name];
+    const client = createCourseDataClient({
+      getKey: () => 'free-key',
+      fetch: async (input) => {
+        const url = String(input);
+        if (url.includes('green-centers')) {
+          return new Response(
+            JSON.stringify({ message: 'Green-center data requires a Pro or Max plan.' }),
+            { status: 403 },
+          );
+        }
         return new Response(
-          JSON.stringify({ message: 'Green-center data requires a Pro or Max plan.' }),
-          { status: 403 },
+          JSON.stringify({
+            data: {
+              id: 4,
+              name: 'Free Plan CC',
+              scorecard: { teeboxes: [{ holes: [{ hole: 1, par: 4 }] }] },
+            },
+          }),
+          { status: 200 },
         );
-      }
-      return new Response(
-        JSON.stringify({
-          data: {
-            id: 4,
-            name: 'Free Plan CC',
-            scorecard: { teeboxes: [{ holes: [{ hole: 1, par: 4 }] }] },
-          },
-        }),
-        { status: 200 },
-      );
-    },
-  });
-  const detail = await client.getCourse('4');
-  assert.equal(detail?.holes[0].par, 4);
-  assert.equal(detail?.holes[0].greenCentroid, null);
+      },
+    });
+    const detail = await client.getCourse('4');
+    assert.equal(detail?.holes[0].par, 4);
+    assert.equal(detail?.holes[0].greenCentroid, null);
+    assert.equal(detail?.holes[0].teeCentroid, null);
+  } finally {
+    for (const name of names) {
+      if (prev[name] == null) delete process.env[name];
+      else process.env[name] = prev[name];
+    }
+  }
+});
+
+test('getCourse fills a miss from the golfapi cache and does not invent', async () => {
+  resetGolfApiCacheForTests();
+  const names = ['GOLFAPI_KEY', 'EXPO_PUBLIC_GOLFAPI_KEY', 'GOLF_API_IO_KEY', 'EXPO_PUBLIC_GOLF_API_IO_KEY'];
+  const prev = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  try {
+    process.env.GOLFAPI_KEY = 'test-key';
+    const seeded = mapGolfApiCourseToHydrate({
+      course: {
+        courseID: '99',
+        clubName: 'Cache Hit CC',
+        city: 'Heber Springs',
+        state: 'AR',
+        latitude: '35.52505',
+        longitude: '-92.03984',
+        parsMen: [4],
+        tees: [{ teeName: 'Blue', length1: 267 }],
+      },
+      coordinates: {
+        coordinates: [
+          { poi: 1, location: 2, hole: 1, latitude: 35.522655, longitude: -92.0393088 },
+          { poi: 12, location: 2, hole: 1, latitude: 35.5250149, longitude: -92.0393432 },
+        ],
+      },
+    });
+    assert.ok(seeded);
+    saveCachedHydrate(seeded!, ['88', 'namecity:cache hit cc|heber springs']);
+    const client = createCourseDataClient({
+      getKey: () => 'gca-key',
+      fetch: async (input) => {
+        const url = String(input);
+        if (url.includes('golfapi.io')) {
+          throw new Error('cache should skip golfapi');
+        }
+        if (url.includes('green-centers')) {
+          return new Response(JSON.stringify({ message: 'Pro only' }), { status: 403 });
+        }
+        return new Response(
+          JSON.stringify({
+            data: {
+              id: 88,
+              name: 'Cache Hit CC',
+              city: 'Heber Springs',
+              state: 'AR',
+              scorecard: { teeboxes: [{ holes: [{ hole: 1, par: 4 }] }] },
+            },
+          }),
+          { status: 200 },
+        );
+      },
+    });
+    const detail = await client.getCourse('88');
+    assert.equal(detail?.holes[0]?.par, 4);
+    assert.deepEqual(detail?.holes[0]?.teeCentroid, { lat: 35.5250149, lng: -92.0393432 });
+    assert.deepEqual(detail?.holes[0]?.greenCentroid, { lat: 35.522655, lng: -92.0393088 });
+  } finally {
+    resetGolfApiCacheForTests();
+    for (const name of names) {
+      if (prev[name] == null) delete process.env[name];
+      else process.env[name] = prev[name];
+    }
+  }
 });
 
 test('OSM overlay is skipped without a real location — no invented polygons', async () => {

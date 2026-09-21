@@ -2,6 +2,14 @@
 
 User-facing name is **ShotTraxx** (`expo.name`, iOS `CFBundleDisplayName`, Android `label`). Bundle ID `com.shottrax.app` and Expo slug `shottrax` stay unchanged. Home-screen icon files under `assets/images/` are the locked Build 36 night-green Shot/Traxx mark (illuminated pin, three lime arcs). Splash still is the first frame of Doc’s 3s open clip, shown with contain + black letterbox.
 
+## golfapi.io runtime hydrate (unknown courses)
+
+When a picked course has no bundled tee/green, ShotTraxx can fetch golfapi.io once (`GET /courses?country=US`, then `/courses/{id}` + `/coordinates/{id}`) and cache the hydrate on-device (`settings.golfapi.hydrates`). Next open of that course reads the cache only — zero API calls. Bundled hydrates (Thunderbird, North Hills, Mountain Ranch, Cypress, …) still win as the default cache seed. No key / thin GPS → miss card. Never invents tee/green.
+
+The fill runs on course pick (`getCourse`, watch nearby Start, catalog prefetch) so Start Round can persist a hydrated layout without a new TestFlight. No cloud backend in v1.
+
+EAS / GitHub secret name: **`GOLFAPI_KEY`** (also `EXPO_PUBLIC_GOLFAPI_KEY` for local Metro). Set it on EAS for production / preview / development like `GOLF_COURSES_API_KEY`. `app.config.js` copies it into `expo.extra.golfApiKey`. Do not commit a key. Do not call golfapi from CI without a key.
+
 ## Golf Courses API (nearby courses, par, green centroids)
 
 Nearby courses, hole par, and green centroids come from [Golf Courses API](https://golfcoursesapi.com/) (Pro green-centers). **Do not hardcode the key.**
@@ -64,7 +72,7 @@ Zip search is out of scope.
 
 ## OpenGolf / OSM follow ingest
 
-`scripts/opengolf-osm-ingest.mjs` turns the OpenGolf US hole CSV into `catalog.json` + lazy `holes/{ST}.json`. Centerline tee/green only. `match_dist_m` > 1000 m is quarantined. Thunderbird Heber Springs and the other hand-verified AR hydrates are never overwritten. ODbL attribution: `ATTRIBUTION.md`, `NOTICE`, Settings credits. Smoke: `src/course/hydrates/opengolf/SMOKE.md`.
+`scripts/opengolf-osm-ingest.mjs` turns the OpenGolf US hole CSV into `catalog.json` + lazy `holes/{ST}.json`. Centerline tee/green only. `match_dist_m` > 1000 m is quarantined. Thunderbird Heber Springs, The Greens at North Hills (Sherwood), and the other hand-verified AR hydrates are never overwritten. ODbL attribution: `ATTRIBUTION.md`, `NOTICE`, Settings credits. Smoke: `src/course/hydrates/opengolf/SMOKE.md`.
 
 ## Yards to green (sensing)
 

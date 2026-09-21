@@ -1,0 +1,244 @@
+{
+  "courseKey": "greens-north-hills-sherwood-ar",
+  "displayName": "The Greens at North Hills",
+  "locality": "Sherwood, AR",
+  "source": "golfapi",
+  "sourceRef": "golfapi.io courseID=012141520629628765160 club=The Greens At North Hills coords=90 cached",
+  "fetchedAt": "2026-09-21T14:12:17Z",
+  "holes": [
+    {
+      "hole": 1,
+      "par": 5,
+      "tee": {
+        "lat": 34.8216237,
+        "lng": -92.2303544,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 34.8207099,
+        "lng": -92.2254161
+      }
+    },
+    {
+      "hole": 2,
+      "par": 4,
+      "tee": {
+        "lat": 34.8223415,
+        "lng": -92.2245742,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 34.819458,
+        "lng": -92.2248887
+      }
+    },
+    {
+      "hole": 3,
+      "par": 4,
+      "tee": {
+        "lat": 34.8185938,
+        "lng": -92.2249578,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 34.8206414,
+        "lng": -92.2274703
+      }
+    },
+    {
+      "hole": 4,
+      "par": 4,
+      "tee": {
+        "lat": 34.8209587,
+        "lng": -92.2289516,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 34.8191533,
+        "lng": -92.2257852
+      }
+    },
+    {
+      "hole": 5,
+      "par": 3,
+      "tee": {
+        "lat": 34.8186015,
+        "lng": -92.2251562,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 34.8189549,
+        "lng": -92.2269664
+      }
+    },
+    {
+      "hole": 6,
+      "par": 5,
+      "tee": {
+        "lat": 34.8186588,
+        "lng": -92.2278036,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 34.8198031,
+        "lng": -92.2324371
+      }
+    },
+    {
+      "hole": 7,
+      "par": 3,
+      "tee": {
+        "lat": 34.8195429,
+        "lng": -92.2331546,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 34.8205105,
+        "lng": -92.2320529
+      }
+    },
+    {
+      "hole": 8,
+      "par": 4,
+      "tee": {
+        "lat": 34.8213066,
+        "lng": -92.2315587,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 34.819008,
+        "lng": -92.2279196
+      }
+    },
+    {
+      "hole": 9,
+      "par": 4,
+      "tee": {
+        "lat": 34.8193887,
+        "lng": -92.2272242,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 34.8213499,
+        "lng": -92.2307533
+      }
+    },
+    {
+      "hole": 10,
+      "par": 4,
+      "tee": {
+        "lat": 34.8231452,
+        "lng": -92.2311,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 34.822708,
+        "lng": -92.2271759
+      }
+    },
+    {
+      "hole": 11,
+      "par": 3,
+      "tee": {
+        "lat": 34.8224076,
+        "lng": -92.2274629,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 34.822696,
+        "lng": -92.2256582
+      }
+    },
+    {
+      "hole": 12,
+      "par": 5,
+      "tee": {
+        "lat": 34.8231078,
+        "lng": -92.2258482,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 34.8244165,
+        "lng": -92.2304248
+      }
+    },
+    {
+      "hole": 13,
+      "par": 4,
+      "tee": {
+        "lat": 34.8247305,
+        "lng": -92.230644,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 34.8255034,
+        "lng": -92.2266023
+      }
+    },
+    {
+      "hole": 14,
+      "par": 4,
+      "tee": {
+        "lat": 34.8255804,
+        "lng": -92.2249457,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 34.8236565,
+        "lng": -92.2249718
+      }
+    },
+    {
+      "hole": 15,
+      "par": 3,
+      "tee": {
+        "lat": 34.8238091,
+        "lng": -92.2255747,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 34.8240804,
+        "lng": -92.2273587
+      }
+    },
+    {
+      "hole": 16,
+      "par": 4,
+      "tee": {
+        "lat": 34.8239092,
+        "lng": -92.2279243,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 34.8227904,
+        "lng": -92.2248256
+      }
+    },
+    {
+      "hole": 17,
+      "par": 3,
+      "tee": {
+        "lat": 34.8225892,
+        "lng": -92.2245259,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 34.821789,
+        "lng": -92.2261269
+      }
+    },
+    {
+      "hole": 18,
+      "par": 5,
+      "tee": {
+        "lat": 34.8213969,
+        "lng": -92.2251965,
+        "label": "Blue"
+      },
+      "green": {
+        "lat": 34.8226915,
+        "lng": -92.2305334
+      }
+    }
+  ]
+}

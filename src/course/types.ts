@@ -45,6 +45,10 @@ export type CourseDetail = {
   name: string;
   holeCount: number | null;
   location: LatLng | null;
+  /** City when the API/catalog supplies it — used for golfapi search, never invented. */
+  city?: string | null;
+  /** State when the API/catalog supplies it — used for golfapi search, never invented. */
+  state?: string | null;
   holes: HoleCourseData[];
   tees: TeeSet[];
   /** Pro/Max flag from course detail. Missing/false → no invented greens. */

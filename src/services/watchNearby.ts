@@ -194,7 +194,10 @@ export async function handleWatchNearbyJson(json: string): Promise<{ ok: boolean
       if (detail.tees.length > 0 && !tee) return { ok: false, feedback: 'open the phone' };
       const layout = applyCourseHydrateToLayout(layoutFromTee(detail, tee), {
         name: detail.name,
+        city: detail.city,
+        state: detail.state,
         location: detail.location,
+        courseKey: detail.id,
       });
       rememberLayoutHoles(layout);
       const round = startRound(ctx.db, holeCount, detail.name, layout);

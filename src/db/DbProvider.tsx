@@ -3,7 +3,9 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { ActivityIndicator, Text, View } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import * as SQLite from 'expo-sqlite';
+import { attachGolfApiCachePersist } from '../course/golfapi';
 import { migrate } from './schema';
+import { getGolfApiHydrateCache, setGolfApiHydrateCache } from './repo';
 import { colors } from '../ui/theme';
 
 type DbContextValue = {
@@ -23,6 +25,10 @@ export function DbProvider({ children }: { children: ReactNode }) {
     try {
       const opened = SQLite.openDatabaseSync('shottrax.db');
       migrate(opened);
+      attachGolfApiCachePersist({
+        load: () => getGolfApiHydrateCache(opened),
+        save: (json) => setGolfApiHydrateCache(opened, json),
+      });
       setDb(opened);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to open database');

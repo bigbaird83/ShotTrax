@@ -73,6 +73,7 @@ async function loadLayout(
     city: course.city,
     state: course.state,
     location: course.location ?? base.location ?? null,
+    courseKey: course.id,
   });
   rememberLayoutHoles(layout);
   return layout;

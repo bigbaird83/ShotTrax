@@ -39,6 +39,8 @@ Nearby course search, hole par, and green centroids are behind [Golf Courses API
 
 **EAS secret name:** `GOLF_COURSES_API_KEY` (set for production, preview, and development). `app.config.js` copies it into `expo.extra.golfCoursesApiKey` so the app can read it on EAS builds via `expo-constants`. **Never commit a key. Do not invent a second secret name in git.**
 
+Unknown courses can also hydrate tee + green from **golfapi.io** at runtime (`GOLFAPI_KEY` / `EXPO_PUBLIC_GOLFAPI_KEY` → `expo.extra.golfApiKey`; set that EAS secret for production / preview / development like GCA). First miss fetches once on pick and caches on-device; replay is cache-only. Bundled hydrates still win. Thin GPS / no key stays a miss — never invented.
+
 Expo client JS only inlines `EXPO_PUBLIC_*`. For local Expo Go, CoS must also set `EXPO_PUBLIC_GOLF_COURSES_API_KEY` in `.env` **or** map that public name from the existing `GOLF_COURSES_API_KEY` secret in the Expo dashboard (same value).
 
 ```bash
@@ -187,7 +189,11 @@ A 5-digit US ZIP (or ZIP+4) in the course search box geocodes to a point, then u
 
 ## Thunderbird CC (Heber Springs)
 
-Searchable. Doc pin-sheet greens + A–D daily pins fold into the hydrate (10–18 mirror 1–9). **Tees stay HARD-MISS** and are never invented. OpenGolf/OSM follow ingest does **not** overwrite this card — Thunderbird is centroid-only in that dump. Miss card: **HARD-MISS — need tee pins.**
+Searchable. golfapi.io supplies tee + green for all 18 coords (9-hole track played as 18). Doc pin sheets still fold daily A–D pins (10–18 mirror 1–9). Tees and greens are never invented. OpenGolf/OSM follow ingest does **not** overwrite this card.
+
+## The Greens at North Hills (Sherwood)
+
+Searchable (Greens at North Hills / North Hills / The Greens At North Hills). golfapi.io tee + green for 18 holes. Matcher is name + Sherwood only — other North Hills clubs do not match. Never invent.
 
 ## OpenGolf / OSM follow ingest
 
