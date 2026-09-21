@@ -2,6 +2,8 @@ import { METERS_PER_YARD } from '../config/sensing';
 import { haversineYards } from '../domain/haversine';
 import { isValidLatLng, type LatLng } from '../domain/latLng';
 import {
+  MOUNTAIN_RANCH_FAIRFIELD_BAY_AR_KEY,
+  MOUNTAIN_RANCH_FAIRFIELD_BAY_CLUBHOUSE,
   THUNDERBIRD_HEBER_CLUBHOUSE,
   THUNDERBIRD_HEBER_SPRINGS_AR_KEY,
   hydrateHoleFor,
@@ -54,6 +56,19 @@ export const LOCAL_COURSE_CATALOG: readonly LocalCourseCatalogEntry[] = [
     holeCount: 9,
     aliases: ['Thunderbird Golf Course', 'Thunderbird CC', 'Thunderbird'],
   },
+  {
+    id: `${LOCAL_CATALOG_ID_PREFIX}${MOUNTAIN_RANCH_FAIRFIELD_BAY_AR_KEY}`,
+    courseKey: MOUNTAIN_RANCH_FAIRFIELD_BAY_AR_KEY,
+    name: 'Mountain Ranch Golf Club',
+    club: 'Mountain Ranch Golf Club',
+    city: 'Fairfield Bay',
+    state: 'AR',
+    country: 'US',
+    locality: 'Fairfield Bay, AR',
+    location: MOUNTAIN_RANCH_FAIRFIELD_BAY_CLUBHOUSE,
+    holeCount: 18,
+    aliases: ['Mountain Ranch', 'Mountain Ranch GC', 'Mountain Ranch Golf Club at Fairfield Bay'],
+  },
 ];
 
 export const THUNDERBIRD_HARD_MISS_HOLES = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
@@ -80,6 +95,33 @@ export function thunderbirdCourseReport(): {
     hydratedHoles: [],
     hardMissHoles: [...THUNDERBIRD_HARD_MISS_HOLES],
     needsDocPinSheets: true,
+  };
+}
+
+export const MOUNTAIN_RANCH_HOLES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18] as const;
+
+export function mountainRanchHoleSources(): CatalogHoleSource[] {
+  return MOUNTAIN_RANCH_HOLES.map((hole) => ({
+    hole,
+    status: 'hydrated',
+    source: `osm golf=hole ref=${hole} + nearest OSM tee/green ways`,
+    needsDocPinSheet: false,
+  }));
+}
+
+export function mountainRanchCourseReport(): {
+  searchableName: string;
+  holeCount: 18;
+  hydratedHoles: number[];
+  hardMissHoles: number[];
+  needsDocPinSheets: false;
+} {
+  return {
+    searchableName: 'Mountain Ranch Golf Club',
+    holeCount: 18,
+    hydratedHoles: [...MOUNTAIN_RANCH_HOLES],
+    hardMissHoles: [],
+    needsDocPinSheets: false,
   };
 }
 

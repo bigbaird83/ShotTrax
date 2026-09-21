@@ -7,11 +7,13 @@ import cypressOsm from './hydrates/cypress-creek-cabot-ar.json';
 import greystoneOsm from './hydrates/greystone-cabot-ar.json';
 import pleasantValleyOsm from './hydrates/pleasant-valley-lr-ar.json';
 import thunderbirdOsm from './hydrates/thunderbird-heber-springs-ar.json';
+import mountainRanchOsm from './hydrates/mountain-ranch-fairfield-bay-ar.json';
 
 export const CYPRESS_CREEK_CABOT_AR_KEY = 'cypress-creek-cabot-ar';
 export const GREYSTONE_CABOT_AR_KEY = 'greystone-cabot-ar';
 export const PLEASANT_VALLEY_LR_AR_KEY = 'pleasant-valley-lr-ar';
 export const THUNDERBIRD_HEBER_SPRINGS_AR_KEY = 'thunderbird-heber-springs-ar';
+export const MOUNTAIN_RANCH_FAIRFIELD_BAY_AR_KEY = 'mountain-ranch-fairfield-bay-ar';
 
 /** Clubhouse / course pin only — never a tee or green. */
 export const CYPRESS_CREEK_CLUBHOUSE: LatLng = { lat: 35.027715, lng: -92.031642 };
@@ -24,6 +26,9 @@ export const PLEASANT_VALLEY_LR_CLUBHOUSE: LatLng = { lat: 34.78, lng: -92.411 }
 
 /** OSM Nominatim pin for Thunderbird Golf Course (way/296944937). Never a tee or green. */
 export const THUNDERBIRD_HEBER_CLUBHOUSE: LatLng = { lat: 35.525292, lng: -92.038355 };
+
+/** Course-center pin for Mountain Ranch (Fairfield Bay). Never a tee or green. */
+export const MOUNTAIN_RANCH_FAIRFIELD_BAY_CLUBHOUSE: LatLng = { lat: 35.611, lng: -92.29 };
 
 export type CourseHydrateSource = 'golfapi' | 'osm' | 'manual_verified';
 
@@ -71,6 +76,7 @@ const REGISTRY: Record<string, unknown> = {
   [GREYSTONE_CABOT_AR_KEY]: greystoneOsm,
   [PLEASANT_VALLEY_LR_AR_KEY]: pleasantValleyOsm,
   [THUNDERBIRD_HEBER_SPRINGS_AR_KEY]: thunderbirdOsm,
+  [MOUNTAIN_RANCH_FAIRFIELD_BAY_AR_KEY]: mountainRanchOsm,
 };
 
 const CLUBHOUSE_PINS: readonly LatLng[] = [
@@ -78,6 +84,7 @@ const CLUBHOUSE_PINS: readonly LatLng[] = [
   GREYSTONE_CABOT_CLUBHOUSE,
   PLEASANT_VALLEY_LR_CLUBHOUSE,
   THUNDERBIRD_HEBER_CLUBHOUSE,
+  MOUNTAIN_RANCH_FAIRFIELD_BAY_CLUBHOUSE,
 ];
 
 const GOLFAPI_KEY_NAMES = [
@@ -246,6 +253,7 @@ export function matchesThunderbirdHeberSprings(course: CourseHydrateMatch): bool
   if (/cypress creek/.test(name)) return false;
   if (/\bgreystone\b/.test(name)) return false;
   if (/pleasant valley/.test(name)) return false;
+  if (/mountain ranch/.test(name)) return false;
   if (!/\bthunderbird\b/.test(name)) return false;
   const bag = [
     name,
@@ -253,7 +261,7 @@ export function matchesThunderbirdHeberSprings(course: CourseHydrateMatch): bool
     normalizeName(course.state),
     normalizeName(course.locality),
   ].join(' ');
-  if (/\bcabot\b/.test(bag) || /little rock/.test(bag)) return false;
+  if (/\bcabot\b/.test(bag) || /little rock/.test(bag) || /fairfield/.test(bag)) return false;
   if (/heber springs/.test(bag) || (/\bheber\b/.test(bag) && (/\bar\b/.test(bag) || /\barkansas\b/.test(bag)))) {
     return true;
   }
@@ -264,11 +272,41 @@ export function matchesThunderbirdHeberSprings(course: CourseHydrateMatch): bool
   return false;
 }
 
+/**
+ * Mountain Ranch Golf Club (Fairfield Bay) only.
+ * Thunderbird, Cypress, Greystone, and Pleasant Valley never match.
+ */
+export function matchesMountainRanchFairfieldBay(course: CourseHydrateMatch): boolean {
+  if (asString(course.courseKey) === MOUNTAIN_RANCH_FAIRFIELD_BAY_AR_KEY) return true;
+  const name = normalizeName(course.name);
+  if (!name) return false;
+  if (/cypress creek/.test(name)) return false;
+  if (/\bgreystone\b/.test(name)) return false;
+  if (/pleasant valley/.test(name)) return false;
+  if (/\bthunderbird\b/.test(name)) return false;
+  if (!/mountain ranch/.test(name)) return false;
+  const bag = [
+    name,
+    normalizeName(course.city),
+    normalizeName(course.state),
+    normalizeName(course.locality),
+  ].join(' ');
+  if (/\bcabot\b/.test(bag) || /little rock/.test(bag) || /heber/.test(bag)) return false;
+  if (/fairfield bay/.test(bag) || /\bfairfield\b/.test(bag)) return true;
+  if (/\bar\b/.test(bag) || /\barkansas\b/.test(bag)) return true;
+  if (isCourseCardLatLng(course.location)) {
+    const yards = haversineYards(course.location, MOUNTAIN_RANCH_FAIRFIELD_BAY_CLUBHOUSE);
+    if (yards <= 1800) return true;
+  }
+  return false;
+}
+
 export function resolveCourseHydrateKey(course: CourseHydrateMatch): string | null {
   if (matchesCypressCreekCabot(course)) return CYPRESS_CREEK_CABOT_AR_KEY;
   if (matchesGreystoneCabot(course)) return GREYSTONE_CABOT_AR_KEY;
   if (matchesPleasantValleyLR(course)) return PLEASANT_VALLEY_LR_AR_KEY;
   if (matchesThunderbirdHeberSprings(course)) return THUNDERBIRD_HEBER_SPRINGS_AR_KEY;
+  if (matchesMountainRanchFairfieldBay(course)) return MOUNTAIN_RANCH_FAIRFIELD_BAY_AR_KEY;
   return null;
 }
 

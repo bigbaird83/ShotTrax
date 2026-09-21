@@ -659,6 +659,37 @@ export function signalLabThunderbirdHydrate(): {
 }
 
 /**
+ * Mountain Ranch Golf Club (Fairfield Bay) paints from its OSM hydrate
+ * when Pro tee+green miss. 18/18 hole-ref + nearest OSM tee/green.
+ * Thunderbird stays miss-carded. Never invent from the clubhouse.
+ */
+export function signalLabMountainRanchHydrate(): {
+  mountainRanchFairfieldBayOnly: true;
+  paintsViaHydrateWhenProMisses: true;
+  neverInventFromClubhouse: true;
+  neverInventFromScorecardYards: true;
+  thunderbirdStillExclusive: true;
+  cypressStillExclusive: true;
+  greystoneStillExclusive: true;
+  pleasantValleyStillExclusive: true;
+  prefetchAllEighteenOnce: true;
+  meterUniqueHydrateOnce: true;
+} {
+  return {
+    mountainRanchFairfieldBayOnly: true,
+    paintsViaHydrateWhenProMisses: true,
+    neverInventFromClubhouse: true,
+    neverInventFromScorecardYards: true,
+    thunderbirdStillExclusive: true,
+    cypressStillExclusive: true,
+    greystoneStillExclusive: true,
+    pleasantValleyStillExclusive: true,
+    prefetchAllEighteenOnce: true,
+    meterUniqueHydrateOnce: true,
+  };
+}
+
+/**
  * Signal Lab build 36 — Add shot gesture lock.
  * 1. First frame is course tee + green center only.
  * 2. After that, do not reframe.
