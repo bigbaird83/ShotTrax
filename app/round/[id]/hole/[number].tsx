@@ -124,7 +124,7 @@ import { lastLandingMark, markToGreen, planPlayHeaderYards, toGreenDisplayFromHo
 import { yardsToGreen } from '@/src/sensing/yardsToGreen';
 import { describeGpsSource } from '@/src/services/location';
 import { courseNeedsPinSheets, planMissCardCopy } from '@/src/domain/missCard';
-import { thunderbirdDailyPin, thunderbirdPinHoleFor } from '@/src/domain/thunderbirdPins';
+import { thunderbirdCupOnGreen, thunderbirdDailyPin, thunderbirdPinHoleFor } from '@/src/domain/thunderbirdPins';
 import { MENU_SHARE_FALLBACK_MS, toastFromShareAttempt } from '@/src/domain/spectator';
 import { publishRoundScoreboard, shareRoundSnapshot } from '@/src/services/shareRound';
 import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, undoShotEdit, deleteHoleShot } from '@/src/services/shotActions';
@@ -460,20 +460,21 @@ export default function HoleScreen() {
   const tbHole = needPins ? thunderbirdPinHoleFor(holeNumber) : null;
   const dailyPin = needPins ? thunderbirdDailyPin(holeNumber, pinSheet) : null;
   const greenCenter = hydrated.green;
-  const green = dailyPin ?? greenCenter;
+  const green = thunderbirdCupOnGreen(greenCenter, dailyPin);
+  const sheetOnGreen = greenCenter ? tbHole : null;
   const pins = {
     front: pinOrNull(
       hole?.greenFrontLat != null && hole.greenFrontLng != null
         ? { lat: hole.greenFrontLat, lng: hole.greenFrontLng }
-        : tbHole?.greenFront,
+        : sheetOnGreen?.greenFront,
     ),
     middle: pinOrNull(greenCenter),
     back: pinOrNull(
       hole?.greenBackLat != null && hole.greenBackLng != null
         ? { lat: hole.greenBackLat, lng: hole.greenBackLng }
-        : tbHole?.greenBack,
+        : sheetOnGreen?.greenBack,
     ),
-    depthYards: hole?.greenDepthYards ?? tbHole?.greenDepthYards ?? null,
+    depthYards: hole?.greenDepthYards ?? sheetOnGreen?.greenDepthYards ?? null,
   };
   const toGreenDisplay = toGreenDisplayFromHole({
     courseYards: hole?.yards ?? tbHole?.whiteYards ?? null,

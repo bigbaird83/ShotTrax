@@ -98,6 +98,24 @@ export function thunderbirdTeesStayHardMiss(): true {
   return true;
 }
 
+/** Pin-sheet green centers are not a green. Greens stay HARD-MISS until OSM or Doc. */
+export function thunderbirdPinSheetsInventGreens(): false {
+  return false;
+}
+
+/**
+ * Daily A–D cup folds onto a green that already exists.
+ * A pin coordinate never becomes the green by itself.
+ */
+export function thunderbirdCupOnGreen(
+  green: LatLng | null | undefined,
+  dailyPin: LatLng | null | undefined,
+): LatLng | null {
+  if (thunderbirdPinSheetsInventGreens()) return null;
+  if (!isValidLatLng(green)) return null;
+  return isValidLatLng(dailyPin) ? dailyPin : green;
+}
+
 export function isThunderbirdPinSheetId(value: string | null | undefined): value is ThunderbirdPinSheetId {
   return THUNDERBIRD_PIN_SHEETS.includes(value as ThunderbirdPinSheetId);
 }

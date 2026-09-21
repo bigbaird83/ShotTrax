@@ -60,5 +60,8 @@ test('Thunderbird Heber Springs is HARD-MISS need tee pins — greens from Doc, 
   assert.match(settings, /COPY\.credits/);
   assert.match(hole, /ThunderbirdPinSheetPicker/);
   assert.match(hole, /thunderbirdDailyPin/);
+  assert.match(hole, /thunderbirdCupOnGreen/);
+  const clubPick = readFileSync(new URL('../../app/round/[id]/club-pick.tsx', import.meta.url), 'utf8');
+  assert.match(clubPick, /thunderbirdCupOnGreen/);
   assert.doesNotMatch(hole, /inventGreen|unlabeled green|THUNDERBIRD_HEBER_CLUBHOUSE/);
 });

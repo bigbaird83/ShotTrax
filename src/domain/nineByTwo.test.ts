@@ -23,11 +23,15 @@ function thunderbirdHoles(): NineByTwoHole[] {
   }));
 }
 
-test('Thunderbird Heber Springs 9×2 mirror is a PASS and GPS is not rewritten', () => {
+test('9×2 mirror is a PASS for other courses; Thunderbird golfapi seed does not paint', () => {
   assert.equal(nineByTwoMirrorIsPass(), true);
   assert.equal(nineByTwoDoesNotInventCoords(), true);
   const before = readFileSync(thunderbirdFile, 'utf8');
-  const holes = thunderbirdHoles();
+  const holes = thunderbirdHoles().map((hole) => ({
+    ...hole,
+    tee: hole.tee ? { lat: hole.tee.lat + 1, lng: hole.tee.lng } : null,
+    green: hole.green ? { lat: hole.green.lat + 1, lng: hole.green.lng } : null,
+  }));
   const verdict = classifyNineByTwo({ numHoles: 9, holes });
   assert.deepEqual(verdict, { ok: true, kind: 'nine_by_two' });
   assert.deepEqual(courseTeeGreenPasses(holes, 9), { ok: true, kind: 'nine_by_two' });
@@ -38,20 +42,11 @@ test('Thunderbird Heber Springs 9×2 mirror is a PASS and GPS is not rewritten',
     assert.deepEqual(back?.tee, front?.tee);
     assert.deepEqual(back?.green, front?.green);
   }
-  assert.deepEqual(holes[0]?.tee, { lat: 35.5250149, lng: -92.0393432 });
-  assert.deepEqual(holes[0]?.green, { lat: 35.522655, lng: -92.0393088 });
   assert.equal(holes.length, 18);
   assert.equal(readFileSync(thunderbirdFile, 'utf8'), before);
 
   const loaded = loadCourseHydrate(THUNDERBIRD_HEBER_SPRINGS_AR_KEY);
-  assert.equal(loaded?.source, 'golfapi');
-  assert.deepEqual(loaded?.holes[0]?.tee, {
-    lat: 35.5250149,
-    lng: -92.0393432,
-    label: 'Blue',
-  });
-  assert.deepEqual(loaded?.holes[9]?.tee, loaded?.holes[0]?.tee);
-  assert.deepEqual(loaded?.holes[9]?.green, loaded?.holes[0]?.green);
+  assert.equal(loaded, null);
 });
 
 test('9×2 does not invent a mirror when the back nine differs or a tee is missing', () => {

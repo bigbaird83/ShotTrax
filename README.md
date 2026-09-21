@@ -39,7 +39,7 @@ Nearby course search, hole par, and green centroids are behind [Golf Courses API
 
 **EAS secret name:** `GOLF_COURSES_API_KEY` (set for production, preview, and development). `app.config.js` copies it into `expo.extra.golfCoursesApiKey` so the app can read it on EAS builds via `expo-constants`. **Never commit a key. Do not invent a second secret name in git.**
 
-Unknown courses paint tee + green in a fixed order: **OSM / OpenGolf**, then **GCA Pro** greens (tees only when the payload has them; scorecard-only stays a miss), then **golfapi.io** as the last resort (`GOLFAPI_KEY` / `EXPO_PUBLIC_GOLFAPI_KEY` → `expo.extra.golfApiKey`). A pass is cached on-device (`settings.course.paint.cache`). Set `EXPO_PUBLIC_COURSE_PAINT_CACHE_URL` to a JSON GET/PUT host so a second phone does not buy the same course again. Cache keys are `id:<courseId>` and `name:<name>|<city>|<state>`. A 9-hole loop whose holes 10–18 exactly mirror 1–9 is a **9×2 pass** (Thunderbird Heber Springs) — those GPS values are not rewritten. Thin GPS / no key stays a miss. Never invented. Do not call golfapi from CI without the secret.
+Unknown courses paint tee + green in a fixed order: **OSM / OpenGolf**, then **GCA Pro** greens (tees only when the payload has them; scorecard-only stays a miss), then **golfapi.io** as the last resort (`GOLFAPI_KEY` / `EXPO_PUBLIC_GOLFAPI_KEY` → `expo.extra.golfApiKey`). A pass is cached on-device (`settings.course.paint.cache`). Set `EXPO_PUBLIC_COURSE_PAINT_CACHE_URL` to a JSON GET/PUT host so a second phone does not buy the same course again. Cache keys are `id:<courseId>` and `name:<name>|<city>|<state>`. A 9-hole loop whose holes 10–18 exactly mirror 1–9 is a **9×2 pass** for other courses — those GPS values are not rewritten. Thunderbird Heber Springs is HARD-MISS: the golfapi seed, device cache, and network golfapi do not paint it. Thin GPS / no key stays a miss. Never invented. Do not call golfapi from CI without the secret.
 
 Expo client JS only inlines `EXPO_PUBLIC_*`. For local Expo Go, CoS must also set `EXPO_PUBLIC_GOLF_COURSES_API_KEY` in `.env` **or** map that public name from the existing `GOLF_COURSES_API_KEY` secret in the Expo dashboard (same value).
 
@@ -61,11 +61,11 @@ Read-only Pro greens probe (course 4 = Bowling Green CC): `npm run gca:greens-pr
 
 1. Shared cache hit (device SQLite, then `EXPO_PUBLIC_COURSE_PAINT_CACHE_URL` when set) — skips GCA and golfapi
 2. OSM / OpenGolf / manual-verified tee + green, if they pass sanity
-3. Bundled golfapi seed (already paid) — skips GCA
-4. GCA Pro green-centers (tees if present). No coordinates → miss
-5. golfapi.io once, only after both miss, then write the cache
+3. Bundled golfapi seed (already paid) — skips GCA. Thunderbird Heber Springs is not in this step.
+4. GCA Pro green-centers (tees if present). No coordinates → miss. Thunderbird skips this step.
+5. golfapi.io once, only after both miss, then write the cache. Thunderbird never calls it.
 
-9×2: `numHoles = 9` and holes 10–18 tee+green exactly equal 1–9 is a pass (`src/domain/nineByTwo.ts`). Thunderbird’s bundled GPS is left as stored.
+9×2: `numHoles = 9` and holes 10–18 tee+green exactly equal 1–9 is a pass for other courses (`src/domain/nineByTwo.ts`). Thunderbird Heber Springs stays HARD-MISS until OSM or a Doc pin-sheet. Pin sheets do not invent greens.
 
 ## OSM overlays
 
@@ -201,7 +201,7 @@ A 5-digit US ZIP (or ZIP+4) in the course search box geocodes to a point, then u
 
 ## Thunderbird CC (Heber Springs)
 
-Searchable. golfapi.io supplies tee + green for all 18 coords (9-hole track played as 18). Doc pin sheets still fold daily A–D pins (10–18 mirror 1–9). Tees and greens are never invented. OpenGolf/OSM follow ingest does **not** overwrite this card.
+Searchable. HARD-MISS: the bundled golfapi seed (courseID 011141520629948893391), device paint cache, and network golfapi do not paint tees or greens. Next paint is OSM if mapped, or a Doc pin-sheet only when a green already exists. Daily A–D pins do not invent a green. OpenGolf/OSM follow ingest does **not** overwrite this card.
 
 ## The Greens at North Hills (Sherwood)
 

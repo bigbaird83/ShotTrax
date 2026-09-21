@@ -6,6 +6,7 @@ import {
   THUNDERBIRD_HEBER_SPRINGS_AR_KEY,
   isClubhousePin,
   loadCourseHydrate,
+  matchesThunderbirdHeberSprings,
   resolveCourseHydrateKey,
 } from './hydrate';
 import { fetchGolfApiHydrate, type GolfApiFetchDeps } from './golfapi';
@@ -20,6 +21,10 @@ import {
   type CoursePaintSource,
 } from './paintCache';
 import type { CourseDetail, HoleCourseData } from './types';
+import {
+  isThunderbirdHeberSpringsIdentity,
+  thunderbirdGolfApiPaintBlocked,
+} from './thunderbirdLock';
 
 /**
  * Course paint waterfall. Paid sources run only after the free card misses.
@@ -152,8 +157,23 @@ export function loadOsmOpenGolfCandidate(course: CourseHydrateMatch): PaintCandi
   };
 }
 
-/** Already-paid golfapi card (bundle or device cache). No network. */
+function thunderbirdPaintLocked(course: CourseHydrateMatch): boolean {
+  if (!thunderbirdGolfApiPaintBlocked()) return false;
+  return (
+    matchesThunderbirdHeberSprings(course) ||
+    isThunderbirdHeberSpringsIdentity({
+      courseKey: course.courseKey,
+      name: course.name,
+      city: course.city,
+      state: course.state,
+      locality: course.locality,
+    })
+  );
+}
+
+/** Already-paid golfapi card (bundle or device cache). No network. Thunderbird seed never wins. */
 export function loadBundledGolfApiCandidate(course: CourseHydrateMatch): PaintCandidate | null {
+  if (thunderbirdPaintLocked(course)) return null;
   const key = resolveCourseHydrateKey(course);
   const bundled = key ? loadCourseHydrate(key) : null;
   if (!bundled || bundled.source !== 'golfapi' || bundled.holes.length === 0) return null;
@@ -172,6 +192,7 @@ export async function loadGolfApiPaintCandidate(
   course: CourseHydrateMatch,
   deps: GolfApiFetchDeps = {},
 ): Promise<PaintCandidate | null> {
+  if (thunderbirdPaintLocked(course)) return null;
   const seeded = loadBundledGolfApiCandidate(course);
   if (seeded && candidatePasses(seeded).ok) return seeded;
   const hydrate = await fetchGolfApiHydrate(course, {
@@ -238,14 +259,15 @@ export async function resolveCoursePaint(
 ): Promise<CoursePaintResult> {
   const cache = deps.cache ?? getSharedCoursePaintCache();
   const now = deps.now ?? (() => new Date().toISOString());
+  const locked = thunderbirdPaintLocked(course);
   for (const key of coursePaintCacheKeys(course)) {
     const cached = await cache.get(key);
-    if (cached && recordPasses(cached, course)) {
-      const nine =
-        cached.nineByTwo ||
-        classifyNineByTwo({ numHoles: cached.numHoles, holes: cached.holes }).ok;
-      return hitFrom(cached.source, cached.holes, nine, true);
-    }
+    if (!cached || !recordPasses(cached, course)) continue;
+    if (locked && cached.source !== 'osm' && cached.source !== 'manual_verified') continue;
+    const nine =
+      cached.nineByTwo ||
+      classifyNineByTwo({ numHoles: cached.numHoles, holes: cached.holes }).ok;
+    return hitFrom(cached.source, cached.holes, nine, true);
   }
 
   const osm = await deps.loadOsm();
@@ -257,14 +279,18 @@ export async function resolveCoursePaint(
     }
   }
 
-  const seeded = loadBundledGolfApiCandidate(course);
-  if (seeded) {
-    const verdict = candidatePasses(seeded);
-    if (verdict.ok) {
-      await writePass(course, seeded, verdict.nineByTwo, cache, now);
-      return hitFrom('golfapi', seeded.holes, verdict.nineByTwo, true);
+  if (!locked) {
+    const seeded = loadBundledGolfApiCandidate(course);
+    if (seeded) {
+      const verdict = candidatePasses(seeded);
+      if (verdict.ok) {
+        await writePass(course, seeded, verdict.nineByTwo, cache, now);
+        return hitFrom('golfapi', seeded.holes, verdict.nineByTwo, true);
+      }
     }
   }
+
+  if (locked) return MISS;
 
   const gca = await deps.loadGca();
   if (gca && gca.source === 'gca') {

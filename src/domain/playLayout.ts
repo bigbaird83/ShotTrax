@@ -628,38 +628,46 @@ export function signalLabPleasantValleyHydrate(): {
 }
 
 /**
- * Thunderbird Country Club (Heber Springs) paints from golfapi.io
- * tee + green (18 coords on a 9-hole track). Doc pin sheets still
- * supply daily A–D pins. Never invent tees or unlabeled OSM greens.
+ * Thunderbird Country Club (Heber Springs) is HARD-MISS.
+ * The bundled golfapi seed (courseID 011141520629948893391) is poisoned and
+ * must not paint from the seed, device cache, or network golfapi.
+ * Next paint is OSM if mapped, or a Doc pin-sheet that already has a green.
+ * Pin sheets do not invent greens. 9×2 still passes for other courses.
  */
 export function signalLabThunderbirdHydrate(): {
   thunderbirdHeberSpringsOnly: true;
-  paintsViaHydrateWhenProMisses: true;
+  paintsViaHydrateWhenProMisses: false;
   neverInventFromClubhouse: true;
   neverInventFromScorecardYards: true;
   neverInventUnlabeledGreens: true;
   neverInventTees: true;
   greensFromDocPinSheets: false;
-  greensFromGolfApi: true;
-  hardMissAllNine: false;
-  needsDocPinSheets: false;
-  needsDocTeePins: false;
+  greensFromGolfApi: false;
+  hardMissAllNine: true;
+  needsDocPinSheets: true;
+  needsDocTeePins: true;
+  golfApiSeedBlocked: true;
+  deviceGolfApiCacheBlocked: true;
+  networkGolfApiBlocked: true;
   cypressStillExclusive: true;
   greystoneStillExclusive: true;
   pleasantValleyStillExclusive: true;
 } {
   return {
     thunderbirdHeberSpringsOnly: true,
-    paintsViaHydrateWhenProMisses: true,
+    paintsViaHydrateWhenProMisses: false,
     neverInventFromClubhouse: true,
     neverInventFromScorecardYards: true,
     neverInventUnlabeledGreens: true,
     neverInventTees: true,
     greensFromDocPinSheets: false,
-    greensFromGolfApi: true,
-    hardMissAllNine: false,
-    needsDocPinSheets: false,
-    needsDocTeePins: false,
+    greensFromGolfApi: false,
+    hardMissAllNine: true,
+    needsDocPinSheets: true,
+    needsDocTeePins: true,
+    golfApiSeedBlocked: true,
+    deviceGolfApiCacheBlocked: true,
+    networkGolfApiBlocked: true,
     cypressStillExclusive: true,
     greystoneStillExclusive: true,
     pleasantValleyStillExclusive: true,

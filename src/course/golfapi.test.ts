@@ -82,19 +82,38 @@ test('golfapi fetch is null without a key and cache hit skips the network', asyn
     assert.equal(calls, 0);
 
     process.env.GOLFAPI_KEY = 'test-key';
-    const seeded = mapGolfApiCourseToHydrate({
+    const poisoned = mapGolfApiCourseToHydrate({
       course: THUNDERBIRD_COURSE,
       coordinates: THUNDERBIRD_COORDS,
     });
-    assert.ok(seeded);
-    saveCachedGolfApiHydrate(seeded!, ['namecity:thunderbird country club|heber springs']);
-    const cached = await fetchGolfApiHydrate(
+    assert.ok(poisoned);
+    saveCachedGolfApiHydrate(poisoned!, ['namecity:thunderbird country club|heber springs']);
+    assert.equal(loadCachedGolfApiHydrate(poisoned!.courseKey), null);
+    const blocked = await fetchGolfApiHydrate(
       { name: 'Thunderbird Country Club', city: 'Heber Springs' },
+      { fetchImpl: async () => { calls += 1; throw new Error('thunderbird must not call golfapi'); } },
+    );
+    assert.equal(blocked, null);
+    assert.equal(calls, 0);
+
+    const other = mapGolfApiCourseToHydrate({
+      course: {
+        ...THUNDERBIRD_COURSE,
+        courseID: 'sample-municipal-1',
+        clubName: 'Sample Municipal',
+        city: 'Conway',
+      },
+      coordinates: THUNDERBIRD_COORDS,
+    });
+    assert.ok(other);
+    saveCachedGolfApiHydrate(other!, ['namecity:sample municipal|conway']);
+    const cached = await fetchGolfApiHydrate(
+      { name: 'Sample Municipal', city: 'Conway' },
       { fetchImpl: async () => { calls += 1; throw new Error('cache should skip'); } },
     );
-    assert.equal(cached?.courseKey, seeded?.courseKey);
-    assert.equal(loadCachedGolfApiHydrate(seeded!.courseKey)?.holes.length, 2);
-    assert.equal(loadCachedHydrate(seeded!.courseKey)?.holes.length, 2);
+    assert.equal(cached?.courseKey, other?.courseKey);
+    assert.equal(loadCachedGolfApiHydrate(other!.courseKey)?.holes.length, 2);
+    assert.equal(loadCachedHydrate(other!.courseKey)?.holes.length, 2);
     assert.equal(calls, 0);
   } finally {
     resetGolfApiCacheForTests();
@@ -109,23 +128,44 @@ test('golfapi fetch maps mocked search + coords and does not invent on empty GPS
   resetGolfApiCacheForTests();
   const names = ['GOLFAPI_KEY', 'EXPO_PUBLIC_GOLFAPI_KEY', 'GOLF_API_IO_KEY', 'EXPO_PUBLIC_GOLF_API_IO_KEY'];
   const prev = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const sample = {
+    ...THUNDERBIRD_COURSE,
+    courseID: 'sample-municipal-1',
+    clubName: 'Sample Municipal',
+    city: 'Conway',
+  };
   try {
     process.env.GOLFAPI_KEY = 'test-key';
+    let thunderbirdCalls = 0;
+    assert.equal(
+      await fetchGolfApiHydrate(
+        { name: 'Thunderbird Country Club', city: 'Heber Springs', state: 'AR' },
+        {
+          fetchImpl: async () => {
+            thunderbirdCalls += 1;
+            throw new Error('thunderbird network golfapi is blocked');
+          },
+        },
+      ),
+      null,
+    );
+    assert.equal(thunderbirdCalls, 0);
+
     const urls: string[] = [];
     const fetched = await fetchGolfApiHydrate(
-      { name: 'Thunderbird Country Club', city: 'Heber Springs', state: 'AR' },
+      { name: 'Sample Municipal', city: 'Conway', state: 'AR' },
       {
         now: () => '2026-09-21T14:12:17Z',
         fetchImpl: async (input) => {
           const url = String(input);
           urls.push(url);
           if (url.includes('/courses?')) {
-            return new Response(JSON.stringify([THUNDERBIRD_COURSE]), { status: 200 });
+            return new Response(JSON.stringify([sample]), { status: 200 });
           }
           if (url.includes('/coordinates/')) {
             return new Response(JSON.stringify(THUNDERBIRD_COORDS), { status: 200 });
           }
-          return new Response(JSON.stringify(THUNDERBIRD_COURSE), { status: 200 });
+          return new Response(JSON.stringify(sample), { status: 200 });
         },
       },
     );
@@ -137,14 +177,14 @@ test('golfapi fetch maps mocked search + coords and does not invent on empty GPS
 
     resetGolfApiCacheForTests();
     const thin = await fetchGolfApiHydrate(
-      { name: 'Thunderbird Country Club', city: 'Heber Springs' },
+      { name: 'Sample Municipal', city: 'Conway' },
       {
         fetchImpl: async (input) => {
           const url = String(input);
           if (url.includes('/coordinates/')) {
             return new Response(JSON.stringify({ coordinates: [] }), { status: 200 });
           }
-          return new Response(JSON.stringify(THUNDERBIRD_COURSE), { status: 200 });
+          return new Response(JSON.stringify(sample), { status: 200 });
         },
       },
     );
@@ -191,7 +231,11 @@ test('fillCourseDetailFromGolfApi cache hit skips network and empty coords do no
   try {
     process.env.GOLFAPI_KEY = 'test-key';
     const seeded = mapGolfApiCourseToHydrate({
-      course: THUNDERBIRD_COURSE,
+      course: {
+        ...THUNDERBIRD_COURSE,
+        courseID: 'unknown-cc-99',
+        clubName: 'Unknown CC',
+      },
       coordinates: THUNDERBIRD_COORDS,
     });
     assert.ok(seeded);
