@@ -16,7 +16,11 @@ import {
   planSpectatorPayload,
   MENU_SHARE_FALLBACK_MS,
   menuShareMustWaitForDismiss,
+  formatShareScorecard,
   shareFailToast,
+  shareMessageIncludesPayloadQuery,
+  shareScorecardTotal,
+  shareSheetPassesUrl,
   shouldOpenShareSheet,
   toastAfterShareAttempt,
   toastFromShareAttempt,
@@ -168,6 +172,37 @@ test('share text is readable without opening a map or granting location', () => 
   assert.match(doneText, new RegExp(`2  52° · 105  3 · ${COPY.approximate}`));
 });
 
+test('Messages share body is a scorecard — never the ?p= spectator token', () => {
+  assert.equal(shareSheetPassesUrl(), false);
+  const cardHoles = holes.map((hole) => ({ hole: hole.number, score: hole.score }));
+  assert.equal(shareScorecardTotal(cardHoles), 7);
+  const live = formatShareScorecard({
+    courseName: 'Magnolia',
+    holes: cardHoles,
+    lastClubYards: '7i · 155',
+  });
+  assert.equal(
+    live,
+    ['ShotTraxx', 'Magnolia · 7', '1  4', '2  3', '3  —', 'Last: 7i · 155'].join('\n'),
+  );
+  assert.equal(shareMessageIncludesPayloadQuery(live), false);
+  assert.doesNotMatch(live, /shottrax:\/\//i);
+  assert.doesNotMatch(live, /[?&]p=/);
+  assert.doesNotMatch(live, /lat|lng|GPS|trail/i);
+
+  const done = formatShareScorecard({
+    courseName: 'Magnolia',
+    holes: cardHoles,
+  });
+  assert.equal(done, ['ShotTraxx', 'Magnolia · 7', '1  4', '2  3', '3  —'].join('\n'));
+  assert.doesNotMatch(done, /Last:/);
+  assert.equal(shareMessageIncludesPayloadQuery(done), false);
+
+  const empty = formatShareScorecard({ courseName: null, holes: [] });
+  assert.equal(empty, 'ShotTraxx\nRound');
+  assert.equal(shareScorecardTotal([]), null);
+});
+
 test('Signal Lab: share yards stay logged pin-to-pin with Approximate when soft/forced', () => {
   assert.equal(spectatorInventsFromCardYards(), false);
   assert.equal(spectatorKeepsApproximateOnSoftForced(), true);
@@ -252,10 +287,14 @@ test('Menu Share toasts Couldn’t open share when Share.share fails — never a
   assert.match(summaryShare, /shareRoundSnapshot/);
   assert.match(summaryShare, /toastFromShareAttempt/);
   assert.match(summaryShare, /setToast\(fail\)/);
-  assert.match(share, /Share\.share/);
+  assert.match(share, /Share\.share\(\{ message: planned\.message, title: 'ShotTraxx' \}/);
+  assert.doesNotMatch(share, /Share\.share\(\{[^}]*url/);
+  assert.match(share, /formatShareScorecard/);
   assert.match(share, /waitForShareHost/);
   assert.match(share, /catch \{/);
   assert.match(share, /return false/);
+  assert.doesNotMatch(share, /encodeSpectatorPayload/);
+  assert.doesNotMatch(share, /queryParams/);
   assert.doesNotMatch(share, /lat|lng/);
   assert.doesNotMatch(menuShare, /getCurrentFix/);
 });
@@ -284,6 +323,9 @@ test('TF 62: Menu Share waits for fullScreen Modal dismiss before Share.share', 
   assert.match(sheet, /onDismiss=\{onDismiss\}/);
   assert.match(share, /waitForShareHost/);
   assert.match(share, /InteractionManager\.runAfterInteractions/);
+  assert.match(share, /formatShareScorecard/);
+  assert.doesNotMatch(share, /Share\.share\(\{[^}]*url/);
+  assert.doesNotMatch(share, /encodeSpectatorPayload/);
   assert.doesNotMatch(open, /getCurrentFix/);
   assert.doesNotMatch(share, /lat|lng/);
 });
