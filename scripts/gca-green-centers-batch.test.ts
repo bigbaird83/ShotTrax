@@ -58,11 +58,11 @@ function tempPaths() {
   return { storePath, cursorPath };
 }
 
-test('nightly cap defaults to 300 and documents AR-first labels', () => {
-  assert.equal(DEFAULT_NIGHTLY_CAP, 300);
-  assert.equal(readCap({}), 300);
+test('nightly cap defaults to 350 and documents AR-first labels', () => {
+  assert.equal(DEFAULT_NIGHTLY_CAP, 350);
+  assert.equal(readCap({}), 350);
   assert.equal(readCap({ GCA_GREENS_BATCH_CAP: '50' }), 50);
-  assert.equal(readCap({ GCA_GREENS_BATCH_CAP: 'nope' }), 300);
+  assert.equal(readCap({ GCA_GREENS_BATCH_CAP: 'nope' }), 350);
   assert.ok(AR_DOC_BELT_PRIORITY.length >= 6);
   assert.ok(AR_DOC_BELT_LABELS.some((label) => /Thunderbird/i.test(label)));
   assert.ok(AR_DOC_BELT_LABELS.some((label) => /Mountain Ranch/i.test(label)));
@@ -327,8 +327,8 @@ test('persistCourse refuses empty hole lists', () => {
 });
 
 test('logs are status counts only — no key, no PII payload', () => {
-  const line = formatCountsLine({ fetched: 12, skipped_empty: 4, 403: 1, errors: 0 }, { cap: 300 });
-  assert.equal(line, 'GCA_GREENS_BATCH fetched=12 skipped_empty=4 403=1 errors=0 cap=300');
+  const line = formatCountsLine({ fetched: 12, skipped_empty: 4, 403: 1, errors: 0 }, { cap: 350 });
+  assert.equal(line, 'GCA_GREENS_BATCH fetched=12 skipped_empty=4 403=1 errors=0 cap=350');
   assert.doesNotMatch(line, /Bearer|lat|lng|address|phone|@/);
 });
 

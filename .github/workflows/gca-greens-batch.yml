@@ -12,9 +12,9 @@ on:
   workflow_dispatch:
     inputs:
       cap:
-        description: 'Nightly course cap (default 300)'
+        description: 'Nightly course cap (default 350)'
         required: false
-        default: '300'
+        default: '350'
 
 concurrency:
   group: gca-greens-batch
@@ -35,7 +35,7 @@ jobs:
       - name: Pull AR-first then US green-centers (capped)
         env:
           GOLF_COURSES_API_KEY: ${{ secrets.GOLF_COURSES_API_KEY }}
-          GCA_GREENS_BATCH_CAP: ${{ github.event.inputs.cap || '300' }}
+          GCA_GREENS_BATCH_CAP: ${{ github.event.inputs.cap || '350' }}
         run: node scripts/gca-green-centers-batch.mjs
         continue-on-error: true
       - name: Persist store when the batch wrote greens

@@ -11,7 +11,7 @@
  * OSM / HARD-MISS stay for courses with no Pro greens (Thunderbird pins
  * are never invented).
  *
- * Nightly cap default 300 courses (see DEFAULT_NIGHTLY_CAP). Override with
+ * Nightly cap default 350 courses (see DEFAULT_NIGHTLY_CAP). Override with
  * GCA_GREENS_BATCH_CAP. Logs status counts only — never keys or PII payloads.
  *
  *   npm run gca:greens-batch
@@ -28,14 +28,15 @@ export const REQUEST_GAP_MS = 600;
 export const CONSECUTIVE_403_ABORT = 5;
 
 /**
- * Conservative nightly cap.
+ * Locked nightly cap (Signal / Doc: middle of 200–500).
  *
- * Pro quota is 10,000 req/day and 120/min burst. 300 green-center GETs plus
- * ~10 priority searches and a few list pages is ~320 requests (~3% of daily
- * quota) at 600 ms gaps (~100/min, under burst). Leaves daytime quota for
- * the app. ~7.4k advertised US greens / 300 ≈ 25 nights.
+ * GCA Pro published limits: 10,000 req/day, 120/min burst (free is 30/day).
+ * 350 green-center GETs plus ~10 priority searches and a few list pages is
+ * ~365 requests (~4% of daily quota). 600 ms gaps stay ~100/min — under the
+ * 120/min burst (200–500 ms would sit at or over that ceiling). Leaves
+ * daytime quota for the app. ~7.4k advertised US greens / 350 ≈ 21 nights.
  */
-export const DEFAULT_NIGHTLY_CAP = 300;
+export const DEFAULT_NIGHTLY_CAP = 350;
 
 /** Clubhouse / course pins from hydrate.ts — never persist these as greens. */
 export const CLUBHOUSE_DENYLIST = [

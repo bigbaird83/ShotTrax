@@ -64,7 +64,7 @@ Zip search is out of scope.
 
 **AR / Doc belt first:** Heber Springs (Thunderbird), Fairfield Bay (Mountain Ranch), Cabot (Cypress Creek, Greystone), Little Rock (Pleasant Valley), Magnolia region — then the rest of Arkansas, then the rest of US.
 
-**Nightly cap:** **300** courses (`GCA_GREENS_BATCH_CAP`, default `DEFAULT_NIGHTLY_CAP`). Pro is 10,000 req/day and 120/min; 300 green-center GETs plus ~10 searches and a few list pages is ~320 requests (~3% of daily quota) at 600 ms gaps (~100/min). ~7.4k / 300 ≈ 25 nights. Consecutive `403` aborts so a free key does not burn the cap.
+**Nightly cap:** **350** courses (`GCA_GREENS_BATCH_CAP`, default `DEFAULT_NIGHTLY_CAP`). GCA Pro published limits are 10,000 req/day and 120/min burst. 350 green-center GETs plus ~10 searches and a few list pages is ~365 requests (~4% of daily quota) at 600 ms gaps (~100/min, under burst). ~7.4k / 350 ≈ 21 nights. Consecutive `403` aborts so a free key does not burn the cap.
 
 **Logs (redacted):** status counts only — `fetched`, `skipped_empty`, `403`, `errors`. Never API keys, Bearer tokens, or payloads with PII (address / phone / full hole lists).
 
