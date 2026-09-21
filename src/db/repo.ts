@@ -28,6 +28,12 @@ import {
   parseColorThemeId,
   type ColorThemeId,
 } from '../domain/colorTheme';
+import {
+  isThunderbirdPinSheetId,
+  resolveThunderbirdPinSheet,
+  THUNDERBIRD_PIN_SHEET_SETTING_KEY,
+  type ThunderbirdPinSheetId,
+} from '../domain/thunderbirdPins';
 import { clubAverageFromShots, type ClubAverage } from '../domain/averages';
 import { rememberResolvedTee } from '../course/osmOverlay';
 import { isValidLatLng } from '../domain/latLng';
@@ -1357,4 +1363,16 @@ export function hasSeenFirstLaunchTip(db: SQLiteDatabase): boolean {
 
 export function markFirstLaunchTipSeen(db: SQLiteDatabase): void {
   setSetting(db, FIRST_LAUNCH_TIP_SETTING_KEY, firstLaunchTipSeenValue());
+}
+
+export function getThunderbirdPinSheet(
+  db: SQLiteDatabase,
+  weekday: number = new Date().getDay(),
+): ThunderbirdPinSheetId {
+  return resolveThunderbirdPinSheet(getSetting(db, THUNDERBIRD_PIN_SHEET_SETTING_KEY), weekday);
+}
+
+export function setThunderbirdPinSheet(db: SQLiteDatabase, sheet: ThunderbirdPinSheetId): void {
+  if (!isThunderbirdPinSheetId(sheet)) return;
+  setSetting(db, THUNDERBIRD_PIN_SHEET_SETTING_KEY, sheet);
 }

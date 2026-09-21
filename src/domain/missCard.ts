@@ -47,6 +47,10 @@ export function missCardInventsPins(): false {
   return false;
 }
 
-export function thunderbirdPinsAreBlocked(): true {
+export function thunderbirdPinsAreBlocked(): false {
+  return false;
+}
+
+export function thunderbirdTeesAreBlocked(): true {
   return true;
 }

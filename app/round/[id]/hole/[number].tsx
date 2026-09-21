@@ -29,8 +29,10 @@ import {
   listRounds,
   listShotsForHole,
   markFirstLaunchTipSeen,
+  getThunderbirdPinSheet,
   saveHoleTee,
   setHoleGreen,
+  setThunderbirdPinSheet,
   updateHolePar,
   updateHolePutts,
   finishHolePutts,
@@ -122,6 +124,7 @@ import { lastLandingMark, markToGreen, planPlayHeaderYards, toGreenDisplayFromHo
 import { yardsToGreen } from '@/src/sensing/yardsToGreen';
 import { describeGpsSource } from '@/src/services/location';
 import { courseNeedsPinSheets, planMissCardCopy } from '@/src/domain/missCard';
+import { thunderbirdDailyPin, thunderbirdPinHoleFor } from '@/src/domain/thunderbirdPins';
 import { MENU_SHARE_FALLBACK_MS, toastFromShareAttempt } from '@/src/domain/spectator';
 import { publishRoundScoreboard, shareRoundSnapshot } from '@/src/services/shareRound';
 import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, undoShotEdit, deleteHoleShot } from '@/src/services/shotActions';
@@ -140,6 +143,7 @@ import { useAmbientLight } from '@/src/ui/useAmbientLight';
 import { playThemeId } from '@/src/domain/playTheme';
 import { formatShotLockChip } from '@/src/domain/shotLock';
 import { HoleMap } from '@/src/ui/HoleMap';
+import { ThunderbirdPinSheetPicker } from '@/src/ui/ThunderbirdPinSheetPicker';
 import { FullSheet } from '@/src/ui/Sheet';
 import { FinishedPuttRows } from '@/src/ui/FinishedPuttRows';
 import { PuttDock } from '@/src/ui/PuttDock';
@@ -426,13 +430,12 @@ export default function HoleScreen() {
     round?.courseLat != null && round.courseLng != null
       ? { lat: round.courseLat, lng: round.courseLng }
       : null;
-  const missCopy = planMissCardCopy({
-    needPins: courseNeedsPinSheets({
-      courseApiId: round?.courseApiId,
-      name: round?.courseName,
-      location: isCourseCardLatLng(courseLocation) ? courseLocation : null,
-    }),
+  const needPins = courseNeedsPinSheets({
+    courseApiId: round?.courseApiId,
+    name: round?.courseName,
+    location: isCourseCardLatLng(courseLocation) ? courseLocation : null,
   });
+  const missCopy = planMissCardCopy({ needPins });
   const overlay =
     osmOverlay ??
     cachedOsmOverlay({ courseId: round?.courseApiId, holeNumber, green: proGreen });
@@ -453,23 +456,27 @@ export default function HoleScreen() {
     green: proGreen,
   });
   const holeTee = hydrated.tee;
-  const green = hydrated.green;
+  const pinSheet = getThunderbirdPinSheet(db);
+  const tbHole = needPins ? thunderbirdPinHoleFor(holeNumber) : null;
+  const dailyPin = needPins ? thunderbirdDailyPin(holeNumber, pinSheet) : null;
+  const greenCenter = hydrated.green;
+  const green = dailyPin ?? greenCenter;
   const pins = {
     front: pinOrNull(
       hole?.greenFrontLat != null && hole.greenFrontLng != null
         ? { lat: hole.greenFrontLat, lng: hole.greenFrontLng }
-        : null,
+        : tbHole?.greenFront,
     ),
-    middle: pinOrNull(green),
+    middle: pinOrNull(greenCenter),
     back: pinOrNull(
       hole?.greenBackLat != null && hole.greenBackLng != null
         ? { lat: hole.greenBackLat, lng: hole.greenBackLng }
-        : null,
+        : tbHole?.greenBack,
     ),
-    depthYards: hole?.greenDepthYards ?? null,
+    depthYards: hole?.greenDepthYards ?? tbHole?.greenDepthYards ?? null,
   };
   const toGreenDisplay = toGreenDisplayFromHole({
-    courseYards: hole?.yards ?? null,
+    courseYards: hole?.yards ?? tbHole?.whiteYards ?? null,
     green,
     shots,
   });
@@ -1383,6 +1390,15 @@ export default function HoleScreen() {
                   </Text>
                 </Pressable>
               </View>
+              {needPins ? (
+                <ThunderbirdPinSheetPicker
+                  selected={pinSheet}
+                  onSelect={(sheet) => {
+                    setThunderbirdPinSheet(db, sheet);
+                    bump();
+                  }}
+                />
+              ) : null}
               {playLayout.shotLine === 'header' ? (
                 <ScrollView
                   horizontal

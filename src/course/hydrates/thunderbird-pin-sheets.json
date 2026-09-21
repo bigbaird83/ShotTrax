@@ -1,0 +1,705 @@
+{
+  "source": "doc-pin-sheet",
+  "courseKey": "thunderbird-heber-springs-ar",
+  "sheets": {
+    "A": {
+      "id": "A",
+      "days": "Sun / Mon",
+      "weekdays": [
+        0,
+        1
+      ]
+    },
+    "B": {
+      "id": "B",
+      "days": "Tue / Wed",
+      "weekdays": [
+        2,
+        3
+      ]
+    },
+    "C": {
+      "id": "C",
+      "days": "Thu / Fri",
+      "weekdays": [
+        4,
+        5
+      ]
+    },
+    "D": {
+      "id": "D",
+      "days": "Sat / Events",
+      "weekdays": [
+        6
+      ]
+    }
+  },
+  "holes": [
+    {
+      "hole": 1,
+      "par": 4,
+      "whiteYards": 267,
+      "greenCenter": {
+        "lat": 35.52695,
+        "lng": -92.03735
+      },
+      "greenFront": {
+        "lat": 35.5268675,
+        "lng": -92.0374626
+      },
+      "greenBack": {
+        "lat": 35.5270325,
+        "lng": -92.0372374
+      },
+      "greenDepthYards": 30,
+      "greenWidthYards": 20,
+      "pins": {
+        "A": {
+          "lat": 35.5269366,
+          "lng": -92.0374439
+        },
+        "B": {
+          "lat": 35.5269188,
+          "lng": -92.0373019
+        },
+        "C": {
+          "lat": 35.5270301,
+          "lng": -92.0373162
+        },
+        "D": {
+          "lat": 35.5268803,
+          "lng": -92.0373545
+        }
+      }
+    },
+    {
+      "hole": 2,
+      "par": 3,
+      "whiteYards": 116,
+      "greenCenter": {
+        "lat": 35.52622,
+        "lng": -92.03775
+      },
+      "greenFront": {
+        "lat": 35.52623,
+        "lng": -92.0378909
+      },
+      "greenBack": {
+        "lat": 35.52621,
+        "lng": -92.0376091
+      },
+      "greenDepthYards": 28,
+      "greenWidthYards": 18,
+      "pins": {
+        "A": {
+          "lat": 35.5262578,
+          "lng": -92.037817
+        },
+        "B": {
+          "lat": 35.526179,
+          "lng": -92.0377544
+        },
+        "C": {
+          "lat": 35.5262471,
+          "lng": -92.037666
+        },
+        "D": {
+          "lat": 35.5261826,
+          "lng": -92.0378047
+        }
+      }
+    },
+    {
+      "hole": 3,
+      "par": 4,
+      "whiteYards": 361,
+      "greenCenter": {
+        "lat": 35.52755,
+        "lng": -92.03625
+      },
+      "greenFront": {
+        "lat": 35.5274314,
+        "lng": -92.036341
+      },
+      "greenBack": {
+        "lat": 35.5276686,
+        "lng": -92.036159
+      },
+      "greenDepthYards": 34,
+      "greenWidthYards": 22,
+      "pins": {
+        "A": {
+          "lat": 35.5275133,
+          "lng": -92.0363496
+        },
+        "B": {
+          "lat": 35.5275334,
+          "lng": -92.0361793
+        },
+        "C": {
+          "lat": 35.5276528,
+          "lng": -92.0362425
+        },
+        "D": {
+          "lat": 35.5275047,
+          "lng": -92.0362371
+        }
+      }
+    },
+    {
+      "hole": 4,
+      "par": 3,
+      "whiteYards": 174,
+      "greenCenter": {
+        "lat": 35.52715,
+        "lng": -92.03555
+      },
+      "greenFront": {
+        "lat": 35.5271922,
+        "lng": -92.0356924
+      },
+      "greenBack": {
+        "lat": 35.5271078,
+        "lng": -92.0354076
+      },
+      "greenDepthYards": 30,
+      "greenWidthYards": 20,
+      "pins": {
+        "A": {
+          "lat": 35.5272111,
+          "lng": -92.0356087
+        },
+        "B": {
+          "lat": 35.5271008,
+          "lng": -92.0355612
+        },
+        "C": {
+          "lat": 35.5271633,
+          "lng": -92.0354472
+        },
+        "D": {
+          "lat": 35.5271205,
+          "lng": -92.0356277
+        }
+      }
+    },
+    {
+      "hole": 5,
+      "par": 4,
+      "whiteYards": 358,
+      "greenCenter": {
+        "lat": 35.52655,
+        "lng": -92.0357
+      },
+      "greenFront": {
+        "lat": 35.5266578,
+        "lng": -92.0357927
+      },
+      "greenBack": {
+        "lat": 35.5264422,
+        "lng": -92.0356073
+      },
+      "greenDepthYards": 32,
+      "greenWidthYards": 21,
+      "pins": {
+        "A": {
+          "lat": 35.5266275,
+          "lng": -92.035705
+        },
+        "B": {
+          "lat": 35.526515,
+          "lng": -92.0357439
+        },
+        "C": {
+          "lat": 35.5265062,
+          "lng": -92.0356006
+        },
+        "D": {
+          "lat": 35.526556,
+          "lng": -92.0357422
+        }
+      }
+    },
+    {
+      "hole": 6,
+      "par": 5,
+      "whiteYards": 473,
+      "greenCenter": {
+        "lat": 35.52815,
+        "lng": -92.03715
+      },
+      "greenFront": {
+        "lat": 35.5280034,
+        "lng": -92.0371753
+      },
+      "greenBack": {
+        "lat": 35.5282966,
+        "lng": -92.0371247
+      },
+      "greenDepthYards": 36,
+      "greenWidthYards": 22,
+      "pins": {
+        "A": {
+          "lat": 35.5280755,
+          "lng": -92.0372241
+        },
+        "B": {
+          "lat": 35.5281583,
+          "lng": -92.0370772
+        },
+        "C": {
+          "lat": 35.5282546,
+          "lng": -92.0371931
+        },
+        "D": {
+          "lat": 35.5281036,
+          "lng": -92.037107
+        }
+      }
+    },
+    {
+      "hole": 7,
+      "par": 4,
+      "whiteYards": 374,
+      "greenCenter": {
+        "lat": 35.5278,
+        "lng": -92.03685
+      },
+      "greenFront": {
+        "lat": 35.5276664,
+        "lng": -92.036821
+      },
+      "greenBack": {
+        "lat": 35.5279336,
+        "lng": -92.036879
+      },
+      "greenDepthYards": 33,
+      "greenWidthYards": 21,
+      "pins": {
+        "A": {
+          "lat": 35.5277281,
+          "lng": -92.0368858
+        },
+        "B": {
+          "lat": 35.5278167,
+          "lng": -92.0367921
+        },
+        "C": {
+          "lat": 35.5278739,
+          "lng": -92.0369173
+        },
+        "D": {
+          "lat": 35.5277776,
+          "lng": -92.0367733
+        }
+      }
+    },
+    {
+      "hole": 8,
+      "par": 5,
+      "whiteYards": 448,
+      "greenCenter": {
+        "lat": 35.5268,
+        "lng": -92.0364
+      },
+      "greenFront": {
+        "lat": 35.526939,
+        "lng": -92.0364458
+      },
+      "greenBack": {
+        "lat": 35.526661,
+        "lng": -92.0363542
+      },
+      "greenDepthYards": 35,
+      "greenWidthYards": 22,
+      "pins": {
+        "A": {
+          "lat": 35.5268843,
+          "lng": -92.0363649
+        },
+        "B": {
+          "lat": 35.5267692,
+          "lng": -92.0364631
+        },
+        "C": {
+          "lat": 35.5267254,
+          "lng": -92.0363126
+        },
+        "D": {
+          "lat": 35.5268392,
+          "lng": -92.0364547
+        }
+      }
+    },
+    {
+      "hole": 9,
+      "par": 3,
+      "whiteYards": 153,
+      "greenCenter": {
+        "lat": 35.52572,
+        "lng": -92.03795
+      },
+      "greenFront": {
+        "lat": 35.5258197,
+        "lng": -92.0378793
+      },
+      "greenBack": {
+        "lat": 35.5256203,
+        "lng": -92.0380207
+      },
+      "greenDepthYards": 28,
+      "greenWidthYards": 18,
+      "pins": {
+        "A": {
+          "lat": 35.5257535,
+          "lng": -92.0378796
+        },
+        "B": {
+          "lat": 35.5257406,
+          "lng": -92.0379938
+        },
+        "C": {
+          "lat": 35.5256466,
+          "lng": -92.0379554
+        },
+        "D": {
+          "lat": 35.5257762,
+          "lng": -92.0379685
+        }
+      }
+    },
+    {
+      "hole": 10,
+      "par": 4,
+      "whiteYards": 267,
+      "greenCenter": {
+        "lat": 35.52695,
+        "lng": -92.03735
+      },
+      "greenFront": {
+        "lat": 35.5268675,
+        "lng": -92.0374626
+      },
+      "greenBack": {
+        "lat": 35.5270325,
+        "lng": -92.0372374
+      },
+      "greenDepthYards": 30,
+      "greenWidthYards": 20,
+      "pins": {
+        "A": {
+          "lat": 35.5269366,
+          "lng": -92.0374439
+        },
+        "B": {
+          "lat": 35.5269188,
+          "lng": -92.0373019
+        },
+        "C": {
+          "lat": 35.5270301,
+          "lng": -92.0373162
+        },
+        "D": {
+          "lat": 35.5268803,
+          "lng": -92.0373545
+        }
+      }
+    },
+    {
+      "hole": 11,
+      "par": 3,
+      "whiteYards": 116,
+      "greenCenter": {
+        "lat": 35.52622,
+        "lng": -92.03775
+      },
+      "greenFront": {
+        "lat": 35.52623,
+        "lng": -92.0378909
+      },
+      "greenBack": {
+        "lat": 35.52621,
+        "lng": -92.0376091
+      },
+      "greenDepthYards": 28,
+      "greenWidthYards": 18,
+      "pins": {
+        "A": {
+          "lat": 35.5262578,
+          "lng": -92.037817
+        },
+        "B": {
+          "lat": 35.526179,
+          "lng": -92.0377544
+        },
+        "C": {
+          "lat": 35.5262471,
+          "lng": -92.037666
+        },
+        "D": {
+          "lat": 35.5261826,
+          "lng": -92.0378047
+        }
+      }
+    },
+    {
+      "hole": 12,
+      "par": 4,
+      "whiteYards": 361,
+      "greenCenter": {
+        "lat": 35.52755,
+        "lng": -92.03625
+      },
+      "greenFront": {
+        "lat": 35.5274314,
+        "lng": -92.036341
+      },
+      "greenBack": {
+        "lat": 35.5276686,
+        "lng": -92.036159
+      },
+      "greenDepthYards": 34,
+      "greenWidthYards": 22,
+      "pins": {
+        "A": {
+          "lat": 35.5275133,
+          "lng": -92.0363496
+        },
+        "B": {
+          "lat": 35.5275334,
+          "lng": -92.0361793
+        },
+        "C": {
+          "lat": 35.5276528,
+          "lng": -92.0362425
+        },
+        "D": {
+          "lat": 35.5275047,
+          "lng": -92.0362371
+        }
+      }
+    },
+    {
+      "hole": 13,
+      "par": 3,
+      "whiteYards": 174,
+      "greenCenter": {
+        "lat": 35.52715,
+        "lng": -92.03555
+      },
+      "greenFront": {
+        "lat": 35.5271922,
+        "lng": -92.0356924
+      },
+      "greenBack": {
+        "lat": 35.5271078,
+        "lng": -92.0354076
+      },
+      "greenDepthYards": 30,
+      "greenWidthYards": 20,
+      "pins": {
+        "A": {
+          "lat": 35.5272111,
+          "lng": -92.0356087
+        },
+        "B": {
+          "lat": 35.5271008,
+          "lng": -92.0355612
+        },
+        "C": {
+          "lat": 35.5271633,
+          "lng": -92.0354472
+        },
+        "D": {
+          "lat": 35.5271205,
+          "lng": -92.0356277
+        }
+      }
+    },
+    {
+      "hole": 14,
+      "par": 4,
+      "whiteYards": 358,
+      "greenCenter": {
+        "lat": 35.52655,
+        "lng": -92.0357
+      },
+      "greenFront": {
+        "lat": 35.5266578,
+        "lng": -92.0357927
+      },
+      "greenBack": {
+        "lat": 35.5264422,
+        "lng": -92.0356073
+      },
+      "greenDepthYards": 32,
+      "greenWidthYards": 21,
+      "pins": {
+        "A": {
+          "lat": 35.5266275,
+          "lng": -92.035705
+        },
+        "B": {
+          "lat": 35.526515,
+          "lng": -92.0357439
+        },
+        "C": {
+          "lat": 35.5265062,
+          "lng": -92.0356006
+        },
+        "D": {
+          "lat": 35.526556,
+          "lng": -92.0357422
+        }
+      }
+    },
+    {
+      "hole": 15,
+      "par": 5,
+      "whiteYards": 473,
+      "greenCenter": {
+        "lat": 35.52815,
+        "lng": -92.03715
+      },
+      "greenFront": {
+        "lat": 35.5280034,
+        "lng": -92.0371753
+      },
+      "greenBack": {
+        "lat": 35.5282966,
+        "lng": -92.0371247
+      },
+      "greenDepthYards": 36,
+      "greenWidthYards": 22,
+      "pins": {
+        "A": {
+          "lat": 35.5280755,
+          "lng": -92.0372241
+        },
+        "B": {
+          "lat": 35.5281583,
+          "lng": -92.0370772
+        },
+        "C": {
+          "lat": 35.5282546,
+          "lng": -92.0371931
+        },
+        "D": {
+          "lat": 35.5281036,
+          "lng": -92.037107
+        }
+      }
+    },
+    {
+      "hole": 16,
+      "par": 4,
+      "whiteYards": 374,
+      "greenCenter": {
+        "lat": 35.5278,
+        "lng": -92.03685
+      },
+      "greenFront": {
+        "lat": 35.5276664,
+        "lng": -92.036821
+      },
+      "greenBack": {
+        "lat": 35.5279336,
+        "lng": -92.036879
+      },
+      "greenDepthYards": 33,
+      "greenWidthYards": 21,
+      "pins": {
+        "A": {
+          "lat": 35.5277281,
+          "lng": -92.0368858
+        },
+        "B": {
+          "lat": 35.5278167,
+          "lng": -92.0367921
+        },
+        "C": {
+          "lat": 35.5278739,
+          "lng": -92.0369173
+        },
+        "D": {
+          "lat": 35.5277776,
+          "lng": -92.0367733
+        }
+      }
+    },
+    {
+      "hole": 17,
+      "par": 5,
+      "whiteYards": 448,
+      "greenCenter": {
+        "lat": 35.5268,
+        "lng": -92.0364
+      },
+      "greenFront": {
+        "lat": 35.526939,
+        "lng": -92.0364458
+      },
+      "greenBack": {
+        "lat": 35.526661,
+        "lng": -92.0363542
+      },
+      "greenDepthYards": 35,
+      "greenWidthYards": 22,
+      "pins": {
+        "A": {
+          "lat": 35.5268843,
+          "lng": -92.0363649
+        },
+        "B": {
+          "lat": 35.5267692,
+          "lng": -92.0364631
+        },
+        "C": {
+          "lat": 35.5267254,
+          "lng": -92.0363126
+        },
+        "D": {
+          "lat": 35.5268392,
+          "lng": -92.0364547
+        }
+      }
+    },
+    {
+      "hole": 18,
+      "par": 3,
+      "whiteYards": 153,
+      "greenCenter": {
+        "lat": 35.52572,
+        "lng": -92.03795
+      },
+      "greenFront": {
+        "lat": 35.5258197,
+        "lng": -92.0378793
+      },
+      "greenBack": {
+        "lat": 35.5256203,
+        "lng": -92.0380207
+      },
+      "greenDepthYards": 28,
+      "greenWidthYards": 18,
+      "pins": {
+        "A": {
+          "lat": 35.5257535,
+          "lng": -92.0378796
+        },
+        "B": {
+          "lat": 35.5257406,
+          "lng": -92.0379938
+        },
+        "C": {
+          "lat": 35.5256466,
+          "lng": -92.0379554
+        },
+        "D": {
+          "lat": 35.5257762,
+          "lng": -92.0379685
+        }
+      }
+    }
+  ]
+}

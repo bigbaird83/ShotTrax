@@ -629,8 +629,8 @@ export function signalLabPleasantValleyHydrate(): {
 
 /**
  * Thunderbird Country Club (Heber Springs) is catalog-indexed.
- * OSM has a course outline and unlabeled greens only — no numbered
- * tee/green/hole. Pro miss + OSM miss → miss card. Never invent pins.
+ * Doc pin sheets supply greens + daily pins A–D. Tees are still
+ * missing — map miss-cards. Never invent tees or unlabeled OSM greens.
  */
 export function signalLabThunderbirdHydrate(): {
   thunderbirdHeberSpringsOnly: true;
@@ -638,8 +638,11 @@ export function signalLabThunderbirdHydrate(): {
   neverInventFromClubhouse: true;
   neverInventFromScorecardYards: true;
   neverInventUnlabeledGreens: true;
+  neverInventTees: true;
+  greensFromDocPinSheets: true;
   hardMissAllNine: true;
-  needsDocPinSheets: true;
+  needsDocPinSheets: false;
+  needsDocTeePins: true;
   cypressStillExclusive: true;
   greystoneStillExclusive: true;
   pleasantValleyStillExclusive: true;
@@ -650,8 +653,11 @@ export function signalLabThunderbirdHydrate(): {
     neverInventFromClubhouse: true,
     neverInventFromScorecardYards: true,
     neverInventUnlabeledGreens: true,
+    neverInventTees: true,
+    greensFromDocPinSheets: true,
     hardMissAllNine: true,
-    needsDocPinSheets: true,
+    needsDocPinSheets: false,
+    needsDocTeePins: true,
     cypressStillExclusive: true,
     greystoneStillExclusive: true,
     pleasantValleyStillExclusive: true,

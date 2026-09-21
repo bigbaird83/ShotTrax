@@ -14,6 +14,8 @@ import {
   showNearbyCourseList,
 } from '@/src/domain/coursePick';
 import { type CourseDistanceUnit } from '@/src/domain/courseDistance';
+import { useDb } from '@/src/db/DbProvider';
+import { getThunderbirdPinSheet, setThunderbirdPinSheet } from '@/src/db/repo';
 import { courseNeedsPinSheets } from '@/src/domain/missCard';
 import type { LatLng } from '@/src/domain/latLng';
 import { parseUsZip } from '@/src/domain/zipGeocode';
@@ -22,6 +24,7 @@ import { geocodeUsZip } from '@/src/services/geocodeZip';
 import { BigButton } from './BigButton';
 import { EmptyPanel } from './EmptyPanel';
 import { useColors } from './ColorThemeProvider';
+import { ThunderbirdPinSheetPicker } from './ThunderbirdPinSheetPicker';
 import { thumbZoneMin, type, type ColorPalette } from './theme';
 
 export type CoursePick = {
@@ -58,9 +61,11 @@ export function CoursePicker({
   courseDistanceUnit = 'mi',
   lastPlayedAtByCourse,
 }: Props) {
+  const { db, revision, bump } = useDb();
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const configured = isGolfCoursesApiConfigured();
+  const pinSheet = useMemo(() => getThunderbirdPinSheet(db), [db, revision]);
   const [busy, setBusy] = useState(false);
   const [teeBusy, setTeeBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -226,7 +231,16 @@ export function CoursePicker({
             state: selected.state,
             location: selected.location,
           }) ? (
-            <Text style={styles.warn}>{COPY.hardMissNeedPins}</Text>
+            <>
+              <Text style={styles.warn}>{COPY.hardMissNeedPins}</Text>
+              <ThunderbirdPinSheetPicker
+                selected={pinSheet}
+                onSelect={(sheet) => {
+                  setThunderbirdPinSheet(db, sheet);
+                  bump();
+                }}
+              />
+            </>
           ) : null}
           {selectedTee ? (
             <>

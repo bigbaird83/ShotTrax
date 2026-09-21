@@ -22,7 +22,7 @@ import {
   inventGreenFromClubhouse,
 } from './hydrate';
 
-test('local catalog indexes Thunderbird Country Club (Heber Springs) as 9 HARD-MISS holes', () => {
+test('local catalog indexes Thunderbird Country Club (Heber Springs) as 9 pin-sheet greens, tees HARD-MISS', () => {
   const entry = LOCAL_COURSE_CATALOG.find((row) => row.courseKey === THUNDERBIRD_HEBER_SPRINGS_AR_KEY);
   assert.ok(entry);
   assert.equal(entry?.name, 'Thunderbird Country Club');
@@ -35,11 +35,12 @@ test('local catalog indexes Thunderbird Country Club (Heber Springs) as 9 HARD-M
   const report = thunderbirdCourseReport();
   assert.equal(report.searchableName, 'Thunderbird Country Club');
   assert.equal(report.holeCount, 9);
-  assert.deepEqual(report.hydratedHoles, []);
+  assert.deepEqual(report.hydratedHoles, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
   assert.deepEqual(report.hardMissHoles, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
-  assert.equal(report.needsDocPinSheets, true);
+  assert.equal(report.needsDocPinSheets, false);
+  assert.equal(report.needsDocTeePins, true);
   assert.equal(
-    thunderbirdHoleSources().every((row) => row.status === 'hard-miss' && row.needsDocPinSheet),
+    thunderbirdHoleSources().every((row) => row.status === 'hydrated' && !row.needsDocPinSheet),
     true,
   );
 });
@@ -99,19 +100,22 @@ test('catalog nearby includes Thunderbird only when the phone is in range', () =
   assert.deepEqual(nearbyLocalCatalog({ lat: 37, lng: -122 }, 25), []);
 });
 
-test('catalog getCourse returns 9 miss-card holes — null tee/green, never the clubhouse', () => {
+test('catalog getCourse returns 9 Doc greens — null tees, never the clubhouse', () => {
   const detail = catalogCourseDetail('local:thunderbird-heber-springs-ar');
   assert.ok(detail);
   assert.equal(detail?.name, 'Thunderbird Country Club');
   assert.equal(detail?.holeCount, 9);
   assert.equal(detail?.holes.length, 9);
   assert.equal(detail?.tees.length, 0);
-  assert.equal(detail?.greenCentersAvailable, false);
+  assert.equal(detail?.greenCentersAvailable, true);
   assert.deepEqual(detail?.location, THUNDERBIRD_HEBER_CLUBHOUSE);
+  assert.deepEqual(detail?.holes[0]?.greenCentroid, { lat: 35.52695, lng: -92.03735 });
+  assert.equal(detail?.holes[0]?.par, 4);
+  assert.equal(detail?.holes[0]?.yards, 267);
   for (const hole of detail?.holes ?? []) {
     assert.equal(hole.teeCentroid, null);
-    assert.equal(hole.greenCentroid, null);
-    assert.equal(hole.par, null);
+    assert.equal(hole.greenCentroid != null, true);
+    assert.equal(hole.par != null, true);
     assert.notDeepEqual(hole.teeCentroid, THUNDERBIRD_HEBER_CLUBHOUSE);
     assert.notDeepEqual(hole.greenCentroid, THUNDERBIRD_HEBER_CLUBHOUSE);
   }
@@ -164,7 +168,7 @@ test('unconfigured client still searches the local catalog and does not call the
   const detail = await client.getCourse('local:thunderbird-heber-springs-ar');
   assert.equal(detail?.holeCount, 9);
   assert.equal(detail?.holes[0]?.teeCentroid, null);
-  assert.equal(detail?.holes[0]?.greenCentroid, null);
+  assert.deepEqual(detail?.holes[0]?.greenCentroid, { lat: 35.52695, lng: -92.03735 });
   assert.deepEqual(await client.searchCourses('pebble'), []);
   assert.equal(await client.getCourse('4'), null);
   assert.equal(calls, 0);

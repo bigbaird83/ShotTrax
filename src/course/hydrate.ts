@@ -1,6 +1,12 @@
 import { decideCourseCardPaint } from '../domain/courseCardPaint';
 import { haversineYards } from '../domain/haversine';
 import { isCourseCardLatLng, type LatLng } from '../domain/latLng';
+import {
+  loadThunderbirdPinBook,
+  thunderbirdInventTees,
+  thunderbirdMirrorHole,
+  thunderbirdPinHoleFor,
+} from '../domain/thunderbirdPins';
 import type { CourseLayoutSeed } from './layout';
 import { rememberResolvedTee } from './osmOverlay';
 import cypressOsm from './hydrates/cypress-creek-cabot-ar.json';
@@ -46,8 +52,14 @@ export type CourseHydrateGreen = {
 export type CourseHydrateHole = {
   hole: number;
   par: number | null;
-  tee: CourseHydrateTee;
+  yards: number | null;
+  /** Null when Doc has not dropped tee pins — never invented. */
+  tee: CourseHydrateTee | null;
   green: CourseHydrateGreen;
+  greenFront: CourseHydrateGreen | null;
+  greenBack: CourseHydrateGreen | null;
+  greenDepthYards: number | null;
+  greenWidthYards: number | null;
 };
 
 export type CourseHydrate = {
@@ -310,6 +322,11 @@ export function resolveCourseHydrateKey(course: CourseHydrateMatch): string | nu
   return null;
 }
 
+function parsePar(value: unknown): number | null {
+  const parRaw = asFiniteNumber(value);
+  return parRaw != null && Number.isInteger(parRaw) && parRaw >= 3 && parRaw <= 6 ? parRaw : null;
+}
+
 function parseHydrateHole(raw: unknown): CourseHydrateHole | null {
   const record = asRecord(raw);
   if (!record) return null;
@@ -317,18 +334,47 @@ function parseHydrateHole(raw: unknown): CourseHydrateHole | null {
   if (hole == null || !Number.isInteger(hole) || hole < 1 || hole > 18) return null;
   const teePoint = pointFrom(record.tee);
   const greenPoint = pointFrom(record.green);
-  if (!teePoint || !greenPoint) return null;
-  if (!hydrateHolePassesGates({ tee: teePoint, green: greenPoint })) return null;
-  const parRaw = asFiniteNumber(record.par);
-  const par = parRaw != null && Number.isInteger(parRaw) && parRaw >= 3 && parRaw <= 6 ? parRaw : null;
+  if (!greenPoint || isClubhousePin(greenPoint)) return null;
+  if (teePoint && isClubhousePin(teePoint)) return null;
+  if (teePoint && !hydrateHolePassesGates({ tee: teePoint, green: greenPoint })) return null;
   const teeRecord = asRecord(record.tee);
   const label = asString(teeRecord?.label) ?? 'default';
   return {
     hole,
-    par,
-    tee: { lat: teePoint.lat, lng: teePoint.lng, label },
+    par: parsePar(record.par),
+    yards: asFiniteNumber(record.yards),
+    tee: teePoint ? { lat: teePoint.lat, lng: teePoint.lng, label } : null,
     green: { lat: greenPoint.lat, lng: greenPoint.lng },
+    greenFront: pointFrom(record.greenFront),
+    greenBack: pointFrom(record.greenBack),
+    greenDepthYards: asFiniteNumber(record.greenDepthYards),
+    greenWidthYards: asFiniteNumber(record.greenWidthYards),
   };
+}
+
+/** Doc pin-sheet greens + daily-pin metadata. Tees stay null — never invented. */
+export function foldThunderbirdPinSheets(hydrate: CourseHydrate): CourseHydrate {
+  if (hydrate.courseKey !== THUNDERBIRD_HEBER_SPRINGS_AR_KEY) return hydrate;
+  if (thunderbirdInventTees()) return hydrate;
+  const book = loadThunderbirdPinBook();
+  const holes: CourseHydrateHole[] = [];
+  for (let n = 1; n <= 9; n += 1) {
+    const pin = thunderbirdPinHoleFor(n, book);
+    const green = pin?.greenCenter;
+    if (!green || !isCourseCardLatLng(green) || isClubhousePin(green)) continue;
+    holes.push({
+      hole: n,
+      par: parsePar(pin.par),
+      yards: pin.whiteYards,
+      tee: null,
+      green: { lat: green.lat, lng: green.lng },
+      greenFront: pin.greenFront && isCourseCardLatLng(pin.greenFront) ? pin.greenFront : null,
+      greenBack: pin.greenBack && isCourseCardLatLng(pin.greenBack) ? pin.greenBack : null,
+      greenDepthYards: pin.greenDepthYards,
+      greenWidthYards: pin.greenWidthYards,
+    });
+  }
+  return { ...hydrate, holes };
 }
 
 export function parseCourseHydrate(raw: unknown): CourseHydrate | null {
@@ -368,7 +414,10 @@ export function loadCourseHydrate(courseKey: string | null | undefined): CourseH
   if (!key) return null;
   const raw = REGISTRY[key];
   if (raw == null) return null;
-  return parseCourseHydrate(raw);
+  const parsed = parseCourseHydrate(raw);
+  if (!parsed) return null;
+  if (key === THUNDERBIRD_HEBER_SPRINGS_AR_KEY) return foldThunderbirdPinSheets(parsed);
+  return parsed;
 }
 
 export function loadHydrateForCourse(course: CourseHydrateMatch): CourseHydrate | null {
@@ -384,11 +433,17 @@ export function hydrateHoleFor(
   holeNumber: number,
 ): CourseHydrateHole | null {
   if (!hydrate) return null;
-  return hydrate.holes.find((hole) => hole.hole === holeNumber) ?? null;
+  const found = hydrate.holes.find((hole) => hole.hole === holeNumber);
+  if (found) return found;
+  if (hydrate.courseKey !== THUNDERBIRD_HEBER_SPRINGS_AR_KEY) return null;
+  const mirror = thunderbirdMirrorHole(holeNumber);
+  if (mirror === holeNumber) return null;
+  return hydrate.holes.find((hole) => hole.hole === mirror) ?? null;
 }
 
 function rememberHydrateHoles(hydrate: CourseHydrate, courseId?: string | null): void {
   for (const hole of hydrate.holes) {
+    if (!hole.tee) continue;
     const tee = { lat: hole.tee.lat, lng: hole.tee.lng };
     const green = { lat: hole.green.lat, lng: hole.green.lng };
     rememberResolvedTee({ courseId: hydrate.courseKey, holeNumber: hole.hole, green }, tee);
@@ -441,12 +496,17 @@ export function resolveHydrateTeeGreen(args: CourseHydrateMatch & {
   if (!hole) {
     return { tee: args.tee, green: args.green, usedHydrate: false, courseKey };
   }
-  const tee = { lat: hole.tee.lat, lng: hole.tee.lng };
   const green = { lat: hole.green.lat, lng: hole.green.lng };
-  if (!hydrateHolePassesGates({ tee, green })) {
+  if (!isCourseCardLatLng(green) || isClubhousePin(green)) {
     return { tee: args.tee, green: args.green, usedHydrate: false, courseKey };
   }
-  return { tee, green, usedHydrate: true, courseKey };
+  if (hole.tee) {
+    const tee = { lat: hole.tee.lat, lng: hole.tee.lng };
+    if (hydrateHolePassesGates({ tee, green })) {
+      return { tee, green, usedHydrate: true, courseKey };
+    }
+  }
+  return { tee: args.tee, green, usedHydrate: true, courseKey };
 }
 
 /** Fill missing / failing layout holes from hydrate. Existing sane Pro coords win. */
@@ -489,12 +549,12 @@ export function applyCourseHydrateToLayout(
       return {
         number: n,
         par: row?.par ?? hyd?.par ?? null,
-        yards: row?.yards ?? null,
+        yards: row?.yards ?? hyd?.yards ?? null,
         handicap: row?.handicap ?? null,
         greenCentroid: resolved.green,
-        greenFront: row?.greenFront ?? null,
-        greenBack: row?.greenBack ?? null,
-        greenDepthYards: row?.greenDepthYards ?? null,
+        greenFront: row?.greenFront ?? hyd?.greenFront ?? null,
+        greenBack: row?.greenBack ?? hyd?.greenBack ?? null,
+        greenDepthYards: row?.greenDepthYards ?? hyd?.greenDepthYards ?? null,
         teeCentroid: resolved.tee,
       };
     });

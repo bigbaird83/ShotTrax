@@ -3,7 +3,7 @@
   "displayName": "Thunderbird Country Club",
   "locality": "Heber Springs, AR",
   "source": "osm",
-  "sourceRef": "osm:way/296944937 Thunderbird Golf Course (Nominatim); Golf Courses / Pro API unauthenticated (no key in env) — no scorecard/green-centers used; 0 golf=tee; 0 golf=hole; 8 unlabeled golf=green ways (628029888, 628029892, 628029896, 628029897, 628029899, 628029900, 628029901, 628029902) unused — no hole refs, never paired; hole count 9 from club listing (plays as 18); HARD-MISS H1–H9 need Doc pin sheets",
+  "sourceRef": "osm:way/296944937 Thunderbird Golf Course (Nominatim); Golf Courses / Pro API unauthenticated (no key in env) — no scorecard/green-centers used; 0 golf=tee; 0 golf=hole; 8 unlabeled golf=green ways (628029888, 628029892, 628029896, 628029897, 628029899, 628029900, 628029901, 628029902) unused — no hole refs, never paired; hole count 9 from club listing (plays as 18); Doc pin sheets A–D greens + daily pins H1–H9 (10–18 mirror 1–9); tees HARD-MISS — no tee pins",
   "fetchedAt": "2026-09-21T00:53:48Z",
   "holes": [],
   "holeSources": [

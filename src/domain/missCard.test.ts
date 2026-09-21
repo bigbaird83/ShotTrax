@@ -8,11 +8,13 @@ import {
   missCardInventsPins,
   planMissCardCopy,
   thunderbirdPinsAreBlocked,
+  thunderbirdTeesAreBlocked,
 } from './missCard';
 
-test('Thunderbird Heber Springs is HARD-MISS need-pins — never invented coords', () => {
+test('Thunderbird Heber Springs is HARD-MISS need tee pins — greens from Doc, never invented', () => {
   assert.equal(missCardInventsPins(), false);
-  assert.equal(thunderbirdPinsAreBlocked(), true);
+  assert.equal(thunderbirdPinsAreBlocked(), false);
+  assert.equal(thunderbirdTeesAreBlocked(), true);
   assert.equal(
     courseNeedsPinSheets({
       courseKey: THUNDERBIRD_HEBER_SPRINGS_AR_KEY,
@@ -46,10 +48,15 @@ test('Thunderbird Heber Springs is HARD-MISS need-pins — never invented coords
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const picker = readFileSync(new URL('../ui/CoursePicker.tsx', import.meta.url), 'utf8');
+  const settings = readFileSync(new URL('../../app/settings.tsx', import.meta.url), 'utf8');
   assert.match(map, /COPY\.courseCardMissingFrame/);
   assert.match(map, /missCopy/);
   assert.match(hole, /planMissCardCopy/);
   assert.match(hole, /courseNeedsPinSheets/);
   assert.match(picker, /COPY\.hardMissNeedPins/);
+  assert.match(picker, /ThunderbirdPinSheetPicker/);
+  assert.match(settings, /ThunderbirdPinSheetPicker/);
+  assert.match(hole, /ThunderbirdPinSheetPicker/);
+  assert.match(hole, /thunderbirdDailyPin/);
   assert.doesNotMatch(hole, /inventGreen|unlabeled green|THUNDERBIRD_HEBER_CLUBHOUSE/);
 });
