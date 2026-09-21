@@ -1,23 +1,43 @@
-# Read-only Golf Courses API Pro green-centers smoke (course 4 = Bowling Green CC).
-# Runs only when GitHub secret GOLF_COURSES_API_KEY is present.
-# Never fails the job / never blocks TF 60. Box TLS often fails (UNEXPECTED_EOF);
-# prefer the EAS `eas-build-post-install` hook for a real builder result.
+# Golf Courses API Pro green-centers probe (read-only).
+# Box TLS to golfcoursesapi.com often fails (UNEXPECTED_EOF); prefer Actions/EAS.
+# Never invents greens. Never prints the API key. Always exits 0 (no TF block).
 name: GCA greens Pro probe
 
 on:
   workflow_dispatch:
+    inputs:
+      course_id:
+        description: 'GCA course id (north-hills mode)'
+        required: false
+        default: '14446'
+        type: string
+      mode:
+        description: 'north-hills (course probe + artifact) or smoke (course 4)'
+        required: false
+        default: 'north-hills'
+        type: choice
+        options:
+          - north-hills
+          - smoke
+  # Same-repo pull_request often has no Actions secret; push to main does.
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/gca-green-centers-probe.mjs'
+      - 'scripts/gca-north-hills-probe.mjs'
+      - '.github/workflows/gca-greens-probe.yml'
   pull_request:
     paths:
       - 'scripts/gca-green-centers-probe.mjs'
       - 'scripts/gca-green-centers-probe.test.ts'
+      - 'scripts/gca-north-hills-probe.mjs'
       - '.github/workflows/gca-greens-probe.yml'
       - 'package.json'
 
 jobs:
   probe:
-    name: Course 4 green-centers
+    name: GCA greens probe
     runs-on: ubuntu-latest
-    if: ${{ secrets.GOLF_COURSES_API_KEY != '' }}
     permissions:
       contents: read
     steps:
@@ -25,7 +45,46 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Probe Bowling Green CC green-centers (read-only)
+
+      - name: Skip if API key missing
+        id: keycheck
+        env:
+          GOLF_COURSES_API_KEY: ${{ secrets.GOLF_COURSES_API_KEY }}
+        run: |
+          if [ -z "$GOLF_COURSES_API_KEY" ]; then
+            echo "NO_KEY"
+            echo "GCA_PROBE=NO_KEY"
+            echo "has_key=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "has_key=true" >> "$GITHUB_OUTPUT"
+
+      - name: North Hills greens probe
+        if: >-
+          steps.keycheck.outputs.has_key == 'true' &&
+          (github.event_name != 'workflow_dispatch' || inputs.mode != 'smoke')
+        env:
+          GOLF_COURSES_API_KEY: ${{ secrets.GOLF_COURSES_API_KEY }}
+          COURSE_ID: ${{ inputs.course_id || '14446' }}
+          OUT_DIR: north-hills-gca-out
+        run: node scripts/gca-north-hills-probe.mjs
+        continue-on-error: true
+
+      - name: Upload North Hills probe artifact
+        if: >-
+          steps.keycheck.outputs.has_key == 'true' &&
+          (github.event_name != 'workflow_dispatch' || inputs.mode != 'smoke')
+        uses: actions/upload-artifact@v4
+        with:
+          name: north-hills-gca-out
+          path: north-hills-gca-out/
+          if-no-files-found: warn
+
+      - name: Smoke probe (course 4 Bowling Green CC)
+        if: >-
+          steps.keycheck.outputs.has_key == 'true' &&
+          github.event_name == 'workflow_dispatch' &&
+          inputs.mode == 'smoke'
         env:
           GOLF_COURSES_API_KEY: ${{ secrets.GOLF_COURSES_API_KEY }}
         run: node scripts/gca-green-centers-probe.mjs
