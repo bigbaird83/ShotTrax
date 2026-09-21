@@ -6,7 +6,7 @@ import { AccessibilityInfo, Image, StyleSheet, View } from 'react-native';
 
 /** Doc’s open clip, already trimmed to the first 3.0s. */
 const OPEN_CLIP = require('../../assets/splash/splash-open-3s.mp4') as number;
-/** Last frame of the 3s clip — Reduce Motion still (no motion). */
+/** First frame of the 3s clip — native Expo splash, pre-video, and Reduce Motion. */
 const OPEN_STILL = require('../../assets/splash/splash-open-still.png');
 
 const SPLASH_BG = '#000000';
@@ -106,6 +106,7 @@ function VideoSplash({ onDone }: { onDone: () => void }) {
       accessibilityRole="image"
       accessibilityLabel="ShotTraxx"
       style={[styles.wrap, StyleSheet.absoluteFill]}>
+      <Image source={OPEN_STILL} style={StyleSheet.absoluteFill} resizeMode="contain" />
       <VideoView
         player={player}
         style={StyleSheet.absoluteFill}
