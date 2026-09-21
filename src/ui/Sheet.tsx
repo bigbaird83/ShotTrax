@@ -9,16 +9,24 @@ type Props = {
   visible: boolean;
   title: string;
   onClose: () => void;
+  /** iOS: fires after the slide-off. Menu Share waits for this. */
+  onDismiss?: () => void;
   children: ReactNode;
 };
 
 /** Layout O — full-screen course / tee / bag / drop sheets. */
-export function FullSheet({ visible, title, onClose, children }: Props) {
+export function FullSheet({ visible, title, onClose, onDismiss, children }: Props) {
   const insets = useSafeAreaInsets();
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="fullScreen"
+      onRequestClose={onClose}
+      onDismiss={onDismiss}
+    >
       <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <View style={styles.bar}>
           <Text style={styles.title}>{title}</Text>

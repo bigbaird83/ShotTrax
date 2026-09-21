@@ -73,6 +73,36 @@ export function toastAfterShareAttempt(opened: boolean): string | null {
   return opened ? null : shareFailToast();
 }
 
+/**
+ * Menu is a fullScreen Modal. RN Share.share presents on the hole RNSScreen,
+ * which is off-hierarchy until that Modal finishes dismissing. Presenting
+ * earlier is a silent iOS drop — the Promise never settles, so no sheet and
+ * no fail toast.
+ */
+export function menuShareMustWaitForDismiss(): true {
+  return true;
+}
+
+/** Slack after Menu close if Modal onDismiss never fires (Android). iOS slide is ~300ms. */
+export const MENU_SHARE_FALLBACK_MS = 600;
+
+export function shouldOpenShareSheet(args: {
+  queued: boolean;
+  menuVisible: boolean;
+  menuDismissed: boolean;
+}): boolean {
+  return args.queued && !args.menuVisible && args.menuDismissed;
+}
+
+/** Any throw / reject becomes the fail toast — never a silent no-op. */
+export async function toastFromShareAttempt(open: () => Promise<boolean>): Promise<string | null> {
+  try {
+    return toastAfterShareAttempt(await open());
+  } catch {
+    return shareFailToast();
+  }
+}
+
 function isClosedDistanceShot(shot: SpectatorShotInput): boolean {
   if (shot.endedAt == null) return false;
   if (shot.source === 'no_gps') return false;

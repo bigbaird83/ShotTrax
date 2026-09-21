@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { findNodeHandle, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { getCourseDataClient } from '@/src/course/client';
 import { formatParLabel, formatSiLabel, formatTeeMeta } from '@/src/course/layout';
 import { teePointForHole, teePointFromHoleFeature } from '@/src/course/osmOverlay';
@@ -13,7 +13,7 @@ import { planNerdOut } from '@/src/domain/nerdOut';
 import { formatPenaltyRow, totalPenaltyStrokes } from '@/src/domain/penalty';
 import { COPY, holeOutClosedOnShot } from '@/src/domain/playerCopy';
 import { holeClosedByShot } from '@/src/domain/putts';
-import { toastAfterShareAttempt } from '@/src/domain/spectator';
+import { toastFromShareAttempt } from '@/src/domain/spectator';
 import { shareRoundSnapshot } from '@/src/services/shareRound';
 import { reconcileHoleScore } from '@/src/domain/scoreReconcile';
 import { useLiveFix } from '@/src/services/useLiveFix';
@@ -33,6 +33,7 @@ export default function RoundSummaryScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [nerdOpen, setNerdOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const shareAnchorRef = useRef<View>(null);
   const [osmOverlay, setOsmOverlay] = useState<OsmOverlay | null>(null);
   const round = useMemo(() => getRound(db, id), [db, id, revision]);
   const holes = useMemo(() => (round ? listHoles(db, round.id) : []), [db, round, revision]);
@@ -188,16 +189,18 @@ export default function RoundSummaryScreen() {
       })}
 
       <BigButton label={COPY.nerdOut} variant="secondary" onPress={() => setNerdOpen(true)} />
-      <BigButton
-        label={COPY.share}
-        variant="secondary"
-        onPress={() => {
-          void shareRoundSnapshot(db, id).then((opened) => {
-            const fail = toastAfterShareAttempt(opened);
-            if (fail) setToast(fail);
-          });
-        }}
-      />
+      <View ref={shareAnchorRef} collapsable={false}>
+        <BigButton
+          label={COPY.share}
+          variant="secondary"
+          onPress={() => {
+            const anchor = findNodeHandle(shareAnchorRef.current);
+            void toastFromShareAttempt(() => shareRoundSnapshot(db, id, { anchor })).then((fail) => {
+              if (fail) setToast(fail);
+            });
+          }}
+        />
+      </View>
       {toast ? <Text style={styles.warn}>{toast}</Text> : null}
       <BigButton label={COPY.home} variant="ghost" onPress={() => router.replace('/')} />
 

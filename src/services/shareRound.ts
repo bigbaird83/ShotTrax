@@ -1,5 +1,5 @@
 import * as Linking from 'expo-linking';
-import { Share } from 'react-native';
+import { InteractionManager, Share } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { ensureRoundShareToken, getClubMap, getHole, getRound, listHoles, listShotsForHole } from '../db/repo';
 import {
@@ -10,6 +10,13 @@ import {
   type SpectatorPayload,
 } from '../domain/spectator';
 import { putSharedPayload } from './shareSync';
+
+/** Present only after the current Modal/nav transition has released the host screen. */
+export function waitForShareHost(run: () => void): void {
+  InteractionManager.runAfterInteractions(() => {
+    requestAnimationFrame(run);
+  });
+}
 
 export function buildRoundSpectatorPayload(
   db: SQLiteDatabase,
@@ -55,15 +62,20 @@ export function spectatorShareUrl(payload: SpectatorPayload): string {
 export async function shareRoundSnapshot(
   db: SQLiteDatabase,
   roundId: string,
-  args?: { currentHoleNumber?: number },
+  args?: { currentHoleNumber?: number; anchor?: number | null },
 ): Promise<boolean> {
   const payload = buildRoundSpectatorPayload(db, roundId, args);
   if (!payload) return false;
   void putSharedPayload(payload.token, payload);
   const url = spectatorShareUrl(payload);
   const message = `${formatSpectatorShareText(payload)}\n\n${url}`;
+  const options = args?.anchor != null ? { anchor: args.anchor } : undefined;
   try {
-    await Share.share({ message, url, title: 'ShotTraxx' });
+    await new Promise<void>((resolve, reject) => {
+      waitForShareHost(() => {
+        Share.share({ message, url, title: 'ShotTraxx' }, options).then(() => resolve(), reject);
+      });
+    });
     return true;
   } catch {
     return false;

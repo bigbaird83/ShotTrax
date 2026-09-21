@@ -1,7 +1,7 @@
 import * as Device from 'expo-device';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, findNodeHandle, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { prefetchCourseHydrateOnce, resolveHydrateTeeGreen } from '@/src/course/hydrate';
 import { ensureHoleTeeGreen } from '@/src/course/prefetch';
@@ -121,7 +121,7 @@ import type { Club, PenaltyReason } from '@/src/domain/types';
 import { lastLandingMark, markToGreen, planPlayHeaderYards, toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
 import { yardsToGreen } from '@/src/sensing/yardsToGreen';
 import { describeGpsSource } from '@/src/services/location';
-import { toastAfterShareAttempt } from '@/src/domain/spectator';
+import { MENU_SHARE_FALLBACK_MS, toastFromShareAttempt } from '@/src/domain/spectator';
 import { shareRoundSnapshot } from '@/src/services/shareRound';
 import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, undoShotEdit, deleteHoleShot } from '@/src/services/shotActions';
 import { useLiveFix } from '@/src/services/useLiveFix';
@@ -169,6 +169,9 @@ export default function HoleScreen() {
   const [scorecardOpen, setScorecardOpen] = useState(false);
   const [selectedClubId, setSelectedClubId] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuButtonRef = useRef<View>(null);
+  const pendingShareRef = useRef(false);
+  const shareFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [playFrameNonce, setPlayFrameNonce] = useState(0);
   const [mapFramed, setMapFramed] = useState(false);
   const [dockPassMap, setDockPassMap] = useState(false);
@@ -708,6 +711,35 @@ export default function HoleScreen() {
     setMenuOpen(true);
     router.setParams({ menu: undefined });
   }, [menuParam, readOnly]);
+
+  const openQueuedShare = useCallback(() => {
+    if (!pendingShareRef.current) return;
+    pendingShareRef.current = false;
+    if (shareFallbackRef.current) {
+      clearTimeout(shareFallbackRef.current);
+      shareFallbackRef.current = null;
+    }
+    const anchor = findNodeHandle(menuButtonRef.current);
+    void toastFromShareAttempt(() =>
+      shareRoundSnapshot(db, id, { currentHoleNumber: holeNumber, anchor }),
+    ).then((fail) => {
+      if (fail) setToast(fail);
+    });
+  }, [db, id, holeNumber]);
+
+  const queueMenuShare = useCallback(() => {
+    pendingShareRef.current = true;
+    setMenuOpen(false);
+    if (shareFallbackRef.current) clearTimeout(shareFallbackRef.current);
+    shareFallbackRef.current = setTimeout(openQueuedShare, MENU_SHARE_FALLBACK_MS);
+  }, [openQueuedShare]);
+
+  useEffect(
+    () => () => {
+      if (shareFallbackRef.current) clearTimeout(shareFallbackRef.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!puttOpen) return;
@@ -1308,7 +1340,12 @@ export default function HoleScreen() {
           ) : (
             <View>
               <View style={styles.stickyInner}>
-                <Pressable onPress={() => setMenuOpen(true)} style={styles.menuButton} accessibilityRole="button">
+                <Pressable
+                  ref={menuButtonRef}
+                  onPress={() => setMenuOpen(true)}
+                  style={styles.menuButton}
+                  accessibilityRole="button"
+                  collapsable={false}>
                   <Text style={styles.menuButtonText}>{COPY.menu}</Text>
                 </Pressable>
                 <View style={{ flex: 1 }}>
@@ -1643,6 +1680,7 @@ export default function HoleScreen() {
       <FullSheet
         visible={menuOpen}
         title={COPY.menu}
+        onDismiss={openQueuedShare}
         onClose={() => {
           setMenuOpen(false);
           bumpPlayFrame();
@@ -1685,13 +1723,7 @@ export default function HoleScreen() {
           <BigButton
             label={COPY.share}
             variant="ghost"
-            onPress={() => {
-              setMenuOpen(false);
-              void shareRoundSnapshot(db, id, { currentHoleNumber: holeNumber }).then((opened) => {
-                const fail = toastAfterShareAttempt(opened);
-                if (fail) setToast(fail);
-              });
-            }}
+            onPress={queueMenuShare}
           />
           <BigButton
             label={COPY.undoLast}
