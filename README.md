@@ -4,7 +4,7 @@ Phone GPS golf shot tracker (no club sensors). **This branch is P5.x** on P1–P
 
 P5.x is the on-course hero: **pick a club to mark GPS**, sticky **Same club** one-tap, Drop vs Penalty, delete round, haptics, and a thumb-zone layout. **Player voice only** on screen — no API/OSM/GPS-meter footnotes. F/M/B distances show only when course data includes front and back pins (never invented from a single green). Rating and slope sit on the tee. An Apple Watch companion picks clubs (top-3 + bag + Same club) and finishes the hole with the same Putter → buckets → **Made it** flow. StoreKit, Photos, and microphone stay out of scope.
 
-User-facing name is **ShotTraxx** (`app.json` `expo.name`, iOS `CFBundleDisplayName`, Android `label` / home screen). Bundle ID `com.shottrax.app` and Expo slug `shottrax` stay unchanged (App Store ID). Home-screen icon is the locked Build 36 night-green Shot/Traxx mark at `assets/images/icon.png` (see `assets/images/README.md`). Splash / launch still shows the full wordmark **ShotTraxx**.
+User-facing name is **ShotTraxx** (`app.json` `expo.name`, iOS `CFBundleDisplayName`, Android `label` / home screen). Bundle ID `com.shottrax.app` and Expo slug `shottrax` stay unchanged (App Store ID). Home-screen icon is the locked Build 36 night-green Shot/Traxx mark at `assets/images/icon.png` (see `assets/images/README.md`). Splash / launch still is the first frame of Doc’s 3s open clip (new mark), not the old fairway wordmark.
 
 ## Run (iOS first)
 
@@ -31,7 +31,7 @@ To install a store-signed build with Watch on a physical iPhone, use **TestFligh
 
 ## Splash
 
-Cold start still shows the native Expo splash (`splash-icon.png`). After JS boots, `BrandedSplash` plays Doc’s muted 3.0s open clip (`assets/splash/splash-open-3s.mp4`) and then enters the app. Reduce Motion skips the clip and shows the last-frame still, then the same onDone path.
+Cold start still shows the native Expo splash (`splash-icon.png` = first frame of the 3s clip, black `#000000`). After JS boots, `BrandedSplash` keeps that still until the muted 3.0s open clip (`assets/splash/splash-open-3s.mp4`) paints, then enters the app. Reduce Motion skips the clip and shows the same first-frame still, then the same onDone path.
 
 ## Golf Courses API (course picker)
 
