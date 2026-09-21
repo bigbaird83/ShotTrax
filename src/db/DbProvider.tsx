@@ -4,8 +4,14 @@ import { ActivityIndicator, Text, View } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import * as SQLite from 'expo-sqlite';
 import { attachGolfApiCachePersist } from '../course/golfapi';
+import { attachCoursePaintCachePersist } from '../course/paintCache';
 import { migrate } from './schema';
-import { getGolfApiHydrateCache, setGolfApiHydrateCache } from './repo';
+import {
+  getCoursePaintCache,
+  getGolfApiHydrateCache,
+  setCoursePaintCache,
+  setGolfApiHydrateCache,
+} from './repo';
 import { colors } from '../ui/theme';
 
 type DbContextValue = {
@@ -28,6 +34,10 @@ export function DbProvider({ children }: { children: ReactNode }) {
       attachGolfApiCachePersist({
         load: () => getGolfApiHydrateCache(opened),
         save: (json) => setGolfApiHydrateCache(opened, json),
+      });
+      attachCoursePaintCachePersist({
+        load: () => getCoursePaintCache(opened),
+        save: (json) => setCoursePaintCache(opened, json),
       });
       setDb(opened);
     } catch (err) {

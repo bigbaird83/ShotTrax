@@ -6,7 +6,6 @@ import {
   nearbyLocalCatalog,
   searchLocalCatalog,
 } from './catalog';
-import { fillCourseDetailFromGolfApi } from './hydrate';
 import { fetchOsmOverlay } from './osmOverlay';
 import {
   mergeGreenCenters,
@@ -16,7 +15,15 @@ import {
 } from './parse';
 import type { CourseDataClient, CourseDetail, CourseSummary, OsmOverlayQuery } from './types';
 import type { LatLng } from '../domain/latLng';
+import { isCourseCardLatLng } from '../domain/latLng';
 import { planCourseSearchParams } from '../domain/coursePick';
+import { getSharedCoursePaintCache } from './paintCache';
+import {
+  applyCoursePaintToDetail,
+  loadGolfApiPaintCandidate,
+  loadOsmOpenGolfCandidate,
+  resolveCoursePaint,
+} from './waterfall';
 
 export const GOLF_COURSES_API_BASE = 'https://golfcoursesapi.com/api/v1';
 const DEFAULT_RADIUS_KM = 25;
@@ -136,45 +143,47 @@ export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataCli
       const detail = parseCourseDetail(detailRes.json);
       if (!detail) return null;
 
-      const greensRes = await apiGet(`/courses/${encoded}/green-centers`, key, fetchImpl);
-      if (greensRes.status === 403 || greensRes.status === 404) {
-        return fillCourseDetailFromGolfApi(detail, {
-          name: detail.name,
-          city: detail.city,
-          state: detail.state,
-          location: detail.location,
-          courseKey: detail.id,
-        });
-      }
-      if (greensRes.status < 200 || greensRes.status >= 300) {
-        return fillCourseDetailFromGolfApi(detail, {
-          name: detail.name,
-          city: detail.city,
-          state: detail.state,
-          location: detail.location,
-          courseKey: detail.id,
-        });
-      }
-      const greens = parseGreenCenters(greensRes.json);
-      const holes = mergeGreenCenters(detail.holes, greens);
-      const tees = detail.tees.map((tee) => ({
-        ...tee,
-        holes: mergeGreenCenters(tee.holes, greens),
-      }));
-      return fillCourseDetailFromGolfApi(
-        {
-          ...detail,
-          holes,
-          tees,
+      const match = {
+        name: detail.name,
+        city: detail.city,
+        state: detail.state,
+        location: detail.location,
+        courseKey: detail.id,
+      };
+      let gcaRows: ReturnType<typeof parseGreenCenters> | null = null;
+      const paint = await resolveCoursePaint(match, {
+        loadOsm: async () => loadOsmOpenGolfCandidate(match),
+        loadGca: async () => {
+          const greensRes = await apiGet(`/courses/${encoded}/green-centers`, key, fetchImpl);
+          if (greensRes.status < 200 || greensRes.status >= 300) return null;
+          gcaRows = parseGreenCenters(greensRes.json);
+          if (gcaRows.length === 0) return null;
+          return {
+            source: 'gca',
+            numHoles: detail.holeCount === 9 || detail.holeCount === 18 ? detail.holeCount : null,
+            holes: gcaRows.map((row) => {
+              const existing = detail.holes.find((hole) => hole.holeNumber === row.holeNumber);
+              const tee = existing && isCourseCardLatLng(existing.teeCentroid) ? existing.teeCentroid : null;
+              return { hole: row.holeNumber, tee, green: row.greenCentroid };
+            }),
+          };
         },
-        {
-          name: detail.name,
-          city: detail.city,
-          state: detail.state,
-          location: detail.location,
-          courseKey: detail.id,
-        },
-      );
+        loadGolfApi: () => loadGolfApiPaintCandidate(match, { fetchImpl }),
+        cache: getSharedCoursePaintCache(),
+      });
+      if (!paint.ok) return detail;
+      const base =
+        paint.source === 'gca' && !paint.fromCache && gcaRows
+          ? {
+              ...detail,
+              holes: mergeGreenCenters(detail.holes, gcaRows),
+              tees: detail.tees.map((tee) => ({
+                ...tee,
+                holes: mergeGreenCenters(tee.holes, gcaRows ?? []),
+              })),
+            }
+          : detail;
+      return applyCoursePaintToDetail(base, paint);
     },
 
     fetchOsmOverlay(query: OsmOverlayQuery) {

@@ -7,8 +7,15 @@ import {
   rememberResolvedTee,
   resolveOverlayTee,
 } from './osmOverlay';
-import { fetchGolfApiHydrate, getGolfApiKey } from './golfapi';
 import { applyCourseHydrateToLayout, prefetchCourseHydrateOnce } from './hydrate';
+import { getSharedCoursePaintCache } from './paintCache';
+import {
+  applyCoursePaintToLayout,
+  layoutStillHardMiss,
+  loadGolfApiPaintCandidate,
+  loadOsmOpenGolfCandidate,
+  resolveCoursePaint,
+} from './waterfall';
 import type { CourseLayoutSeed } from './layout';
 import type { OsmOverlay, OsmOverlayQuery } from './types';
 
@@ -183,20 +190,19 @@ export async function prefetchCourseCard(
     location: layout.location ?? null,
     courseKey: layout.apiId,
   });
-  const miss = !hydrated.holes?.length || hydrated.holes.some((hole) => !hole.teeCentroid || !hole.greenCentroid);
-  if (miss && getGolfApiKey()) {
-    const fetched = await fetchGolfApiHydrate({
+  if (layoutStillHardMiss(hydrated)) {
+    const match = {
       name: layout.name,
       location: layout.location ?? null,
       courseKey: layout.apiId,
+    };
+    const painted = await resolveCoursePaint(match, {
+      loadOsm: async () => loadOsmOpenGolfCandidate(match),
+      loadGca: async () => null,
+      loadGolfApi: () => loadGolfApiPaintCandidate(match),
+      cache: getSharedCoursePaintCache(),
     });
-    if (fetched) {
-      hydrated = applyCourseHydrateToLayout(hydrated, {
-        name: layout.name,
-        location: layout.location ?? null,
-        courseKey: fetched.courseKey,
-      });
-    }
+    if (painted.ok) hydrated = applyCoursePaintToLayout(hydrated, painted);
   }
   rememberLayoutHoles(hydrated);
   prefetchCourseHydrateOnce({

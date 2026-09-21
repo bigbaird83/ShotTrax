@@ -30,6 +30,12 @@ type GolfApiTeeSet = {
 export type GolfApiFetchDeps = {
   fetchImpl?: typeof fetch;
   now?: () => string;
+  /**
+   * Skip the on-device golfapi blob. Used when that blob was already tried
+   * in this resolve and failed sanity, so last resort can buy a fresh card.
+   * A passing cache hit must not set this.
+   */
+  skipCache?: boolean;
 };
 
 type PersistHooks = {
@@ -255,6 +261,8 @@ export function mapGolfApiCourseToHydrate(args: {
     });
   }
   if (holes.length === 0) return null;
+  const numHolesRaw = asFiniteNumber(course.numHoles ?? course.num_holes);
+  const numHoles = numHolesRaw === 9 || numHolesRaw === 18 ? numHolesRaw : null;
   return {
     courseKey: golfApiCourseKey(courseId),
     displayName,
@@ -262,6 +270,7 @@ export function mapGolfApiCourseToHydrate(args: {
     source: 'golfapi',
     sourceRef: `golfapi.io courseID=${courseId} club=${displayName} coords=${coords.length} runtime`,
     fetchedAt: args.fetchedAt ?? new Date().toISOString(),
+    numHoles,
     holes,
   };
 }
@@ -398,15 +407,18 @@ function courseMatchesHit(course: CourseHydrateMatch, hit: Record<string, unknow
 
 /**
  * Search + course + coordinates. No key / miss / thin → null.
- * Never invents tee/green. Cache hit skips the network.
+ * Last-resort paint source — the waterfall calls this only after OSM/OpenGolf
+ * and GCA Pro both hard-miss. Never invents tee/green. Cache hit skips the network.
  */
 export async function fetchGolfApiHydrate(
   course: CourseHydrateMatch,
   deps: GolfApiFetchDeps = {},
 ): Promise<CourseHydrate | null> {
-  const cachedKey = resolveGolfApiHydrateKey(course);
-  const cached = loadCachedGolfApiHydrate(cachedKey ?? course.courseKey);
-  if (cached && cached.holes.length > 0) return cached;
+  if (!deps.skipCache) {
+    const cachedKey = resolveGolfApiHydrateKey(course);
+    const cached = loadCachedGolfApiHydrate(cachedKey ?? course.courseKey);
+    if (cached && cached.holes.length > 0) return cached;
+  }
 
   const key = getGolfApiKey();
   if (!key) return null;

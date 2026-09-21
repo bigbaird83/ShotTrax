@@ -10,7 +10,10 @@
  *
  * Secret names (EAS dashboard, production / preview / development):
  *   GOLF_COURSES_API_KEY
- *   GOLFAPI_KEY (golfapi.io runtime hydrate; optional)
+ *   GOLFAPI_KEY (golfapi.io runtime hydrate; optional, last-resort paint)
+ *
+ * Optional shared paint cache (not a secret): EXPO_PUBLIC_COURSE_PAINT_CACHE_URL
+ * is copied into expo.extra.coursePaintCacheUrl. JSON GET/PUT. Unset → device only.
  *
  * Do not commit a key. Do not invent a second secret name in git.
  * Local Expo Go: set EXPO_PUBLIC_GOLF_COURSES_API_KEY in `.env`, or the same
@@ -42,6 +45,11 @@ module.exports = ({ config }) => {
     trimKey(process.env.EXPO_PUBLIC_SHARE_SYNC_URL) ??
     trimKey(extra.shareSyncUrl) ??
     null;
+  const coursePaintCacheUrl =
+    trimKey(process.env.EXPO_PUBLIC_COURSE_PAINT_CACHE_URL) ??
+    trimKey(process.env.COURSE_PAINT_CACHE_URL) ??
+    trimKey(extra.coursePaintCacheUrl) ??
+    null;
 
   return {
     ...config,
@@ -50,6 +58,7 @@ module.exports = ({ config }) => {
       golfCoursesApiKey,
       golfApiKey,
       shareSyncUrl,
+      coursePaintCacheUrl,
     },
   };
 };

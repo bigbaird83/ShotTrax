@@ -7,6 +7,7 @@ import {
   saveCachedHydrate,
 } from './golfapi';
 import { fetchOsmOverlay } from './osmOverlay';
+import { resetCoursePaintCacheForTests } from './paintCache';
 import { GOLF_COURSES_API_BASE } from './client';
 
 test('client is unconfigured without a key and does not call the network', async () => {
@@ -89,6 +90,7 @@ test('searchCourses sends q= for name, city, state, or zip and never invents a c
 });
 
 test('getCourse loads scorecard then Pro green-centers', async () => {
+  resetCoursePaintCacheForTests();
   const urls: string[] = [];
   const client = createCourseDataClient({
     getKey: () => 'k',
@@ -139,9 +141,11 @@ test('getCourse loads scorecard then Pro green-centers', async () => {
   assert.equal(detail?.holes[1].greenCentroid, null);
   assert.ok(urls[0]?.startsWith(GOLF_COURSES_API_BASE));
   assert.match(urls[1] ?? '', /green-centers/);
+  assert.equal(urls.some((url) => url.includes('golfapi.io')), false);
 });
 
 test('getCourse keeps greens blank on 403 Pro-only green-centers — never invents', async () => {
+  resetCoursePaintCacheForTests();
   const names = ['GOLFAPI_KEY', 'EXPO_PUBLIC_GOLFAPI_KEY', 'GOLF_API_IO_KEY', 'EXPO_PUBLIC_GOLF_API_IO_KEY'];
   const prev = Object.fromEntries(names.map((name) => [name, process.env[name]]));
   try {
@@ -181,6 +185,7 @@ test('getCourse keeps greens blank on 403 Pro-only green-centers — never inven
 });
 
 test('getCourse fills a miss from the golfapi cache and does not invent', async () => {
+  resetCoursePaintCacheForTests();
   resetGolfApiCacheForTests();
   const names = ['GOLFAPI_KEY', 'EXPO_PUBLIC_GOLFAPI_KEY', 'GOLF_API_IO_KEY', 'EXPO_PUBLIC_GOLF_API_IO_KEY'];
   const prev = Object.fromEntries(names.map((name) => [name, process.env[name]]));
