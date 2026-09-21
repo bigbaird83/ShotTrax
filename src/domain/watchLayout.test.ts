@@ -21,10 +21,14 @@ import {
   WATCH_BACK_HOME_MIN_HEIGHT,
   WATCH_CONTROL_RATIO,
   WATCH_MAP_RATIO,
+  WATCH_PUTT_PILL_MIN_HEIGHT,
   WATCH_UNDER_WHEEL_MIN_HEIGHT,
   watchControlBandIsAboutFortyPercent,
   watchLayoutAddsToOne,
   watchMapAreaIsAboutSixtyPercent,
+  watchPuttIsCompactPill,
+  watchPuttSharesBackHomeRow,
+  watchTallPuttPushesClubStripOffScreen,
 } from './watchLayout';
 import { planWatchClubStrip } from './watchClubPick';
 
@@ -36,7 +40,11 @@ test('282 opening window includes Dr; Watch control band is ~40%; round start fr
   assert.equal(WATCH_CONTROL_RATIO, 0.4);
   assert.equal(WATCH_BACK_HOME_MIN_HEIGHT, 44);
   assert.equal(WATCH_UNDER_WHEEL_MIN_HEIGHT, 40);
+  assert.equal(WATCH_PUTT_PILL_MIN_HEIGHT, 32);
   assert.equal(WATCH_WHEEL_PILL_HEIGHT, 44);
+  assert.equal(watchPuttSharesBackHomeRow(), true);
+  assert.equal(watchPuttIsCompactPill(), true);
+  assert.equal(watchTallPuttPushesClubStripOffScreen(), false);
 
   const bag = [
     { id: 'club_driver', carry: 280 },
@@ -112,7 +120,16 @@ test('282 opening window includes Dr; Watch control band is ~40%; round start fr
   assert.match(watchUi, /geo\.size\.height \* 0\.4/);
   assert.match(watchUi, /minHeight: 44/);
   assert.match(watchUi, /minHeight: 40/);
+  assert.match(watchUi, /minHeight: 32/);
   assert.match(watchUi, /height: 44/);
+  const clubPick = watchUi.slice(watchUi.indexOf('private var clubPick'), watchUi.indexOf('private var moreClubs'));
+  const navRow = clubPick.slice(
+    clubPick.indexOf('HStack(spacing: 8)'),
+    clubPick.indexOf('GeometryReader { wheelGeo'),
+  );
+  assert.match(navRow, /Text\("Putt"\)/);
+  assert.match(navRow, /Capsule\(\)/);
+  assert.doesNotMatch(navRow, /maxWidth: \.infinity, minHeight: 40/);
   assert.match(watchUi, /stripWindowStart/);
   assert.match(watchUi, /\.prefix\(3\)/);
   assert.match(watchUi, /sorted \{ \$0\.carry < \$1\.carry \}/);
