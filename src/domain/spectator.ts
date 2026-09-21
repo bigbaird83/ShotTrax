@@ -73,6 +73,84 @@ export function toastAfterShareAttempt(opened: boolean): string | null {
   return opened ? null : shareFailToast();
 }
 
+/**
+ * Menu is a fullScreen Modal. RN Share.share presents on the hole RNSScreen,
+ * which is off-hierarchy until that Modal finishes dismissing. Presenting
+ * earlier is a silent iOS drop — the Promise never settles, so no sheet and
+ * no fail toast.
+ */
+export function menuShareMustWaitForDismiss(): true {
+  return true;
+}
+
+/** Slack after Menu close if Modal onDismiss never fires (Android). iOS slide is ~300ms. */
+export const MENU_SHARE_FALLBACK_MS = 600;
+
+export function shouldOpenShareSheet(args: {
+  queued: boolean;
+  menuVisible: boolean;
+  menuDismissed: boolean;
+}): boolean {
+  return args.queued && !args.menuVisible && args.menuDismissed;
+}
+
+/** Any throw / reject becomes the fail toast — never a silent no-op. */
+export async function toastFromShareAttempt(open: () => Promise<boolean>): Promise<string | null> {
+  try {
+    return toastAfterShareAttempt(await open());
+  } catch {
+    return shareFailToast();
+  }
+}
+
+/** Messages / the share sheet get a scorecard, never Share.url. */
+export function shareSheetPassesUrl(): false {
+  return false;
+}
+
+/** Full `?p=` spectator body must never land in the share text. */
+export function shareMessageIncludesPayloadQuery(text: string): boolean {
+  return /[?&]p=/.test(text);
+}
+
+export type ShareScorecardHole = {
+  hole: number;
+  score: number | null;
+};
+
+/** Sum posted scores only. Blank holes stay off the total. */
+export function shareScorecardTotal(holes: ShareScorecardHole[]): number | null {
+  let sum = 0;
+  let n = 0;
+  for (const row of holes) {
+    if (row.score == null || !Number.isFinite(row.score)) continue;
+    sum += row.score;
+    n += 1;
+  }
+  return n === 0 ? null : sum;
+}
+
+/**
+ * Primary SMS / share body: course · total · hole-by-hole scores.
+ * Optional last closed club·yards. No deep link, no GPS.
+ */
+export function formatShareScorecard(args: {
+  courseName?: string | null;
+  holes: ShareScorecardHole[];
+  lastClubYards?: string | null;
+}): string {
+  const course = args.courseName?.trim() ? args.courseName.trim() : 'Round';
+  const total = shareScorecardTotal(args.holes);
+  const headline = total == null ? course : `${course} · ${total}`;
+  const rows = [...args.holes]
+    .sort((a, b) => a.hole - b.hole)
+    .map((row) => `${row.hole}  ${row.score == null ? '—' : String(row.score)}`);
+  const lines = ['ShotTraxx', headline, ...rows];
+  const last = args.lastClubYards?.trim();
+  if (last) lines.push(`Last: ${last}`);
+  return lines.join('\n');
+}
+
 function isClosedDistanceShot(shot: SpectatorShotInput): boolean {
   if (shot.endedAt == null) return false;
   if (shot.source === 'no_gps') return false;

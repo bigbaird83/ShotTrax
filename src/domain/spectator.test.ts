@@ -14,8 +14,16 @@ import {
   planSpectatorHoleRow,
   planSpectatorLive,
   planSpectatorPayload,
+  MENU_SHARE_FALLBACK_MS,
+  menuShareMustWaitForDismiss,
+  formatShareScorecard,
   shareFailToast,
+  shareMessageIncludesPayloadQuery,
+  shareScorecardTotal,
+  shareSheetPassesUrl,
+  shouldOpenShareSheet,
   toastAfterShareAttempt,
+  toastFromShareAttempt,
   spectatorInventsFromCardYards,
   spectatorKeepsApproximateOnSoftForced,
   spectatorNeedsViewerLocation,
@@ -164,6 +172,37 @@ test('share text is readable without opening a map or granting location', () => 
   assert.match(doneText, new RegExp(`2  52° · 105  3 · ${COPY.approximate}`));
 });
 
+test('Messages share body is a scorecard — never the ?p= spectator token', () => {
+  assert.equal(shareSheetPassesUrl(), false);
+  const cardHoles = holes.map((hole) => ({ hole: hole.number, score: hole.score }));
+  assert.equal(shareScorecardTotal(cardHoles), 7);
+  const live = formatShareScorecard({
+    courseName: 'Magnolia',
+    holes: cardHoles,
+    lastClubYards: '7i · 155',
+  });
+  assert.equal(
+    live,
+    ['ShotTraxx', 'Magnolia · 7', '1  4', '2  3', '3  —', 'Last: 7i · 155'].join('\n'),
+  );
+  assert.equal(shareMessageIncludesPayloadQuery(live), false);
+  assert.doesNotMatch(live, /shottrax:\/\//i);
+  assert.doesNotMatch(live, /[?&]p=/);
+  assert.doesNotMatch(live, /lat|lng|GPS|trail/i);
+
+  const done = formatShareScorecard({
+    courseName: 'Magnolia',
+    holes: cardHoles,
+  });
+  assert.equal(done, ['ShotTraxx', 'Magnolia · 7', '1  4', '2  3', '3  —'].join('\n'));
+  assert.doesNotMatch(done, /Last:/);
+  assert.equal(shareMessageIncludesPayloadQuery(done), false);
+
+  const empty = formatShareScorecard({ courseName: null, holes: [] });
+  assert.equal(empty, 'ShotTraxx\nRound');
+  assert.equal(shareScorecardTotal([]), null);
+});
+
 test('Signal Lab: share yards stay logged pin-to-pin with Approximate when soft/forced', () => {
   assert.equal(spectatorInventsFromCardYards(), false);
   assert.equal(spectatorKeepsApproximateOnSoftForced(), true);
@@ -219,11 +258,19 @@ test('share surfaces use the spectator helper and do not upload a live trail', (
   assert.doesNotMatch(spectator, /expo-location/);
 });
 
-test('Menu Share toasts Couldn’t open share when Share.share fails — never a GPS trail', () => {
+test('Menu Share toasts Couldn’t open share when Share.share fails — never a GPS trail', async () => {
   assert.equal(shareFailToast(), "Couldn't open share");
   assert.equal(COPY.shareFail, "Couldn't open share");
   assert.equal(toastAfterShareAttempt(false), COPY.shareFail);
   assert.equal(toastAfterShareAttempt(true), null);
+  assert.equal(await toastFromShareAttempt(async () => false), COPY.shareFail);
+  assert.equal(await toastFromShareAttempt(async () => true), null);
+  assert.equal(
+    await toastFromShareAttempt(async () => {
+      throw new Error('share');
+    }),
+    COPY.shareFail,
+  );
   assert.doesNotMatch(COPY.shareFail, /lat|lng|GPS|trail/i);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
@@ -231,15 +278,54 @@ test('Menu Share toasts Couldn’t open share when Share.share fails — never a
   const share = readFileSync(new URL('../services/shareRound.ts', import.meta.url), 'utf8');
   const menuShare = hole.slice(hole.indexOf('label={COPY.share}'), hole.indexOf('label={COPY.undoLast}'));
   const summaryShare = summary.slice(summary.indexOf('label={COPY.share}'), summary.indexOf('label={COPY.home}'));
-  assert.match(menuShare, /shareRoundSnapshot/);
-  assert.match(menuShare, /toastAfterShareAttempt/);
-  assert.match(menuShare, /setToast\(fail\)/);
+  assert.match(menuShare, /queueMenuShare/);
+  assert.doesNotMatch(menuShare, /shareRoundSnapshot/);
+  assert.match(hole, /onDismiss=\{openQueuedShare\}/);
+  assert.match(hole, /shareRoundSnapshot/);
+  assert.match(hole, /toastFromShareAttempt/);
+  assert.match(hole, /setToast\(fail\)/);
   assert.match(summaryShare, /shareRoundSnapshot/);
-  assert.match(summaryShare, /toastAfterShareAttempt/);
+  assert.match(summaryShare, /toastFromShareAttempt/);
   assert.match(summaryShare, /setToast\(fail\)/);
-  assert.match(share, /Share\.share/);
+  assert.match(share, /Share\.share\(\{ message: planned\.message, title: 'ShotTraxx' \}/);
+  assert.doesNotMatch(share, /Share\.share\(\{[^}]*url/);
+  assert.match(share, /formatShareScorecard/);
+  assert.match(share, /waitForShareHost/);
   assert.match(share, /catch \{/);
   assert.match(share, /return false/);
+  assert.doesNotMatch(share, /encodeSpectatorPayload/);
+  assert.doesNotMatch(share, /queryParams/);
   assert.doesNotMatch(share, /lat|lng/);
   assert.doesNotMatch(menuShare, /getCurrentFix/);
+});
+
+test('TF 62: Menu Share waits for fullScreen Modal dismiss before Share.share', () => {
+  assert.equal(menuShareMustWaitForDismiss(), true);
+  assert.equal(MENU_SHARE_FALLBACK_MS, 600);
+  assert.equal(shouldOpenShareSheet({ queued: true, menuVisible: true, menuDismissed: false }), false);
+  assert.equal(shouldOpenShareSheet({ queued: true, menuVisible: false, menuDismissed: false }), false);
+  assert.equal(shouldOpenShareSheet({ queued: true, menuVisible: false, menuDismissed: true }), true);
+  assert.equal(shouldOpenShareSheet({ queued: false, menuVisible: false, menuDismissed: true }), false);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const sheet = readFileSync(new URL('../ui/Sheet.tsx', import.meta.url), 'utf8');
+  const share = readFileSync(new URL('../services/shareRound.ts', import.meta.url), 'utf8');
+  const queue = hole.slice(hole.indexOf('const queueMenuShare'), hole.indexOf('const onWatchPuttPick'));
+  const open = hole.slice(hole.indexOf('const openQueuedShare'), hole.indexOf('const queueMenuShare'));
+  assert.match(queue, /pendingShareRef\.current = true/);
+  assert.match(queue, /setMenuOpen\(false\)/);
+  assert.match(queue, /MENU_SHARE_FALLBACK_MS/);
+  assert.doesNotMatch(queue, /shareRoundSnapshot/);
+  assert.match(open, /shareRoundSnapshot/);
+  assert.match(open, /toastFromShareAttempt/);
+  assert.match(open, /if \(!pendingShareRef\.current\) return/);
+  assert.match(hole, /onDismiss=\{openQueuedShare\}/);
+  assert.match(sheet, /onDismiss=\{onDismiss\}/);
+  assert.match(share, /waitForShareHost/);
+  assert.match(share, /InteractionManager\.runAfterInteractions/);
+  assert.match(share, /formatShareScorecard/);
+  assert.doesNotMatch(share, /Share\.share\(\{[^}]*url/);
+  assert.doesNotMatch(share, /encodeSpectatorPayload/);
+  assert.doesNotMatch(open, /getCurrentFix/);
+  assert.doesNotMatch(share, /lat|lng/);
 });
