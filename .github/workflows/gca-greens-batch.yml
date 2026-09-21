@@ -1,0 +1,52 @@
+# Nightly Golf Courses API Pro green-centers batch puller.
+# ~02:00 America/Chicago during CDT (UTC-5). `0 7 * * *` UTC = 02:00 CDT / 01:00 CST.
+# Runs only when GitHub secret GOLF_COURSES_API_KEY is present (same name as EAS).
+# Skip is clean when the secret is missing. Never fails polish / TF 61.
+# Logs status counts only. Never invents greens.
+name: GCA greens Pro batch
+
+on:
+  schedule:
+    # 07:00 UTC ≈ 02:00 America/Chicago (CDT). During CST this is 01:00 CT.
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+    inputs:
+      cap:
+        description: 'Nightly course cap (default 300)'
+        required: false
+        default: '300'
+
+concurrency:
+  group: gca-greens-batch
+  cancel-in-progress: false
+
+jobs:
+  batch:
+    name: Nightly green-centers persist
+    runs-on: ubuntu-latest
+    if: ${{ secrets.GOLF_COURSES_API_KEY != '' }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Pull AR-first then US green-centers (capped)
+        env:
+          GOLF_COURSES_API_KEY: ${{ secrets.GOLF_COURSES_API_KEY }}
+          GCA_GREENS_BATCH_CAP: ${{ github.event.inputs.cap || '300' }}
+        run: node scripts/gca-green-centers-batch.mjs
+        continue-on-error: true
+      - name: Persist store when the batch wrote greens
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/course/hydrates/gca/green-centers.json src/course/hydrates/gca/cursor.json
+          if git diff --cached --quiet; then
+            echo "No GCA store changes"
+            exit 0
+          fi
+          git commit -m "chore: persist GCA Pro green-centers (nightly cap, counts only)"
+          git push

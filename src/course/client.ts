@@ -6,12 +6,13 @@ import {
   nearbyLocalCatalog,
   searchLocalCatalog,
 } from './catalog';
+import { applyPersistedGreens, gcaGreensForCourse, gcaStoreCourseDetail } from './gcaGreenStore';
 import { fetchOsmOverlay } from './osmOverlay';
 import {
-  mergeGreenCenters,
   parseCourseDetail,
   parseGreenCenters,
   parseNearbyCourses,
+  type GreenCenterRow,
 } from './parse';
 import type { CourseDataClient, CourseDetail, CourseSummary, OsmOverlayQuery } from './types';
 import type { LatLng } from '../domain/latLng';
@@ -24,6 +25,9 @@ const MAX_RADIUS_KM = 100;
 export type CourseDataDeps = {
   getKey?: () => string | null;
   fetch?: typeof fetch;
+  /** Persisted Pro greens. Default reads the local GCA hydrate store. */
+  getStoredGreens?: (id: string) => GreenCenterRow[];
+  getStoredCourse?: (id: string) => CourseDetail | null;
 };
 
 export class GolfCoursesApiError extends Error {
@@ -78,6 +82,8 @@ async function apiGet(
 export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataClient {
   const getKey = deps.getKey ?? getGolfCoursesApiKey;
   const fetchImpl = deps.fetch ?? fetch;
+  const getStoredGreens = deps.getStoredGreens ?? gcaGreensForCourse;
+  const getStoredCourse = deps.getStoredCourse ?? gcaStoreCourseDetail;
 
   return {
     isConfigured(): boolean {
@@ -124,35 +130,24 @@ export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataCli
     async getCourse(id: string): Promise<CourseDetail | null> {
       if (!id.trim()) return null;
       if (isLocalCatalogId(id)) return catalogCourseDetail(id);
+      const stored = getStoredGreens(id);
       const key = getKey();
-      if (!key) return catalogCourseDetail(id);
+      if (!key) return catalogCourseDetail(id) ?? getStoredCourse(id);
       const encoded = encodeURIComponent(id);
       const detailRes = await apiGet(`/courses/${encoded}`, key, fetchImpl);
-      if (detailRes.status === 404) return null;
+      if (detailRes.status === 404) return getStoredCourse(id);
       if (detailRes.status < 200 || detailRes.status >= 300) {
         throw new GolfCoursesApiError('Couldn’t load that course.', detailRes.status);
       }
       const detail = parseCourseDetail(detailRes.json);
-      if (!detail) return null;
+      if (!detail) return getStoredCourse(id);
 
       const greensRes = await apiGet(`/courses/${encoded}/green-centers`, key, fetchImpl);
-      if (greensRes.status === 403 || greensRes.status === 404) {
-        return detail;
-      }
-      if (greensRes.status < 200 || greensRes.status >= 300) {
-        return detail;
-      }
-      const greens = parseGreenCenters(greensRes.json);
-      const holes = mergeGreenCenters(detail.holes, greens);
-      const tees = detail.tees.map((tee) => ({
-        ...tee,
-        holes: mergeGreenCenters(tee.holes, greens),
-      }));
-      return {
-        ...detail,
-        holes,
-        tees,
-      };
+      const live =
+        greensRes.status >= 200 && greensRes.status < 300
+          ? parseGreenCenters(greensRes.json)
+          : [];
+      return applyPersistedGreens(detail, stored, live);
     },
 
     fetchOsmOverlay(query: OsmOverlayQuery) {

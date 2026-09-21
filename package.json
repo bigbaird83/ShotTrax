@@ -42,6 +42,7 @@
     "test": "tsx --test src/domain/*.test.ts src/sensing/*.test.ts src/course/*.test.ts scripts/*.test.ts",
     "typecheck": "tsc --noEmit",
     "gca:greens-probe": "node scripts/gca-green-centers-probe.mjs",
+    "gca:greens-batch": "node scripts/gca-green-centers-batch.mjs",
     "eas-build-post-install": "node scripts/gca-green-centers-probe.mjs",
     "eas:build:ios": "eas build -p ios --profile production",
     "eas:submit:ios": "eas submit -p ios"

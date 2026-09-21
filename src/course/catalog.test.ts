@@ -209,6 +209,14 @@ test('API search results win; catalog fills a Thunderbird miss without duplicati
   assert.equal(other[1].name, 'Thunderbird Country Club');
 });
 
+test('empty GCA store does not invent catalog courses or Thunderbird greens', () => {
+  assert.equal(LOCAL_COURSE_CATALOG.length, 2);
+  const thunderbird = catalogCourseDetail('local:thunderbird-heber-springs-ar');
+  assert.equal(thunderbird?.greenCentersAvailable, false);
+  assert.equal(thunderbird?.holes.every((hole) => hole.greenCentroid == null), true);
+  assert.equal(searchLocalCatalog('pebble').length, 0);
+});
+
 test('course list searches the local catalog without requiring a Golf Courses API key', () => {
   const picker = readFileSync(new URL('../ui/CoursePicker.tsx', import.meta.url), 'utf8');
   const findFn = picker.slice(picker.indexOf('const onFind'), picker.indexOf('useEffect(() => {'));

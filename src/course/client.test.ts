@@ -137,6 +137,42 @@ test('getCourse loads scorecard then Pro green-centers', async () => {
   assert.match(urls[1] ?? '', /green-centers/);
 });
 
+test('getCourse fills 403 greens from the persisted GCA store only — never invents', async () => {
+  const client = createCourseDataClient({
+    getKey: () => 'pro-key',
+    getStoredGreens: () => [
+      {
+        holeNumber: 1,
+        greenCentroid: { lat: 35.027902, lng: -92.0287661 },
+        greenFront: null,
+        greenBack: null,
+        greenDepthYards: null,
+      },
+    ],
+    fetch: async (input) => {
+      const url = String(input);
+      if (url.includes('green-centers')) {
+        return new Response(JSON.stringify({ message: 'Green-center data requires a Pro or Max plan.' }), {
+          status: 403,
+        });
+      }
+      return new Response(
+        JSON.stringify({
+          data: {
+            id: 7,
+            name: 'Cypress Creek Golf Club',
+            scorecard: { teeboxes: [{ name: 'White', holes: [{ hole: 1, par: 4 }] }] },
+          },
+        }),
+        { status: 200 },
+      );
+    },
+  });
+  const detail = await client.getCourse('7');
+  assert.deepEqual(detail?.holes[0]?.greenCentroid, { lat: 35.027902, lng: -92.0287661 });
+  assert.equal(detail?.holes[0]?.teeCentroid, null);
+});
+
 test('getCourse keeps greens blank on 403 Pro-only green-centers — never invents', async () => {
   const client = createCourseDataClient({
     getKey: () => 'free-key',

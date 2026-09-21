@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "priorityIndex": 0,
+  "arStateId": null,
+  "arListPage": 1,
+  "usListPage": 1,
+  "arListDone": false,
+  "processedIds": [],
+  "lastRunAt": null,
+  "lastCounts": {
+    "fetched": 0,
+    "skipped_empty": 0,
+    "403": 0,
+    "errors": 0
+  }
+}

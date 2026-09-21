@@ -58,6 +58,27 @@ Wired as the EAS `eas-build-post-install` npm hook (Expo lifecycle hook in `pack
 
 Zip search is out of scope.
 
+### Pro greens nightly batch (AR-first, then US)
+
+`scripts/gca-green-centers-batch.mjs` walks ~7.4k US courses that advertise Pro green-centers and persists **only** parsed `GET /api/v1/courses/:id/green-centers` rows into `src/course/hydrates/gca/green-centers.json` (the catalog / hydrate store). OSM / HARD-MISS stay for the rest. **Never invents** greens, tees, or Thunderbird pins.
+
+**AR / Doc belt first:** Heber Springs (Thunderbird), Fairfield Bay (Mountain Ranch), Cabot (Cypress Creek, Greystone), Little Rock (Pleasant Valley), Magnolia region — then the rest of Arkansas, then the rest of US.
+
+**Nightly cap:** **300** courses (`GCA_GREENS_BATCH_CAP`, default `DEFAULT_NIGHTLY_CAP`). Pro is 10,000 req/day and 120/min; 300 green-center GETs plus ~10 searches and a few list pages is ~320 requests (~3% of daily quota) at 600 ms gaps (~100/min). ~7.4k / 300 ≈ 25 nights. Consecutive `403` aborts so a free key does not burn the cap.
+
+**Logs (redacted):** status counts only — `fetched`, `skipped_empty`, `403`, `errors`. Never API keys, Bearer tokens, or payloads with PII (address / phone / full hole lists).
+
+```bash
+# local — skip cleanly when the key is absent
+npm run gca:greens-batch
+# optional cap
+GCA_GREENS_BATCH_CAP=50 GOLF_COURSES_API_KEY=your_key npm run gca:greens-batch
+```
+
+GitHub Action `.github/workflows/gca-greens-batch.yml` cron `0 7 * * *` UTC ≈ **02:00 America/Chicago during CDT** (01:00 CT during CST). Uses repo secret `GOLF_COURSES_API_KEY` (same name as EAS). Skips the job when the secret is missing. Does not block polish / TF 61. Zip search is out of scope.
+
+Signal: empty / `403` / missing → no coordinates written. Clubhouse pins are denied. Thunderbird’s curated catalog row stays HARD-MISS unless a later live Pro payload is selected by API id.
+
 ## OSM overlay
 
 `src/course/osmOverlay.ts` queries Overpass for `golf=green|fairway|tee|hole` around a real green pin or course coordinate. Empty / timeout / unmapped → no overlay (never invented). OSM `par=*` tags are **not** used for scorecard par.
