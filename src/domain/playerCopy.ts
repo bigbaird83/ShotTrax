@@ -77,6 +77,8 @@ export const COPY = {
   previousHole: 'Previous hole',
   menu: 'Menu',
   settings: 'Settings',
+  credits: 'Credits',
+  courseDataCredits: 'Hole maps © OpenStreetMap contributors and OpenGolf (ODbL).',
   courseDistance: 'Course distance',
   courseDistanceSetting: 'Course distance: Miles / Kilometers',
   colorTheme: 'Color theme',

@@ -62,6 +62,10 @@ Zip search is out of scope.
 
 `src/course/osmOverlay.ts` queries Overpass for `golf=green|fairway|tee|hole` around a real green pin or course coordinate. Empty / timeout / unmapped → no overlay (never invented). OSM `par=*` tags are **not** used for scorecard par.
 
+## OpenGolf / OSM follow ingest
+
+`scripts/opengolf-osm-ingest.mjs` turns the OpenGolf US hole CSV into `catalog.json` + lazy `holes/{ST}.json`. Centerline tee/green only. `match_dist_m` > 1000 m is quarantined. Thunderbird Heber Springs and the other hand-verified AR hydrates are never overwritten. ODbL attribution: `ATTRIBUTION.md`, `NOTICE`, Settings credits. Smoke: `src/course/hydrates/opengolf/SMOKE.md`.
+
 ## Yards to green (sensing)
 
 `yardsToGreen(fix, greenCentroid) → { yards, quality }` in `src/sensing/api.ts`.

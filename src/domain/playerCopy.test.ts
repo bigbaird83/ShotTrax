@@ -97,6 +97,10 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.menu, 'Menu');
   assert.equal(COPY.previousHole, 'Previous hole');
   assert.equal(COPY.settings, 'Settings');
+  assert.equal(COPY.credits, 'Credits');
+  assert.match(COPY.courseDataCredits, /OpenStreetMap contributors/);
+  assert.match(COPY.courseDataCredits, /OpenGolf/);
+  assert.match(COPY.courseDataCredits, /ODbL/);
   assert.equal(COPY.home, 'Home');
   assert.equal(COPY.back, 'Back');
   assert.equal(COPY.addShot, 'Add shot');
@@ -147,8 +151,10 @@ test('player copy uses words, never ? or SI jargon dump', () => {
 });
 
 test('player copy never mentions API, OSM, invent, centroid, or meters', () => {
-  const blob = JSON.stringify(COPY);
+  const { courseDataCredits, ...player } = COPY;
+  const blob = JSON.stringify(player);
   assert.doesNotMatch(blob, /API|OSM|invent|centroid|Pro green|lat\/lng|accuracy/i);
+  assert.match(courseDataCredits, /OpenStreetMap contributors/);
 });
 
 test('yards to green is a big number or — plus waiting copy', () => {

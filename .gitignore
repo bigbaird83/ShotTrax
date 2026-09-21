@@ -43,3 +43,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# OpenGolf ingest intermediates (runtime uses catalog.json + holes/*.json)
+src/course/hydrates/opengolf/pack.json
+src/course/hydrates/opengolf/pack.json.gz

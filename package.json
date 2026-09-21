@@ -42,6 +42,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "test": "tsx --test src/domain/*.test.ts src/sensing/*.test.ts src/course/*.test.ts scripts/*.test.ts",
+    "opengolf:ingest": "node scripts/opengolf-osm-ingest.mjs",
     "typecheck": "tsc --noEmit",
     "gca:greens-probe": "node scripts/gca-green-centers-probe.mjs",
     "eas-build-post-install": "node scripts/gca-green-centers-probe.mjs",
