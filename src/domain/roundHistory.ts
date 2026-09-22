@@ -1,3 +1,5 @@
+import { COPY } from './playerCopy';
+
 /** History list row: date, course, tees played, score. */
 
 export type HistoryRow = {
@@ -68,4 +70,71 @@ export function formatHistoryRow(args: {
     score: formatHistoryScoreLabel(args.score),
     relative: formatHistoryRelativeDay(args.startedAt, args.nowMs),
   };
+}
+
+/** Left swipe reveals Edit and Delete. It does not delete by itself. */
+export const HISTORY_SWIPE_OPEN_PX = 48;
+export const HISTORY_SWIPE_REVEAL_PX = 148;
+
+export function historySwipeShouldOpen(dx: number, dy: number): boolean {
+  if (Math.abs(dy) > Math.abs(dx)) return false;
+  return dx <= -HISTORY_SWIPE_OPEN_PX;
+}
+
+export function historySwipeShouldClose(dx: number, dy: number): boolean {
+  if (Math.abs(dy) > Math.abs(dx)) return false;
+  return dx >= HISTORY_SWIPE_OPEN_PX;
+}
+
+export function historyDeleteRequiresConfirm(): true {
+  return true;
+}
+
+export function historyDeletePrompt(): {
+  title: typeof COPY.deleteRound;
+  body: typeof COPY.deleteRoundConfirm;
+  cancelIsDefault: true;
+} {
+  return {
+    title: COPY.deleteRound,
+    body: COPY.deleteRoundConfirm,
+    cancelIsDefault: true,
+  };
+}
+
+/** Finished rounds open for edit from history. Live rounds already do. */
+export function pastRoundEditAnytime(): true {
+  return true;
+}
+
+export function pastRoundEditRequested(edit: string | string[] | null | undefined): boolean {
+  const value = Array.isArray(edit) ? edit[0] : edit;
+  return value === '1';
+}
+
+/** Finished + explicit Edit: existing marks only. */
+export function pastRoundMarksOnly(args: { finished: boolean; editRequested: boolean }): boolean {
+  return pastRoundEditAnytime() && args.finished && args.editRequested;
+}
+
+/** New shots stay off in past-round edit. */
+export function pastRoundCanAddShot(marksOnly: boolean): boolean {
+  return !marksOnly;
+}
+
+export function pastRoundEditInventsShots(): false {
+  return false;
+}
+
+export function pastRoundEditInventsPaint(): false {
+  return false;
+}
+
+/** Past-round edit shows stored tee/green only. */
+export function pastRoundStoredPaintOnly(marksOnly: boolean): boolean {
+  return marksOnly && !pastRoundEditInventsPaint();
+}
+
+export function pastRoundHoleHref(roundId: string, holeNumber: number): string {
+  return `/round/${roundId}/hole/${holeNumber}?edit=1`;
 }

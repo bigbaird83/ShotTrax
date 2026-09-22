@@ -15,6 +15,7 @@ export const COPY = {
   start9: 'Start 9 holes',
   continueRound: 'Continue round',
   finishRound: 'Finish round',
+  edit: 'Edit',
   deleteRound: 'Delete round',
   deleteRoundConfirm: 'Delete this round? Shots and scores go with it.',
   deleteShot: 'Delete shot',

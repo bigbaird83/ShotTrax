@@ -15,12 +15,14 @@ export function playHrefAfterRoundStart(roundId: string): `/round/${string}/hole
   return `/round/${roundId}/hole/1`;
 }
 
-/** Prev hole / Next hole stay on play. Never club-pick. */
+/** Prev hole / Next hole stay on play. Never club-pick. Past edit keeps ?edit=1. */
 export function playHrefAfterHoleChange(
   roundId: string,
   holeNumber: number,
-): `/round/${string}/hole/${number}` {
-  return playHoleHref(roundId, holeNumber);
+  keepPastEdit = false,
+): string {
+  const href = playHoleHref(roundId, holeNumber);
+  return keepPastEdit ? `${href}?edit=1` : href;
 }
 
 export function allClubsHref(roundId: string, holeNumber: number): string {
