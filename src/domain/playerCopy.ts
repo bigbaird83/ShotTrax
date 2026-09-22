@@ -111,7 +111,7 @@ export const COPY = {
   selectCourse: 'Select course',
   score: 'Score',
   shots: 'Shots',
-  noShots: 'No shots yet. Pick a club after you hit.',
+  noShots: 'Tap your club after hitting to mark your shot.',
   inPlay: 'In play',
   logged: 'Logged',
   suggested: 'Suggested',
