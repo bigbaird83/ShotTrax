@@ -105,9 +105,13 @@ export function favoriteRowMinHeight(status: OfflinePackStatus | null | undefine
   return favoriteRowCompact(status) ? FAVORITE_READY_ROW_MIN_HEIGHT : null;
 }
 
-/** Favorites is a tab root: no Back control. A left-edge swipe goes Home. */
-export function favoritesShowsBackButton(): false {
-  return false;
+/** Back and a left-edge swipe both go Home. Same pattern for later menus. */
+export function favoritesShowsBackButton(): true {
+  return true;
+}
+
+export function favoritesBackAndSwipeGoHome(): true {
+  return true;
 }
 
 export const FAVORITES_SWIPE_EDGE_PX = 28;

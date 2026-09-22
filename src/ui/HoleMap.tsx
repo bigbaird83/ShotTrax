@@ -28,6 +28,7 @@ import {
   ADD_SHOT_TO_PIN_HIT_H,
   ADD_SHOT_TO_PIN_HIT_W,
   holeMapKeepsScrollZoomOnceMounted,
+  placeToDraftFromDragRelease,
   planDragShotLines,
   toPinMarkerCoordinate,
 } from '@/src/domain/placeToDrag';
@@ -648,28 +649,26 @@ function NativeHoleMap({
             // One-finger hold-drag is this Marker only — tight hit, not a
             // map-covering View. iOS gives an overlay the gesture stream and
             // pan/pinch never reach the map on first Add shot or after edit.
-            // React coordinate stays at drag-start so live yards cannot snap
-            // the annotation and pan the camera. Map background keeps pan/pinch.
+            // React coordinate stays at drag-start so a yards update cannot snap
+            // the annotation. The marker follows the finger natively. Yards
+            // commit on release only. Map background keeps pan/pinch.
             coordinate={toCoord(toPinCoordinate.lat, toPinCoordinate.lng)}
             anchor={{ x: 0.5, y: 1 }}
             tappable={false}
-            tracksViewChanges
+            tracksViewChanges={toPinDragOrigin == null}
             stopPropagation
             draggable={Boolean(onPlaceToDrag)}
             onDragStart={() => {
               if (!placedTo) return;
               setToPinDragOrigin(placedTo);
             }}
-            onDrag={(event) => {
-              if (!onPlaceToDrag) return;
-              const { latitude, longitude } = event.nativeEvent.coordinate;
-              onPlaceToDrag({ lat: latitude, lng: longitude });
-            }}
             onDragEnd={(event) => {
               if (!onPlaceToDrag) return;
               const { latitude, longitude } = event.nativeEvent.coordinate;
-              onPlaceToDrag({ lat: latitude, lng: longitude });
+              const released = placeToDraftFromDragRelease({ lat: latitude, lng: longitude });
               setToPinDragOrigin(null);
+              if (!released) return;
+              onPlaceToDrag({ lat: latitude, lng: longitude });
             }}>
             <View
               testID="to-pin-hit"

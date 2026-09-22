@@ -23,11 +23,19 @@ import {
   favoriteRowCompact,
   favoriteRowMinHeight,
   favoriteShowsDownloadPill,
+  favoritesBackAndSwipeGoHome,
   favoritesLeftEdgeSwipeGoesHome,
   favoritesShowsBackButton,
   favoritesSwipeHomeHref,
   offlineStatusAfterDownload,
 } from './favorites';
+import {
+  placeToDraftFromDragRelease,
+  toPinDragInventsMidDrag,
+  toPinFollowsFinger,
+  toPinYardsRecalcOnDragMove,
+  toPinYardsRecalcOnReleaseOnly,
+} from './placeToDrag';
 import {
   armHoleTransition,
   consumeHoleTransition,
@@ -142,8 +150,9 @@ test('Ready offline hides Download, stays a chip, and collapses the row', () => 
   assert.doesNotMatch(favorites, /MapView|HoleMap/);
 });
 
-test('Favorites has no Back button; a left-edge swipe goes Home', () => {
-  assert.equal(favoritesShowsBackButton(), false);
+test('Favorites Back and a left-edge swipe both go Home', () => {
+  assert.equal(favoritesShowsBackButton(), true);
+  assert.equal(favoritesBackAndSwipeGoHome(), true);
   assert.equal(favoritesSwipeHomeHref(), '/');
   assert.equal(favoritesLeftEdgeSwipeGoesHome({ startX: 8, dx: 80, dy: 6 }), true);
   assert.equal(favoritesLeftEdgeSwipeGoesHome({ startX: 8, dx: 20, dy: 0 }), false);
@@ -157,9 +166,36 @@ test('Favorites has no Back button; a left-edge swipe goes Home', () => {
   assert.match(favorites, /router\.navigate\(favoritesSwipeHomeHref\(\)\)/);
   assert.match(favorites, /FAVORITES_SWIPE_EDGE_PX/);
   assert.match(favorites, /favoritesShowsBackButton/);
-  assert.doesNotMatch(favorites, /COPY\.back|>Back<|>Back</);
-  assert.match(tabs, /name="favorites"[\s\S]*headerLeft: \(\) => null/);
-  assert.match(tabs, /name="favorites"[\s\S]*headerBackVisible: false/);
+  assert.match(favorites, /COPY\.back/);
+  assert.match(favorites, /headerLeft:/);
+  assert.doesNotMatch(tabs, /headerLeft: \(\) => null/);
+  assert.doesNotMatch(tabs, /headerBackVisible: false/);
+});
+
+test('add-shot to-pin follows the finger and yards update on release only', () => {
+  assert.equal(toPinFollowsFinger(), true);
+  assert.equal(toPinYardsRecalcOnDragMove(), false);
+  assert.equal(toPinYardsRecalcOnReleaseOnly(), true);
+  assert.equal(toPinDragInventsMidDrag(), false);
+  const released = placeToDraftFromDragRelease({ lat: 33.27, lng: -93.24 });
+  assert.deepEqual(released, { lat: 33.27, lng: -93.24 });
+  assert.equal(placeToDraftFromDragRelease(null), null);
+  assert.equal(placeToDraftFromDragRelease({ lat: Number.NaN, lng: 1 }), null);
+  assert.equal(placeToDraftFromDragRelease({ lat: 0, lng: 0 }), null);
+
+  const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
+  const dragStart = map.indexOf('onDragStart=');
+  const dragEnd = map.indexOf('onDragEnd=');
+  assert.ok(dragStart > 0 && dragEnd > dragStart);
+  const during = map.slice(dragStart, dragEnd);
+  assert.doesNotMatch(during, /onPlaceToDrag\(/);
+  const release = map.slice(dragEnd, map.indexOf('testID="to-pin-hit"'));
+  assert.match(release, /placeToDraftFromDragRelease/);
+  assert.match(release, /onPlaceToDrag\(\{ lat: latitude, lng: longitude \}\)/);
+  assert.match(map, /scrollEnabled=\{framedForGestures\}/);
+  assert.match(map, /zoomEnabled=\{framedForGestures\}/);
+  assert.doesNotMatch(map, /testID="to-pin-drag-layer"/);
+  assert.doesNotMatch(map, /inventGreen/);
 });
 
 test('previous hole slides in from the left and next hole from the right', () => {

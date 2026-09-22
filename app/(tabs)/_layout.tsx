@@ -27,13 +27,10 @@ export default function TabLayout() {
         name="favorites"
         options={{
           title: 'Favorites',
-          // Tab header types omit this stack flag. Favorites stays a root: no Back.
-          headerBackVisible: false,
-          headerLeft: () => null,
-          tabBarIcon: ({ color }: { color: string }) => (
+          tabBarIcon: ({ color }) => (
             <SymbolView name="star.fill" tintColor={color} size={26} fallback={null} />
           ),
-        } as never}
+        }}
       />
       <Tabs.Screen
         name="bag"

@@ -1,5 +1,5 @@
-import { router } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
+import { router, useNavigation } from 'expo-router';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { downloadFavoriteForOffline } from '@/src/course/offlineFavorite';
 import { layoutForFavoriteStart, favoriteStartHoleCount } from '@/src/course/startRoundEntry';
@@ -16,6 +16,7 @@ import {
   favoriteRowCompact,
   favoriteRowMinHeight,
   favoriteShowsDownloadPill,
+  favoritesBackAndSwipeGoHome,
   favoritesLeftEdgeSwipeGoesHome,
   favoritesShowsBackButton,
   favoritesSwipeHomeHref,
@@ -35,11 +36,32 @@ import { space, tapTarget, type, type ColorPalette } from '@/src/ui/theme';
 
 export default function FavoritesScreen() {
   const { db, revision, bump } = useDb();
+  const navigation = useNavigation();
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const store = useMemo(() => readSettingStore(db), [db]);
   const favorites = useMemo(() => listFavorites(store), [store, revision]);
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  const goHome = () => {
+    router.navigate(favoritesSwipeHomeHref());
+  };
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerLeft: favoritesShowsBackButton()
+        ? () => (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={COPY.back}
+              onPress={goHome}
+              style={styles.back}>
+              <Text style={styles.backText}>{COPY.back}</Text>
+            </Pressable>
+          )
+        : undefined,
+    });
+  }, [navigation, styles.back, styles.backText]);
 
   const swipeHome = useRef(
     PanResponder.create({
@@ -48,6 +70,7 @@ export default function FavoritesScreen() {
       onPanResponderRelease: (event, gesture) => {
         const startX = event.nativeEvent.pageX - gesture.dx;
         if (!favoritesLeftEdgeSwipeGoesHome({ startX, dx: gesture.dx, dy: gesture.dy })) return;
+        if (!favoritesBackAndSwipeGoHome()) return;
         router.navigate(favoritesSwipeHomeHref());
       },
     }),
@@ -175,9 +198,7 @@ export default function FavoritesScreen() {
             onPress={() => router.push('/request-course')}
           />
         </ScrollView>
-        {favoritesShowsBackButton() ? null : (
-          <View style={styles.homeSwipeEdge} {...swipeHome.panHandlers} />
-        )}
+        <View style={styles.homeSwipeEdge} {...swipeHome.panHandlers} />
       </View>
     </Screen>
   );
@@ -186,6 +207,8 @@ export default function FavoritesScreen() {
 function makeStyles(colors: ColorPalette) {
   return StyleSheet.create({
     fill: { flex: 1 },
+    back: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
+    backText: { color: colors.cream, fontSize: type.button, fontWeight: '800' },
     scroll: { padding: space.md, paddingBottom: 32, gap: 12 },
     title: { color: colors.cream, fontSize: type.hole, fontWeight: '900' },
     banner: {

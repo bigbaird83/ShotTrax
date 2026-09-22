@@ -54,6 +54,31 @@ export function toPinFollowsFinger(): true {
   return true;
 }
 
+/** Yards and the saved draft update when the finger lifts, not on each move. */
+export function toPinYardsRecalcOnDragMove(): false {
+  return false;
+}
+
+export function toPinYardsRecalcOnReleaseOnly(): true {
+  return true;
+}
+
+/** Mid-drag does not invent a tee, green, or landing. */
+export function toPinDragInventsMidDrag(): false {
+  return false;
+}
+
+/**
+ * The native marker coordinate at release. Missing or invalid stays unset.
+ * Never synthesized from the screen or from a course center.
+ */
+export function placeToDraftFromDragRelease(
+  coord: { lat: number; lng: number } | null | undefined,
+): LatLng | null {
+  if (!isValidLatLng(coord)) return null;
+  return { lat: coord.lat, lng: coord.lng };
+}
+
 export function confirmPlaceIsFatButton(): true {
   return true;
 }
