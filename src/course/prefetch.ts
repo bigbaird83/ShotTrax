@@ -16,6 +16,7 @@ import {
   loadOsmOpenGolfCandidate,
   resolveCoursePaint,
 } from './waterfall';
+import { backgroundHoleNumbers } from './startRoundEntry';
 import type { CourseLayoutSeed } from './layout';
 import type { OsmOverlay, OsmOverlayQuery } from './types';
 
@@ -29,6 +30,10 @@ export type PrefetchHoleFrame = {
 
 export type PrefetchDeps = {
   fetchOverlay?: (query: OsmOverlayQuery) => Promise<OsmOverlay | null>;
+  /** Round length. Background cache is holes 2 through this count. */
+  holeCount?: 9 | 18;
+  /** Persist a painted layout onto the open round. Never blocks Start. */
+  applyLayout?: (layout: CourseLayoutSeed) => void;
 };
 
 /** Start Round must open hole 1 immediately. Whole-card OSM is background only. */
@@ -230,12 +235,63 @@ export async function prefetchCourseCard(
   return out;
 }
 
-/** Fire-and-forget wrapper so Start Round never awaits the card. */
+/**
+ * After hole 1 has entered (paint or miss card), warm holes 2–18.
+ * Hole 1 is not fetched here. Local paint is already on the round.
+ */
+export async function cacheHolesAfterFirst(
+  layout: CourseLayoutSeed,
+  deps?: PrefetchDeps,
+): Promise<PrefetchHoleFrame[]> {
+  let hydrated = applyCourseHydrateToLayout(layout, {
+    name: layout.name,
+    location: layout.location ?? null,
+    courseKey: layout.apiId,
+  });
+  if (layoutStillHardMiss(hydrated)) {
+    const match = {
+      name: layout.name,
+      location: layout.location ?? null,
+      courseKey: layout.apiId,
+    };
+    const painted = await resolveCoursePaint(match, {
+      loadOsm: async () => loadOsmOpenGolfCandidate(match),
+      loadGca: async () => null,
+      loadGolfApi: () => loadGolfApiPaintCandidate(match),
+      cache: getSharedCoursePaintCache(),
+    });
+    if (painted.ok) hydrated = applyCoursePaintToLayout(hydrated, painted);
+  }
+  rememberLayoutHoles(hydrated);
+  deps?.applyLayout?.(hydrated);
+  const limit = deps?.holeCount === 9 ? 9 : 18;
+  const byNumber = new Map((hydrated.holes ?? []).map((hole) => [hole.number, hole]));
+  const out: PrefetchHoleFrame[] = [];
+  for (const holeNumber of backgroundHoleNumbers(limit)) {
+    const hole = byNumber.get(holeNumber);
+    const green = hole && isValidLatLng(hole.greenCentroid) ? hole.greenCentroid : null;
+    const tee = hole && isValidLatLng(hole.teeCentroid) ? hole.teeCentroid : null;
+    const frame = await ensureHoleTeeGreen(
+      {
+        courseId: hydrated.apiId,
+        holeNumber,
+        tee,
+        green,
+        location: green ?? (isValidLatLng(hydrated.location) ? hydrated.location : null),
+      },
+      deps,
+    );
+    out.push(frame);
+  }
+  return out;
+}
+
+/** Fire-and-forget wrapper so Start Round never awaits holes 2–18. */
 export function prefetchCourseCardInBackground(
   layout: CourseLayoutSeed,
   deps?: PrefetchDeps,
 ): void {
-  void prefetchCourseCard(layout, deps).catch(() => {
-    // Background only. Hole camera fetches the current hole if the cache is still empty.
+  void cacheHolesAfterFirst(layout, deps).catch(() => {
+    // Background only. The open hole fetches itself if its cache is still empty.
   });
 }

@@ -3,6 +3,7 @@ import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, findNodeHandle, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { catalogEntryById } from '@/src/course/catalog';
 import { prefetchCourseHydrateOnce, resolveHydrateTeeGreen } from '@/src/course/hydrate';
 import { ensureHoleTeeGreen } from '@/src/course/prefetch';
 import {
@@ -436,6 +437,11 @@ export default function HoleScreen() {
     location: isCourseCardLatLng(courseLocation) ? courseLocation : null,
   });
   const missCopy = planMissCardCopy({ needPins });
+  const requestCourse = {
+    name: round?.courseName ?? '',
+    city: catalogEntryById(round?.courseApiId)?.city ?? '',
+    courseId: round?.courseApiId ?? '',
+  };
   const overlay =
     osmOverlay ??
     cachedOsmOverlay({ courseId: round?.courseApiId, holeNumber, green: proGreen });
@@ -1277,6 +1283,7 @@ export default function HoleScreen() {
           fmb={fmb}
           osmOverlay={overlay}
           missCopy={missCopy}
+          requestCourse={requestCourse}
           placedFrom={placeMode === 'edit-from' || placeMode === 'edit-to' ? placeFrom : addShotFrom}
           placedTo={placeToDraft ?? placeTo}
           lineFrom={placeMode === 'edit-from' || placeMode === 'edit-to' ? placeFrom : addShotFrom}
@@ -1936,6 +1943,7 @@ export default function HoleScreen() {
             }}
             osmOverlay={osmOverlay}
             missCopy={missCopy}
+            requestCourse={requestCourse}
             lockFrame
             hideYardsOverlay
             showPhonePin={false}

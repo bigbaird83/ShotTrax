@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { isGolfCoursesApiConfigured } from '@/src/course/config';
@@ -15,7 +16,8 @@ import {
 } from '@/src/domain/coursePick';
 import { type CourseDistanceUnit } from '@/src/domain/courseDistance';
 import { useDb } from '@/src/db/DbProvider';
-import { getThunderbirdPinSheet, setThunderbirdPinSheet } from '@/src/db/repo';
+import { getThunderbirdPinSheet, readSettingStore, setThunderbirdPinSheet } from '@/src/db/repo';
+import { favoriteFromSummary, isFavorite, listFavorites, setFavorite } from '@/src/domain/favorites';
 import { courseNeedsPinSheets } from '@/src/domain/missCard';
 import type { LatLng } from '@/src/domain/latLng';
 import { parseUsZip } from '@/src/domain/zipGeocode';
@@ -66,6 +68,8 @@ export function CoursePicker({
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const configured = isGolfCoursesApiConfigured();
   const pinSheet = useMemo(() => getThunderbirdPinSheet(db), [db, revision]);
+  const store = useMemo(() => readSettingStore(db), [db]);
+  const favorites = useMemo(() => listFavorites(store), [store, revision]);
   const [busy, setBusy] = useState(false);
   const [teeBusy, setTeeBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -153,6 +157,24 @@ export function CoursePicker({
     return () => clearTimeout(timer);
   }, [autoFind, onFind, query]);
 
+  const toggleStar = (course: CourseSummary) => {
+    const favorite = favoriteFromSummary(course);
+    if (!favorite) return;
+    setFavorite(store, favorite, !isFavorite(store, course.id));
+    bump();
+  };
+
+  const openRequest = (course?: CourseSummary | null) => {
+    router.push({
+      pathname: '/request-course',
+      params: {
+        name: course?.name ?? query.trim(),
+        city: course?.city ?? '',
+        courseId: course?.id ?? '',
+      },
+    });
+  };
+
   const pickCourse = async (course: CourseSummary) => {
     setTeeBusy(true);
     setError(null);
@@ -219,11 +241,26 @@ export function CoursePicker({
               hint={COPY.nearbyEmptyHint}
             />
           ) : null}
+          {emptyNearby ? (
+            <BigButton label={COPY.requestThisCourse} variant="secondary" onPress={() => openRequest(null)} />
+          ) : null}
         </>
       ) : selected ? (
         <View style={styles.selected}>
           <Text style={styles.selectedName}>{selected.name}</Text>
           <Text style={styles.meta}>{placeLine(selected)}</Text>
+          <View style={styles.actions}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={isFavorite(store, selected.id) ? COPY.unfavorite : COPY.favorite}
+              onPress={() => toggleStar(selected)}
+              style={styles.star}>
+              <Text style={styles.starText}>{isFavorite(store, selected.id) ? '★' : '☆'}</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={() => openRequest(selected)} style={styles.link}>
+              <Text style={styles.linkText}>{COPY.requestThisCourse}</Text>
+            </Pressable>
+          </View>
           {courseNeedsPinSheets({
             courseApiId: selected.id,
             name: selected.name,
@@ -271,27 +308,39 @@ export function CoursePicker({
                 unit: courseDistanceUnit,
                 lastPlayedAt: lastPlayedAtByCourse?.[course.id] ?? lastPlayedAtByCourse?.[course.name],
               });
+              const starred = favorites.some((row) => row.id === course.id);
               return (
-                <Pressable
-                  key={course.id}
-                  onPress={() => void pickCourse(course)}
-                  style={styles.row}>
-                  <Text style={styles.rowTitle}>{card.name}</Text>
-                  <View style={styles.chips}>
-                    {card.distance ? <Text style={styles.chip}>{card.distance}</Text> : null}
-                    {card.lastPlayed ? <Text style={styles.chip}>{card.lastPlayed}</Text> : null}
+                <View key={course.id} style={styles.row}>
+                  <Pressable onPress={() => void pickCourse(course)}>
+                    <Text style={styles.rowTitle}>{card.name}</Text>
+                    <View style={styles.chips}>
+                      {card.distance ? <Text style={styles.chip}>{card.distance}</Text> : null}
+                      {card.lastPlayed ? <Text style={styles.chip}>{card.lastPlayed}</Text> : null}
+                    </View>
+                    <Text style={styles.meta}>{placeLine(course)}</Text>
+                    {courseNeedsPinSheets({
+                      courseApiId: course.id,
+                      name: course.name,
+                      city: course.city,
+                      state: course.state,
+                      location: course.location,
+                    }) ? (
+                      <Text style={styles.warn}>{COPY.hardMissNeedPins}</Text>
+                    ) : null}
+                  </Pressable>
+                  <View style={styles.actions}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={starred ? COPY.unfavorite : COPY.favorite}
+                      onPress={() => toggleStar(course)}
+                      style={styles.star}>
+                      <Text style={styles.starText}>{starred ? '★' : '☆'}</Text>
+                    </Pressable>
+                    <Pressable accessibilityRole="button" onPress={() => openRequest(course)} style={styles.link}>
+                      <Text style={styles.linkText}>{COPY.requestThisCourse}</Text>
+                    </Pressable>
                   </View>
-                  <Text style={styles.meta}>{placeLine(course)}</Text>
-                  {courseNeedsPinSheets({
-                    courseApiId: course.id,
-                    name: course.name,
-                    city: course.city,
-                    state: course.state,
-                    location: course.location,
-                  }) ? (
-                    <Text style={styles.warn}>{COPY.hardMissNeedPins}</Text>
-                  ) : null}
-                </Pressable>
+                </View>
               );
             })
           : null}
@@ -364,5 +413,10 @@ function makeStyles(colors: ColorPalette) {
     overflow: 'hidden',
   },
   teeBox: { gap: 8, marginTop: 8 },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4 },
+  star: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  starText: { color: colors.cream, fontSize: 22, fontWeight: '800' },
+  link: { minHeight: 44, justifyContent: 'center' },
+  linkText: { color: colors.cream, fontSize: type.meta, fontWeight: '800' },
   });
 }

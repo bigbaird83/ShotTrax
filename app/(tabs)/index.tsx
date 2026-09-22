@@ -10,7 +10,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { getCourseDataClient } from '@/src/course/client';
 import { applyCourseHydrateToLayout } from '@/src/course/hydrate';
 import { layoutFromTee } from '@/src/course/layout';
 import { prefetchCourseCardInBackground, rememberLayoutHoles } from '@/src/course/prefetch';
@@ -50,12 +49,12 @@ import { tapTarget, type, type ColorPalette } from '@/src/ui/theme';
 import { getCurrentFix } from '@/src/services/location';
 import { setWatchCoursePickedHandler } from '@/src/services/watchNearby';
 
-async function loadLayout(
+function loadLayout(
   course: CourseSummary,
   detail: CourseDetail | null,
   tee: TeeSet | null,
-): Promise<CourseLayoutSeed> {
-  const resolved = detail ?? (await getCourseDataClient().getCourse(course.id).catch(() => null));
+): CourseLayoutSeed {
+  const resolved = detail;
   const base = resolved
     ? layoutFromTee(resolved, tee)
     : {
@@ -131,12 +130,18 @@ export default function HomeScreen() {
     bump();
   };
 
-  const applyPickedCourse = async (course: CourseSummary, holeCount: 9 | 18) => {
-    const layout = await loadLayout(course, pickedDetail, pickedTee);
+  const applyPickedCourse = (course: CourseSummary, holeCount: 9 | 18) => {
+    const layout = loadLayout(course, pickedDetail, pickedTee);
     const round = startRound(db, holeCount, course.name, layout);
     bump();
     router.push(playHrefAfterRoundStart(round.id));
-    prefetchCourseCardInBackground(layout);
+    prefetchCourseCardInBackground(layout, {
+      holeCount,
+      applyLayout: (painted) => {
+        attachCourseToRound(db, round.id, course.name, painted);
+        bump();
+      },
+    });
   };
 
   const commitPick = async (pick: CoursePick) => {
@@ -150,11 +155,17 @@ export default function HomeScreen() {
     if (active) {
       setStarting(true);
       try {
-        const layout = await loadLayout(pick.course, pick.detail, pick.tee);
+        const layout = loadLayout(pick.course, pick.detail, pick.tee);
         attachCourseToRound(db, active.id, pick.course.name, layout);
         bump();
         router.push(playHrefAfterRoundStart(active.id));
-        prefetchCourseCardInBackground(layout);
+        prefetchCourseCardInBackground(layout, {
+          holeCount: active.holeCount === 9 ? 9 : 18,
+          applyLayout: (painted) => {
+            attachCourseToRound(db, active.id, pick.course.name, painted);
+            bump();
+          },
+        });
       } catch (err) {
         Alert.alert('Couldn’t attach course', err instanceof Error ? err.message : 'Try again.');
       } finally {
@@ -183,16 +194,14 @@ export default function HomeScreen() {
       return;
     }
     if (!canStart || !picked) return;
-    void (async () => {
-      setStarting(true);
-      try {
-        await applyPickedCourse(picked, holeCount);
-      } catch (err) {
-        Alert.alert('Couldn’t start round', err instanceof Error ? err.message : 'Try again.');
-      } finally {
-        setStarting(false);
-      }
-    })();
+    setStarting(true);
+    try {
+      applyPickedCourse(picked, holeCount);
+    } catch (err) {
+      Alert.alert('Couldn’t start round', err instanceof Error ? err.message : 'Try again.');
+    } finally {
+      setStarting(false);
+    }
   };
 
   const onRefresh = useCallback(async () => {

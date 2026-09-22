@@ -84,6 +84,9 @@ export default function SettingsScreen() {
       <BigButton label={COPY.bag} variant="secondary" onPress={() => router.push('/bag')} />
       <Text style={styles.creditsTitle}>{COPY.credits}</Text>
       <Text style={styles.credits}>{COPY.courseDataCredits}</Text>
+      <Text style={styles.contact}>{COPY.contactLine}</Text>
+      <BigButton label={COPY.requestThisCourse} variant="secondary" onPress={() => router.push('/request-course')} />
+      <BigButton label={COPY.contributeCourse} variant="ghost" onPress={() => router.push('/contribute-course')} />
     </Screen>
   );
 }
@@ -111,5 +114,6 @@ function makeStyles(colors: ColorPalette) {
     chipTextOn: { color: colors.cream },
     creditsTitle: { color: colors.cream, fontSize: type.body, fontWeight: '800', marginTop: 8 },
     credits: { color: colors.muted, fontSize: type.meta, fontWeight: '600' },
+    contact: { color: colors.cream, fontSize: type.body, fontWeight: '800' },
   });
 }

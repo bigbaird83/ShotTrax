@@ -1340,6 +1340,16 @@ export function setGolfApiHydrateCache(db: SQLiteDatabase, json: string): void {
   setSetting(db, GOLFAPI_HYDRATE_SETTING_KEY, json);
 }
 
+export function readSettingStore(db: SQLiteDatabase): {
+  get(key: string): string | null;
+  set(key: string, value: string): void;
+} {
+  return {
+    get: (key) => getSetting(db, key),
+    set: (key, value) => setSetting(db, key, value),
+  };
+}
+
 export function getSetting(db: SQLiteDatabase, key: string): string | null {
   const row = db.getFirstSync<{ value: string }>('SELECT value FROM settings WHERE key = ?', [key]);
   return row?.value ?? null;
