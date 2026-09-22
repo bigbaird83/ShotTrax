@@ -115,12 +115,16 @@ test('one course list puts played courses on top', () => {
 
 test('home cannot start without a pick and has no free-text course start', () => {
   const home = readFileSync(new URL('../../app/(tabs)/index.tsx', import.meta.url), 'utf8');
+  const search = readFileSync(new URL('../../app/search.tsx', import.meta.url), 'utf8');
   assert.match(home, /canStartRound\(/);
   assert.match(home, /disabled=\{starting \|\| !canStart\}/);
   assert.doesNotMatch(home, /courseName\.trim\(\) \|\| null/);
   assert.doesNotMatch(home, /startRound\(db, holeCount, name\)/);
   assert.match(home, /COPY\.courseNamePlaceholder/);
-  assert.match(home, /planCourseSearchParams|searchQuery/);
+  assert.match(home, /router\.push\('\/search'\)/);
+  assert.doesNotMatch(home, /onChangeText/);
+  assert.match(search, /searchQuery/);
+  assert.match(search, /setSearchQuery\(''\)/);
   assert.match(home, /if \(!canStart \|\| !picked\) return;/);
 
   const picker = readFileSync(new URL('../ui/CoursePicker.tsx', import.meta.url), 'utf8');
@@ -128,7 +132,7 @@ test('home cannot start without a pick and has no free-text course start', () =>
   assert.match(picker, /planCourseList/);
   assert.match(picker, /planNearbyCourseSearch/);
   assert.match(picker, /COPY\.courseNamePlaceholder/);
-  assert.match(home, /setSearchQuery\(''\)/);
+  assert.match(search, /setSearchQuery\(''\)/);
   const findFn = picker.slice(picker.indexOf('const onFind'), picker.indexOf('useEffect(() => {\n    onRefreshReady'));
   assert.match(findFn, /planNearbyCourseSearch/);
   assert.match(findFn, /searchCourses\(plan\.q\)/);

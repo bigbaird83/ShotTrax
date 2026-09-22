@@ -76,6 +76,63 @@ export function offlineStatusLabel(status: OfflinePackStatus | null | undefined)
   return null;
 }
 
+/** HARD-MISS never displays Ready. A stale ready pack still reads as Miss. */
+export function favoriteDisplayedOfflineStatus(
+  status: OfflinePackStatus | null | undefined,
+  hardMiss: boolean,
+): OfflinePackStatus | null {
+  if (hardMiss) return status === 'downloading' ? 'downloading' : 'miss';
+  return status ?? null;
+}
+
+/** Ready hides the download pill. Miss and not-yet-downloaded keep it. */
+export function favoriteShowsDownloadPill(status: OfflinePackStatus | null | undefined): boolean {
+  return status !== 'ready';
+}
+
+export function favoriteReadyChipOnly(status: OfflinePackStatus | null | undefined): boolean {
+  return status === 'ready';
+}
+
+export function favoriteRowCompact(status: OfflinePackStatus | null | undefined): boolean {
+  return status === 'ready';
+}
+
+/** Ready rows shrink so more favorites fit. Expanded rows stay content-sized. */
+export const FAVORITE_READY_ROW_MIN_HEIGHT = 76;
+
+export function favoriteRowMinHeight(status: OfflinePackStatus | null | undefined): number | null {
+  return favoriteRowCompact(status) ? FAVORITE_READY_ROW_MIN_HEIGHT : null;
+}
+
+/** Favorites is a tab root: no Back control. A left-edge swipe goes Home. */
+export function favoritesShowsBackButton(): false {
+  return false;
+}
+
+export const FAVORITES_SWIPE_EDGE_PX = 28;
+export const FAVORITES_SWIPE_TRIGGER_PX = 56;
+
+export function favoritesSwipeHomeHref(): '/' {
+  return '/';
+}
+
+export function favoritesLeftEdgeSwipeGoesHome(args: {
+  startX: number;
+  dx: number;
+  dy: number;
+}): boolean {
+  if (args.startX > FAVORITES_SWIPE_EDGE_PX) return false;
+  if (args.dx < FAVORITES_SWIPE_TRIGGER_PX) return false;
+  if (Math.abs(args.dy) > args.dx) return false;
+  return true;
+}
+
+/** Tapping the course name starts play through Start Round. */
+export function favoriteNameStartsPlay(): true {
+  return true;
+}
+
 /**
  * Ready only when the waterfall accepted a full card and the course is not HARD-MISS.
  * `paintOk: true` cannot promote Thunderbird.

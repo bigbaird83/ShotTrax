@@ -1,7 +1,18 @@
 import * as Device from 'expo-device';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, findNodeHandle, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  Alert,
+  Animated,
+  findNodeHandle,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { catalogEntryById } from '@/src/course/catalog';
 import { prefetchCourseHydrateOnce, resolveHydrateTeeGreen } from '@/src/course/hydrate';
@@ -54,6 +65,13 @@ import {
   markedSuggestedMessage,
 } from '@/src/domain/playerCopy';
 import { allClubsHref, playHrefAfterHoleChange } from '@/src/domain/playNav';
+import {
+  armHoleTransition,
+  consumeHoleTransition,
+  holeNavDirection,
+  holeSlideStartsOffscreenX,
+  HOLE_SLIDE_MS,
+} from '@/src/domain/holeTransition';
 import { canAdvanceHole, holesNeedingOpenShots } from '@/src/domain/holeAdvance';
 import { isPutterClubId } from '@/src/domain/defaultBag';
 import { catchUpPinFromTap, planCancelCatchUp, planCatchUpSheet } from '@/src/domain/catchUpMap';
@@ -327,6 +345,7 @@ export default function HoleScreen() {
     setEditUndo(null);
     setConfirmUndo(null);
     setMapFramed(false);
+    armHoleTransition(holeNavDirection(holeNumber, nextNumber));
     hapticLight();
     router.replace(playHrefAfterHoleChange(id, nextNumber));
   };
@@ -360,6 +379,29 @@ export default function HoleScreen() {
   useEffect(() => {
     navigation.setOptions({ headerShown: false, title: `Hole ${holeNumber}` });
   }, [navigation, holeNumber]);
+
+  const slideX = useRef(new Animated.Value(0)).current;
+  const { width: holeSlideWidth } = useWindowDimensions();
+  const holeSlideWidthRef = useRef(holeSlideWidth);
+  holeSlideWidthRef.current = holeSlideWidth;
+  const pendingHoleSlide = useRef(consumeHoleTransition());
+
+  useLayoutEffect(() => {
+    const direction = pendingHoleSlide.current ?? consumeHoleTransition();
+    pendingHoleSlide.current = null;
+    if (!direction) {
+      slideX.setValue(0);
+      return;
+    }
+    slideX.setValue(holeSlideStartsOffscreenX(direction, holeSlideWidthRef.current));
+    const anim = Animated.timing(slideX, {
+      toValue: 0,
+      duration: HOLE_SLIDE_MS,
+      useNativeDriver: true,
+    });
+    anim.start();
+    return () => anim.stop();
+  }, [holeNumber, slideX]);
 
   useEffect(() => {
     setMapFramed(false);
@@ -1268,7 +1310,7 @@ export default function HoleScreen() {
   };
 
   return (
-    <View style={styles.fill}>
+    <Animated.View style={[styles.fill, { transform: [{ translateX: slideX }] }]}>
       <View collapsable={false} style={styles.mapFill}>
         <HoleMap
           fullBleed
@@ -2216,7 +2258,7 @@ export default function HoleScreen() {
           <BigButton label={`Add +${penaltyStrokes}`} onPress={onAddPenalty} />
         </ScrollView>
       </FullSheet>
-    </View>
+    </Animated.View>
   );
 }
 
