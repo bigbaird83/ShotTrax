@@ -1,6 +1,7 @@
 import { hydrateHolePassesGates } from '../course/hydrate';
 import { courseIsHardMiss, type CourseIdentity } from './favorites';
 import type { LatLng } from './latLng';
+import { COPY } from './playerCopy';
 
 /**
  * Course requests are a queue plus a user-opened email composer.
@@ -87,11 +88,12 @@ export function buildCourseRequest(input: {
 
 export function courseRequestSubject(payload: CourseRequestPayload): string {
   const place = payload.city ? ` — ${payload.city}` : '';
-  return `Course request: ${payload.name}${place}`;
+  return `${COPY.requestCourseEmailBrand} course request: ${payload.name}${place}`;
 }
 
 export function courseRequestBody(payload: CourseRequestPayload): string {
   return [
+    COPY.requestCourseEmailBrand,
     `Course: ${payload.name}`,
     `City: ${payload.city || '—'}`,
     `Notes: ${payload.notes || '—'}`,

@@ -179,6 +179,8 @@ export const COPY = {
   contributeGrant: 'I grant ShotTraxx commercial use of this map under terms compatible with ODbL.',
   contributeEmailButton: 'Email this contribution',
   requestEmailButton: 'Email this request',
+  /** Published mark. ™ is allowed. Not ®. */
+  requestCourseEmailBrand: 'ShotTraxx™',
   contactEmail: 'ShotTraxx@gmail.com',
   contactHandle: '@ShotTraxx',
   contactLine: 'ShotTraxx@gmail.com · X @ShotTraxx',
