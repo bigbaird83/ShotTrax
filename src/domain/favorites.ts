@@ -132,7 +132,22 @@ export function favoritesLeftEdgeSwipeGoesHome(args: {
   return true;
 }
 
-/** Tapping the course name starts play through Start Round. */
+export type FavoriteRowPressTarget = 'row' | 'star';
+
+/**
+ * Anywhere on the favorite row starts the round.
+ * The star only toggles the favorite and does not play.
+ */
+export function favoriteRowPressAction(target: FavoriteRowPressTarget): 'play' | 'toggle' {
+  return target === 'star' ? 'toggle' : 'play';
+}
+
+/** Top Favorites message is plain text. No card, border, or button chrome. */
+export function favoritesBannerChrome(): 'plain' {
+  return 'plain';
+}
+
+/** A favorite row tap (not the star) starts play through Start Round. */
 export function favoriteNameStartsPlay(): true {
   return true;
 }

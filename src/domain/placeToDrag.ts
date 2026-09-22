@@ -63,6 +63,22 @@ export function toPinYardsRecalcOnReleaseOnly(): true {
   return true;
 }
 
+/** Add-shot pin grows while the finger is down or dragging. Release restores 1. */
+export const ADD_SHOT_TO_PIN_PRESSED_SCALE = 1.6;
+
+export function addShotToPinScalesUpOnPressOrDrag(): true {
+  return true;
+}
+
+export function addShotToPinScaleOnRelease(): 1 {
+  return 1;
+}
+
+export function addShotToPinVisualScale(pressedOrDragging: boolean): number {
+  if (!addShotToPinScalesUpOnPressOrDrag()) return addShotToPinScaleOnRelease();
+  return pressedOrDragging ? ADD_SHOT_TO_PIN_PRESSED_SCALE : addShotToPinScaleOnRelease();
+}
+
 /** Mid-drag does not invent a tee, green, or landing. */
 export function toPinDragInventsMidDrag(): false {
   return false;

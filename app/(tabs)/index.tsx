@@ -33,13 +33,14 @@ import { canFinishBagCarrySetup, countTypedCarries } from '@/src/domain/bagCusto
 import { canStartRound } from '@/src/domain/coursePick';
 import { COPY, formatTeeMeta } from '@/src/domain/playerCopy';
 import { playHrefAfterRoundStart } from '@/src/domain/playNav';
-import { formatHistoryRow } from '@/src/domain/roundHistory';
+import { formatHistoryRow, historyDeletePrompt, pastRoundEditAnytime, pastRoundHoleHref } from '@/src/domain/roundHistory';
 import { describeGpsSource } from '@/src/services/location';
 import { BagCarryList, BagCustomizeActions } from '@/src/ui/BagCarryList';
 import { BigButton } from '@/src/ui/BigButton';
 import { takePendingCoursePick } from '@/src/course/pendingCoursePick';
 import type { CoursePick } from '@/src/ui/CoursePicker';
 import { EmptyPanel } from '@/src/ui/EmptyPanel';
+import { HistorySwipeRow } from '@/src/ui/HistorySwipeRow';
 import { GpsBanner } from '@/src/ui/GpsBanner';
 import { Screen } from '@/src/ui/Screen';
 import { FullSheet } from '@/src/ui/Sheet';
@@ -85,6 +86,7 @@ export default function HomeScreen() {
   const [pickedTee, setPickedTee] = useState<TeeSet | null>(null);
   const [pickedDetail, setPickedDetail] = useState<CourseDetail | null>(null);
   const [starting, setStarting] = useState(false);
+  const [openHistoryId, setOpenHistoryId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [simMessage, setSimMessage] = useState<string | null>(
     Device.isDevice === false ? COPY.simulator : null,
@@ -355,26 +357,37 @@ export default function HomeScreen() {
             teeName: round.teeName,
             score: scored.length ? total : null,
           });
+          const prompt = historyDeletePrompt();
           return (
-            <Pressable
+            <HistorySwipeRow
               key={round.id}
+              open={openHistoryId === round.id}
+              onOpen={() => setOpenHistoryId(round.id)}
+              onClose={() => setOpenHistoryId((current) => (current === round.id ? null : current))}
               onPress={() =>
                 router.push(open ? playHrefAfterRoundStart(round.id) : `/round/${round.id}/summary`)
               }
-              onLongPress={() => {
-                Alert.alert(COPY.deleteRound, COPY.deleteRoundConfirm, [
+              onEdit={() => {
+                if (!pastRoundEditAnytime()) return;
+                setOpenHistoryId(null);
+                router.push(pastRoundHoleHref(round.id, 1));
+              }}
+              onDelete={() => {
+                if (!prompt.cancelIsDefault) return;
+                Alert.alert(prompt.title, prompt.body, [
                   { text: COPY.cancel, style: 'cancel' },
                   {
                     text: COPY.deleteRound,
                     style: 'destructive',
                     onPress: () => {
                       deleteRound(db, round.id);
+                      setOpenHistoryId(null);
                       bump();
                     },
                   },
                 ]);
               }}
-              style={styles.row}>
+              rowStyle={styles.row}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.rowTitle}>{row.courseName}</Text>
                 <Text style={styles.cardMeta}>
@@ -386,7 +399,7 @@ export default function HomeScreen() {
                 <Text style={styles.chip}>{row.relative}</Text>
                 <Text style={styles.score}>{row.score}</Text>
               </View>
-            </Pressable>
+            </HistorySwipeRow>
           );
         })
       )}
