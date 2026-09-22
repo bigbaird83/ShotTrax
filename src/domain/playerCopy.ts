@@ -1,5 +1,8 @@
 /** Player-facing copy. Accuracy / API / OSM rules stay in code, not on screen. */
 
+/** Published mark (USPTO SN 50113482). ™ only. Not ®. */
+export const SHOTTRAXX_BRAND = 'ShotTraxx™' as const;
+
 export const COPY = {
   homeLede: 'Find a course, pick your tee, start the round.',
   home: 'Home',
@@ -21,6 +24,15 @@ export const COPY = {
   deleteShot: 'Delete shot',
   deleteShotConfirm: 'Delete this shot?',
   roundHistory: 'Round history',
+  exportRounds: 'Export rounds',
+  exportRoundsEmpty: 'No rounds to export.',
+  exportRoundsFailed: 'Couldn’t open the share sheet.',
+  restoreRounds: 'Restore rounds',
+  restoreRoundsTitle: 'Restore rounds',
+  restoreRoundsHint: `Paste the ${SHOTTRAXX_BRAND} rounds JSON from the other phone. No account.`,
+  restoreRoundsAction: 'Restore',
+  restoreRoundsFailed: `That isn’t a ${SHOTTRAXX_BRAND} rounds file.`,
+  restoreRoundsEmpty: 'Those rounds are already on this phone.',
   noRounds: 'Your first round will show up here.',
   firstRoundHint: 'Pick a course and start 9 or 18.',
   nearbyEmptyHint: 'Pull to refresh, or search by name, city, state, or zip.',
@@ -48,7 +60,7 @@ export const COPY = {
   liveBoardWatch: 'Watch a live board',
   liveBoardCodeHint: 'Enter the 6-character code.',
   liveBoardNeedsHost: 'Live refresh on other phones needs a share host.',
-  spectatorTitle: 'ShotTraxx',
+  spectatorTitle: SHOTTRAXX_BRAND,
   spectatorLive: 'Live',
   spectatorFinished: 'Finished',
   spectatorNeedsNoLocation: 'Spectator view — no location needed.',
@@ -163,13 +175,14 @@ export const COPY = {
   offlineMiss: 'Miss (no map)',
   requestThisCourse: 'Request this course',
   requestCourseTitle: 'Request this course',
-  requestCourseLede: 'Tell us the course. This opens your email app — ShotTraxx does not send it for you.',
+  requestCourseLede: `Tell us the course. This opens your email app — ${SHOTTRAXX_BRAND} does not send it for you.`,
   contributeCourse: 'Contribute a course',
   contributeCourseTitle: 'Contribute a course',
   contributeThanks: 'Thanks — if we accept and publish your map, you get 1 free year.',
-  contributeGrant: 'I grant ShotTraxx commercial use of this map under terms compatible with ODbL.',
+  contributeGrant: `I grant ${SHOTTRAXX_BRAND} commercial use of this map under terms compatible with ODbL.`,
   contributeEmailButton: 'Email this contribution',
   requestEmailButton: 'Email this request',
+  requestCourseEmailBrand: SHOTTRAXX_BRAND,
   contactEmail: 'ShotTraxx@gmail.com',
   contactHandle: '@ShotTraxx',
   contactLine: 'ShotTraxx@gmail.com · X @ShotTraxx',

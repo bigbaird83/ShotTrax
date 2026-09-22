@@ -6,9 +6,11 @@ import type { LatLng } from '../domain/latLng';
 import { COPY } from '../domain/playerCopy';
 import {
   buildCourseRequest,
+  courseRequestBody,
   courseRequestMailto,
   courseRequestMutatesPaint,
   courseRequestSendsWithoutConfirm,
+  courseRequestSubject,
   listCourseRequests,
   queueCourseRequest,
   SHOTTRAXX_CONTACT_EMAIL,
@@ -375,7 +377,20 @@ test('course request payload keeps email, handle, and fields and does not paint'
   assert.equal(payload.email, 'ShotTraxx@gmail.com');
   assert.equal(payload.handle, '@ShotTraxx');
   const mailto = courseRequestMailto(payload);
+  assert.equal(COPY.requestCourseEmailBrand, 'ShotTraxx™');
+  assert.equal(COPY.spectatorTitle, 'ShotTraxx™');
+  assert.match(COPY.restoreRoundsHint, /ShotTraxx™/);
+  assert.match(COPY.restoreRoundsFailed, /ShotTraxx™/);
+  assert.match(COPY.requestCourseLede, /ShotTraxx™/);
+  assert.match(COPY.contributeGrant, /ShotTraxx™/);
+  assert.doesNotMatch(COPY.restoreRoundsHint, /®/);
+  assert.doesNotMatch(COPY.contributeGrant, /®/);
+  assert.equal(courseRequestSubject(payload), 'ShotTraxx™ course request: Oak Hills — Cabot');
+  assert.match(courseRequestBody(payload), /^ShotTraxx™\n/);
+  assert.doesNotMatch(courseRequestSubject(payload), /®/);
+  assert.doesNotMatch(courseRequestBody(payload), /®/);
   assert.match(mailto, /^mailto:ShotTraxx@gmail.com\?/);
+  assert.match(decodeURIComponent(mailto), /ShotTraxx™/);
   assert.match(decodeURIComponent(mailto), /Oak Hills/);
   assert.match(decodeURIComponent(mailto), /Cabot/);
   assert.match(decodeURIComponent(mailto), /nine holes, no map/);

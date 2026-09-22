@@ -38,6 +38,12 @@ import { clubAverageFromShots, type ClubAverage } from '../domain/averages';
 import { rememberResolvedTee } from '../course/osmOverlay';
 import { COURSE_PAINT_CACHE_SETTING_KEY } from '../course/paintCache';
 import { isValidLatLng } from '../domain/latLng';
+import {
+  buildRoundHistoryExport,
+  planRoundHistoryImport,
+  type RoundHistoryDocument,
+  type RoundTransferRound,
+} from '../domain/roundTransfer';
 import { newShareBoardCode, normalizeShareBoardCode } from '../domain/liveBoard';
 import { parseSpectatorPayload, type SpectatorPayload } from '../domain/spectator';
 import { planFinishHoleScore, planRecomputeFinishedHoleScore } from '../domain/holeScore';
@@ -580,6 +586,199 @@ export function attachCourseToRound(
       }
     }
   });
+}
+
+export function collectRoundHistoryExport(db: SQLiteDatabase, exportedAt: string): RoundHistoryDocument {
+  const rounds = listRounds(db).map((round) => ({
+    startedAt: round.startedAt,
+    finishedAt: round.finishedAt,
+    courseName: round.courseName,
+    holeCount: round.holeCount,
+    courseApiId: round.courseApiId,
+    courseLat: round.courseLat,
+    courseLng: round.courseLng,
+    teeName: round.teeName,
+    teeRating: round.teeRating,
+    teeSlope: round.teeSlope,
+    teeTotalYards: round.teeTotalYards,
+    holes: listHoles(db, round.id).map((hole) => ({
+      number: hole.number,
+      par: hole.par,
+      parSource: hole.parSource,
+      score: hole.score,
+      yards: hole.yards,
+      handicap: hole.handicap,
+      teeLat: hole.teeLat,
+      teeLng: hole.teeLng,
+      greenLat: hole.greenLat,
+      greenLng: hole.greenLng,
+      greenSource: hole.greenSource,
+      greenFrontLat: hole.greenFrontLat,
+      greenFrontLng: hole.greenFrontLng,
+      greenBackLat: hole.greenBackLat,
+      greenBackLng: hole.greenBackLng,
+      greenDepthYards: hole.greenDepthYards,
+      putts: hole.putts,
+      puttLengths: hole.puttLengths,
+      puttsDone: hole.puttsDone,
+      shots: listShotsForHole(db, hole.id).map((shot) => ({
+        clubId: shot.clubId,
+        seq: shot.seq,
+        startLat: shot.startLat,
+        startLng: shot.startLng,
+        endLat: shot.endLat,
+        endLng: shot.endLng,
+        startAccuracyM: shot.startAccuracyM,
+        endAccuracyM: shot.endAccuracyM,
+        startFixQuality: shot.startFixQuality,
+        endFixQuality: shot.endFixQuality,
+        distanceYards: shot.distanceYards,
+        typedYards: shot.typedYards,
+        fixQuality: shot.fixQuality,
+        impossibleJump: shot.impossibleJump,
+        startedAt: shot.startedAt,
+        endedAt: shot.endedAt,
+        source: shot.source,
+        suggested: shot.suggested,
+        holeOut: shot.holeOut,
+        averageEligibleAt: shot.averageEligibleAt ?? null,
+      })),
+    })),
+  }));
+  return buildRoundHistoryExport({ rounds, exportedAt });
+}
+
+function roundTransferKey(round: {
+  startedAt: string;
+  courseName: string | null;
+  holeCount: number;
+}): string {
+  return `${round.startedAt}|${round.courseName ?? ''}|${round.holeCount}`;
+}
+
+/**
+ * Write a planned transfer. New ids. Skips a round already stored with the
+ * same start, course, and length so a second restore does not double-count.
+ * Does not write a stored average. Club averages recompute from shots.
+ */
+export function restoreRoundHistory(
+  db: SQLiteDatabase,
+  raw: unknown,
+): { ok: true; rounds: number; shots: number; rejectedShots: number } | { ok: false; reason: string } {
+  const plan = planRoundHistoryImport(raw);
+  if (!plan.ok) return plan;
+  const clubs = new Set(db.getAllSync<{ id: string }>('SELECT id FROM clubs').map((row) => row.id));
+  const seen = new Set(listRounds(db).map(roundTransferKey));
+  let rounds = 0;
+  let shots = 0;
+  db.withTransactionSync(() => {
+    for (const round of plan.rounds) {
+      const key = roundTransferKey(round);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      insertTransferredRound(db, round, clubs);
+      rounds += 1;
+      shots += round.holes.reduce((sum, hole) => sum + hole.shots.length, 0);
+    }
+  });
+  return { ok: true, rounds, shots, rejectedShots: plan.rejectedShots };
+}
+
+function insertTransferredRound(
+  db: SQLiteDatabase,
+  round: RoundTransferRound,
+  clubs: Set<string>,
+): void {
+  const roundId = newId();
+  const courseLoc = isValidLatLng(
+    round.courseLat != null && round.courseLng != null
+      ? { lat: round.courseLat, lng: round.courseLng }
+      : null,
+  )
+    ? { lat: round.courseLat as number, lng: round.courseLng as number }
+    : null;
+  db.runSync(
+    'INSERT INTO rounds (id, started_at, finished_at, course_name, hole_count, course_api_id, course_lat, course_lng, tee_name, tee_rating, tee_slope, tee_total_yards, last_club_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)',
+    [
+      roundId,
+      round.startedAt,
+      round.finishedAt,
+      round.courseName,
+      round.holeCount,
+      round.courseApiId,
+      courseLoc?.lat ?? null,
+      courseLoc?.lng ?? null,
+      round.teeName,
+      round.teeRating,
+      round.teeSlope,
+      round.teeTotalYards,
+    ],
+  );
+  for (const hole of round.holes) {
+    const holeId = newId();
+    db.runSync(
+      'INSERT INTO holes (id, round_id, number, par, par_source, score, yards, handicap, green_lat, green_lng, green_source, green_front_lat, green_front_lng, green_back_lat, green_back_lng, green_depth_yards, tee_lat, tee_lng, putts, putt_lengths, putts_done) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        holeId,
+        roundId,
+        hole.number,
+        hole.par,
+        hole.parSource,
+        hole.score,
+        hole.yards,
+        hole.handicap,
+        hole.green?.lat ?? null,
+        hole.green?.lng ?? null,
+        hole.green ? hole.greenSource : null,
+        hole.greenFront?.lat ?? null,
+        hole.greenFront?.lng ?? null,
+        hole.greenBack?.lat ?? null,
+        hole.greenBack?.lng ?? null,
+        hole.greenDepthYards,
+        hole.tee?.lat ?? null,
+        hole.tee?.lng ?? null,
+        hole.putts,
+        hole.puttLengths.length ? hole.puttLengths.join(',') : null,
+        hole.puttsDone ? 1 : 0,
+      ],
+    );
+    for (const shot of hole.shots) {
+      const clubId = shot.clubId && clubs.has(shot.clubId) ? shot.clubId : null;
+      db.runSync(
+        `INSERT INTO shots (
+          id, hole_id, club_id, seq,
+          start_lat, start_lng, start_accuracy_m, start_fix_quality,
+          end_lat, end_lng, end_accuracy_m, end_fix_quality,
+          distance_yards, typed_yards, fix_quality, impossible_jump,
+          started_at, ended_at, source, suggested, average_eligible_at, hole_out
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          newId(),
+          holeId,
+          clubId,
+          shot.seq,
+          shot.start.lat,
+          shot.start.lng,
+          shot.startAccuracyM,
+          shot.startFixQuality,
+          shot.end.lat,
+          shot.end.lng,
+          shot.endAccuracyM,
+          shot.endFixQuality,
+          shot.distanceYards,
+          shot.typedYards,
+          shot.fixQuality,
+          shot.impossibleJump ? 1 : 0,
+          shot.startedAt,
+          shot.endedAt,
+          shot.source,
+          shot.suggested ? 1 : 0,
+          shot.averageEligibleAt,
+          shot.holeOut ? 1 : 0,
+        ],
+      );
+    }
+  }
 }
 
 export function finishRound(db: SQLiteDatabase, id: string): void {

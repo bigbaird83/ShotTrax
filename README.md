@@ -4,7 +4,7 @@ Phone GPS golf shot tracker (no club sensors). **This branch is P5.x** on P1–P
 
 P5.x is the on-course hero: **pick a club to mark GPS**, sticky **Same club** one-tap, Drop vs Penalty, delete round, haptics, and a thumb-zone layout. **Player voice only** on screen — no API/OSM/GPS-meter footnotes. F/M/B distances show only when course data includes front and back pins (never invented from a single green). Rating and slope sit on the tee. An Apple Watch companion picks clubs (top-3 + bag + Same club) and finishes the hole with the same Putter → buckets → **Made it** flow. StoreKit, Photos, and microphone stay out of scope.
 
-User-facing name is **ShotTraxx** (`app.json` `expo.name`, iOS `CFBundleDisplayName`, Android `label` / home screen). Bundle ID `com.shottrax.app` and Expo slug `shottrax` stay unchanged (App Store ID). Home-screen icon is the locked Build 36 night-green Shot/Traxx mark at `assets/images/icon.png` (see `assets/images/README.md`). Splash / launch still is the first frame of Doc’s 3s open clip (new mark), not the old fairway wordmark.
+User-facing name is **ShotTraxx™** (`app.json` `expo.name`, iOS `CFBundleDisplayName`, Android `label` / home screen). Bundle ID `com.shottrax.app` and Expo slug `shottrax` stay unchanged (App Store ID). Home-screen icon is the locked Build 36 night-green Shot/Traxx mark at `assets/images/icon.png` (see `assets/images/README.md`). Splash / launch still is the first frame of Doc’s 3s open clip (new mark), not the old fairway wordmark.
 
 ## Run (iOS first)
 
@@ -118,7 +118,7 @@ eas submit -p ios
 ### Install on the phone
 
 1. In [App Store Connect](https://appstoreconnect.apple.com), open the app → TestFlight → add yourself as an **internal tester**.
-2. On the iPhone, install the **TestFlight** app from the App Store, accept the invite, install ShotTraxx.
+2. On the iPhone, install the **TestFlight** app from the App Store, accept the invite, install ShotTraxx™.
 
 ### Profiles in `eas.json`
 

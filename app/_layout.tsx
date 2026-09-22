@@ -7,6 +7,7 @@ import { startWatchClubBridge } from '@/src/services/watchClub';
 import { useWatchNearbyStart } from '@/src/services/useWatchNearbyStart';
 import { BrandedSplash } from '@/src/ui/BrandedSplash';
 import { ColorThemeProvider, useColors, useColorTheme } from '@/src/ui/ColorThemeProvider';
+import { SHOTTRAXX_BRAND } from '@/src/domain/playerCopy';
 import { expoStackBackTitle } from '@/src/domain/playNav';
 import { colors as fallbackColors } from '@/src/ui/theme';
 
@@ -49,10 +50,11 @@ function ThemedNavigation() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false, title: 'Home' }} />
           <Stack.Screen name="round/[id]" options={{ headerShown: false, title: 'Round' }} />
           <Stack.Screen name="search" options={{ title: 'Search', headerBackTitle: 'Home' }} />
-          <Stack.Screen name="s/[token]" options={{ title: 'ShotTraxx' }} />
+          <Stack.Screen name="s/[token]" options={{ title: SHOTTRAXX_BRAND }} />
           <Stack.Screen name="nerd-out" options={{ title: 'Nerd out' }} />
           <Stack.Screen name="board" options={{ title: 'Live board' }} />
           <Stack.Screen name="request-course" options={{ title: 'Request this course' }} />
+          <Stack.Screen name="restore-rounds" options={{ title: 'Restore rounds' }} />
           <Stack.Screen name="contribute-course" options={{ title: 'Contribute a course' }} />
           <Stack.Screen
             name="settings"

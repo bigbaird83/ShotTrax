@@ -2,7 +2,7 @@
 module.exports = (config) => ({
   type: 'watch',
   name: 'ShotTraxxWatch',
-  displayName: 'ShotTraxx',
+  displayName: 'ShotTraxx™',
   bundleIdentifier: `${config.ios.bundleIdentifier}.watch`,
   deploymentTarget: '10.0',
   icon: '../../assets/images/icon.png',

@@ -172,10 +172,10 @@ test('Favorites Back and a left-edge swipe both go Home', () => {
   assert.doesNotMatch(tabs, /headerBackVisible: false/);
 });
 
-test('add-shot to-pin follows the finger and yards update on release only', () => {
+test('add-shot to-pin follows the finger and yards update while dragging', () => {
   assert.equal(toPinFollowsFinger(), true);
-  assert.equal(toPinYardsRecalcOnDragMove(), false);
-  assert.equal(toPinYardsRecalcOnReleaseOnly(), true);
+  assert.equal(toPinYardsRecalcOnDragMove(), true);
+  assert.equal(toPinYardsRecalcOnReleaseOnly(), false);
   assert.equal(toPinDragInventsMidDrag(), false);
   const released = placeToDraftFromDragRelease({ lat: 33.27, lng: -93.24 });
   assert.deepEqual(released, { lat: 33.27, lng: -93.24 });

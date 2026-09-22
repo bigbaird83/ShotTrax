@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import {
+  HISTORY_SWIPE_DELETE_PX,
+  HISTORY_SWIPE_EDIT_PX,
   HISTORY_SWIPE_REVEAL_PX,
-  historySwipeShouldClose,
-  historySwipeShouldOpen,
+  historySwipeRestOffset,
+  historySwipeSnap,
 } from '@/src/domain/roundHistory';
 import { COPY } from '@/src/domain/playerCopy';
 import { useColors } from './ColorThemeProvider';
@@ -38,7 +40,7 @@ export function HistorySwipeRow({
 
   useEffect(() => {
     Animated.spring(x, {
-      toValue: open ? -HISTORY_SWIPE_REVEAL_PX : 0,
+      toValue: historySwipeRestOffset(open),
       useNativeDriver: true,
       bounciness: 0,
       speed: 20,
@@ -55,12 +57,27 @@ export function HistorySwipeRow({
         x.setValue(next);
       },
       onPanResponderRelease: (_, gesture) => {
-        if (openRef.current) {
-          if (historySwipeShouldClose(gesture.dx, gesture.dy)) callbacks.current.onClose();
-          else callbacks.current.onOpen();
-          return;
-        }
-        if (historySwipeShouldOpen(gesture.dx, gesture.dy)) callbacks.current.onOpen();
+        const snap = historySwipeSnap({
+          dx: gesture.dx,
+          dy: gesture.dy,
+          open: openRef.current,
+        });
+        if (snap === 'open') callbacks.current.onOpen();
+        else callbacks.current.onClose();
+        Animated.spring(x, {
+          toValue: historySwipeRestOffset(snap === 'open'),
+          useNativeDriver: true,
+          bounciness: 0,
+          speed: 20,
+        }).start();
+      },
+      onPanResponderTerminate: (_, gesture) => {
+        const snap = historySwipeSnap({
+          dx: gesture.dx,
+          dy: gesture.dy,
+          open: openRef.current,
+        });
+        if (snap === 'open') callbacks.current.onOpen();
         else callbacks.current.onClose();
       },
     }),
@@ -105,16 +122,17 @@ function makeStyles(colors: ColorPalette) {
       flexDirection: 'row',
     },
     edit: {
-      flex: 1,
+      width: HISTORY_SWIPE_EDIT_PX,
       backgroundColor: colors.bgElevated,
       alignItems: 'center',
       justifyContent: 'center',
+      paddingHorizontal: 8,
       borderWidth: 1,
       borderColor: colors.line,
     },
     editText: { color: colors.cream, fontSize: type.button, fontWeight: '800' },
     delete: {
-      width: 56,
+      width: HISTORY_SWIPE_DELETE_PX,
       backgroundColor: colors.red,
       alignItems: 'center',
       justifyContent: 'center',

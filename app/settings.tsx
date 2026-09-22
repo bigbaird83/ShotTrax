@@ -85,7 +85,6 @@ export default function SettingsScreen() {
       <Text style={styles.creditsTitle}>{COPY.credits}</Text>
       <Text style={styles.credits}>{COPY.courseDataCredits}</Text>
       <Text style={styles.contact}>{COPY.contactLine}</Text>
-      <BigButton label={COPY.requestThisCourse} variant="secondary" onPress={() => router.push('/request-course')} />
       <BigButton label={COPY.contributeCourse} variant="ghost" onPress={() => router.push('/contribute-course')} />
     </Screen>
   );

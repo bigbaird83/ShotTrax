@@ -25,16 +25,24 @@ import {
   holeNativeCameraIsPaintable,
 } from '@/src/domain/mapPaint';
 import {
+  ADD_SHOT_PATH_DOT_PX,
   ADD_SHOT_TO_PIN_HIT_H,
   ADD_SHOT_TO_PIN_HIT_W,
+  addShotPathDotFollowsPin,
+  addShotToPinAnchor,
+  addShotToPinBox,
   addShotToPinScalesUpOnPressOrDrag,
+  addShotToPinStaysCenteredOnPath,
   addShotToPinTracksViewChanges,
   addShotToPinVisualScale,
   holeMapKeepsScrollZoomOnceMounted,
+  liveDragPointForLines,
   placeToDraftFromDragRelease,
   planDragShotLines,
   toPinMarkerCoordinate,
+  toPinYardsRecalcOnDragMove,
 } from '@/src/domain/placeToDrag';
+import { requestThisCourseVisible } from '@/src/domain/courseRequest';
 import { COPY, showWaitingOnLocationLine } from '@/src/domain/playerCopy';
 import { appleBasemapTilesBestEffortOnly } from '@/src/course/startRoundEntry';
 import { isValidLatLng } from '@/src/domain/latLng';
@@ -168,20 +176,31 @@ function TrailFallback({
         <Text style={styles.holeBadgeText}>Hole {holeNumber}</Text>
         <Text style={styles.missMsg}>{missCopy?.title ?? COPY.courseCardMissingFrame}</Text>
         {missCopy?.detail ? <Text style={styles.missDetail}>{missCopy.detail}</Text> : null}
-        <Pressable
-          accessibilityRole="button"
-          onPress={() =>
-            router.push({
-              pathname: '/request-course',
-              params: {
-                name: requestCourse?.name ?? '',
-                city: requestCourse?.city ?? '',
-                courseId: requestCourse?.courseId ?? '',
-              },
-            })
-          }>
-          <Text style={styles.missDetail}>{COPY.requestThisCourse}</Text>
-        </Pressable>
+        {requestThisCourseVisible({
+          course: {
+            name: requestCourse?.name,
+            city: requestCourse?.city,
+            courseKey: requestCourse?.courseId,
+            courseApiId: requestCourse?.courseId,
+          },
+          hasTeeGreenPaint: false,
+          paintKnown: true,
+        }) ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() =>
+              router.push({
+                pathname: '/request-course',
+                params: {
+                  name: requestCourse?.name ?? '',
+                  city: requestCourse?.city ?? '',
+                  courseId: requestCourse?.courseId ?? '',
+                },
+              })
+            }>
+            <Text style={styles.missDetail}>{COPY.requestThisCourse}</Text>
+          </Pressable>
+        ) : null}
       </View>
     );
   }
@@ -193,6 +212,102 @@ function TrailFallback({
       ) : null}
       {waiting ? <Text style={styles.fallbackMsg}>{COPY.waitingOnLocation}</Text> : null}
     </View>
+  );
+}
+
+type LatLng = { lat: number; lng: number };
+
+/**
+ * Owns the in-progress drag point. setState here redraws the lines, yard
+ * chips, and path dot without re-rendering the draggable pin, so the native
+ * marker keeps following the finger.
+ */
+function LiveDragGeometry({
+  placedTo,
+  lineFrom,
+  lineGreen,
+  onPlaceToDrag,
+  setLiveDrag,
+}: {
+  placedTo?: LatLng | null;
+  lineFrom?: LatLng | null;
+  lineGreen?: LatLng | null;
+  onPlaceToDrag?: (coord: LatLng) => void;
+  setLiveDrag: { current: (point: LatLng | null) => void };
+}) {
+  const [liveDrag, setLive] = useState<LatLng | null>(null);
+  setLiveDrag.current = setLive;
+
+  useEffect(() => {
+    setLive(null);
+  }, [placedTo?.lat, placedTo?.lng]);
+
+  const dragPoint = liveDragPointForLines({ live: liveDrag, placed: placedTo ?? null });
+  const dragLines = useMemo(() => {
+    if (!onPlaceToDrag || !dragPoint) return { shot: null, toGreen: null };
+    return planDragShotLines({
+      from: lineFrom ?? null,
+      drag: dragPoint,
+      green: lineGreen ?? null,
+    });
+  }, [onPlaceToDrag, lineFrom, lineGreen, dragPoint]);
+
+  return (
+    <>
+      {dragLines.shot ? (
+        <Polyline
+          coordinates={[
+            toCoord(dragLines.shot.from.lat, dragLines.shot.from.lng),
+            toCoord(dragLines.shot.to.lat, dragLines.shot.to.lng),
+          ]}
+          strokeColor={colors.cream}
+          strokeWidth={3}
+          lineDashPattern={[8, 6]}
+        />
+      ) : null}
+      {dragLines.shot && addShotPathDotFollowsPin() ? (
+        <Marker
+          coordinate={toCoord(dragLines.shot.to.lat, dragLines.shot.to.lng)}
+          anchor={{ x: 0.5, y: 0.5 }}
+          tappable={false}
+          tracksViewChanges={false}>
+          <View pointerEvents="none" testID="shot-path-dot" style={styles.pathDot} />
+        </Marker>
+      ) : null}
+      {dragLines.toGreen ? (
+        <Polyline
+          coordinates={[
+            toCoord(dragLines.toGreen.from.lat, dragLines.toGreen.from.lng),
+            toCoord(dragLines.toGreen.to.lat, dragLines.toGreen.to.lng),
+          ]}
+          strokeColor={colors.cream}
+          strokeWidth={3}
+          lineDashPattern={[8, 6]}
+        />
+      ) : null}
+      {dragLines.shot ? (
+        <Marker
+          coordinate={toCoord(dragLines.shot.mid.lat, dragLines.shot.mid.lng)}
+          anchor={{ x: 0.5, y: 0.5 }}
+          tappable={false}
+          tracksViewChanges>
+          <View pointerEvents="none" style={styles.lineChip}>
+            <Text style={styles.lineChipValue}>{dragLines.shot.label}</Text>
+          </View>
+        </Marker>
+      ) : null}
+      {dragLines.toGreen ? (
+        <Marker
+          coordinate={toCoord(dragLines.toGreen.mid.lat, dragLines.toGreen.mid.lng)}
+          anchor={{ x: 0.5, y: 0.5 }}
+          tappable={false}
+          tracksViewChanges>
+          <View pointerEvents="none" style={[styles.lineChip, styles.lineChipGreen]}>
+            <Text style={styles.lineChipValue}>{dragLines.toGreen.label}</Text>
+          </View>
+        </Marker>
+      ) : null}
+    </>
   );
 }
 
@@ -236,6 +351,7 @@ function NativeHoleMap({
   const [toPinDragOrigin, setToPinDragOrigin] = useState<{ lat: number; lng: number } | null>(
     null,
   );
+  const setLiveDrag = useRef<(point: { lat: number; lng: number } | null) => void>(() => {});
   const [toPinHeld, setToPinHeld] = useState(false);
   const toPinEngaged = toPinHeld || toPinDragOrigin != null;
   const [toPinTracksView, setToPinTracksView] = useState(false);
@@ -245,11 +361,16 @@ function NativeHoleMap({
     placedTo: placedTo ?? null,
     dragOrigin: toPinDragOrigin,
   });
+  const toPinMapCoordinate = useMemo(
+    () => (toPinCoordinate ? toCoord(toPinCoordinate.lat, toPinCoordinate.lng) : null),
+    [toPinCoordinate?.lat, toPinCoordinate?.lng],
+  );
 
   useEffect(() => {
     if (!placedTo) {
       setToPinDragOrigin(null);
       setToPinHeld(false);
+      setLiveDrag.current(null);
     }
   }, [placedTo]);
 
@@ -318,15 +439,6 @@ function NativeHoleMap({
   }, [lockedPoints]);
 
   const holeFrameOnScreen = Boolean(holeUpCamera || lockedRegion);
-
-  const dragLines = useMemo(() => {
-    if (!onPlaceToDrag || !placedTo) return { shot: null, toGreen: null };
-    return planDragShotLines({
-      from: lineFrom ?? null,
-      drag: placedTo,
-      green: lineGreen ?? null,
-    });
-  }, [onPlaceToDrag, lineFrom, lineGreen, placedTo]);
 
   const lockedCameraRef = useRef(holeUpCamera);
   lockedCameraRef.current = holeUpCamera;
@@ -660,16 +772,15 @@ function NativeHoleMap({
             tracksViewChanges={false}
           />
         ) : null}
-        {toPinCoordinate ? (
+        {toPinMapCoordinate ? (
           <Marker
             // One-finger hold-drag is this Marker only — tight hit, not a
-            // map-covering View. iOS gives an overlay the gesture stream and
-            // pan/pinch never reach the map on first Add shot or after edit.
-            // React coordinate stays at drag-start so a yards update cannot snap
-            // the annotation. The marker follows the finger natively. Yards
-            // commit on release only. Map background keeps pan/pinch.
-            coordinate={toCoord(toPinCoordinate.lat, toPinCoordinate.lng)}
-            anchor={{ x: 0.5, y: 1 }}
+            // map-covering View. React coordinate stays at drag-start so a
+            // live yards re-render cannot snap the annotation or pan the
+            // camera. Lines and yard chips follow liveDrag. The draft commits
+            // on release. The pin tip stays on that path point.
+            coordinate={toPinMapCoordinate}
+            anchor={addShotToPinAnchor()}
             tappable={false}
             tracksViewChanges={addShotToPinTracksViewChanges({
               dragOriginSet: toPinDragOrigin != null,
@@ -684,11 +795,20 @@ function NativeHoleMap({
               }
               if (!placedTo) return;
               setToPinDragOrigin(placedTo);
+              setLiveDrag.current(placedTo);
+            }}
+            onDrag={(event) => {
+              if (!toPinYardsRecalcOnDragMove()) return;
+              const { latitude, longitude } = event.nativeEvent.coordinate;
+              const point = placeToDraftFromDragRelease({ lat: latitude, lng: longitude });
+              if (!point) return;
+              setLiveDrag.current(point);
             }}
             onDragEnd={(event) => {
               setToPinHeld(false);
               setToPinDragOrigin(null);
               setToPinTracksView(true);
+              setLiveDrag.current(null);
               if (!onPlaceToDrag) return;
               const { latitude, longitude } = event.nativeEvent.coordinate;
               const released = placeToDraftFromDragRelease({ lat: latitude, lng: longitude });
@@ -710,13 +830,33 @@ function NativeHoleMap({
               }}
               style={[
                 styles.toPinHit,
-                {
-                  transform: [{ scale: addShotToPinVisualScale(toPinEngaged) }],
-                  transformOrigin: 'bottom',
-                },
+                addShotToPinStaysCenteredOnPath()
+                  ? {
+                      width: addShotToPinBox(addShotToPinVisualScale(toPinEngaged)).width,
+                      height: addShotToPinBox(addShotToPinVisualScale(toPinEngaged)).height,
+                      justifyContent: 'flex-end',
+                    }
+                  : null,
               ]}>
-              <View style={styles.toPinHead} />
-              <View style={styles.toPinStem} />
+              <View
+                style={[
+                  styles.toPinHead,
+                  {
+                    width: 22 * addShotToPinVisualScale(toPinEngaged),
+                    height: 22 * addShotToPinVisualScale(toPinEngaged),
+                    borderRadius: 11 * addShotToPinVisualScale(toPinEngaged),
+                  },
+                ]}
+              />
+              <View
+                style={[
+                  styles.toPinStem,
+                  {
+                    width: 3 * addShotToPinVisualScale(toPinEngaged),
+                    height: 16 * addShotToPinVisualScale(toPinEngaged),
+                  },
+                ]}
+              />
             </View>
           </Marker>
         ) : null}
@@ -738,50 +878,13 @@ function NativeHoleMap({
             <View pointerEvents="none" style={styles.userDot} />
           </Marker>
         ) : null}
-        {dragLines.shot ? (
-          <Polyline
-            coordinates={[
-              toCoord(dragLines.shot.from.lat, dragLines.shot.from.lng),
-              toCoord(dragLines.shot.to.lat, dragLines.shot.to.lng),
-            ]}
-            strokeColor={colors.cream}
-            strokeWidth={3}
-            lineDashPattern={[8, 6]}
-          />
-        ) : null}
-        {dragLines.toGreen ? (
-          <Polyline
-            coordinates={[
-              toCoord(dragLines.toGreen.from.lat, dragLines.toGreen.from.lng),
-              toCoord(dragLines.toGreen.to.lat, dragLines.toGreen.to.lng),
-            ]}
-            strokeColor={colors.cream}
-            strokeWidth={3}
-            lineDashPattern={[8, 6]}
-          />
-        ) : null}
-        {dragLines.shot ? (
-          <Marker
-            coordinate={toCoord(dragLines.shot.mid.lat, dragLines.shot.mid.lng)}
-            anchor={{ x: 0.5, y: 0.5 }}
-            tappable={false}
-            tracksViewChanges>
-            <View pointerEvents="none" style={styles.lineChip}>
-              <Text style={styles.lineChipValue}>{dragLines.shot.label}</Text>
-            </View>
-          </Marker>
-        ) : null}
-        {dragLines.toGreen ? (
-          <Marker
-            coordinate={toCoord(dragLines.toGreen.mid.lat, dragLines.toGreen.mid.lng)}
-            anchor={{ x: 0.5, y: 0.5 }}
-            tappable={false}
-            tracksViewChanges>
-            <View pointerEvents="none" style={[styles.lineChip, styles.lineChipGreen]}>
-              <Text style={styles.lineChipValue}>{dragLines.toGreen.label}</Text>
-            </View>
-          </Marker>
-        ) : null}
+        <LiveDragGeometry
+          placedTo={placedTo}
+          lineFrom={lineFrom}
+          lineGreen={lineGreen}
+          onPlaceToDrag={onPlaceToDrag}
+          setLiveDrag={setLiveDrag}
+        />
       </MapView>
       ) : null}
       {showMapCover ? (
@@ -945,5 +1048,13 @@ const styles = StyleSheet.create({
     height: 16,
     marginTop: -2,
     backgroundColor: colors.good,
+  },
+  pathDot: {
+    width: ADD_SHOT_PATH_DOT_PX,
+    height: ADD_SHOT_PATH_DOT_PX,
+    borderRadius: ADD_SHOT_PATH_DOT_PX / 2,
+    backgroundColor: colors.cream,
+    borderWidth: 3,
+    borderColor: colors.good,
   },
 });

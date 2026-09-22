@@ -1,4 +1,4 @@
-import { COPY } from './playerCopy';
+import { COPY, SHOTTRAXX_BRAND } from './playerCopy';
 import type { FixQuality, Shot, ShotFixQuality } from './types';
 
 export const SPECTATOR_PAYLOAD_VERSION = 1 as const;
@@ -112,7 +112,7 @@ export function shareSheetPassesUrl(): false {
 export function shareSheetContent(args: {
   message: string;
   imageUrl?: string | null;
-}): { message: string; title: 'ShotTraxx'; url?: string } {
+}): { message: string; title: typeof SHOTTRAXX_BRAND; url?: string } {
   const url = args.imageUrl?.trim() ?? '';
   const localPng =
     /^file:\/\//i.test(url) &&
@@ -120,8 +120,8 @@ export function shareSheetContent(args: {
     !shareMessageIncludesPayloadQuery(url) &&
     !/shottrax:\/\//i.test(url);
   return localPng
-    ? { message: args.message, title: 'ShotTraxx', url }
-    : { message: args.message, title: 'ShotTraxx' };
+    ? { message: args.message, title: SHOTTRAXX_BRAND, url }
+    : { message: args.message, title: SHOTTRAXX_BRAND };
 }
 
 /** Full `?p=` spectator body must never land in the share text. */
@@ -161,7 +161,7 @@ export function formatShareScorecard(args: {
   const rows = [...args.holes]
     .sort((a, b) => a.hole - b.hole)
     .map((row) => `${row.hole}  ${row.score == null ? '—' : String(row.score)}`);
-  const lines = ['ShotTraxx', headline, ...rows];
+  const lines = [SHOTTRAXX_BRAND, headline, ...rows];
   const last = args.lastClubYards?.trim();
   if (last) lines.push(`Last: ${last}`);
   return lines.join('\n');
@@ -359,14 +359,14 @@ export function formatSpectatorShareText(payload: SpectatorPayload): string {
     const last = payload.live.lastClubYards ?? '—';
     const score = payload.live.score == null ? '—' : String(payload.live.score);
     return [
-      `ShotTraxx · ${COPY.spectatorLive}`,
+      `${SHOTTRAXX_BRAND} · ${COPY.spectatorLive}`,
       course,
       `Hole ${payload.live.hole} · ${score}`,
       `Last: ${last}`,
     ].join('\n');
   }
   const lines = payload.holes.map((row) => formatSpectatorHoleLine(row));
-  return [`ShotTraxx · ${COPY.spectatorFinished}`, course, ...lines].join('\n');
+  return [`${SHOTTRAXX_BRAND} · ${COPY.spectatorFinished}`, course, ...lines].join('\n');
 }
 
 export function spectatorPayloadHasCoordinates(payload: SpectatorPayload): boolean {

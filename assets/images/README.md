@@ -12,4 +12,4 @@ Night-green diorama, illuminated pin, three neon lime radar arcs into the light,
 | `favicon.png` | Web favicon, 48² from Build 36 |
 | `ios/*.png` | Pixel sizes Expo / iOS App Icon expects, generated from Build 36 |
 
-Small home-screen sizes thicken the neon arcs so they still read at ~60px. Bundle ID `com.shottrax.app` and slug `shottrax` stay unchanged. User-facing name is **ShotTraxx**.
+Small home-screen sizes thicken the neon arcs so they still read at ~60px. Bundle ID `com.shottrax.app` and slug `shottrax` stay unchanged. User-facing name is **ShotTraxx™**.

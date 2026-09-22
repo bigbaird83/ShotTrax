@@ -3,6 +3,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import * as SplashScreen from 'expo-splash-screen';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, Image, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { SHOTTRAXX_BRAND } from '@/src/domain/playerCopy';
 import { SPLASH_BG, SPLASH_RESIZE_MODE, splashLetterboxSize } from '@/src/domain/splashLetterbox';
 
 /** Doc’s open clip, first 3.0s, muted. Square 960² — contain + black letterbox, never cover. */
@@ -77,7 +78,7 @@ function LetterboxedSplash({ children }: { children?: ReactNode }) {
     <View
       pointerEvents="auto"
       accessibilityRole="image"
-      accessibilityLabel="ShotTraxx"
+      accessibilityLabel={SHOTTRAXX_BRAND}
       style={[styles.wrap, StyleSheet.absoluteFill]}>
       <View style={[styles.mark, square]}>
         <Image source={OPEN_STILL} style={StyleSheet.absoluteFill} resizeMode={SPLASH_RESIZE_MODE} />

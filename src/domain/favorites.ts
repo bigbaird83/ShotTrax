@@ -161,6 +161,44 @@ export function offlineStatusAfterDownload(course: CourseIdentity, paintOk: bool
   return 'ready';
 }
 
+/**
+ * Star on a past round uses the same favorites list as the Favorites tab.
+ * Location is the stored course pin only. Missing identity stays unstarred.
+ */
+export function historyStarUsesFavoritesList(): true {
+  return true;
+}
+
+export function historyStarInventsPaint(): false {
+  return false;
+}
+
+export function favoriteFromHistoryRound(round: {
+  courseApiId?: string | null;
+  courseName?: string | null;
+  courseLat?: number | null;
+  courseLng?: number | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+}): FavoriteCourse | null {
+  const name = text(round.courseName);
+  if (!name) return null;
+  const id = text(round.courseApiId) ?? `name:${name.toLowerCase()}`;
+  const location =
+    round.courseLat != null && round.courseLng != null
+      ? point({ lat: round.courseLat, lng: round.courseLng })
+      : null;
+  return {
+    id,
+    name,
+    city: text(round.city),
+    state: text(round.state),
+    country: text(round.country),
+    location,
+  };
+}
+
 export function favoriteFromSummary(course: {
   id: string;
   name: string;

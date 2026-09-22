@@ -26,7 +26,8 @@ test('home-screen icon is the locked Build 36 night-green Shot/Traxx art; splash
   assert.notEqual(icon.equals(splashIcon), true);
 
   const branded = readFileSync(new URL('../ui/BrandedSplash.tsx', import.meta.url), 'utf8');
-  assert.match(branded, /ShotTraxx/);
+  assert.match(branded, /accessibilityLabel=\{SHOTTRAXX_BRAND\}/);
+  assert.doesNotMatch(branded, /®/);
   assert.doesNotMatch(branded, /stacked Shot\/Traxx-only/);
 
   const watch = readFileSync(new URL('../../targets/watch/expo-target.config.js', import.meta.url), 'utf8');

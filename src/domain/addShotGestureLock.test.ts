@@ -254,8 +254,9 @@ test('Signal Lab: Add shot two-finger pan/pinch after frame leave the camera and
   assert.match(map, /draggable=\{Boolean\(onPlaceToDrag\)\}/);
   assert.match(map, /if \(!onPlaceToDrag\) return/);
   assert.match(map, /onPlaceToDrag\(\{ lat: latitude, lng: longitude \}\)/);
-  const dragLines = map.slice(map.indexOf('const dragLines = useMemo'), map.indexOf('const lockedCameraRef'));
-  assert.match(dragLines, /drag: placedTo/);
+  const dragLines = map.slice(map.indexOf('const dragPoint'), map.indexOf('const lockedCameraRef'));
+  assert.match(dragLines, /liveDragPointForLines\(\{ live: liveDrag, placed: placedTo/);
+  assert.match(dragLines, /drag: dragPoint/);
   assert.doesNotMatch(dragLines, /locationX|locationY|pageX|pageY|screen:|camera:/);
 
   const yardsSrc = readFileSync(new URL('./placeToDrag.ts', import.meta.url), 'utf8');

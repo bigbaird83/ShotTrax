@@ -18,6 +18,7 @@ import {
 import { type CourseDistanceUnit } from '@/src/domain/courseDistance';
 import { useDb } from '@/src/db/DbProvider';
 import { getThunderbirdPinSheet, readSettingStore, setThunderbirdPinSheet } from '@/src/db/repo';
+import { holesHaveTeeGreenPaint, requestThisCourseVisible } from '@/src/domain/courseRequest';
 import { favoriteFromSummary, isFavorite, listFavorites, setFavorite } from '@/src/domain/favorites';
 import { courseNeedsPinSheets } from '@/src/domain/missCard';
 import type { LatLng } from '@/src/domain/latLng';
@@ -201,6 +202,23 @@ export function CoursePicker({
     }
   };
 
+  const selectedHoles = detail?.holes ?? (selectedTee ? selectedTee.holes : null);
+  const selectedHasPaint = holesHaveTeeGreenPaint(selectedHoles);
+  const showSelectedRequest = requestThisCourseVisible({
+    course: selected
+      ? {
+          courseKey: selected.id,
+          courseApiId: selected.id,
+          name: selected.name,
+          city: selected.city,
+          state: selected.state,
+          location: selected.location,
+        }
+      : null,
+    hasTeeGreenPaint: selectedHasPaint,
+    paintKnown: selectedHoles != null,
+  });
+
   const zipMiss = error === COPY.zipGeocodeMiss;
   const emptyNearby = results != null && results.length === 0 && !busy && !zipMiss;
   const needsLocation = error === COPY.nearbyNeedsLocation;
@@ -244,7 +262,7 @@ export function CoursePicker({
               hint={COPY.nearbyEmptyHint}
             />
           ) : null}
-          {emptyNearby ? (
+          {emptyNearby && showSelectedRequest ? (
             <BigButton label={COPY.requestThisCourse} variant="secondary" onPress={() => openRequest(null)} />
           ) : null}
         </>
@@ -260,9 +278,11 @@ export function CoursePicker({
               style={styles.star}>
               <Text style={styles.starText}>{isFavorite(store, selected.id) ? '★' : '☆'}</Text>
             </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => openRequest(selected)} style={styles.link}>
-              <Text style={styles.linkText}>{COPY.requestThisCourse}</Text>
-            </Pressable>
+            {showSelectedRequest ? (
+              <Pressable accessibilityRole="button" onPress={() => openRequest(selected)} style={styles.link}>
+                <Text style={styles.linkText}>{COPY.requestThisCourse}</Text>
+              </Pressable>
+            ) : null}
           </View>
           {courseNeedsPinSheets({
             courseApiId: selected.id,
@@ -312,6 +332,18 @@ export function CoursePicker({
                 lastPlayedAt: lastPlayedAtByCourse?.[course.id] ?? lastPlayedAtByCourse?.[course.name],
               });
               const starred = favorites.some((row) => row.id === course.id);
+              const showRequest = requestThisCourseVisible({
+                course: {
+                  courseKey: course.id,
+                  courseApiId: course.id,
+                  name: course.name,
+                  city: course.city,
+                  state: course.state,
+                  location: course.location,
+                },
+                hasTeeGreenPaint: false,
+                paintKnown: false,
+              });
               return (
                 <View key={course.id} style={styles.row}>
                   <Pressable onPress={() => void pickCourse(course)}>
@@ -339,9 +371,11 @@ export function CoursePicker({
                       style={styles.star}>
                       <Text style={styles.starText}>{starred ? '★' : '☆'}</Text>
                     </Pressable>
-                    <Pressable accessibilityRole="button" onPress={() => openRequest(course)} style={styles.link}>
-                      <Text style={styles.linkText}>{COPY.requestThisCourse}</Text>
-                    </Pressable>
+                    {showRequest ? (
+                      <Pressable accessibilityRole="button" onPress={() => openRequest(course)} style={styles.link}>
+                        <Text style={styles.linkText}>{COPY.requestThisCourse}</Text>
+                      </Pressable>
+                    ) : null}
                   </View>
                 </View>
               );

@@ -1,5 +1,6 @@
-import type { LatLng } from './latLng';
-import { hydrateHolePassesGates } from '../course/hydrate';
+import type { CourseLayoutSeed } from '../course/layout';
+import { isClubhousePin, hydrateHolePassesGates } from '../course/hydrate';
+import { isCourseCardLatLng, type LatLng } from './latLng';
 
 /**
  * 9×2 sanity (Signal revise).
@@ -31,6 +32,105 @@ export function nineByTwoMirrorIsPass(): true {
 
 export function nineByTwoDoesNotInventCoords(): true {
   return true;
+}
+
+/** Playing 18 on a 9-hole course copies real front-nine tee+green onto 10–18. */
+export function playEighteenMirrorsNine(): true {
+  return true;
+}
+
+/** The back nine is a copy of real front paint. Missing front paint stays missing. */
+export function playEighteenInventsBackNine(): false {
+  return false;
+}
+
+export function resolveCourseNumHoles(args: {
+  detailHoleCount?: number | null;
+  catalogHoleCount?: number | null;
+}): 9 | 18 | null {
+  if (args.detailHoleCount === 9 || args.detailHoleCount === 18) return args.detailHoleCount;
+  if (args.catalogHoleCount === 9 || args.catalogHoleCount === 18) return args.catalogHoleCount;
+  return null;
+}
+
+type LayoutHole = NonNullable<CourseLayoutSeed['holes']>[number];
+
+function copyPoint(point: LatLng | null | undefined): LatLng | null {
+  if (!isCourseCardLatLng(point) || isClubhousePin(point)) return null;
+  return { lat: point.lat, lng: point.lng };
+}
+
+function blankBackHole(number: number): LayoutHole {
+  return {
+    number,
+    par: null,
+    yards: null,
+    handicap: null,
+    greenCentroid: null,
+    greenFront: null,
+    greenBack: null,
+    greenDepthYards: null,
+    teeCentroid: null,
+  };
+}
+
+/**
+ * numHoles=9 and the user plays 18: holes 10–18 are an exact tee+green copy of 1–9
+ * when that front pair passes the card gates. A missing or clubhouse front pair
+ * hard-misses that back hole. An 18-hole course is left alone. A 9-hole round
+ * is left alone. Never synthesizes a second nine.
+ */
+export function mirrorFrontNineForEighteen(args: {
+  numHoles: number | null | undefined;
+  playHoleCount: 9 | 18;
+  holes: readonly LayoutHole[];
+}): LayoutHole[] {
+  if (args.numHoles !== 9 || args.playHoleCount !== 18 || !playEighteenMirrorsNine()) {
+    return args.holes.map((hole) => ({ ...hole }));
+  }
+  const byHole = new Map<number, LayoutHole>();
+  for (const hole of args.holes) {
+    if (!Number.isInteger(hole.number) || hole.number < 1 || hole.number > 9) continue;
+    if (!byHole.has(hole.number)) byHole.set(hole.number, hole);
+  }
+  const out: LayoutHole[] = [];
+  for (let n = 1; n <= 9; n += 1) {
+    const front = byHole.get(n);
+    if (front) out.push({ ...front, number: n });
+    const tee = copyPoint(front?.teeCentroid);
+    const green = copyPoint(front?.greenCentroid);
+    if (!front || !tee || !green || !hydrateHolePassesGates({ tee, green }) || playEighteenInventsBackNine()) {
+      out.push(blankBackHole(n + 9));
+      continue;
+    }
+    out.push({
+      ...front,
+      number: n + 9,
+      par: front.par ?? null,
+      yards: front.yards ?? null,
+      handicap: front.handicap ?? null,
+      teeCentroid: tee,
+      greenCentroid: green,
+      greenFront: copyPoint(front.greenFront),
+      greenBack: copyPoint(front.greenBack),
+      greenDepthYards: front.greenDepthYards ?? null,
+    });
+  }
+  return out;
+}
+
+export function layoutForPlayedHoles(
+  layout: CourseLayoutSeed,
+  args: { numHoles: number | null | undefined; playHoleCount: 9 | 18 },
+): CourseLayoutSeed {
+  return {
+    ...layout,
+    holes: mirrorFrontNineForEighteen({
+      numHoles: args.numHoles,
+      playHoleCount: args.playHoleCount,
+      holes: layout.holes ?? [],
+    }),
+  };
 }
 
 function holeByNumber(holes: readonly NineByTwoHole[]): Map<number, NineByTwoHole> {

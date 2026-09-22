@@ -365,8 +365,9 @@ test('panning the map leaves shot and to-green unchanged unless the landing pin 
   assert.doesNotMatch(live, /locationX|locationY|pageX|pageY/);
 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
-  const preview = map.slice(map.indexOf('const dragLines = useMemo'), map.indexOf('const lockedCameraRef'));
-  assert.match(preview, /drag: placedTo/);
+  const preview = map.slice(map.indexOf('const dragPoint'), map.indexOf('const lockedCameraRef'));
+  assert.match(preview, /liveDragPointForLines\(\{ live: liveDrag, placed: placedTo/);
+  assert.match(preview, /drag: dragPoint/);
   assert.doesNotMatch(preview, /locationX|locationY|screen:|camera:/);
   assert.match(map, /if \(!onPlaceToDrag\) return/);
   assert.doesNotMatch(map, /if \(!onPlaceToDrag \|\| mapOwnsGesture\) return/);

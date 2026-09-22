@@ -34,7 +34,8 @@ test('live board is scores + a code — no map, GPS, or spectator token', () => 
       { hole: 3, score: null },
     ],
   });
-  assert.match(text, /ShotTraxx live board/);
+  assert.match(text, /ShotTraxx™ live board/);
+  assert.doesNotMatch(text, /®/);
   assert.match(text, /Magnolia · 7/);
   assert.match(text, /Code AB12CD/);
   assert.match(text, /1  4/);
