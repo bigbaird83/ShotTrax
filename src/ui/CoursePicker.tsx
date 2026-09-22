@@ -8,6 +8,7 @@ import type { CourseDetail, CourseSummary, TeeSet } from '@/src/course/types';
 import type { GpsFix } from '@/src/domain/types';
 import { COPY } from '@/src/domain/playerCopy';
 import { planCourseCard } from '@/src/domain/courseCard';
+import { deferCourseSearchLayout } from '@/src/domain/courseSearchLayout';
 import {
   planCourseList,
   planCourseSearchParams,
@@ -92,7 +93,7 @@ export function CoursePicker({
       if (plan.mode === 'needs_location') {
         setListPhoneFix(rawFix);
         setListFrom(null);
-        setResults([]);
+        deferCourseSearchLayout(() => setResults([]));
         setError(COPY.nearbyNeedsLocation);
         return;
       }
@@ -114,7 +115,7 @@ export function CoursePicker({
         });
         setListPhoneFix(null);
         setListFrom(geo.from);
-        setResults(listed);
+        deferCourseSearchLayout(() => setResults(listed));
         if (listed.length === 0) {
           setError(COPY.nearbyEmpty);
         }
@@ -132,12 +133,12 @@ export function CoursePicker({
         phoneFix: rawFix,
         nowMs,
       });
-      setResults(listed);
+      deferCourseSearchLayout(() => setResults(listed));
       if (listed.length === 0) {
         setError(COPY.nearbyEmpty);
       }
     } catch (err) {
-      setResults([]);
+      deferCourseSearchLayout(() => setResults([]));
       setError(err instanceof Error ? err.message : 'Couldn’t find courses.');
     } finally {
       setBusy(false);
@@ -182,17 +183,19 @@ export function CoursePicker({
     setDetail(null);
     try {
       const next = await getCourseDataClient().getCourse(course.id);
-      setDetail(next);
       const nextTees = next?.tees ?? [];
-      setTees(nextTees);
-      if (nextTees.length === 1) {
-        onSelect({ course, detail: next, tee: nextTees[0] });
-      } else {
-        onSelect({ course, detail: next, tee: null });
-      }
+      deferCourseSearchLayout(() => {
+        setDetail(next);
+        setTees(nextTees);
+        if (nextTees.length === 1) {
+          onSelect({ course, detail: next, tee: nextTees[0] });
+        } else {
+          onSelect({ course, detail: next, tee: null });
+        }
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Couldn’t load that course.');
-      onSelect({ course, detail: null, tee: null });
+      deferCourseSearchLayout(() => onSelect({ course, detail: null, tee: null }));
     } finally {
       setTeeBusy(false);
     }

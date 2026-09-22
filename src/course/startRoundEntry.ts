@@ -1,4 +1,7 @@
 import { decideCourseCardPaint } from '../domain/courseCardPaint';
+import type { FavoriteCourse } from '../domain/favorites';
+import { catalogEntryById } from './catalog';
+import { applyCourseHydrateToLayout } from './hydrate';
 import type { CourseLayoutSeed } from './layout';
 
 /**
@@ -57,4 +60,30 @@ export function planStartRound(
     hole1: hole1EntryFromLayout(layout),
     backgroundHoles: backgroundHoleNumbers(holeCount),
   };
+}
+
+/** Catalog 9 stays 9. Anything else uses the Start 18 path. Never invented. */
+export function favoriteStartHoleCount(course: { id: string }): 9 | 18 {
+  return catalogEntryById(course.id)?.holeCount === 9 ? 9 : 18;
+}
+
+/** Same hydrate fill Start Round uses. Missing tee/green stays missing. */
+export function layoutForFavoriteStart(course: FavoriteCourse): CourseLayoutSeed {
+  const base: CourseLayoutSeed = {
+    apiId: course.id,
+    name: course.name,
+    location: course.location,
+    teeName: null,
+    teeRating: null,
+    teeSlope: null,
+    teeTotalYards: null,
+    holes: [],
+  };
+  return applyCourseHydrateToLayout(base, {
+    name: course.name,
+    city: course.city,
+    state: course.state,
+    location: course.location,
+    courseKey: course.id,
+  });
 }

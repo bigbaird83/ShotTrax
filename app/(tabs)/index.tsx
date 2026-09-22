@@ -1,5 +1,5 @@
 import * as Device from 'expo-device';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -7,7 +7,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { applyCourseHydrateToLayout } from '@/src/course/hydrate';
@@ -20,7 +19,6 @@ import {
   deleteRound,
   finishRound,
   getActiveRound,
-  getCourseDistanceUnit,
   hasSeenBagCustomize,
   listClubs,
   markBagCustomizeSkipped,
@@ -30,7 +28,7 @@ import {
   startRound,
   type CourseLayoutSeed,
 } from '@/src/db/repo';
-import { formatLastPlayedChip, lastPlayedAtForCourse } from '@/src/domain/courseCard';
+import { formatLastPlayedChip } from '@/src/domain/courseCard';
 import { canFinishBagCarrySetup, countTypedCarries } from '@/src/domain/bagCustomize';
 import { canStartRound } from '@/src/domain/coursePick';
 import { COPY, formatTeeMeta } from '@/src/domain/playerCopy';
@@ -39,7 +37,8 @@ import { formatHistoryRow } from '@/src/domain/roundHistory';
 import { describeGpsSource } from '@/src/services/location';
 import { BagCarryList, BagCustomizeActions } from '@/src/ui/BagCarryList';
 import { BigButton } from '@/src/ui/BigButton';
-import { CoursePicker, type CoursePick } from '@/src/ui/CoursePicker';
+import { takePendingCoursePick } from '@/src/course/pendingCoursePick';
+import type { CoursePick } from '@/src/ui/CoursePicker';
 import { EmptyPanel } from '@/src/ui/EmptyPanel';
 import { GpsBanner } from '@/src/ui/GpsBanner';
 import { Screen } from '@/src/ui/Screen';
@@ -82,20 +81,16 @@ export default function HomeScreen() {
   const { db, revision, bump } = useDb();
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const [searchQuery, setSearchQuery] = useState('');
   const [picked, setPicked] = useState<CourseSummary | null>(null);
   const [pickedTee, setPickedTee] = useState<TeeSet | null>(null);
   const [pickedDetail, setPickedDetail] = useState<CourseDetail | null>(null);
   const [starting, setStarting] = useState(false);
-  const [sheetOpen, setSheetOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [simMessage, setSimMessage] = useState<string | null>(
     Device.isDevice === false ? COPY.simulator : null,
   );
-  const refreshRef = useRef<(() => Promise<void>) | null>(null);
   const rounds = useMemo(() => listRounds(db), [db, revision]);
   const active = useMemo(() => getActiveRound(db), [db, revision]);
-  const courseDistanceUnit = useMemo(() => getCourseDistanceUnit(db), [db, revision]);
   const clubs = useMemo(() => listClubs(db), [db, revision]);
   const bagPromptOpen = useMemo(() => !hasSeenBagCustomize(db), [db, revision]);
   const typedCarryCount = useMemo(() => countTypedCarries(clubs), [clubs]);
@@ -114,7 +109,6 @@ export default function HomeScreen() {
       setPicked(pick.course);
       setPickedDetail(pick.detail);
       setPickedTee(null);
-      setSearchQuery(pick.course.name);
     });
     return () => setWatchCoursePickedHandler(null);
   }, []);
@@ -149,9 +143,7 @@ export default function HomeScreen() {
     setPicked(pick.course);
     setPickedTee(pick.tee);
     setPickedDetail(pick.detail);
-    setSearchQuery('');
     if (needsTee) return;
-    setSheetOpen(false);
     if (active) {
       setStarting(true);
       try {
@@ -172,16 +164,6 @@ export default function HomeScreen() {
         setStarting(false);
       }
     }
-  };
-
-  const onSelectCourse = (pick: CoursePick | null) => {
-    if (!pick) {
-      setPicked(null);
-      setPickedTee(null);
-      setPickedDetail(null);
-      return;
-    }
-    void commitPick(pick);
   };
 
   const teeCount = picked ? (pickedDetail == null ? null : pickedDetail.tees.length) : 0;
@@ -211,11 +193,19 @@ export default function HomeScreen() {
         const fix = await getCurrentFix().catch(() => null);
         setSimMessage(fix ? describeGpsSource(fix) : COPY.simulator);
       }
-      await refreshRef.current?.();
     } finally {
       setRefreshing(false);
     }
   }, []);
+
+  const commitRef = useRef(commitPick);
+  commitRef.current = commitPick;
+  useFocusEffect(
+    useCallback(() => {
+      const pending = takePendingCoursePick();
+      if (pending) void commitRef.current(pending);
+    }, []),
+  );
   const teeLabel = pickedTee
     ? formatTeeMeta({
         name: pickedTee.name,
@@ -255,24 +245,18 @@ export default function HomeScreen() {
 
       {simMessage ? <GpsBanner message={simMessage} /> : null}
 
-      <TextInput
-        placeholder={COPY.courseNamePlaceholder}
-        placeholderTextColor={colors.muted}
-        value={searchQuery}
-        onChangeText={(text) => {
-          setPicked(null);
-          setPickedTee(null);
-          setPickedDetail(null);
-          setSearchQuery(text);
-          setSheetOpen(true);
-        }}
-        style={styles.input}
-      />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={COPY.courseNamePlaceholder}
+        onPress={() => router.push('/search')}
+        style={styles.searchPill}>
+        <Text style={styles.searchPillText}>{COPY.courseNamePlaceholder}</Text>
+      </Pressable>
 
       <BigButton
         label="Courses near you"
         variant="secondary"
-        onPress={() => setSheetOpen(true)}
+        onPress={() => router.push('/search')}
       />
       <Text style={styles.hint}>{COPY.nearbyHint}</Text>
       {picked ? (
@@ -281,34 +265,15 @@ export default function HomeScreen() {
           {teeLabel || needsTee ? (
             <Text style={styles.cardMeta}>{teeLabel ? teeLabel : COPY.pickTee}</Text>
           ) : null}
-          {formatLastPlayedChip(lastPlayedAtForCourse(rounds, { id: picked.id, name: picked.name })) ? (
+          {formatLastPlayedChip(
+            lastPlayedAtByCourse[picked.id] ?? lastPlayedAtByCourse[picked.name],
+          ) ? (
             <Text style={styles.chip}>
-              {formatLastPlayedChip(lastPlayedAtForCourse(rounds, { id: picked.id, name: picked.name }))}
+              {formatLastPlayedChip(lastPlayedAtByCourse[picked.id] ?? lastPlayedAtByCourse[picked.name])}
             </Text>
           ) : null}
         </View>
       ) : null}
-
-      <FullSheet visible={sheetOpen} title={COPY.selectCourse} onClose={() => setSheetOpen(false)}>
-        <CoursePicker
-          selected={picked}
-          selectedTee={pickedTee}
-          attachMode={Boolean(active)}
-          courseDistanceUnit={courseDistanceUnit}
-          query={searchQuery}
-          onQueryChange={(text) => {
-            setSearchQuery(text);
-            setPicked(null);
-            setPickedTee(null);
-            setPickedDetail(null);
-          }}
-          onSelect={onSelectCourse}
-          lastPlayedAtByCourse={lastPlayedAtByCourse}
-          onRefreshReady={(fn) => {
-            refreshRef.current = fn;
-          }}
-        />
-      </FullSheet>
 
       {active ? (
         <View style={styles.card}>
@@ -448,16 +413,16 @@ function makeStyles(colors: ColorPalette) {
     lede: { color: colors.muted, fontSize: type.body, lineHeight: 22 },
     hint: { color: colors.muted, fontSize: type.tiny },
     meta: { color: colors.cream, fontSize: type.meta, fontWeight: '700' },
-    input: {
+    searchPill: {
       minHeight: 56,
       borderWidth: 1,
       borderColor: colors.line,
       borderRadius: 14,
       paddingHorizontal: 14,
-      color: colors.cream,
-      fontSize: 18,
       backgroundColor: colors.bgElevated,
+      justifyContent: 'center',
     },
+    searchPillText: { color: colors.muted, fontSize: 18, fontWeight: '700' },
     card: {
       backgroundColor: colors.bgElevated,
       borderRadius: 16,

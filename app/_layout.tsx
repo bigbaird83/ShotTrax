@@ -48,6 +48,7 @@ function ThemedNavigation() {
           }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false, title: 'Home' }} />
           <Stack.Screen name="round/[id]" options={{ headerShown: false, title: 'Round' }} />
+          <Stack.Screen name="search" options={{ title: 'Search', headerBackTitle: 'Home' }} />
           <Stack.Screen name="s/[token]" options={{ title: 'ShotTraxx' }} />
           <Stack.Screen name="nerd-out" options={{ title: 'Nerd out' }} />
           <Stack.Screen name="board" options={{ title: 'Live board' }} />
