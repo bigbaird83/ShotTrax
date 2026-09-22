@@ -66,12 +66,6 @@ import {
 } from '@/src/domain/playerCopy';
 import { allClubsHref, playHrefAfterHoleChange } from '@/src/domain/playNav';
 import {
-  pastRoundCanAddShot,
-  pastRoundEditRequested,
-  pastRoundMarksOnly,
-  pastRoundStoredPaintOnly,
-} from '@/src/domain/roundHistory';
-import {
   armHoleTransition,
   consumeHoleTransition,
   holeNavDirection,
@@ -177,12 +171,11 @@ import { ScorecardBody } from '@/src/ui/ScorecardBody';
 import { COLOR_THEMES, tapTarget, type, type ColorPalette } from '@/src/ui/theme';
 
 export default function HoleScreen() {
-  const { id, number, putts: puttsParam, menu: menuParam, edit: editParam } = useLocalSearchParams<{
+  const { id, number, putts: puttsParam, menu: menuParam } = useLocalSearchParams<{
     id: string;
     number: string;
     putts?: string;
     menu?: string;
-    edit?: string;
   }>();
   const holeNumber = Number(number);
   const navigation = useNavigation();
@@ -248,11 +241,7 @@ export default function HoleScreen() {
     () => (hole ? getOpenShotForHole(db, hole.id) : null),
     [db, hole, revision],
   );
-  const marksOnly = pastRoundMarksOnly({
-    finished: Boolean(round?.finishedAt),
-    editRequested: pastRoundEditRequested(editParam),
-  });
-  const readOnly = Boolean(round?.finishedAt) && !marksOnly;
+  const readOnly = Boolean(round?.finishedAt);
   const historyRoundCount = useMemo(
     () =>
       firstLaunchTipHistoryRoundCount({
@@ -317,7 +306,6 @@ export default function HoleScreen() {
   };
 
   const startCatchUp = (seq: number | null) => {
-    if (!pastRoundCanAddShot(marksOnly)) return;
     closeEdit();
     resetPlace();
     setInsertSeq(seq);
@@ -359,7 +347,7 @@ export default function HoleScreen() {
     setMapFramed(false);
     armHoleTransition(holeNavDirection(holeNumber, nextNumber));
     hapticLight();
-    router.replace(playHrefAfterHoleChange(id, nextNumber, marksOnly));
+    router.replace(playHrefAfterHoleChange(id, nextNumber));
   };
 
   const lastShotClubId = [...shots].reverse().find((shot) => shot.clubId)?.clubId ?? null;
@@ -442,7 +430,6 @@ export default function HoleScreen() {
   }, [confirmUndo, bump]);
 
   useEffect(() => {
-    if (marksOnly) return;
     const greenCandidate =
       hole?.greenLat != null && hole.greenLng != null
         ? { lat: hole.greenLat, lng: hole.greenLng }
@@ -475,7 +462,7 @@ export default function HoleScreen() {
     return () => {
       live = false;
     };
-  }, [marksOnly, round?.courseApiId, hole?.greenLat, hole?.greenLng, hole?.teeLat, hole?.teeLng, holeNumber]);
+  }, [round?.courseApiId, hole?.greenLat, hole?.greenLng, hole?.teeLat, hole?.teeLng, holeNumber]);
 
   const greenCandidate =
     hole?.greenLat != null && hole.greenLng != null
@@ -516,11 +503,11 @@ export default function HoleScreen() {
     tee: proTee,
     green: proGreen,
   });
-  const holeTee = pastRoundStoredPaintOnly(marksOnly) ? proTee : hydrated.tee;
+  const holeTee = hydrated.tee;
   const pinSheet = getThunderbirdPinSheet(db);
   const tbHole = needPins ? thunderbirdPinHoleFor(holeNumber) : null;
   const dailyPin = needPins ? thunderbirdDailyPin(holeNumber, pinSheet) : null;
-  const greenCenter = pastRoundStoredPaintOnly(marksOnly) ? proGreen : hydrated.green;
+  const greenCenter = hydrated.green;
   const green = thunderbirdCupOnGreen(greenCenter, dailyPin);
   const sheetOnGreen = greenCenter ? tbHole : null;
   const pins = {
@@ -614,22 +601,21 @@ export default function HoleScreen() {
     rememberResolvedTee({ courseId: round?.courseApiId, holeNumber, green }, holeTee);
   }
   useEffect(() => {
-    if (marksOnly) return;
     prefetchCourseHydrateOnce({
       name: round?.courseName,
       location: isCourseCardLatLng(courseLocation) ? courseLocation : null,
       courseId: round?.courseApiId,
     });
-  }, [marksOnly, round?.courseName, round?.courseApiId, round?.courseLat, round?.courseLng]);
+  }, [round?.courseName, round?.courseApiId, round?.courseLat, round?.courseLng]);
   useEffect(() => {
-    if (marksOnly || !hole?.id || !holeTee) return;
+    if (!hole?.id || !holeTee) return;
     saveHoleTee(db, hole.id, holeTee);
-  }, [marksOnly, db, hole?.id, holeTee?.lat, holeTee?.lng]);
+  }, [db, hole?.id, holeTee?.lat, holeTee?.lng]);
   useEffect(() => {
-    if (marksOnly || !hole?.id || !hydrated.usedHydrate || !green) return;
+    if (!hole?.id || !hydrated.usedHydrate || !green) return;
     if (hole.greenSource === 'user_estimate') return;
     setHoleGreen(db, hole.id, { ...green, source: 'course_centroid' });
-  }, [marksOnly, db, hole?.id, hole?.greenSource, hydrated.usedHydrate, green?.lat, green?.lng]);
+  }, [db, hole?.id, hole?.greenSource, hydrated.usedHydrate, green?.lat, green?.lng]);
   const courseCardFrame = diagnoseCourseCardFrame({
     tee: holeTee,
     green,
@@ -703,7 +689,7 @@ export default function HoleScreen() {
 
   const openPuttSheet = useCallback(
     async (targetHole: number) => {
-      if (readOnly || marksOnly) return;
+      if (readOnly) return;
       const row = getHole(db, id, targetHole);
       if (!row) return;
       const lengths = row.puttLengths.filter(isPuttLengthId);
@@ -725,7 +711,7 @@ export default function HoleScreen() {
           : nextDraft;
       void pushWatchPuttSheet({ open: true, holeNumber: targetHole, lengths: pushDraft.lengths });
     },
-    [readOnly, marksOnly, db, id, bump],
+    [readOnly, db, id, bump],
   );
 
   const saveDraft = useCallback(
@@ -946,7 +932,6 @@ export default function HoleScreen() {
   const markClub = async (club: Club | null, force = false) => {
     const next = club ? selectClubForMark(club, clubs) : null;
     if (readOnly || placing) return;
-    if (!pastRoundCanAddShot(marksOnly)) return;
     if (club && !next) return;
     if (next && putterOpensPuttSheet({ clubId: next.id })) {
       hapticSelect();
@@ -1016,7 +1001,6 @@ export default function HoleScreen() {
       hapticTap();
       return;
     }
-    if (!pastRoundCanAddShot(marksOnly)) return;
     const ok = undoLastShot(db, { roundId: id, holeNumber });
     if (!ok) return;
     hapticTap();
@@ -1025,7 +1009,7 @@ export default function HoleScreen() {
   };
 
   const onEndShot = async (force = false) => {
-    if (readOnly || !open || !pastRoundCanAddShot(marksOnly)) return;
+    if (readOnly || !open) return;
     setBusy(true);
     try {
       const { plan } = await endOpenShot(db, { roundId: id, holeNumber, force });
@@ -1053,7 +1037,7 @@ export default function HoleScreen() {
   };
 
   const onDrop = async (force = false) => {
-    if (readOnly || placing || !pastRoundCanAddShot(marksOnly)) return;
+    if (readOnly || placing) return;
     setBusy(true);
     try {
       const { plan } = await takeDrop(db, {
@@ -1101,7 +1085,7 @@ export default function HoleScreen() {
   };
 
   const onFinishHole = () => {
-    if (readOnly || marksOnly || !hole || !round) return;
+    if (readOnly || !hole || !round) return;
     void (async () => {
       await closeApproachBeforePutts(db, { roundId: id, holeNumber });
       finishHoleOut(db, hole.id);
@@ -1136,7 +1120,7 @@ export default function HoleScreen() {
   };
 
   const openBag = () => {
-    if (placing || marksOnly) return;
+    if (placing) return;
     router.push(allClubsHref(id, holeNumber));
   };
 
@@ -1149,7 +1133,6 @@ export default function HoleScreen() {
   };
 
   const commitPlaced = (clubId: string) => {
-    if (!pastRoundCanAddShot(marksOnly)) return;
     if (!placeFrom || !placeTo) return;
     const result = addPlacedShot(db, {
       roundId: round.id,
@@ -1499,7 +1482,7 @@ export default function HoleScreen() {
                               ) : null}
                             </Text>
                           </Pressable>
-                          {!readOnly && pastRoundCanAddShot(marksOnly) && slot && playLayout.insertPlus === 'header' ? (
+                          {!readOnly && slot && playLayout.insertPlus === 'header' ? (
                             <Pressable
                               accessibilityRole="button"
                               accessibilityLabel={COPY.insertShot}
@@ -1513,7 +1496,7 @@ export default function HoleScreen() {
                       );
                     })
                   )}
-                  {!readOnly && pastRoundCanAddShot(marksOnly) && shots.length === 0 ? (
+                  {!readOnly && shots.length === 0 ? (
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel={COPY.insertShot}
@@ -1668,7 +1651,7 @@ export default function HoleScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={COPY.allClubs}
-              disabled={readOnly || marksOnly || placing}
+              disabled={readOnly || placing}
               onPress={openBag}
               style={styles.allClubsPill}>
               <Text style={styles.allClubsPillText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
@@ -1703,7 +1686,7 @@ export default function HoleScreen() {
                 windowStart={stripPlan.windowStart}
                 disabled={readOnly || placing}
                 onPick={(id) => {
-                  if (placing || !pastRoundCanAddShot(marksOnly)) return;
+                  if (placing) return;
                   setSelectedClubId(applyWheelSelection(id));
                   const full = clubs.find((row) => row.id === id) ?? null;
                   void markClub(full);
@@ -1740,7 +1723,7 @@ export default function HoleScreen() {
                 </Pressable>
               </View>
             ) : null}
-            {!readOnly && pastRoundCanAddShot(marksOnly) ? (
+            {!readOnly ? (
               <Pressable
                 accessibilityRole="button"
                 disabled={placing}
@@ -2150,7 +2133,7 @@ export default function HoleScreen() {
                     {isHoleOutShot(shot) ? <HoleOutBadge testID="hole-out-score-badge" /> : null}
                     <QualityBadge quality={shot.fixQuality} open={openShot && !noGps} source={shot.source} />
                   </Pressable>
-                  {!readOnly && pastRoundCanAddShot(marksOnly) && slot ? (
+                  {!readOnly && slot ? (
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel={COPY.insertShot}
@@ -2174,7 +2157,7 @@ export default function HoleScreen() {
             </View>
           ))}
 
-          {!readOnly && pastRoundCanAddShot(marksOnly) ? (
+          {!readOnly ? (
             <>
               <BigButton
                 label={COPY.markWithoutClub}
