@@ -2,7 +2,7 @@
  * Dynamic Expo config. Reads Golf Courses API key at EAS build time so the
  * client can use `expo.extra.golfCoursesApiKey` via expo-constants.
  *
- * Display name is ShotTraxx (`expo.name`, iOS CFBundleDisplayName, Android
+ * Display name is ShotTraxx™ (`expo.name`, iOS CFBundleDisplayName, Android
  * label). Bundle ID `com.shottrax.app` and slug `shottrax` stay unchanged.
  * Icon paths in app.json (`./assets/images/icon.png` and adaptive siblings)
  * are the locked Build 36 night-green Shot/Traxx mark. `splash-icon.png` is

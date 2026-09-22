@@ -5,7 +5,7 @@
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
   <key>CFBundleDisplayName</key>
-  <string>ShotTraxx</string>
+  <string>ShotTraxx™</string>
   <key>CFBundleExecutable</key>
   <string>$(EXECUTABLE_NAME)</string>
   <key>CFBundleIdentifier</key>
@@ -21,7 +21,7 @@
   <key>CFBundleVersion</key>
   <string>1</string>
   <key>NSLocationWhenInUseUsageDescription</key>
-  <string>ShotTraxx uses Watch location when you pick a club on the Watch to mark where you hit from.</string>
+  <string>ShotTraxx™ uses Watch location when you pick a club on the Watch to mark where you hit from.</string>
   <key>WKApplication</key>
   <true/>
   <key>WKBackgroundModes</key>

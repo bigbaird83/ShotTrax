@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "ShotTraxx",
+    "name": "ShotTraxx™",
     "slug": "shottrax",
     "version": "0.1.0",
     "orientation": "portrait",
@@ -16,16 +16,16 @@
         "com.apple.security.application-groups": ["group.com.shottrax.app"]
       },
       "infoPlist": {
-        "CFBundleDisplayName": "ShotTraxx",
-        "CFBundleName": "ShotTraxx",
+        "CFBundleDisplayName": "ShotTraxx™",
+        "CFBundleName": "ShotTraxx™",
         "ITSAppUsesNonExemptEncryption": false,
-        "NSLocationWhenInUseUsageDescription": "ShotTraxx uses your location while the app is open to find courses near you, show yards to the green, and mark where you hit from when you pick a club.",
-        "NSPhotoLibraryUsageDescription": "ShotTraxx does not use your photo library. This description is required to ship on the App Store.",
-        "NSPhotoLibraryAddUsageDescription": "ShotTraxx does not save photos to your library. This description is required to ship on the App Store."
+        "NSLocationWhenInUseUsageDescription": "ShotTraxx™ uses your location while the app is open to find courses near you, show yards to the green, and mark where you hit from when you pick a club.",
+        "NSPhotoLibraryUsageDescription": "ShotTraxx™ does not use your photo library. This description is required to ship on the App Store.",
+        "NSPhotoLibraryAddUsageDescription": "ShotTraxx™ does not save photos to your library. This description is required to ship on the App Store."
       }
     },
     "android": {
-      "label": "ShotTraxx",
+      "label": "ShotTraxx™",
       "adaptiveIcon": {
         "backgroundColor": "#05190D",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -69,7 +69,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "ShotTraxx uses your location while the app is open to find courses near you, show yards to the green, and mark where you hit from when you pick a club.",
+          "locationWhenInUsePermission": "ShotTraxx™ uses your location while the app is open to find courses near you, show yards to the green, and mark where you hit from when you pick a club.",
           "locationAlwaysAndWhenInUsePermission": false,
           "locationAlwaysPermission": false,
           "isIosBackgroundLocationEnabled": false,

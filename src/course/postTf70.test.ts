@@ -378,6 +378,13 @@ test('course request payload keeps email, handle, and fields and does not paint'
   assert.equal(payload.handle, '@ShotTraxx');
   const mailto = courseRequestMailto(payload);
   assert.equal(COPY.requestCourseEmailBrand, 'ShotTraxx™');
+  assert.equal(COPY.spectatorTitle, 'ShotTraxx™');
+  assert.match(COPY.restoreRoundsHint, /ShotTraxx™/);
+  assert.match(COPY.restoreRoundsFailed, /ShotTraxx™/);
+  assert.match(COPY.requestCourseLede, /ShotTraxx™/);
+  assert.match(COPY.contributeGrant, /ShotTraxx™/);
+  assert.doesNotMatch(COPY.restoreRoundsHint, /®/);
+  assert.doesNotMatch(COPY.contributeGrant, /®/);
   assert.equal(courseRequestSubject(payload), 'ShotTraxx™ course request: Oak Hills — Cabot');
   assert.match(courseRequestBody(payload), /^ShotTraxx™\n/);
   assert.doesNotMatch(courseRequestSubject(payload), /®/);

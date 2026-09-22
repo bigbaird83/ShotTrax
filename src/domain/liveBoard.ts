@@ -1,4 +1,4 @@
-import { COPY } from './playerCopy';
+import { COPY, SHOTTRAXX_BRAND } from './playerCopy';
 import { shareMessageIncludesPayloadQuery, type ShareScorecardHole, shareScorecardTotal } from './spectator';
 
 export const LIVE_BOARD_POLL_MS = 8000;
@@ -75,7 +75,7 @@ export function formatLiveBoardShare(args: {
   const rows = [...args.holes]
     .sort((a, b) => a.hole - b.hole)
     .map((row) => `${row.hole}  ${row.score == null ? '—' : String(row.score)}`);
-  const lines = ['ShotTraxx live board', headline, `Code ${args.code}`, ...rows];
+  const lines = [`${SHOTTRAXX_BRAND} live board`, headline, `Code ${args.code}`, ...rows];
   const url = args.url?.trim();
   if (url && !shareMessageIncludesPayloadQuery(url)) lines.push(url);
   lines.push(COPY.liveBoardPrivacy);

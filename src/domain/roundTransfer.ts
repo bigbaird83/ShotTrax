@@ -1,6 +1,7 @@
 import { isClubhousePin } from '../course/hydrate';
 import { haversineYards, roundYards } from './haversine';
 import { isCourseCardLatLng, isValidLatLng, type LatLng } from './latLng';
+import { SHOTTRAXX_BRAND } from './playerCopy';
 import type { ShotFixQuality, ShotSource } from './types';
 
 /**
@@ -464,6 +465,6 @@ export function formatRestoreSummary(args: { rounds: number; shots: number; reje
   return `Restored ${rounds}, ${shots}.${skipped}`;
 }
 
-export function roundHistoryShareTitle(): 'ShotTraxx rounds' {
-  return 'ShotTraxx rounds';
+export function roundHistoryShareTitle(): 'ShotTraxx™ rounds' {
+  return `${SHOTTRAXX_BRAND} rounds`;
 }

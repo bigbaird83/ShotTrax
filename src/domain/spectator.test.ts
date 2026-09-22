@@ -157,7 +157,8 @@ test('share text is readable without opening a map or granting location', () => 
     holes,
   });
   const liveText = formatSpectatorShareText(live);
-  assert.match(liveText, /ShotTraxx · Live/);
+  assert.match(liveText, /ShotTraxx™ · Live/);
+  assert.doesNotMatch(liveText, /®/);
   assert.match(liveText, /Magnolia/);
   assert.match(liveText, /Hole 1 · 4/);
   assert.match(liveText, /7i · 155/);
@@ -170,16 +171,16 @@ test('share text is readable without opening a map or granting location', () => 
     holes,
   });
   const doneText = formatSpectatorShareText(done);
-  assert.match(doneText, /ShotTraxx · Finished/);
+  assert.match(doneText, /ShotTraxx™ · Finished/);
   assert.match(doneText, /1  7i · 155  4/);
   assert.match(doneText, new RegExp(`2  52° · 105  3 · ${COPY.approximate}`));
 });
 
 test('Messages share body is a scorecard — never the ?p= spectator token', () => {
   assert.equal(shareSheetPassesUrl(), false);
-  assert.deepEqual(shareSheetContent({ message: 'ShotTraxx\nMagnolia · 7' }), {
-    message: 'ShotTraxx\nMagnolia · 7',
-    title: 'ShotTraxx',
+  assert.deepEqual(shareSheetContent({ message: 'ShotTraxx™\nMagnolia · 7' }), {
+    message: 'ShotTraxx™\nMagnolia · 7',
+    title: 'ShotTraxx™',
   });
   assert.equal(
     shareSheetContent({ message: 'card', imageUrl: 'shottrax:///s/x?p=abc' }).url,
@@ -198,7 +199,7 @@ test('Messages share body is a scorecard — never the ?p= spectator token', () 
   });
   assert.equal(
     live,
-    ['ShotTraxx', 'Magnolia · 7', '1  4', '2  3', '3  —', 'Last: 7i · 155'].join('\n'),
+    ['ShotTraxx™', 'Magnolia · 7', '1  4', '2  3', '3  —', 'Last: 7i · 155'].join('\n'),
   );
   assert.equal(shareMessageIncludesPayloadQuery(live), false);
   assert.doesNotMatch(live, /shottrax:\/\//i);
@@ -209,12 +210,12 @@ test('Messages share body is a scorecard — never the ?p= spectator token', () 
     courseName: 'Magnolia',
     holes: cardHoles,
   });
-  assert.equal(done, ['ShotTraxx', 'Magnolia · 7', '1  4', '2  3', '3  —'].join('\n'));
+  assert.equal(done, ['ShotTraxx™', 'Magnolia · 7', '1  4', '2  3', '3  —'].join('\n'));
   assert.doesNotMatch(done, /Last:/);
   assert.equal(shareMessageIncludesPayloadQuery(done), false);
 
   const empty = formatShareScorecard({ courseName: null, holes: [] });
-  assert.equal(empty, 'ShotTraxx\nRound');
+  assert.equal(empty, 'ShotTraxx™\nRound');
   assert.equal(shareScorecardTotal([]), null);
 });
 

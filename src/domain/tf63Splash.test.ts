@@ -10,7 +10,8 @@ test('TF 63: BrandedSplash plays Doc 3s muted open clip; Reduce Motion uses firs
   assert.match(branded, /isReduceMotionEnabled/);
   assert.match(branded, /playToEnd/);
   assert.match(branded, /onDone/);
-  assert.match(branded, /ShotTraxx/);
+  assert.match(branded, /accessibilityLabel=\{SHOTTRAXX_BRAND\}/);
+  assert.doesNotMatch(branded, /®/);
   assert.match(branded, /contentFit=\{SPLASH_RESIZE_MODE\}/);
   assert.match(branded, /nativeControls=\{false\}/);
   assert.doesNotMatch(branded, /Animated\.(sequence|spring|timing)/);

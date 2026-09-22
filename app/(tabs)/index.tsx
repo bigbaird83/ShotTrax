@@ -35,7 +35,7 @@ import {
 import { formatLastPlayedChip } from '@/src/domain/courseCard';
 import { canFinishBagCarrySetup, countTypedCarries } from '@/src/domain/bagCustomize';
 import { canStartRound } from '@/src/domain/coursePick';
-import { COPY, formatTeeMeta } from '@/src/domain/playerCopy';
+import { COPY, formatTeeMeta, SHOTTRAXX_BRAND } from '@/src/domain/playerCopy';
 import { playHrefAfterRoundStart } from '@/src/domain/playNav';
 import {
   favoriteFromHistoryRound,
@@ -302,7 +302,7 @@ export default function HomeScreen() {
   return (
     <Screen edges={['bottom']} refreshing={refreshing} onRefresh={() => void onRefresh()}>
       <View style={styles.homeBar}>
-        <Text style={styles.title}>ShotTraxx</Text>
+        <Text style={styles.title}>{SHOTTRAXX_BRAND}</Text>
         <Pressable
           accessibilityRole="button"
           onPress={() => router.push('/settings')}
