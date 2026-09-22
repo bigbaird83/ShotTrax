@@ -13,6 +13,7 @@ import {
   favoriteDisplayedOfflineStatus,
   favoriteNameStartsPlay,
   favoriteReadyChipOnly,
+  favoriteRowPressAction,
   favoriteRowCompact,
   favoriteRowMinHeight,
   favoriteShowsDownloadPill,
@@ -77,6 +78,7 @@ export default function FavoritesScreen() {
   ).current;
 
   const unstar = (course: FavoriteCourse) => {
+    if (favoriteRowPressAction('star') !== 'toggle') return;
     setFavorite(store, course, false);
     bump();
   };
@@ -92,6 +94,7 @@ export default function FavoritesScreen() {
   };
 
   const playFavorite = (course: FavoriteCourse) => {
+    if (favoriteRowPressAction('row') !== 'play') return;
     if (!favoriteNameStartsPlay()) return;
     const holeCount = favoriteStartHoleCount(course);
     const layout = layoutForFavoriteStart(course);
@@ -113,9 +116,7 @@ export default function FavoritesScreen() {
       <View style={styles.fill}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <Text style={styles.title}>{COPY.favorites}</Text>
-          <View style={styles.banner}>
-            <Text style={styles.bannerText}>{FAVORITES_BANNER}</Text>
-          </View>
+          <Text style={styles.bannerText}>{FAVORITES_BANNER}</Text>
           {favorites.length === 0 ? (
             <EmptyPanel title={COPY.favorites} hint={FAVORITES_BANNER} />
           ) : (
@@ -144,18 +145,17 @@ export default function FavoritesScreen() {
                     { minHeight: favoriteRowMinHeight(displayed) ?? undefined },
                   ]}>
                   <View style={styles.row}>
-                    <View style={styles.nameCol}>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={`Start round ${course.name}`}
-                        onPress={() => playFavorite(course)}>
-                        <Text style={styles.name}>{course.name}</Text>
-                      </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Start round ${course.name}`}
+                      onPress={() => playFavorite(course)}
+                      style={styles.playHit}>
+                      <Text style={styles.name}>{course.name}</Text>
                       {place ? <Text style={styles.meta}>{place}</Text> : null}
                       {hardMiss ? <Text style={styles.warn}>{COPY.hardMissNeedPins}</Text> : null}
                       {readyChip ? <Text style={styles.readyChip}>{COPY.offlineReady}</Text> : null}
                       {!readyChip && label ? <Text style={styles.status}>{label}</Text> : null}
-                    </View>
+                    </Pressable>
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel={COPY.unfavorite}
@@ -211,14 +211,7 @@ function makeStyles(colors: ColorPalette) {
     backText: { color: colors.cream, fontSize: type.button, fontWeight: '800' },
     scroll: { padding: space.md, paddingBottom: 32, gap: 12 },
     title: { color: colors.cream, fontSize: type.hole, fontWeight: '900' },
-    banner: {
-      backgroundColor: colors.bgElevated,
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: colors.line,
-      padding: 14,
-    },
-    bannerText: { color: colors.cream, fontSize: type.body, fontWeight: '700', lineHeight: 22 },
+    bannerText: { color: colors.cream, fontSize: type.body, lineHeight: 22 },
     card: {
       backgroundColor: colors.bgElevated,
       borderRadius: 16,
@@ -232,8 +225,8 @@ function makeStyles(colors: ColorPalette) {
       paddingHorizontal: 14,
       gap: 4,
     },
-    row: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-    nameCol: { flex: 1, gap: 4 },
+    row: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },
+    playHit: { flex: 1, gap: 4, justifyContent: 'center' },
     name: { color: colors.cream, fontSize: type.body, fontWeight: '800' },
     meta: { color: colors.muted, fontSize: type.meta },
     warn: { color: colors.orange, fontSize: type.meta, fontWeight: '700' },

@@ -63,6 +63,38 @@ export function toPinYardsRecalcOnReleaseOnly(): true {
   return true;
 }
 
+/**
+ * Add-shot to-pin grows on press and stays large while dragging so the mark
+ * is easy to see. Release restores 1. Layout hit size does not change.
+ */
+export const ADD_SHOT_TO_PIN_PRESSED_SCALE = 2;
+
+export function addShotToPinScalesUpOnPressOrDrag(): true {
+  return true;
+}
+
+export function addShotToPinScaleOnRelease(): 1 {
+  return 1;
+}
+
+export function addShotToPinVisualScale(pressedOrDragging: boolean): number {
+  if (!addShotToPinScalesUpOnPressOrDrag()) return addShotToPinScaleOnRelease();
+  return pressedOrDragging ? ADD_SHOT_TO_PIN_PRESSED_SCALE : addShotToPinScaleOnRelease();
+}
+
+/**
+ * Idle and the scale-up frame must refresh the marker bitmap.
+ * After that snapshot, drag tracking turns off so the native marker can
+ * follow the finger without a yards re-render snapping it back.
+ */
+export function addShotToPinTracksViewChanges(args: {
+  dragOriginSet: boolean;
+  capturingScale: boolean;
+}): boolean {
+  if (!args.dragOriginSet) return true;
+  return args.capturingScale;
+}
+
 /** Mid-drag does not invent a tee, green, or landing. */
 export function toPinDragInventsMidDrag(): false {
   return false;

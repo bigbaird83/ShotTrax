@@ -27,6 +27,9 @@ import {
 import {
   ADD_SHOT_TO_PIN_HIT_H,
   ADD_SHOT_TO_PIN_HIT_W,
+  addShotToPinScalesUpOnPressOrDrag,
+  addShotToPinTracksViewChanges,
+  addShotToPinVisualScale,
   holeMapKeepsScrollZoomOnceMounted,
   placeToDraftFromDragRelease,
   planDragShotLines,
@@ -233,6 +236,9 @@ function NativeHoleMap({
   const [toPinDragOrigin, setToPinDragOrigin] = useState<{ lat: number; lng: number } | null>(
     null,
   );
+  const [toPinHeld, setToPinHeld] = useState(false);
+  const toPinEngaged = toPinHeld || toPinDragOrigin != null;
+  const [toPinTracksView, setToPinTracksView] = useState(false);
   const toPinLive = Boolean(freezePan || onPlaceToDrag);
   const framedForGestures = holeMapKeepsScrollZoomOnceMounted();
   const toPinCoordinate = toPinMarkerCoordinate({
@@ -241,8 +247,18 @@ function NativeHoleMap({
   });
 
   useEffect(() => {
-    if (!placedTo) setToPinDragOrigin(null);
+    if (!placedTo) {
+      setToPinDragOrigin(null);
+      setToPinHeld(false);
+    }
   }, [placedTo]);
+
+  useEffect(() => {
+    if (toPinDragOrigin == null) return;
+    setToPinTracksView(true);
+    const timer = setTimeout(() => setToPinTracksView(false), 180);
+    return () => clearTimeout(timer);
+  }, [toPinDragOrigin]);
 
   const revealMapsChrome = () => {
     if (allowMapsChrome) setMapsChrome(true);
@@ -655,18 +671,27 @@ function NativeHoleMap({
             coordinate={toCoord(toPinCoordinate.lat, toPinCoordinate.lng)}
             anchor={{ x: 0.5, y: 1 }}
             tappable={false}
-            tracksViewChanges={toPinDragOrigin == null}
+            tracksViewChanges={addShotToPinTracksViewChanges({
+              dragOriginSet: toPinDragOrigin != null,
+              capturingScale: toPinTracksView,
+            })}
             stopPropagation
             draggable={Boolean(onPlaceToDrag)}
             onDragStart={() => {
+              if (addShotToPinScalesUpOnPressOrDrag()) {
+                setToPinHeld(true);
+                setToPinTracksView(true);
+              }
               if (!placedTo) return;
               setToPinDragOrigin(placedTo);
             }}
             onDragEnd={(event) => {
+              setToPinHeld(false);
+              setToPinDragOrigin(null);
+              setToPinTracksView(true);
               if (!onPlaceToDrag) return;
               const { latitude, longitude } = event.nativeEvent.coordinate;
               const released = placeToDraftFromDragRelease({ lat: latitude, lng: longitude });
-              setToPinDragOrigin(null);
               if (!released) return;
               onPlaceToDrag({ lat: latitude, lng: longitude });
             }}>
@@ -674,7 +699,22 @@ function NativeHoleMap({
               testID="to-pin-hit"
               pointerEvents="auto"
               collapsable={false}
-              style={styles.toPinHit}>
+              onTouchStart={() => {
+                if (addShotToPinScalesUpOnPressOrDrag()) setToPinHeld(true);
+              }}
+              onTouchEnd={() => {
+                if (toPinDragOrigin == null) setToPinHeld(false);
+              }}
+              onTouchCancel={() => {
+                if (toPinDragOrigin == null) setToPinHeld(false);
+              }}
+              style={[
+                styles.toPinHit,
+                {
+                  transform: [{ scale: addShotToPinVisualScale(toPinEngaged) }],
+                  transformOrigin: 'bottom',
+                },
+              ]}>
               <View style={styles.toPinHead} />
               <View style={styles.toPinStem} />
             </View>
