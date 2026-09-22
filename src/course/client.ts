@@ -13,7 +13,7 @@ import {
   parseGreenCenters,
   parseNearbyCourses,
 } from './parse';
-import type { CourseDataClient, CourseDetail, CourseSummary, OsmOverlayQuery } from './types';
+import type { CourseDataClient, CourseDetail, CourseSummary, HoleCourseData, OsmOverlayQuery } from './types';
 import type { LatLng } from '../domain/latLng';
 import { isCourseCardLatLng } from '../domain/latLng';
 import { planCourseSearchParams } from '../domain/coursePick';
@@ -23,6 +23,7 @@ import {
   loadGolfApiPaintCandidate,
   loadOsmOpenGolfCandidate,
   resolveCoursePaint,
+  type PaintCandidate,
 } from './waterfall';
 
 export const GOLF_COURSES_API_BASE = 'https://golfcoursesapi.com/api/v1';
@@ -77,6 +78,65 @@ async function apiGet(
     json = null;
   }
   return { status: res.status, json };
+}
+
+export type GcaPaintDeps = {
+  getKey?: () => string | null;
+  fetch?: typeof fetch;
+  /** Already-loaded scorecard holes. Tees ride along when the detail had them. */
+  holes?: readonly HoleCourseData[] | null;
+  numHoles?: number | null;
+};
+
+/**
+ * Same GCA Pro read as live course paint: `GET /courses/:id/green-centers`.
+ * No key, a local catalog id, or a non-2xx response is a miss. Never invents a green.
+ * When holes were not already loaded, the course detail is read first so tees match live paint.
+ */
+export async function loadGcaPaintCandidate(
+  courseId: string | null | undefined,
+  deps: GcaPaintDeps = {},
+): Promise<{ candidate: PaintCandidate; rows: ReturnType<typeof parseGreenCenters> } | null> {
+  const id = courseId?.trim() ?? '';
+  if (!id || isLocalCatalogId(id)) return null;
+  const key = (deps.getKey ?? getGolfCoursesApiKey)();
+  if (!key) return null;
+  const fetchImpl = deps.fetch ?? fetch;
+  const encoded = encodeURIComponent(id);
+  try {
+    let holes = deps.holes ?? null;
+    let numHoles = deps.numHoles === 9 || deps.numHoles === 18 ? deps.numHoles : null;
+    if (!holes) {
+      const detailRes = await apiGet(`/courses/${encoded}`, key, fetchImpl);
+      if (detailRes.status >= 200 && detailRes.status < 300) {
+        const detail = parseCourseDetail(detailRes.json);
+        holes = detail?.holes ?? [];
+        if (numHoles == null && (detail?.holeCount === 9 || detail?.holeCount === 18)) {
+          numHoles = detail.holeCount;
+        }
+      } else {
+        holes = [];
+      }
+    }
+    const greensRes = await apiGet(`/courses/${encoded}/green-centers`, key, fetchImpl);
+    if (greensRes.status < 200 || greensRes.status >= 300) return null;
+    const rows = parseGreenCenters(greensRes.json);
+    if (rows.length === 0) return null;
+    return {
+      rows,
+      candidate: {
+        source: 'gca',
+        numHoles,
+        holes: rows.map((row) => {
+          const existing = holes?.find((hole) => hole.holeNumber === row.holeNumber);
+          const tee = existing && isCourseCardLatLng(existing.teeCentroid) ? existing.teeCentroid : null;
+          return { hole: row.holeNumber, tee, green: row.greenCentroid };
+        }),
+      },
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -154,19 +214,14 @@ export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataCli
       const paint = await resolveCoursePaint(match, {
         loadOsm: async () => loadOsmOpenGolfCandidate(match),
         loadGca: async () => {
-          const greensRes = await apiGet(`/courses/${encoded}/green-centers`, key, fetchImpl);
-          if (greensRes.status < 200 || greensRes.status >= 300) return null;
-          gcaRows = parseGreenCenters(greensRes.json);
-          if (gcaRows.length === 0) return null;
-          return {
-            source: 'gca',
-            numHoles: detail.holeCount === 9 || detail.holeCount === 18 ? detail.holeCount : null,
-            holes: gcaRows.map((row) => {
-              const existing = detail.holes.find((hole) => hole.holeNumber === row.holeNumber);
-              const tee = existing && isCourseCardLatLng(existing.teeCentroid) ? existing.teeCentroid : null;
-              return { hole: row.holeNumber, tee, green: row.greenCentroid };
-            }),
-          };
+          const loaded = await loadGcaPaintCandidate(id, {
+            getKey,
+            fetch: fetchImpl,
+            numHoles: detail.holeCount,
+            holes: detail.holes,
+          });
+          gcaRows = loaded?.rows ?? null;
+          return loaded?.candidate ?? null;
         },
         loadGolfApi: () => loadGolfApiPaintCandidate(match, { fetchImpl }),
         cache: getSharedCoursePaintCache(),

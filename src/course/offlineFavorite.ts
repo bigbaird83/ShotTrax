@@ -1,5 +1,6 @@
+import { loadGcaPaintCandidate } from './client';
 import type { CourseHydrateMatch } from './hydrate';
-import { getSharedCoursePaintCache } from './paintCache';
+import { getSharedCoursePaintCache, type CoursePaintCache } from './paintCache';
 import {
   loadGolfApiPaintCandidate,
   loadOsmOpenGolfCandidate,
@@ -19,6 +20,10 @@ export type OfflineDownloadDeps = {
   now?: () => string;
   onStatus?: (status: OfflinePackStatus) => void;
   resolve?: (course: CourseHydrateMatch) => Promise<CoursePaintResult>;
+  /** Same Golf Courses API key and fetch live paint uses for GCA Pro. */
+  getKey?: () => string | null;
+  fetch?: typeof fetch;
+  cache?: CoursePaintCache;
 };
 
 function matchOf(course: FavoriteCourse): CourseHydrateMatch {
@@ -31,12 +36,21 @@ function matchOf(course: FavoriteCourse): CourseHydrateMatch {
   };
 }
 
-async function resolveWithWaterfall(course: CourseHydrateMatch): Promise<CoursePaintResult> {
+async function resolveWithWaterfall(
+  course: CourseHydrateMatch,
+  deps: OfflineDownloadDeps,
+): Promise<CoursePaintResult> {
   return resolveCoursePaint(course, {
-    cache: getSharedCoursePaintCache(),
+    cache: deps.cache ?? getSharedCoursePaintCache(),
     loadOsm: async () => loadOsmOpenGolfCandidate(course),
-    loadGca: async () => null,
-    loadGolfApi: () => loadGolfApiPaintCandidate(course),
+    loadGca: async () => {
+      const loaded = await loadGcaPaintCandidate(course.courseKey, {
+        getKey: deps.getKey,
+        fetch: deps.fetch,
+      });
+      return loaded?.candidate ?? null;
+    },
+    loadGolfApi: () => loadGolfApiPaintCandidate(course, { fetchImpl: deps.fetch }),
   });
 }
 
@@ -62,7 +76,7 @@ export async function downloadFavoriteForOffline(
   writeOfflinePack(store, { courseId: course.id, status: downloading, updatedAt: now() });
   deps.onStatus?.(downloading);
 
-  const painted = await (deps.resolve ?? resolveWithWaterfall)(identity);
+  const painted = await (deps.resolve ?? ((match) => resolveWithWaterfall(match, deps)))(identity);
   const status = offlineStatusAfterDownload(identity, painted.ok);
   writeOfflinePack(store, { courseId: course.id, status, updatedAt: now() });
   deps.onStatus?.(status);

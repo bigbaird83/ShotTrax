@@ -50,6 +50,7 @@ import {
   THUNDERBIRD_HEBER_SPRINGS_AR_KEY,
 } from './hydrate';
 import { downloadFavoriteForOffline } from './offlineFavorite';
+import { createMemoryCoursePaintCache } from './paintCache';
 import { cacheHolesAfterFirst } from './prefetch';
 import {
   appleBasemapTilesBestEffortOnly,
@@ -303,6 +304,54 @@ test('Favorites offline states never mark HARD-MISS Ready', async () => {
   assert.match(favoritesScreen, /FAVORITES_BANNER/);
   assert.match(favoritesScreen, /Download for offline|COPY\.downloadForOffline/);
   assert.doesNotMatch(favoritesScreen, /Watch ready|watch ready/i);
+});
+
+test('OSM miss + GCA paint makes the offline download Ready and skips golfapi', async () => {
+  const urls: string[] = [];
+  const green = { lat: 35.522655, lng: -92.0393088 };
+  const store = memoryStore();
+  const course = favoriteFromSummary({
+    id: 'gca-offline-1',
+    name: 'Offline GCA Probe CC',
+    city: 'Nowhereville',
+    state: 'ZZ',
+    country: 'US',
+    location: null,
+  });
+  assert.ok(course);
+  const status = await downloadFavoriteForOffline(course, store, {
+    now: () => '2026-09-22T01:05:00.000Z',
+    cache: createMemoryCoursePaintCache(),
+    getKey: () => 'gca-test-key',
+    fetch: async (input) => {
+      const url = String(input);
+      urls.push(url);
+      if (url.includes('golfapi.io')) {
+        return new Response(JSON.stringify({ error: 'golfapi must not run' }), { status: 500 });
+      }
+      if (url.includes('/green-centers')) {
+        return new Response(JSON.stringify([{ hole: 1, lat: green.lat, lng: green.lng }]), { status: 200 });
+      }
+      return new Response(
+        JSON.stringify({
+          data: { id: 'gca-offline-1', name: 'Offline GCA Probe CC', city: 'Nowhereville', state: 'ZZ' },
+        }),
+        { status: 200 },
+      );
+    },
+  });
+  assert.equal(status, 'ready');
+  assert.equal(offlinePackFor(store, course.id)?.status, 'ready');
+  assert.equal(urls.some((url) => url.includes('/green-centers')), true);
+  assert.equal(urls.some((url) => url.includes('golfapi.io')), false);
+
+  const offline = readFileSync(new URL('./offlineFavorite.ts', import.meta.url), 'utf8');
+  assert.match(offline, /loadGcaPaintCandidate/);
+  assert.doesNotMatch(offline, /loadGca:\s*async\s*\(\)\s*=>\s*null/);
+  const request = readFileSync(new URL('../domain/courseRequest.ts', import.meta.url), 'utf8');
+  const contribute = readFileSync(new URL('../domain/courseContribute.ts', import.meta.url), 'utf8');
+  assert.doesNotMatch(request, /loadGcaPaintCandidate|resolveCoursePaint/);
+  assert.doesNotMatch(contribute, /loadGcaPaintCandidate|resolveCoursePaint/);
 });
 
 test('course request payload keeps email, handle, and fields and does not paint', () => {
