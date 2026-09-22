@@ -28,6 +28,7 @@ import {
   ADD_SHOT_TO_PIN_HIT_H,
   ADD_SHOT_TO_PIN_HIT_W,
   addShotToPinScalesUpOnPressOrDrag,
+  addShotToPinTracksViewChanges,
   addShotToPinVisualScale,
   holeMapKeepsScrollZoomOnceMounted,
   placeToDraftFromDragRelease,
@@ -253,10 +254,11 @@ function NativeHoleMap({
   }, [placedTo]);
 
   useEffect(() => {
+    if (toPinDragOrigin == null) return;
     setToPinTracksView(true);
-    const timer = setTimeout(() => setToPinTracksView(false), 120);
+    const timer = setTimeout(() => setToPinTracksView(false), 180);
     return () => clearTimeout(timer);
-  }, [toPinEngaged]);
+  }, [toPinDragOrigin]);
 
   const revealMapsChrome = () => {
     if (allowMapsChrome) setMapsChrome(true);
@@ -669,17 +671,24 @@ function NativeHoleMap({
             coordinate={toCoord(toPinCoordinate.lat, toPinCoordinate.lng)}
             anchor={{ x: 0.5, y: 1 }}
             tappable={false}
-            tracksViewChanges={toPinDragOrigin == null || toPinTracksView}
+            tracksViewChanges={addShotToPinTracksViewChanges({
+              dragOriginSet: toPinDragOrigin != null,
+              capturingScale: toPinTracksView,
+            })}
             stopPropagation
             draggable={Boolean(onPlaceToDrag)}
             onDragStart={() => {
-              if (addShotToPinScalesUpOnPressOrDrag()) setToPinHeld(true);
+              if (addShotToPinScalesUpOnPressOrDrag()) {
+                setToPinHeld(true);
+                setToPinTracksView(true);
+              }
               if (!placedTo) return;
               setToPinDragOrigin(placedTo);
             }}
             onDragEnd={(event) => {
               setToPinHeld(false);
               setToPinDragOrigin(null);
+              setToPinTracksView(true);
               if (!onPlaceToDrag) return;
               const { latitude, longitude } = event.nativeEvent.coordinate;
               const released = placeToDraftFromDragRelease({ lat: latitude, lng: longitude });
@@ -693,11 +702,18 @@ function NativeHoleMap({
               onTouchStart={() => {
                 if (addShotToPinScalesUpOnPressOrDrag()) setToPinHeld(true);
               }}
-              onTouchEnd={() => setToPinHeld(false)}
-              onTouchCancel={() => setToPinHeld(false)}
+              onTouchEnd={() => {
+                if (toPinDragOrigin == null) setToPinHeld(false);
+              }}
+              onTouchCancel={() => {
+                if (toPinDragOrigin == null) setToPinHeld(false);
+              }}
               style={[
                 styles.toPinHit,
-                { transform: [{ scale: addShotToPinVisualScale(toPinEngaged) }] },
+                {
+                  transform: [{ scale: addShotToPinVisualScale(toPinEngaged) }],
+                  transformOrigin: 'bottom',
+                },
               ]}>
               <View style={styles.toPinHead} />
               <View style={styles.toPinStem} />

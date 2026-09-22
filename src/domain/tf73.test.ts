@@ -16,6 +16,7 @@ import {
   ADD_SHOT_TO_PIN_PRESSED_SCALE,
   addShotToPinScaleOnRelease,
   addShotToPinScalesUpOnPressOrDrag,
+  addShotToPinTracksViewChanges,
   addShotToPinVisualScale,
   toPinYardsRecalcOnDragMove,
   toPinYardsRecalcOnReleaseOnly,
@@ -172,14 +173,22 @@ test('add-shot pin scales up on press or drag and yards stay on release', () => 
   assert.equal(addShotToPinScaleOnRelease(), 1);
   assert.equal(addShotToPinVisualScale(true), ADD_SHOT_TO_PIN_PRESSED_SCALE);
   assert.equal(addShotToPinVisualScale(false), 1);
-  assert.ok(ADD_SHOT_TO_PIN_PRESSED_SCALE > 1);
+  assert.equal(ADD_SHOT_TO_PIN_PRESSED_SCALE, 2);
+  assert.equal(addShotToPinTracksViewChanges({ dragOriginSet: false, capturingScale: false }), true);
+  assert.equal(addShotToPinTracksViewChanges({ dragOriginSet: true, capturingScale: true }), true);
+  assert.equal(addShotToPinTracksViewChanges({ dragOriginSet: true, capturingScale: false }), false);
   assert.equal(toPinYardsRecalcOnDragMove(), false);
   assert.equal(toPinYardsRecalcOnReleaseOnly(), true);
 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   assert.match(map, /addShotToPinVisualScale\(toPinEngaged\)/);
+  assert.match(map, /addShotToPinTracksViewChanges/);
   assert.match(map, /onTouchStart=/);
   assert.match(map, /setToPinHeld\(true\)/);
+  assert.match(map, /setToPinTracksView\(true\)/);
+  assert.doesNotMatch(map, /onDrag=\{/);
+  assert.match(map, /scrollEnabled=\{framedForGestures\}/);
+  assert.match(map, /zoomEnabled=\{framedForGestures\}/);
   const dragStart = map.indexOf('onDragStart=');
   const dragEnd = map.indexOf('onDragEnd=');
   assert.ok(dragStart > 0 && dragEnd > dragStart);
