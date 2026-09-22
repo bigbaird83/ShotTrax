@@ -30,6 +30,8 @@ type Props = {
   hideYardsOverlay?: boolean;
   onFrameReady?: (ready: boolean) => void;
   style?: object;
+  missCopy?: { title: string; detail?: string | null };
+  requestCourse?: { name?: string | null; city?: string | null; courseId?: string | null } | null;
 };
 
 export function HoleMap({

@@ -1,5 +1,6 @@
+import { router } from 'expo-router';
 import { Component, type ErrorInfo, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 import MapView, { Marker, Polygon, Polyline } from 'react-native-maps';
 import type { OsmFeature, OsmGolfKind, OsmOverlay } from '@/src/course/types';
 import { featuresForHole } from '@/src/course/osmOverlay';
@@ -31,6 +32,7 @@ import {
   toPinMarkerCoordinate,
 } from '@/src/domain/placeToDrag';
 import { COPY, showWaitingOnLocationLine } from '@/src/domain/playerCopy';
+import { appleBasemapTilesBestEffortOnly } from '@/src/course/startRoundEntry';
 import { isValidLatLng } from '@/src/domain/latLng';
 import { hasClosedGpsTrail, hasGpsStart } from '@/src/domain/shotSource';
 import { planShotTrail, shotTrailDash } from '@/src/domain/shotTrail';
@@ -81,7 +83,11 @@ type Props = {
   allowMapsChrome?: boolean;
   /** HARD-MISS / need-pins copy. Default is the generic tee+green miss. */
   missCopy?: { title: string; detail?: string | null };
+  /** Miss-card deep link. Does not invent a pin. */
+  requestCourse?: { name?: string | null; city?: string | null; courseId?: string | null } | null;
 };
+
+const APPLE_TILES_BEST_EFFORT = appleBasemapTilesBestEffortOnly();
 
 class MapGuard extends Component<{ children: ReactNode; fallback: ReactNode }, { failed: boolean }> {
   state = { failed: false };
@@ -123,6 +129,7 @@ function TrailFallback({
   hideYardsOverlay,
   frameMiss,
   missCopy,
+  requestCourse,
 }: {
   holeNumber: number;
   yardsToGreen?: YardsToGreenResult;
@@ -131,6 +138,7 @@ function TrailFallback({
   hideYardsOverlay?: boolean;
   frameMiss?: boolean;
   missCopy?: { title: string; detail?: string | null };
+  requestCourse?: { name?: string | null; city?: string | null; courseId?: string | null } | null;
 }) {
   const yardsOnCard = Boolean(yardsToGreen && yardsToGreen.yards != null && Number.isFinite(yardsToGreen.yards));
   const waiting =
@@ -145,10 +153,31 @@ function TrailFallback({
     });
   if (frameMiss) {
     return (
-      <View style={styles.missCard} testID="course-card-miss">
+      <View
+        style={styles.missCard}
+        testID="course-card-miss"
+        accessibilityHint={
+          APPLE_TILES_BEST_EFFORT
+            ? 'Marks and yards use your GPS and saved course paint. Map tiles are best-effort.'
+            : undefined
+        }>
         <Text style={styles.holeBadgeText}>Hole {holeNumber}</Text>
         <Text style={styles.missMsg}>{missCopy?.title ?? COPY.courseCardMissingFrame}</Text>
         {missCopy?.detail ? <Text style={styles.missDetail}>{missCopy.detail}</Text> : null}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() =>
+            router.push({
+              pathname: '/request-course',
+              params: {
+                name: requestCourse?.name ?? '',
+                city: requestCourse?.city ?? '',
+                courseId: requestCourse?.courseId ?? '',
+              },
+            })
+          }>
+          <Text style={styles.missDetail}>{COPY.requestThisCourse}</Text>
+        </Pressable>
       </View>
     );
   }
@@ -192,6 +221,7 @@ function NativeHoleMap({
   showPhonePin,
   allowMapsChrome = true,
   missCopy,
+  requestCourse,
 }: Props) {
   const mapRef = useRef<MapView | null>(null);
   const framedOnce = useRef(false);
@@ -440,6 +470,7 @@ function NativeHoleMap({
           hideYardsOverlay={hideYardsOverlay}
           frameMiss={Boolean(lockFrame)}
           missCopy={missCopy}
+          requestCourse={requestCourse}
         />
       </View>
     );

@@ -758,7 +758,7 @@ test('prefetch meters unique hydrate once and golfapi does not invent without a 
 test('Start Round / hole load apply hydrate before MapView for Cypress', () => {
   const home = readFileSync(new URL('../../app/(tabs)/index.tsx', import.meta.url), 'utf8');
   assert.match(home, /applyCourseHydrateToLayout/);
-  const apply = home.slice(home.indexOf('async function loadLayout'), home.indexOf('export default function HomeScreen'));
+  const apply = home.slice(home.indexOf('function loadLayout'), home.indexOf('export default function HomeScreen'));
   assert.match(apply, /applyCourseHydrateToLayout/);
   assert.ok(apply.indexOf('applyCourseHydrateToLayout') < apply.indexOf('rememberLayoutHoles'));
 

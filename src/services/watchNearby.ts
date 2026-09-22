@@ -5,7 +5,7 @@ import { applyCourseHydrateToLayout } from '@/src/course/hydrate';
 import type { CourseDetail, CourseSummary } from '@/src/course/types';
 import { layoutFromTee } from '@/src/course/layout';
 import { prefetchCourseCardInBackground, rememberLayoutHoles } from '@/src/course/prefetch';
-import { startRound } from '@/src/db/repo';
+import { attachCourseToRound, startRound } from '@/src/db/repo';
 import { playHrefAfterRoundStart } from '@/src/domain/playNav';
 import type { GpsFix } from '@/src/domain/types';
 import {
@@ -203,7 +203,13 @@ export async function handleWatchNearbyJson(json: string): Promise<{ ok: boolean
       const round = startRound(ctx.db, holeCount, detail.name, layout);
       ctx.bump();
       router.push(playHrefAfterRoundStart(round.id));
-      prefetchCourseCardInBackground(layout);
+      prefetchCourseCardInBackground(layout, {
+        holeCount,
+        applyLayout: (painted) => {
+          attachCourseToRound(ctx.db, round.id, detail.name, painted);
+          ctx.bump();
+        },
+      });
       return { ok: true, feedback: tee ? `${detail.name} · ${tee.name}` : detail.name };
     } catch {
       return { ok: false, feedback: PHONE_UNAVAILABLE };
