@@ -1,11 +1,13 @@
 import { router } from 'expo-router';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getCourseDataClient } from '@/src/course/client';
+import { catalogEntryById } from '@/src/course/catalog';
 import { applyCourseHydrateToLayout } from '@/src/course/hydrate';
 import type { CourseDetail, CourseSummary } from '@/src/course/types';
 import { layoutFromTee } from '@/src/course/layout';
 import { prefetchCourseCardInBackground, rememberLayoutHoles } from '@/src/course/prefetch';
 import { attachCourseToRound, startRound } from '@/src/db/repo';
+import { layoutForPlayedHoles, resolveCourseNumHoles } from '@/src/domain/nineByTwo';
 import { playHrefAfterRoundStart } from '@/src/domain/playNav';
 import type { GpsFix } from '@/src/domain/types';
 import {
@@ -192,21 +194,34 @@ export async function handleWatchNearbyJson(json: string): Promise<{ ok: boolean
         : null;
       if (start.teeName && !tee) return { ok: false, feedback: 'open the phone' };
       if (detail.tees.length > 0 && !tee) return { ok: false, feedback: 'open the phone' };
-      const layout = applyCourseHydrateToLayout(layoutFromTee(detail, tee), {
-        name: detail.name,
-        city: detail.city,
-        state: detail.state,
-        location: detail.location,
-        courseKey: detail.id,
+      const numHoles = resolveCourseNumHoles({
+        detailHoleCount: detail.holeCount,
+        catalogHoleCount: catalogEntryById(detail.id)?.holeCount ?? null,
       });
+      const layout = layoutForPlayedHoles(
+        applyCourseHydrateToLayout(layoutFromTee(detail, tee), {
+          name: detail.name,
+          city: detail.city,
+          state: detail.state,
+          location: detail.location,
+          courseKey: detail.id,
+        }),
+        { numHoles, playHoleCount: holeCount },
+      );
       rememberLayoutHoles(layout);
       const round = startRound(ctx.db, holeCount, detail.name, layout);
       ctx.bump();
       router.push(playHrefAfterRoundStart(round.id));
       prefetchCourseCardInBackground(layout, {
         holeCount,
+        courseNumHoles: numHoles,
         applyLayout: (painted) => {
-          attachCourseToRound(ctx.db, round.id, detail.name, painted);
+          attachCourseToRound(
+            ctx.db,
+            round.id,
+            detail.name,
+            layoutForPlayedHoles(painted, { numHoles, playHoleCount: holeCount }),
+          );
           ctx.bump();
         },
       });

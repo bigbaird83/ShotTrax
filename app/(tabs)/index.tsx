@@ -9,13 +9,16 @@ import {
   Text,
   View,
 } from 'react-native';
+import { catalogEntryById } from '@/src/course/catalog';
 import { applyCourseHydrateToLayout } from '@/src/course/hydrate';
 import { layoutFromTee } from '@/src/course/layout';
+import { downloadFavoriteForOffline } from '@/src/course/offlineFavorite';
 import { prefetchCourseCardInBackground, rememberLayoutHoles } from '@/src/course/prefetch';
 import type { CourseDetail, CourseSummary, TeeSet } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
 import {
   attachCourseToRound,
+  collectRoundHistoryExport,
   deleteRound,
   finishRound,
   getActiveRound,
@@ -25,6 +28,7 @@ import {
   listHoles,
   listRounds,
   markBagCustomizeSeen,
+  readSettingStore,
   startRound,
   type CourseLayoutSeed,
 } from '@/src/db/repo';
@@ -33,7 +37,17 @@ import { canFinishBagCarrySetup, countTypedCarries } from '@/src/domain/bagCusto
 import { canStartRound } from '@/src/domain/coursePick';
 import { COPY, formatTeeMeta } from '@/src/domain/playerCopy';
 import { playHrefAfterRoundStart } from '@/src/domain/playNav';
+import {
+  favoriteFromHistoryRound,
+  historyStarInventsPaint,
+  historyStarUsesFavoritesList,
+  isFavorite,
+  setFavorite,
+} from '@/src/domain/favorites';
+import { layoutForPlayedHoles, resolveCourseNumHoles } from '@/src/domain/nineByTwo';
 import { formatHistoryRow, historyDeletePrompt, pastRoundEditAnytime, pastRoundHoleHref } from '@/src/domain/roundHistory';
+import { serializeRoundHistory } from '@/src/domain/roundTransfer';
+import { presentRoundHistoryShare } from '@/src/services/roundHistoryShare';
 import { describeGpsSource } from '@/src/services/location';
 import { BagCarryList, BagCustomizeActions } from '@/src/ui/BagCarryList';
 import { BigButton } from '@/src/ui/BigButton';
@@ -48,6 +62,21 @@ import { useColors } from '@/src/ui/ColorThemeProvider';
 import { tapTarget, type, type ColorPalette } from '@/src/ui/theme';
 import { getCurrentFix } from '@/src/services/location';
 import { setWatchCoursePickedHandler } from '@/src/services/watchNearby';
+
+function playedLayout(
+  layout: CourseLayoutSeed,
+  course: CourseSummary,
+  detail: CourseDetail | null,
+  holeCount: 9 | 18,
+): CourseLayoutSeed {
+  return layoutForPlayedHoles(layout, {
+    numHoles: resolveCourseNumHoles({
+      detailHoleCount: detail?.holeCount,
+      catalogHoleCount: catalogEntryById(course.id)?.holeCount ?? null,
+    }),
+    playHoleCount: holeCount,
+  });
+}
 
 function loadLayout(
   course: CourseSummary,
@@ -127,14 +156,24 @@ export default function HomeScreen() {
   };
 
   const applyPickedCourse = (course: CourseSummary, holeCount: 9 | 18) => {
-    const layout = loadLayout(course, pickedDetail, pickedTee);
+    const numHoles = resolveCourseNumHoles({
+      detailHoleCount: pickedDetail?.holeCount,
+      catalogHoleCount: catalogEntryById(course.id)?.holeCount ?? null,
+    });
+    const layout = playedLayout(loadLayout(course, pickedDetail, pickedTee), course, pickedDetail, holeCount);
     const round = startRound(db, holeCount, course.name, layout);
     bump();
     router.push(playHrefAfterRoundStart(round.id));
     prefetchCourseCardInBackground(layout, {
       holeCount,
+      courseNumHoles: numHoles,
       applyLayout: (painted) => {
-        attachCourseToRound(db, round.id, course.name, painted);
+        attachCourseToRound(
+          db,
+          round.id,
+          course.name,
+          layoutForPlayedHoles(painted, { numHoles, playHoleCount: holeCount }),
+        );
         bump();
       },
     });
@@ -149,14 +188,25 @@ export default function HomeScreen() {
     if (active) {
       setStarting(true);
       try {
-        const layout = loadLayout(pick.course, pick.detail, pick.tee);
+        const holeCount = active.holeCount === 9 ? 9 : 18;
+        const numHoles = resolveCourseNumHoles({
+          detailHoleCount: pick.detail?.holeCount,
+          catalogHoleCount: catalogEntryById(pick.course.id)?.holeCount ?? null,
+        });
+        const layout = playedLayout(loadLayout(pick.course, pick.detail, pick.tee), pick.course, pick.detail, holeCount);
         attachCourseToRound(db, active.id, pick.course.name, layout);
         bump();
         router.push(playHrefAfterRoundStart(active.id));
         prefetchCourseCardInBackground(layout, {
-          holeCount: active.holeCount === 9 ? 9 : 18,
+          holeCount,
+          courseNumHoles: numHoles,
           applyLayout: (painted) => {
-            attachCourseToRound(db, active.id, pick.course.name, painted);
+            attachCourseToRound(
+              db,
+              active.id,
+              pick.course.name,
+              layoutForPlayedHoles(painted, { numHoles, playHoleCount: holeCount }),
+            );
             bump();
           },
         });
@@ -186,6 +236,38 @@ export default function HomeScreen() {
     } finally {
       setStarting(false);
     }
+  };
+
+  const favoriteStore = useMemo(() => readSettingStore(db), [db]);
+
+  const starHistoryRound = (round: (typeof rounds)[number]) => {
+    if (!historyStarUsesFavoritesList() || historyStarInventsPaint()) return;
+    const catalog = round.courseApiId ? catalogEntryById(round.courseApiId) : null;
+    const favorite = favoriteFromHistoryRound({
+      courseApiId: round.courseApiId,
+      courseName: round.courseName,
+      courseLat: round.courseLat,
+      courseLng: round.courseLng,
+      city: catalog?.city ?? null,
+      state: catalog?.state ?? null,
+      country: catalog?.country ?? null,
+    });
+    if (!favorite) return;
+    const starred = isFavorite(favoriteStore, favorite.id);
+    setFavorite(favoriteStore, favorite, !starred);
+    bump();
+    if (starred) return;
+    void downloadFavoriteForOffline(favorite, favoriteStore, { onStatus: () => bump() });
+  };
+
+  const onExportRounds = async () => {
+    const doc = collectRoundHistoryExport(db, new Date().toISOString());
+    if (doc.rounds.length === 0) {
+      Alert.alert(COPY.exportRounds, COPY.exportRoundsEmpty);
+      return;
+    }
+    const ok = await presentRoundHistoryShare(serializeRoundHistory(doc));
+    if (!ok) Alert.alert(COPY.exportRounds, COPY.exportRoundsFailed);
   };
 
   const onRefresh = useCallback(async () => {
@@ -343,6 +425,8 @@ export default function HomeScreen() {
       <BigButton label={COPY.liveBoardWatch} variant="ghost" onPress={() => router.push('/board')} />
 
       <Text style={styles.section}>{COPY.roundHistory}</Text>
+      <BigButton label={COPY.exportRounds} variant="secondary" onPress={() => void onExportRounds()} />
+      <BigButton label={COPY.restoreRounds} variant="ghost" onPress={() => router.push('/restore-rounds')} />
       {rounds.length === 0 ? (
         <EmptyPanel title={COPY.noRounds} hint={COPY.firstRoundHint} />
       ) : (
@@ -358,6 +442,17 @@ export default function HomeScreen() {
             score: scored.length ? total : null,
           });
           const prompt = historyDeletePrompt();
+          const catalog = round.courseApiId ? catalogEntryById(round.courseApiId) : null;
+          const favorite = favoriteFromHistoryRound({
+            courseApiId: round.courseApiId,
+            courseName: round.courseName,
+            courseLat: round.courseLat,
+            courseLng: round.courseLng,
+            city: catalog?.city ?? null,
+            state: catalog?.state ?? null,
+            country: catalog?.country ?? null,
+          });
+          const starred = favorite ? isFavorite(favoriteStore, favorite.id) : false;
           return (
             <HistorySwipeRow
               key={round.id}
@@ -388,6 +483,15 @@ export default function HomeScreen() {
                 ]);
               }}
               rowStyle={styles.row}>
+              {favorite ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={starred ? COPY.unfavorite : COPY.favorite}
+                  onPress={() => starHistoryRound(round)}
+                  style={styles.star}>
+                  <Text style={styles.starText}>{starred ? '★' : '☆'}</Text>
+                </Pressable>
+              ) : null}
               <View style={{ flex: 1 }}>
                 <Text style={styles.rowTitle}>{row.courseName}</Text>
                 <Text style={styles.cardMeta}>
@@ -473,5 +577,7 @@ function makeStyles(colors: ColorPalette) {
     scoreCol: { alignItems: 'flex-end', gap: 2 },
     relative: { color: colors.muted, fontSize: type.tiny, fontWeight: '800' },
     score: { color: colors.cream, fontSize: 24, fontWeight: '900' },
+    star: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+    starText: { color: colors.lime, fontSize: 28, fontWeight: '900' },
   });
 }

@@ -16,6 +16,7 @@ import {
   loadOsmOpenGolfCandidate,
   resolveCoursePaint,
 } from './waterfall';
+import { layoutForPlayedHoles } from '../domain/nineByTwo';
 import { backgroundHoleNumbers } from './startRoundEntry';
 import type { CourseLayoutSeed } from './layout';
 import type { OsmOverlay, OsmOverlayQuery } from './types';
@@ -32,6 +33,8 @@ export type PrefetchDeps = {
   fetchOverlay?: (query: OsmOverlayQuery) => Promise<OsmOverlay | null>;
   /** Round length. Background cache is holes 2 through this count. */
   holeCount?: 9 | 18;
+  /** Course card hole count. 9 + an 18-hole round mirrors real front paint. */
+  courseNumHoles?: number | null;
   /** Persist a painted layout onto the open round. Never blocks Start. */
   applyLayout?: (layout: CourseLayoutSeed) => void;
 };
@@ -262,6 +265,11 @@ export async function cacheHolesAfterFirst(
     });
     if (painted.ok) hydrated = applyCoursePaintToLayout(hydrated, painted);
   }
+  const playHoleCount = deps?.holeCount === 9 ? 9 : 18;
+  hydrated = layoutForPlayedHoles(hydrated, {
+    numHoles: deps?.courseNumHoles ?? null,
+    playHoleCount,
+  });
   rememberLayoutHoles(hydrated);
   deps?.applyLayout?.(hydrated);
   const limit = deps?.holeCount === 9 ? 9 : 18;

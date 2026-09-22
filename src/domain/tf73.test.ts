@@ -177,8 +177,8 @@ test('add-shot pin scales up on press or drag and yards stay on release', () => 
   assert.equal(addShotToPinTracksViewChanges({ dragOriginSet: false, capturingScale: false }), true);
   assert.equal(addShotToPinTracksViewChanges({ dragOriginSet: true, capturingScale: true }), true);
   assert.equal(addShotToPinTracksViewChanges({ dragOriginSet: true, capturingScale: false }), false);
-  assert.equal(toPinYardsRecalcOnDragMove(), false);
-  assert.equal(toPinYardsRecalcOnReleaseOnly(), true);
+  assert.equal(toPinYardsRecalcOnDragMove(), true);
+  assert.equal(toPinYardsRecalcOnReleaseOnly(), false);
 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   assert.match(map, /addShotToPinVisualScale\(toPinEngaged\)/);
@@ -186,7 +186,9 @@ test('add-shot pin scales up on press or drag and yards stay on release', () => 
   assert.match(map, /onTouchStart=/);
   assert.match(map, /setToPinHeld\(true\)/);
   assert.match(map, /setToPinTracksView\(true\)/);
-  assert.doesNotMatch(map, /onDrag=\{/);
+  assert.match(map, /onDrag=\{/);
+  assert.match(map, /liveDragPointForLines/);
+  assert.match(map, /shot-path-dot/);
   assert.match(map, /scrollEnabled=\{framedForGestures\}/);
   assert.match(map, /zoomEnabled=\{framedForGestures\}/);
   const dragStart = map.indexOf('onDragStart=');
@@ -243,7 +245,7 @@ test('round history swipe reveals Edit and Delete, and past edit does not invent
   const swipe = readFileSync(new URL('../ui/HistorySwipeRow.tsx', import.meta.url), 'utf8');
   assert.match(swipe, /COPY\.edit/);
   assert.match(swipe, /✕/);
-  assert.match(swipe, /historySwipeShouldOpen/);
+  assert.match(swipe, /historySwipeSnap/);
   assert.doesNotMatch(swipe, /deleteRound\(/);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');

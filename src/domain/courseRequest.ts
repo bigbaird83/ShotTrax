@@ -1,7 +1,43 @@
+import { hydrateHolePassesGates } from '../course/hydrate';
+import { courseIsHardMiss, type CourseIdentity } from './favorites';
+import type { LatLng } from './latLng';
+
 /**
  * Course requests are a queue plus a user-opened email composer.
  * They never paint a hole and they never send mail by themselves.
+ *
+ * The button shows only for a HARD-MISS card or a card with no tee/green paint.
+ * Real tee/green map data hides it.
  */
+
+export function holesHaveTeeGreenPaint(
+  holes:
+    | ReadonlyArray<{
+        tee?: LatLng | null;
+        green?: LatLng | null;
+        teeCentroid?: LatLng | null;
+        greenCentroid?: LatLng | null;
+      }>
+    | null
+    | undefined,
+): boolean {
+  return (holes ?? []).some((hole) =>
+    hydrateHolePassesGates({
+      tee: hole.tee ?? hole.teeCentroid ?? null,
+      green: hole.green ?? hole.greenCentroid ?? null,
+    }),
+  );
+}
+
+export function requestThisCourseVisible(args: {
+  course?: CourseIdentity | null;
+  hasTeeGreenPaint: boolean;
+  paintKnown?: boolean;
+}): boolean {
+  if (args.hasTeeGreenPaint) return false;
+  if (args.course && courseIsHardMiss(args.course)) return true;
+  return args.paintKnown === true && !args.hasTeeGreenPaint;
+}
 
 export const SHOTTRAXX_CONTACT_EMAIL = 'ShotTraxx@gmail.com';
 export const SHOTTRAXX_X_HANDLE = '@ShotTraxx';

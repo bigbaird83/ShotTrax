@@ -27,6 +27,7 @@ import {
   setFavorite,
   type FavoriteCourse,
 } from '@/src/domain/favorites';
+import { requestThisCourseVisible } from '@/src/domain/courseRequest';
 import { COPY } from '@/src/domain/playerCopy';
 import { playHrefAfterRoundStart } from '@/src/domain/playNav';
 import { BigButton } from '@/src/ui/BigButton';
@@ -172,7 +173,18 @@ export default function FavoritesScreen() {
                       onPress={() => download(course)}
                     />
                   ) : null}
-                  {compact ? null : (
+                  {requestThisCourseVisible({
+                    course: {
+                      courseKey: course.id,
+                      courseApiId: course.id,
+                      name: course.name,
+                      city: course.city,
+                      state: course.state,
+                      location: course.location,
+                    },
+                    hasTeeGreenPaint: displayed === 'ready',
+                    paintKnown: displayed === 'ready' || displayed === 'miss',
+                  }) ? (
                     <BigButton
                       label={COPY.requestThisCourse}
                       variant="ghost"
@@ -187,16 +199,11 @@ export default function FavoritesScreen() {
                         })
                       }
                     />
-                  )}
+                  ) : null}
                 </View>
               );
             })
           )}
-          <BigButton
-            label={COPY.requestThisCourse}
-            variant="ghost"
-            onPress={() => router.push('/request-course')}
-          />
         </ScrollView>
         <View style={styles.homeSwipeEdge} {...swipeHome.panHandlers} />
       </View>

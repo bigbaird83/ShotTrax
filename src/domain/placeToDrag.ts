@@ -54,13 +54,29 @@ export function toPinFollowsFinger(): true {
   return true;
 }
 
-/** Yards and the saved draft update when the finger lifts, not on each move. */
-export function toPinYardsRecalcOnDragMove(): false {
+/**
+ * While the finger is down, both yardages and both dotted lines follow the
+ * pin. The saved draft still commits on release. Nothing is invented mid-drag.
+ */
+export function toPinYardsRecalcOnDragMove(): true {
+  return true;
+}
+
+export function toPinYardsRecalcOnReleaseOnly(): false {
   return false;
 }
 
-export function toPinYardsRecalcOnReleaseOnly(): true {
+/** Lines and chips read the live map point. The marker coordinate stays put. */
+export function dragLinesFollowLivePoint(): true {
   return true;
+}
+
+export function liveDragPointForLines(args: {
+  live: LatLng | null | undefined;
+  placed: LatLng | null | undefined;
+}): LatLng | null {
+  if (isValidLatLng(args.live)) return { lat: args.live.lat, lng: args.live.lng };
+  return isValidLatLng(args.placed) ? { lat: args.placed.lat, lng: args.placed.lng } : null;
 }
 
 /**
@@ -80,6 +96,41 @@ export function addShotToPinScaleOnRelease(): 1 {
 export function addShotToPinVisualScale(pressedOrDragging: boolean): number {
   if (!addShotToPinScalesUpOnPressOrDrag()) return addShotToPinScaleOnRelease();
   return pressedOrDragging ? ADD_SHOT_TO_PIN_PRESSED_SCALE : addShotToPinScaleOnRelease();
+}
+
+/**
+ * Enlarged pin grows from the tip (bottom center). A CSS scale from the view
+ * center walks the tip off the shot path. Layout size keeps the tip on the line.
+ */
+export function addShotToPinUsesTransformScale(): false {
+  return false;
+}
+
+export function addShotToPinStaysCenteredOnPath(): true {
+  return true;
+}
+
+export function addShotToPinAnchor(): { x: 0.5; y: 1 } {
+  return { x: 0.5, y: 1 };
+}
+
+export function addShotToPinBox(scale: number): { width: number; height: number } {
+  const safe = scale > 0 && Number.isFinite(scale) ? scale : 1;
+  return {
+    width: ADD_SHOT_TO_PIN_HIT_W * safe,
+    height: ADD_SHOT_TO_PIN_HIT_H * safe,
+  };
+}
+
+/** Dotted-line dot at the shot, in addition to the drag pin. It follows the pin. */
+export const ADD_SHOT_PATH_DOT_PX = 22;
+
+export function addShotPathDotFollowsPin(): true {
+  return true;
+}
+
+export function addShotPathDotInAdditionToDragPin(): true {
+  return true;
 }
 
 /**

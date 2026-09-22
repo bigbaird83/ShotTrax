@@ -72,9 +72,19 @@ export function formatHistoryRow(args: {
   };
 }
 
-/** Left swipe reveals Edit and Delete. It does not delete by itself. */
-export const HISTORY_SWIPE_OPEN_PX = 48;
-export const HISTORY_SWIPE_REVEAL_PX = 148;
+/**
+ * Left swipe reveals Edit and Delete together. It does not delete by itself.
+ * A short left swipe still snaps fully open. There is no half-open rest.
+ */
+export const HISTORY_SWIPE_OPEN_PX = 16;
+export const HISTORY_SWIPE_EDIT_PX = 112;
+export const HISTORY_SWIPE_DELETE_PX = 72;
+export const HISTORY_SWIPE_REVEAL_PX = HISTORY_SWIPE_EDIT_PX + HISTORY_SWIPE_DELETE_PX;
+
+/** Edit label and the delete control both fit inside the open reveal. */
+export function historySwipeRevealFitsActions(): true {
+  return true;
+}
 
 export function historySwipeShouldOpen(dx: number, dy: number): boolean {
   if (Math.abs(dy) > Math.abs(dx)) return false;
@@ -84,6 +94,20 @@ export function historySwipeShouldOpen(dx: number, dy: number): boolean {
 export function historySwipeShouldClose(dx: number, dy: number): boolean {
   if (Math.abs(dy) > Math.abs(dx)) return false;
   return dx >= HISTORY_SWIPE_OPEN_PX;
+}
+
+/** Open rest is the full Edit+Delete reveal. Closed rest is 0. Never a partial. */
+export function historySwipeRestOffset(open: boolean): number {
+  return open ? -HISTORY_SWIPE_REVEAL_PX : 0;
+}
+
+/**
+ * Release always snaps fully open or fully closed.
+ * A short left swipe opens both actions. It does not bounce shut on the delete sliver.
+ */
+export function historySwipeSnap(args: { dx: number; dy: number; open: boolean }): 'open' | 'closed' {
+  if (args.open) return historySwipeShouldClose(args.dx, args.dy) ? 'closed' : 'open';
+  return historySwipeShouldOpen(args.dx, args.dy) ? 'open' : 'closed';
 }
 
 export function historyDeleteRequiresConfirm(): true {
