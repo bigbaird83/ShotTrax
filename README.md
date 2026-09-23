@@ -31,7 +31,7 @@ To install a store-signed build with Watch on a physical iPhone, use **TestFligh
 
 ## Splash
 
-Cold start still shows the native Expo splash (`splash-icon.png` = first frame of the 3s clip, `resizeMode: contain`, black `#000000`). After JS boots, `BrandedSplash` keeps that still until the muted 3.0s open clip (`assets/splash/splash-open-first-3s-v2.mp4`) paints, then enters the app. The square 960² mark/video is always `contain` + black letterbox, centered — never `cover` or stretch. Reduce Motion skips the clip and shows the same first-frame still (`assets/splash/splash-first-frame-v2.png`), then the same onDone path.
+Cold start still shows the native Expo splash (`splash-icon.png` = first frame of the 3s clip, `resizeMode: contain`, black `#000000`). After JS boots, `BrandedSplash` keeps that still until the muted 3.0s open clip (`assets/splash/splash-open-first-3s-v2.mp4`, lime ™ top-right of the final x baked into every frame to match the still) paints, then enters the app. The square 960² mark/video is always `contain` + black letterbox, centered — never `cover` or stretch. Reduce Motion skips the clip and shows the same first-frame still (`assets/splash/splash-first-frame-v2.png`), then the same onDone path.
 
 ## Golf Courses API (course picker)
 
