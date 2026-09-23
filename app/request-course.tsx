@@ -69,7 +69,11 @@ export default function RequestCourseScreen() {
       />
       {queued ? <Text style={styles.meta}>Queued. Your email app still has to send it.</Text> : null}
       <BigButton label={COPY.requestEmailButton} onPress={send} />
-      <BigButton label={COPY.contributeCourse} variant="secondary" onPress={() => router.push('/contribute-course')} />
+      <BigButton
+        label={COPY.contributeCourse}
+        variant="secondary"
+        onPress={() => router.push({ pathname: '/contribute-course', params: { name, city, courseId: seededId } })}
+      />
     </Screen>
   );
 }
