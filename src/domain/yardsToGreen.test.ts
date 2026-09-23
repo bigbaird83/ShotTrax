@@ -1,12 +1,16 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { MAX_SHOT_YD } from '../config/sensing';
 import { haversineYards, roundYards } from './haversine';
 import { isValidLatLng } from './latLng';
+import { yardsToGreenPlayerLabel } from './playerCopy';
 import {
   lastClubMark,
   lastLandingMark,
+  liveGpsToPinHiddenByPlaceHint,
   markToGreen,
+  planLiveGpsToPin,
   planPlayHeaderYards,
   planToGreenDisplay,
   toGreenSixHundredCapsTheNumber,
@@ -403,4 +407,52 @@ test('lastLandingMark is the latest closed end pin, never the tee or phone', () 
     ]),
     landing,
   );
+});
+
+function fixAt(point: { lat: number; lng: number }, accuracyM: number | null) {
+  return { ...point, accuracyM, mocked: false, isSimulator: false, timestamp: 1 };
+}
+
+test('live GPS → pin badge: number only for good or soft GPS and a real green', () => {
+  const phone = northOf(green, -212);
+  const yards = roundYards(haversineYards(phone, green));
+
+  assert.deepEqual(planLiveGpsToPin({ fix: fixAt(phone, 5), green }), { yards, quality: 'good' });
+  assert.deepEqual(planLiveGpsToPin({ fix: fixAt(phone, 20), green }), { yards, quality: 'soft' });
+
+  const none = { yards: null, quality: 'none' };
+  // Poor or unknown accuracy, no fix, no green, bad pin: no number.
+  assert.deepEqual(planLiveGpsToPin({ fix: fixAt(phone, 40), green }), none);
+  assert.deepEqual(planLiveGpsToPin({ fix: fixAt(phone, null), green }), none);
+  assert.deepEqual(planLiveGpsToPin({ fix: null, green }), none);
+  assert.deepEqual(planLiveGpsToPin({ fix: fixAt(phone, 5), green: null }), none);
+  assert.deepEqual(planLiveGpsToPin({ fix: fixAt(phone, 5), green: { lat: 0, lng: 0 } }), none);
+
+  const unavailable = yardsToGreenPlayerLabel(none, { hasFix: false, hasGreen: true });
+  assert.equal(unavailable.value, '—');
+  assert.equal(yardsToGreenPlayerLabel(none, { hasFix: true, hasGreen: false }).value, '—');
+});
+
+test('live GPS → pin badge sits under the header and stays up during Add shot', () => {
+  assert.equal(liveGpsToPinHiddenByPlaceHint(), false);
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  assert.match(hole, /const liveGpsToPin = planLiveGpsToPin\(\{ fix, green \}\)/);
+  const start = hole.indexOf('testID="live-gps-to-pin"');
+  assert.ok(start > 0);
+  const corner = hole.slice(hole.lastIndexOf('<View', hole.lastIndexOf('styles.headerCorner', start)), start + 400);
+  assert.match(corner, /pointerEvents="none"/);
+  assert.match(corner, /top: \(headerBottom \?\? insets\.top \+ 6 \+ tapTarget \+ 16\) \+ 6/);
+  assert.match(corner, /<YardsToGreenBadge\s+compact\s+approximateOnSoft\s+result=\{liveGpsToPin\}/);
+  assert.match(corner, /hasFix=\{liveGpsToPin\.quality !== 'none'\}/);
+  // Not gated by placeHint, placeMode, or hideYardsOverlay.
+  const before = hole.slice(hole.lastIndexOf('\n', hole.lastIndexOf('styles.headerCorner', start) - 40), start);
+  assert.doesNotMatch(before, /placeHint|placeMode|hideYardsOverlay|catchUpFullScreen/);
+  // Placed under the whole sticky header (normal play and Add shot catch-up alike).
+  const sticky = hole.slice(hole.indexOf('onLayout={onHeaderLayout}') - 80, hole.indexOf('onLayout={onHeaderLayout}') + 120);
+  assert.match(sticky, /styles\.sticky, \{ paddingTop: insets\.top \+ 6 \}/);
+  assert.match(hole, /setHeaderBottom/);
+
+  const badge = readFileSync(new URL('../ui/YardsToGreenBadge.tsx', import.meta.url), 'utf8');
+  assert.match(badge, /approximateOnSoft && result\.quality === 'soft'/);
+  assert.match(badge, /COPY\.approximate/);
 });

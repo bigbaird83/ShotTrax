@@ -1,6 +1,7 @@
 import { haversineYards, roundYards } from './haversine';
 import { isValidLatLng, type LatLng } from './latLng';
-import type { ShotFixQuality, ShotSource } from './types';
+import type { GpsFix, ShotFixQuality, ShotSource } from './types';
+import { yardsToGreen, type YardsToGreenResult } from '../sensing/yardsToGreen';
 
 export type GreenPinSource = 'user_estimate' | 'course_centroid';
 
@@ -252,4 +253,26 @@ export function toGreenDisplayFromHole(args: {
     shotCount: args.shots.length,
     hasGreen,
   });
+}
+
+/**
+ * Corner badge under the play header: live phone GPS → green pin.
+ * A number only for a good or soft fix and a real green pin (`yardsToGreen`).
+ * Poor / missing fix or no green → yards null, quality none (shown as —).
+ * Never a card number, a mark, or an invented pin.
+ */
+export function planLiveGpsToPin(args: {
+  fix: GpsFix | null | undefined;
+  green: LatLng | null | undefined;
+}): YardsToGreenResult {
+  const live = yardsToGreen(args.fix ?? null, args.green ?? null);
+  if (live.quality === 'none' || live.yards == null || !Number.isFinite(live.yards)) {
+    return { yards: null, quality: 'none' };
+  }
+  return live;
+}
+
+/** Stays up in normal play and during Add shot; placeHint / hideYardsOverlay do not hide it. */
+export function liveGpsToPinHiddenByPlaceHint(): false {
+  return false;
 }
