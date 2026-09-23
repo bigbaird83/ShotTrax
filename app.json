@@ -20,7 +20,8 @@
         "CFBundleName": "ShotTraxx™",
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "ShotTraxx™ uses your location while the app is open to find courses near you, show yards to the green, and mark where you hit from when you pick a club.",
-        "NSPhotoLibraryUsageDescription": "ShotTraxx™ does not use your photo library. This description is required to ship on the App Store.",
+        "NSPhotoLibraryUsageDescription": "ShotTraxx™ does not use your photo library except to read one scorecard photo you pick when you add a course.",
+        "NSCameraUsageDescription": "ShotTraxx™ uses the camera only when you take a photo of a paper scorecard to add a course.",
         "NSPhotoLibraryAddUsageDescription": "ShotTraxx™ does not save photos to your library. This description is required to ship on the App Store."
       }
     },
@@ -77,6 +78,15 @@
         }
       ],
       "./plugins/withDisableExpoLocationMotion",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "ShotTraxx™ does not use your photo library except to read one scorecard photo you pick when you add a course.",
+          "cameraPermission": "ShotTraxx™ uses the camera only when you take a photo of a paper scorecard to add a course.",
+          "microphonePermission": false
+        }
+      ],
+      "expo-mail-composer",
       "react-native-maps",
       "@bacons/apple-targets"
     ],

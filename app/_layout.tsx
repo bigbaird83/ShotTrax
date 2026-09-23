@@ -55,7 +55,7 @@ function ThemedNavigation() {
           <Stack.Screen name="board" options={{ title: 'Live board' }} />
           <Stack.Screen name="request-course" options={{ title: 'Request this course' }} />
           <Stack.Screen name="restore-rounds" options={{ title: 'Restore rounds' }} />
-          <Stack.Screen name="contribute-course" options={{ title: 'Contribute a course' }} />
+          <Stack.Screen name="contribute-course" options={{ title: 'Add this course' }} />
           <Stack.Screen
             name="settings"
             options={({ navigation }) => {
