@@ -304,7 +304,7 @@ test('Menu Share toasts Couldn’t open share when Share.share fails — never a
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const summary = readFileSync(new URL('../../app/round/[id]/summary.tsx', import.meta.url), 'utf8');
   const share = readFileSync(new URL('../services/shareRound.ts', import.meta.url), 'utf8');
-  const menuShare = hole.slice(hole.indexOf('label={COPY.share}'), hole.indexOf('label={COPY.undoLast}'));
+  const menuShare = hole.slice(hole.indexOf('<ShareChoice variant="ghost"'), hole.indexOf('label={COPY.undoLast}'));
   const summaryShare = summary.slice(summary.indexOf('label={COPY.share}'), summary.indexOf('label={COPY.home}'));
   assert.match(menuShare, /queueMenuShare/);
   assert.doesNotMatch(menuShare, /shareRoundSnapshot/);

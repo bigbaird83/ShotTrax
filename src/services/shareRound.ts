@@ -7,14 +7,14 @@ import {
   getHole,
   getRound,
   listHoles,
+  listPenaltiesForHole,
   listShotsForHole,
   putShareBoard,
 } from '../db/repo';
 import { encodeScoreSnapshot, formatLiveBoardShare, normalizeShareBoardCode } from '../domain/liveBoard';
-import {
-  planScorecardImageLines,
-  renderScorecardPng,
-} from '../domain/scorecardImage';
+import { totalPenaltyStrokes } from '../domain/penalty';
+import { planScorecard, type ScorecardHole } from '../domain/scorecard';
+import { planScorecardImage, renderScorecardPng } from '../domain/scorecardImage';
 import {
   formatShareScorecard,
   planSpectatorPayload,
@@ -47,7 +47,12 @@ function planRoundShare(
   db: SQLiteDatabase,
   roundId: string,
   args?: { currentHoleNumber?: number },
-): { payload: SpectatorPayload; message: string; holes: { hole: number; score: number | null }[] } | null {
+): {
+  payload: SpectatorPayload;
+  message: string;
+  holes: { hole: number; score: number | null }[];
+  scorecard: ScorecardHole[];
+} | null {
   const round = getRound(db, roundId);
   if (!round) return null;
   const clubs = getClubMap(db);
@@ -82,9 +87,23 @@ function planRoundShare(
     updatedAt: new Date().toISOString(),
   });
   const cardHoles = holes.map((hole) => ({ hole: hole.number, score: hole.score }));
+  // Same rows as the in-app scorecard. A finished round flags every unclosed hole.
+  const scorecard = planScorecard(
+    holes.map((hole) => ({
+      number: hole.number,
+      par: hole.par,
+      score: hole.score,
+      putts: hole.putts,
+      puttsDone: hole.puttsDone,
+      shotCount: listShotsForHole(db, hole.id).length,
+      penaltyStrokes: totalPenaltyStrokes(listPenaltiesForHole(db, hole.id)),
+    })),
+    { currentHoleNumber: round.finishedAt != null ? undefined : current },
+  );
   return {
     payload,
     holes: cardHoles,
+    scorecard,
     message: formatShareScorecard({
       courseName: payload.courseName,
       holes: cardHoles,
@@ -160,10 +179,10 @@ export async function shareRoundSnapshot(
   let imageUrl: string | null = null;
   try {
     const png = renderScorecardPng(
-      planScorecardImageLines({
+      planScorecardImage({
         courseName: planned.payload.courseName,
-        holes: planned.holes,
-        lastClubYards: planned.payload.live?.lastClubYards ?? null,
+        holes: planned.scorecard,
+        finished: planned.payload.finished,
       }),
     );
     imageUrl = await writeScorecardPngFile(png);

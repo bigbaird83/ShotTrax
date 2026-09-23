@@ -10,7 +10,9 @@ import {
   scorecardMarkGlyph,
   type ScorecardHole,
 } from '@/src/domain/scorecard';
+import type { ShareKind } from '@/src/domain/shareChoice';
 import { BigButton } from './BigButton';
+import { ShareChoice } from './ShareChoice';
 import { useColors } from './ColorThemeProvider';
 import { type, type ColorPalette } from './theme';
 
@@ -35,7 +37,7 @@ export function ScorecardBody({
   holes: HoleIn[];
   currentHoleNumber?: number;
   onBack: () => void;
-  onShare?: () => void;
+  onShare?: (kind: ShareKind) => void;
   onNerdOut?: () => void;
   onSelectHole?: (holeNumber: number) => void;
 }) {
@@ -91,7 +93,7 @@ export function ScorecardBody({
           );
         })}
       </View>
-      {onShare ? <BigButton label={COPY.share} variant="secondary" onPress={onShare} /> : null}
+      {onShare ? <ShareChoice variant="secondary" onPick={onShare} /> : null}
       {onNerdOut ? <BigButton label={COPY.nerdOut} variant="ghost" onPress={onNerdOut} /> : null}
       <BigButton label={COPY.back} variant="secondary" onPress={onBack} />
     </View>
