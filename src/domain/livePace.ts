@@ -126,6 +126,30 @@ export function formatLivePaceLine(pace: LivePace, finished = false): string {
   return parts.join(' · ');
 }
 
+/**
+ * Past-round pace for history / summary: "4h 02m · 13m a hole".
+ * Null when no hole was timed — old rounds show nothing, never a guess.
+ */
+export function formatRoundPaceLine(pace: LivePace): string | null {
+  if (pace.elapsedMs == null && pace.avgHoleMs == null) return null;
+  const parts: string[] = [];
+  if (pace.elapsedMs != null) parts.push(formatPaceDuration(pace.elapsedMs));
+  if (pace.avgHoleMs != null) parts.push(`${formatPaceDuration(pace.avgHoleMs)} a hole`);
+  return parts.join(' · ');
+}
+
+/** "2:05 PM – 2:18 PM · 13m". Start only is "2:05 PM –". No stamps is null. */
+export function formatHoleTimeSpan(row: Pick<LivePaceHole, 'startedAt' | 'completedAt'>): string | null {
+  const start = timeMs(row.startedAt);
+  const end = timeMs(row.completedAt);
+  if (start == null && end == null) return null;
+  const startLabel = start == null ? '—' : formatHoleClock(row.startedAt);
+  if (end == null) return `${startLabel} –`;
+  const span = `${startLabel} – ${formatHoleClock(row.completedAt)}`;
+  const ms = holeDurationMs({ hole: 0, score: null, par: null, ...row });
+  return ms == null ? span : `${span} · ${formatPaceDuration(ms)}`;
+}
+
 /** Posted total, and to-par only when every scored hole has a known par. */
 export function planLiveScoreTotals(holes: LivePaceHole[]): {
   total: number | null;

@@ -62,6 +62,7 @@ export const COPY = {
   liveBoardCodeHint: 'Enter the 6-character code.',
   liveBoardNeedsHost: 'Live refresh on other phones needs the share host.',
   liveFollowSameDevice: 'Following on this phone. Live refresh on other phones needs the share host.',
+  paceOfPlay: 'Pace of play',
   liveFollowOpen: 'Follow on this phone',
   liveFollowRefresh: 'Updates after each finished hole.',
   spectatorTitle: SHOTTRAXX_BRAND,

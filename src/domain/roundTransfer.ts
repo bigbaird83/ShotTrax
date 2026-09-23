@@ -71,6 +71,9 @@ export type RoundTransferHole = {
   putts: number;
   puttLengths: string[];
   puttsDone: boolean;
+  /** Pace of play: hole begun / Made it · Hole Out. Null when never stamped. */
+  startedAt: string | null;
+  completedAt: string | null;
   shots: RoundTransferShot[];
 };
 
@@ -152,6 +155,8 @@ type ExportHoleInput = {
   putts: number;
   puttLengths: string[];
   puttsDone: boolean;
+  startedAt?: string | null;
+  completedAt?: string | null;
   shots: ExportShotInput[];
 };
 
@@ -182,6 +187,12 @@ function text(value: unknown): string | null {
 function finite(value: unknown): number | null {
   const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN;
   return Number.isFinite(n) ? n : null;
+}
+
+/** Parseable time only. A bad pace stamp is dropped, never guessed. */
+function isoTime(value: unknown): string | null {
+  const t = text(value);
+  return t && Number.isFinite(Date.parse(t)) ? t : null;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -302,6 +313,8 @@ function acceptHole(raw: unknown): { hole: RoundTransferHole; rejectedShots: num
         ? record.puttLengths.filter((item): item is string => typeof item === 'string')
         : [],
       puttsDone: record.puttsDone === true,
+      startedAt: isoTime(record.startedAt),
+      completedAt: isoTime(record.completedAt),
       shots,
     },
   };
@@ -361,6 +374,8 @@ export function buildRoundHistoryExport(args: {
         putts: hole.putts,
         puttLengths: hole.puttLengths,
         puttsDone: hole.puttsDone,
+        startedAt: isoTime(hole.startedAt),
+        completedAt: isoTime(hole.completedAt),
         shots,
       });
     }

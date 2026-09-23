@@ -3,8 +3,10 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
   formatHoleClock,
+  formatHoleTimeSpan,
   formatLivePaceLine,
   formatPaceDuration,
+  formatRoundPaceLine,
   formatToPar,
   holeDurationMs,
   planLivePace,
@@ -19,6 +21,7 @@ import {
   spectatorPayloadHasCoordinates,
   type SpectatorHoleInput,
 } from './spectator';
+import { buildRoundHistoryExport, planRoundHistoryImport, serializeRoundHistory } from './roundTransfer';
 
 const T0 = Date.parse('2026-09-23T14:00:00.000Z');
 const at = (min: number) => new Date(T0 + min * 60000).toISOString();
@@ -249,4 +252,136 @@ test('start time: only when the player moves on after finishing the prior hole �
 
   // Unknown hole number is a no-op.
   assert.equal(planHoleStartStamp(fresh, 19), false);
+});
+
+test('past-round pace line and per-hole time span for history / summary', () => {
+  const holes = [
+    row({ hole: 1, score: 4, startedAt: at(0), completedAt: at(12) }),
+    row({ hole: 2, score: 5, startedAt: at(13), completedAt: at(27) }),
+  ];
+  const pace = planLivePace({ holes, nowMs: T0 + 999 * 60000, finished: true });
+  assert.equal(formatRoundPaceLine(pace), '27m · 13m a hole');
+
+  const long = planLivePace({
+    holes: [row({ hole: 1, score: 4, startedAt: at(0), completedAt: at(242) })],
+    nowMs: T0,
+    finished: true,
+  });
+  assert.equal(formatRoundPaceLine(long), '4h 02m · 4h 02m a hole');
+
+  // Old round with no stamps shows no pace at all.
+  assert.equal(
+    formatRoundPaceLine(planLivePace({ holes: [row({ hole: 1, score: 4 })], nowMs: T0, finished: true })),
+    null,
+  );
+
+  const start = new Date(2026, 8, 23, 14, 5).toISOString();
+  const end = new Date(2026, 8, 23, 14, 18).toISOString();
+  assert.equal(formatHoleTimeSpan({ startedAt: start, completedAt: end }), '2:05 PM – 2:18 PM · 13m');
+  assert.equal(formatHoleTimeSpan({ startedAt: start, completedAt: null }), '2:05 PM –');
+  assert.equal(formatHoleTimeSpan({ startedAt: null, completedAt: end }), '— – 2:18 PM');
+  assert.equal(formatHoleTimeSpan({ startedAt: null, completedAt: null }), null);
+});
+
+test('round history export / restore keeps hole start and finish times', () => {
+  const doc = buildRoundHistoryExport({
+    exportedAt: at(300),
+    rounds: [
+      {
+        startedAt: at(0),
+        finishedAt: at(250),
+        courseName: 'Magnolia',
+        holeCount: 9,
+        courseApiId: null,
+        courseLat: null,
+        courseLng: null,
+        teeName: null,
+        teeRating: null,
+        teeSlope: null,
+        teeTotalYards: null,
+        holes: [
+          {
+            number: 1,
+            par: 4,
+            parSource: 'course',
+            score: 4,
+            yards: null,
+            handicap: null,
+            teeLat: null,
+            teeLng: null,
+            greenLat: null,
+            greenLng: null,
+            greenSource: null,
+            greenFrontLat: null,
+            greenFrontLng: null,
+            greenBackLat: null,
+            greenBackLng: null,
+            greenDepthYards: null,
+            putts: 2,
+            puttLengths: [],
+            puttsDone: true,
+            startedAt: at(0),
+            completedAt: at(12),
+            shots: [],
+          },
+          {
+            number: 2,
+            par: 3,
+            parSource: 'course',
+            score: null,
+            yards: null,
+            handicap: null,
+            teeLat: null,
+            teeLng: null,
+            greenLat: null,
+            greenLng: null,
+            greenSource: null,
+            greenFrontLat: null,
+            greenFrontLng: null,
+            greenBackLat: null,
+            greenBackLng: null,
+            greenDepthYards: null,
+            putts: 0,
+            puttLengths: [],
+            puttsDone: false,
+            shots: [],
+          },
+        ],
+      },
+    ],
+  });
+  assert.equal(doc.rounds[0].holes[0].startedAt, at(0));
+  assert.equal(doc.rounds[0].holes[0].completedAt, at(12));
+  assert.equal(doc.rounds[0].holes[1].startedAt, null);
+  assert.equal(doc.rounds[0].holes[1].completedAt, null);
+
+  const back = planRoundHistoryImport(serializeRoundHistory(doc));
+  assert.equal(back.ok, true);
+  if (!back.ok) return;
+  assert.equal(back.rounds[0].holes[0].startedAt, at(0));
+  assert.equal(back.rounds[0].holes[0].completedAt, at(12));
+
+  // Files from before this change (no stamps) and junk stamps import as null.
+  const legacy = JSON.parse(serializeRoundHistory(doc));
+  delete legacy.rounds[0].holes[0].startedAt;
+  legacy.rounds[0].holes[0].completedAt = 'not a time';
+  const old = planRoundHistoryImport(legacy);
+  assert.equal(old.ok, true);
+  if (!old.ok) return;
+  assert.equal(old.rounds[0].holes[0].startedAt, null);
+  assert.equal(old.rounds[0].holes[0].completedAt, null);
+
+  const repo = readFileSync(new URL('../db/repo.ts', import.meta.url), 'utf8');
+  const collect = repo.slice(repo.indexOf('export function collectRoundHistoryExport'), repo.indexOf('function roundTransferKey'));
+  assert.match(collect, /startedAt: hole\.startedAt/);
+  assert.match(collect, /completedAt: hole\.completedAt/);
+  const insert = repo.slice(repo.indexOf('function insertTransferredRound'), repo.indexOf('export function finishRound'));
+  assert.match(insert, /started_at, completed_at\)/);
+  assert.match(insert, /hole\.startedAt,\s*hole\.completedAt/);
+
+  const summary = readFileSync(new URL('../../app/round/[id]/summary.tsx', import.meta.url), 'utf8');
+  assert.match(summary, /formatRoundPaceLine/);
+  assert.match(summary, /formatHoleTimeSpan/);
+  const history = readFileSync(new URL('../../app/(tabs)/index.tsx', import.meta.url), 'utf8');
+  assert.match(history, /formatRoundPaceLine/);
 });

@@ -626,6 +626,8 @@ export function collectRoundHistoryExport(db: SQLiteDatabase, exportedAt: string
       putts: hole.putts,
       puttLengths: hole.puttLengths,
       puttsDone: hole.puttsDone,
+      startedAt: hole.startedAt,
+      completedAt: hole.completedAt,
       shots: listShotsForHole(db, hole.id).map((shot) => ({
         clubId: shot.clubId,
         seq: shot.seq,
@@ -722,7 +724,7 @@ function insertTransferredRound(
   for (const hole of round.holes) {
     const holeId = newId();
     db.runSync(
-      'INSERT INTO holes (id, round_id, number, par, par_source, score, yards, handicap, green_lat, green_lng, green_source, green_front_lat, green_front_lng, green_back_lat, green_back_lng, green_depth_yards, tee_lat, tee_lng, putts, putt_lengths, putts_done) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO holes (id, round_id, number, par, par_source, score, yards, handicap, green_lat, green_lng, green_source, green_front_lat, green_front_lng, green_back_lat, green_back_lng, green_depth_yards, tee_lat, tee_lng, putts, putt_lengths, putts_done, started_at, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         holeId,
         roundId,
@@ -745,6 +747,8 @@ function insertTransferredRound(
         hole.putts,
         hole.puttLengths.length ? hole.puttLengths.join(',') : null,
         hole.puttsDone ? 1 : 0,
+        hole.startedAt,
+        hole.completedAt,
       ],
     );
     for (const shot of hole.shots) {
