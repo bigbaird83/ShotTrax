@@ -374,7 +374,12 @@ struct ContentView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.65)
                         .frame(width: pillWidth, height: 44)
-                        .background(selected ? outdoorLime : Color("bg"))
+                        .background(
+                          RoundedRectangle(cornerRadius: 10)
+                            .fill(selected ? outdoorLime : Color("bg"))
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .contentShape(RoundedRectangle(cornerRadius: 10))
                         .overlay(
                           RoundedRectangle(cornerRadius: 10)
                             .stroke(selected ? outdoorLime : Color("cream"), lineWidth: selected ? 3 : 1)
