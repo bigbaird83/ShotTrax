@@ -45,6 +45,7 @@ import {
   setFavorite,
 } from '@/src/domain/favorites';
 import { layoutForPlayedHoles, resolveCourseNumHoles } from '@/src/domain/nineByTwo';
+import { formatRoundPaceLine, planLivePace } from '@/src/domain/livePace';
 import { formatHistoryRow, historyDeletePrompt, pastRoundEditAnytime, pastRoundHoleHref } from '@/src/domain/roundHistory';
 import { serializeRoundHistory } from '@/src/domain/roundTransfer';
 import { presentRoundHistoryShare } from '@/src/services/roundHistoryShare';
@@ -435,6 +436,21 @@ export default function HomeScreen() {
           const scored = holes.filter((h) => h.score != null);
           const total = scored.reduce((sum, h) => sum + (h.score ?? 0), 0);
           const open = round.finishedAt == null;
+          const paceLine = open
+            ? null
+            : formatRoundPaceLine(
+                planLivePace({
+                  holes: holes.map((h) => ({
+                    hole: h.number,
+                    score: h.score,
+                    par: h.par,
+                    startedAt: h.startedAt,
+                    completedAt: h.completedAt,
+                  })),
+                  nowMs: Date.now(),
+                  finished: true,
+                }),
+              );
           const row = formatHistoryRow({
             startedAt: round.startedAt,
             courseName: round.courseName,
@@ -497,6 +513,7 @@ export default function HomeScreen() {
                 <Text style={styles.cardMeta}>
                   {row.date} · {row.tees}
                   {open ? ' · in progress' : ''}
+                  {paceLine ? ` · ${paceLine}` : ''}
                 </Text>
               </View>
               <View style={styles.scoreCol}>

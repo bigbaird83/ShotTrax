@@ -45,6 +45,7 @@ import {
   type RoundTransferRound,
 } from '../domain/roundTransfer';
 import { newShareBoardCode, normalizeShareBoardCode } from '../domain/liveBoard';
+import { planHoleStartStamp } from '../domain/livePace';
 import { parseSpectatorPayload, type SpectatorPayload } from '../domain/spectator';
 import { planFinishHoleScore, planRecomputeFinishedHoleScore } from '../domain/holeScore';
 import { clampPenaltyStrokes, scoreAfterPenalty, totalPenaltyStrokes } from '../domain/penalty';
@@ -135,6 +136,8 @@ type HoleRow = {
   putts: number | null;
   putt_lengths: string | null;
   putts_done: number | null;
+  started_at?: string | null;
+  completed_at?: string | null;
 };
 
 type ShotRow = {
@@ -239,6 +242,8 @@ function mapHole(row: HoleRow): Hole {
       (id) => id ?? '',
     ),
     puttsDone: (row.putts_done ?? 0) === 1,
+    startedAt: row.started_at ?? null,
+    completedAt: row.completed_at ?? null,
   };
 }
 
@@ -621,6 +626,8 @@ export function collectRoundHistoryExport(db: SQLiteDatabase, exportedAt: string
       putts: hole.putts,
       puttLengths: hole.puttLengths,
       puttsDone: hole.puttsDone,
+      startedAt: hole.startedAt,
+      completedAt: hole.completedAt,
       shots: listShotsForHole(db, hole.id).map((shot) => ({
         clubId: shot.clubId,
         seq: shot.seq,
@@ -717,7 +724,7 @@ function insertTransferredRound(
   for (const hole of round.holes) {
     const holeId = newId();
     db.runSync(
-      'INSERT INTO holes (id, round_id, number, par, par_source, score, yards, handicap, green_lat, green_lng, green_source, green_front_lat, green_front_lng, green_back_lat, green_back_lng, green_depth_yards, tee_lat, tee_lng, putts, putt_lengths, putts_done) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO holes (id, round_id, number, par, par_source, score, yards, handicap, green_lat, green_lng, green_source, green_front_lat, green_front_lng, green_back_lat, green_back_lng, green_depth_yards, tee_lat, tee_lng, putts, putt_lengths, putts_done, started_at, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         holeId,
         roundId,
@@ -740,6 +747,8 @@ function insertTransferredRound(
         hole.putts,
         hole.puttLengths.length ? hole.puttLengths.join(',') : null,
         hole.puttsDone ? 1 : 0,
+        hole.startedAt,
+        hole.completedAt,
       ],
     );
     for (const shot of hole.shots) {
@@ -887,6 +896,40 @@ export function updateHolePar(db: SQLiteDatabase, holeId: string, par: number | 
   ]);
 }
 
+/**
+ * Live follow: stamp a hole's start only when the player moves onto it after
+ * every earlier hole is finished. Looking ahead never stamps. Never restamps.
+ */
+export function markHoleStarted(db: SQLiteDatabase, roundId: string, number: number): void {
+  const round = getRound(db, roundId);
+  if (!round || round.finishedAt != null) return;
+  const holes = listHoles(db, roundId);
+  const planned = planHoleStartStamp(
+    holes.map((hole) => ({
+      number: hole.number,
+      score: hole.score,
+      puttsDone: hole.puttsDone,
+      startedAt: hole.startedAt,
+      completedAt: hole.completedAt,
+    })),
+    number,
+  );
+  if (!planned) return;
+  db.runSync('UPDATE holes SET started_at = ? WHERE round_id = ? AND number = ? AND started_at IS NULL', [
+    new Date().toISOString(),
+    roundId,
+    number,
+  ]);
+}
+
+/** Live follow: first Made it / Hole Out time. Re-finishing keeps the first stamp. */
+function stampHoleCompleted(db: SQLiteDatabase, holeId: string): void {
+  db.runSync('UPDATE holes SET completed_at = COALESCE(completed_at, ?) WHERE id = ?', [
+    new Date().toISOString(),
+    holeId,
+  ]);
+}
+
 export function updateHoleScore(db: SQLiteDatabase, holeId: string, score: number | null): void {
   db.runSync('UPDATE holes SET score = ? WHERE id = ?', [score, holeId]);
 }
@@ -949,6 +992,7 @@ export function finishHolePutts(
   if (!planned.ok) return;
   updateHolePutts(db, holeId, planned.putts, planned.lengths, true);
   persistCloseHoleScore(db, holeId, planned.putts);
+  stampHoleCompleted(db, holeId);
 }
 
 /** Off-green hole-out. Current club is the shot. No fake putt yards. GIR stays unset. */
@@ -956,6 +1000,7 @@ export function finishHoleOut(db: SQLiteDatabase, holeId: string): void {
   const planned = planFinishHoleOut();
   updateHolePutts(db, holeId, planned.putts, planned.lengths, true);
   persistCloseHoleScore(db, holeId, planned.putts);
+  stampHoleCompleted(db, holeId);
   const flag = planFlagLastRealShot(
     db.getAllSync<{ id: string; seq: number }>(
       'SELECT id, seq FROM shots WHERE hole_id = ? ORDER BY seq ASC',

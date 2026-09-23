@@ -61,6 +61,10 @@ function planRoundShare(
     number: hole.number,
     score: hole.score,
     cardYards: hole.yards,
+    par: hole.par,
+    putts: hole.puttsDone ? hole.putts : null,
+    startedAt: hole.startedAt,
+    completedAt: hole.completedAt,
     shots: listShotsForHole(db, hole.id).map((shot) => ({
       clubShortName: shot.clubId ? clubs[shot.clubId]?.shortName ?? null : null,
       distanceYards: shot.distanceYards,
@@ -75,6 +79,7 @@ function planRoundShare(
     finished: round.finishedAt != null,
     currentHoleNumber: getHole(db, round.id, current)?.number ?? current,
     holes: input,
+    updatedAt: new Date().toISOString(),
   });
   const cardHoles = holes.map((hole) => ({ hole: hole.number, score: hole.score }));
   return {

@@ -8,6 +8,7 @@ import { finishedHoleDisplayScore } from '@/src/domain/holeScore';
 import { formatPenaltyRow, totalPenaltyStrokes } from '@/src/domain/penalty';
 import { COPY, holeOutClosedOnShot } from '@/src/domain/playerCopy';
 import { holeClosedByShot } from '@/src/domain/putts';
+import { formatHoleTimeSpan, formatRoundPaceLine, planLivePace } from '@/src/domain/livePace';
 import { toastFromShareAttempt } from '@/src/domain/spectator';
 import { shareRoundSnapshot } from '@/src/services/shareRound';
 import { reconcileHoleScore } from '@/src/domain/scoreReconcile';
@@ -54,6 +55,18 @@ export default function RoundSummaryScreen() {
   const toPar = withPar.reduce((sum, row) => sum + ((row.displayScore ?? 0) - (row.hole.par ?? 0)), 0);
   const toParLabel =
     withPar.length === 0 ? '—' : toPar === 0 ? 'E' : toPar > 0 ? `+${toPar}` : `${toPar}`;
+  const pace = planLivePace({
+    holes: holes.map((hole) => ({
+      hole: hole.number,
+      score: hole.score,
+      par: hole.par,
+      startedAt: hole.startedAt,
+      completedAt: hole.completedAt,
+    })),
+    nowMs: Date.now(),
+    finished: round.finishedAt != null,
+  });
+  const paceLine = formatRoundPaceLine(pace);
 
   return (
     <Screen>
@@ -76,6 +89,11 @@ export default function RoundSummaryScreen() {
       <Text style={styles.muted}>
         {scored.length} of {round.holeCount} holes scored.
       </Text>
+      {paceLine ? (
+        <Text style={styles.pace} testID="round-pace">
+          {COPY.paceOfPlay}: {paceLine}
+        </Text>
+      ) : null}
 
       {holeViews.map(({ hole, shots, penalties, penStrokes, displayScore }) => {
         const closedGps = shots.filter(
@@ -89,6 +107,7 @@ export default function RoundSummaryScreen() {
           penaltyStrokes: penStrokes,
         }).mismatch;
         const closer = holeClosedByShot(shots);
+        const timeSpan = formatHoleTimeSpan(hole);
         const shotBits = [
           `${shots.length} shot${shots.length === 1 ? '' : 's'}`,
           hole.putts ? `${hole.putts} putt${hole.putts === 1 ? '' : 's'}` : null,
@@ -106,6 +125,7 @@ export default function RoundSummaryScreen() {
                 {hole.yards != null ? ` · ${hole.yards} yd` : ''}
               </Text>
               <Text style={styles.muted}>{shotBits.join(' · ')}</Text>
+              {timeSpan ? <Text style={styles.time}>{timeSpan}</Text> : null}
               {closer ? (
                 <Text style={styles.holeOutLine} testID="hole-out-summary">
                   {holeOutClosedOnShot(closer.seq)}
@@ -162,6 +182,8 @@ function makeStyles(colors: ColorPalette) {
   total: { color: colors.cream, fontSize: 48, fontWeight: '900' },
   toPar: { color: colors.cream, fontSize: 28, fontWeight: '800' },
   muted: { color: colors.muted, fontSize: 16 },
+  pace: { color: colors.cream, fontSize: 16, fontWeight: '700' },
+  time: { color: colors.muted, fontSize: 13 },
   holeOutLine: { color: colors.lime, fontSize: 13, fontWeight: '800' },
   penalty: { color: colors.amber, fontSize: 14, fontWeight: '700' },
   warn: { color: colors.orange, fontSize: 13, fontWeight: '700' },

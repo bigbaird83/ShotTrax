@@ -97,3 +97,14 @@ Zip search is out of scope.
 - Same haversine + good/soft bands as shot marks
 - No fix or no green → `{ yards: null, quality: 'none' }` (never invents a pin or range)
 - Top-3 `D` uses this yards value **only when `quality !== none`**
+
+## Live follow scorecard
+
+Person A shares the live board (code / `shottrax:///s/{code}`). Person B opens that link or enters the code on **Watch a live board** and sees a scorecard: hole, par, score, putts, start and finish time, plus `Thru N · elapsed · ~time left`. No map, no GPS.
+
+- `holes.started_at` is stamped when the player is on a hole whose earlier holes are all finished (Made it / Hole Out or a posted score) — i.e. they finished the last hole and moved on. Looking ahead at later holes and coming back never stamps them (`planHoleStartStamp`). `holes.completed_at` is stamped the first time Made it / Hole Out fires (re-finishing keeps the first stamp).
+- The board payload (`SpectatorPayload`, still `v: 1`) now carries `par`, `putts` (only after Made it / Hole Out), `startedAt`, `completedAt` per hole and `updatedAt`. Older payloads parse with those fields null.
+- Pace (`src/domain/livePace.ts`): thru = holes with a posted score or finish stamp; elapsed = first start → now (last finish once done); time left = mean start→finish of stamped holes × holes left. No stamps → no pace, never a guess.
+- The hole screen republishes after every change, so a follower sees each finished hole on the next poll (`LIVE_BOARD_POLL_MS`).
+- Same phone always works (local `share_boards` row). Other phones need `EXPO_PUBLIC_SHARE_SYNC_URL` — the same JSON `GET/PUT /{code}` host; the extra fields ride in the existing JSON. Without it the follower screen says so.
+- Round history keeps pace of play. The stamps stay on each hole row, the round summary shows `Pace of play: 4h 02m · 13m a hole` and a start–finish time for each hole, and each finished round in the history list shows its total time. The round history export / restore file carries `startedAt` / `completedAt` per hole. Older files and rounds with no stamps show no pace.
