@@ -12,6 +12,7 @@ import {
   TextInput,
   useWindowDimensions,
   View,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { catalogEntryById } from '@/src/course/catalog';
@@ -145,7 +146,7 @@ import { planScorecardDismiss } from '@/src/domain/scorecard';
 import { reconcileHoleScore, scoreMismatchMessage } from '@/src/domain/scoreReconcile';
 import { resolveStickyClub, selectClubForMark } from '@/src/domain/stickyClub';
 import type { Club, PenaltyReason } from '@/src/domain/types';
-import { lastLandingMark, markToGreen, planPlayHeaderYards, toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
+import { lastLandingMark, markToGreen, planLiveGpsToPin, planPlayHeaderYards, toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
 import { yardsToGreen } from '@/src/sensing/yardsToGreen';
 import { describeGpsSource } from '@/src/services/location';
 import { courseNeedsPinSheets, planMissCardCopy } from '@/src/domain/missCard';
@@ -174,6 +175,7 @@ import { FinishedPuttRows } from '@/src/ui/FinishedPuttRows';
 import { PuttDock } from '@/src/ui/PuttDock';
 import { PuttSheetBody } from '@/src/ui/PuttSheetBody';
 import { ScorecardBody } from '@/src/ui/ScorecardBody';
+import { YardsToGreenBadge } from '@/src/ui/YardsToGreenBadge';
 import { COLOR_THEMES, tapTarget, type, type ColorPalette } from '@/src/ui/theme';
 
 export default function HoleScreen() {
@@ -700,6 +702,15 @@ export default function HoleScreen() {
   });
   /** Signal gate: haversine(fix → hydrated green centroid). Never a card number or green-edge. */
   const liveToGreen = yardsToGreen(fix, green);
+  /** Corner badge under the header: live GPS → green pin; — when GPS is poor, no pin, or > 600 yd. */
+  const liveGpsToPin = planLiveGpsToPin({ fix, green });
+  // Bottom of the sticky header (status bar + Menu / Hole / Scorecard + shot strip).
+  const [headerBottom, setHeaderBottom] = useState<number | null>(null);
+  const onHeaderLayout = useCallback((event: LayoutChangeEvent) => {
+    const { y, height } = event.nativeEvent.layout;
+    const next = Math.round(y + height);
+    if (next > 0) setHeaderBottom((prev) => (prev === next ? prev : next));
+  }, []);
 
   const openPuttSheet = useCallback(
     async (targetHole: number) => {
@@ -1404,7 +1415,10 @@ export default function HoleScreen() {
                 }
           }
         />
-        <View pointerEvents="box-none" style={[styles.sticky, { paddingTop: insets.top + 6 }]}>
+        <View
+          pointerEvents="box-none"
+          onLayout={onHeaderLayout}
+          style={[styles.sticky, { paddingTop: insets.top + 6 }]}>
           {catchUpFullScreen ? (
             <View>
               <View style={styles.catchUpBar}>
@@ -1616,26 +1630,40 @@ export default function HoleScreen() {
             </View>
           )}
         </View>
-        {runningPar.visible ? (
-          <View
-            pointerEvents="none"
-            testID="running-par-badge"
-            accessibilityLabel={runningPar.accessibilityLabel}
-            style={[styles.runningParBadge, { top: insets.top + 58 }]}>
-            <Text style={styles.runningParText}>
-              {`thru ${runningPar.thru}`}
-              {runningPar.toParLabel ? (
-                <Text
-                  style={[
-                    runningPar.toParTone === 'good' && styles.runningParGood,
-                    runningPar.toParTone === 'bad' && styles.runningParBad,
-                  ]}>
-                  {`, ${runningPar.toParLabel}`}
-                </Text>
-              ) : null}
-            </Text>
+        <View
+          pointerEvents="none"
+          style={[styles.headerCorner, { top: (headerBottom ?? insets.top + 6 + tapTarget + 16) + 6 }]}>
+          <View testID="live-gps-to-pin">
+            <YardsToGreenBadge
+              compact
+              approximateOnSoft
+              unavailable={liveGpsToPin.unavailable}
+              result={liveGpsToPin}
+              hasFix={liveGpsToPin.quality !== 'none'}
+              hasGreen={Boolean(green)}
+            />
           </View>
-        ) : null}
+          {runningPar.visible ? (
+            <View
+              pointerEvents="none"
+              testID="running-par-badge"
+              accessibilityLabel={runningPar.accessibilityLabel}
+              style={styles.runningParBadge}>
+              <Text style={styles.runningParText}>
+                {`thru ${runningPar.thru}`}
+                {runningPar.toParLabel ? (
+                  <Text
+                    style={[
+                      runningPar.toParTone === 'good' && styles.runningParGood,
+                      runningPar.toParTone === 'bad' && styles.runningParBad,
+                    ]}>
+                    {`, ${runningPar.toParLabel}`}
+                  </Text>
+                ) : null}
+              </Text>
+            </View>
+          ) : null}
+        </View>
         {catchUpFullScreen &&
         (placeMode === 'to' || placeMode === 'edit-to') &&
         placeToDraft &&
@@ -2370,9 +2398,14 @@ function makeStyles(colors: ColorPalette) {
   finishedHoleGood: { color: colors.good, fontWeight: '900' },
   finishedHoleBad: { color: colors.red, fontWeight: '900' },
   finishedHoleFlag: { color: colors.lime, fontWeight: '900', fontSize: type.tiny },
-  runningParBadge: {
+  headerCorner: {
     position: 'absolute',
     right: 12,
+    alignItems: 'flex-end',
+    gap: 6,
+    maxWidth: '46%',
+  },
+  runningParBadge: {
     maxWidth: 132,
     backgroundColor: colors.overlay,
     borderRadius: 10,
