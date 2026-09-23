@@ -9,6 +9,7 @@ export function YardsToGreenBadge({
   hasGreen,
   compact = false,
   approximateOnSoft = false,
+  unavailable = false,
 }: {
   result: YardsToGreenResult;
   hasFix?: boolean;
@@ -16,12 +17,16 @@ export function YardsToGreenBadge({
   compact?: boolean;
   /** Soft GPS (15–25 m) adds the Approximate note under the number. */
   approximateOnSoft?: boolean;
+  /** No number to show for a known reason (e.g. past the live cap): — / Unavailable. */
+  unavailable?: boolean;
 }) {
   const label = yardsToGreenPlayerLabel(result, { hasFix, hasGreen });
   const copy =
-    approximateOnSoft && result.quality === 'soft' && label.value !== '—'
-      ? { ...label, detail: `${label.detail} · ${COPY.approximate}` }
-      : label;
+    unavailable && label.value === '—'
+      ? { ...label, detail: COPY.unavailable }
+      : approximateOnSoft && result.quality === 'soft' && label.value !== '—'
+        ? { ...label, detail: `${label.detail} · ${COPY.approximate}` }
+        : label;
   return (
     <View style={[styles.wrap, compact && styles.compact]} accessibilityLabel={`${copy.heading} ${copy.value}`}>
       <Text style={styles.heading}>{copy.heading}</Text>

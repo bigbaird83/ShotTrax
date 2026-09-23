@@ -702,7 +702,7 @@ export default function HoleScreen() {
   });
   /** Signal gate: haversine(fix → hydrated green centroid). Never a card number or green-edge. */
   const liveToGreen = yardsToGreen(fix, green);
-  /** Corner badge under the header: live GPS → green pin, — when GPS is poor or no pin. */
+  /** Corner badge under the header: live GPS → green pin; — when GPS is poor, no pin, or > 600 yd. */
   const liveGpsToPin = planLiveGpsToPin({ fix, green });
   // Bottom of the sticky header (status bar + Menu / Hole / Scorecard + shot strip).
   const [headerBottom, setHeaderBottom] = useState<number | null>(null);
@@ -1637,6 +1637,7 @@ export default function HoleScreen() {
             <YardsToGreenBadge
               compact
               approximateOnSoft
+              unavailable={liveGpsToPin.unavailable}
               result={liveGpsToPin}
               hasFix={liveGpsToPin.quality !== 'none'}
               hasGreen={Boolean(green)}

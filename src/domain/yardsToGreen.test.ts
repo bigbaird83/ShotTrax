@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { MAX_SHOT_YD } from '../config/sensing';
 import { haversineYards, roundYards } from './haversine';
 import { isValidLatLng } from './latLng';
-import { yardsToGreenPlayerLabel } from './playerCopy';
+import { COPY, yardsToGreenPlayerLabel } from './playerCopy';
 import {
   lastClubMark,
   lastLandingMark,
@@ -13,6 +13,7 @@ import {
   planLiveGpsToPin,
   planPlayHeaderYards,
   planToGreenDisplay,
+  TO_GREEN_LIVE_MAX_YD,
   toGreenSixHundredCapsTheNumber,
   toGreenSixHundredIsPhoneFixCutoff,
   resolveGreenPin,
@@ -417,16 +418,35 @@ test('live GPS → pin badge: number only for good or soft GPS and a real green'
   const phone = northOf(green, -212);
   const yards = roundYards(haversineYards(phone, green));
 
-  assert.deepEqual(planLiveGpsToPin({ fix: fixAt(phone, 5), green }), { yards, quality: 'good' });
-  assert.deepEqual(planLiveGpsToPin({ fix: fixAt(phone, 20), green }), { yards, quality: 'soft' });
+  assert.deepEqual(planLiveGpsToPin({ fix: fixAt(phone, 5), green }), { yards, quality: 'good', unavailable: false });
+  assert.deepEqual(planLiveGpsToPin({ fix: fixAt(phone, 20), green }), { yards, quality: 'soft', unavailable: false });
 
-  const none = { yards: null, quality: 'none' };
+  const none = { yards: null, quality: 'none', unavailable: false };
   // Poor or unknown accuracy, no fix, no green, bad pin: no number.
   assert.deepEqual(planLiveGpsToPin({ fix: fixAt(phone, 40), green }), none);
   assert.deepEqual(planLiveGpsToPin({ fix: fixAt(phone, null), green }), none);
   assert.deepEqual(planLiveGpsToPin({ fix: null, green }), none);
   assert.deepEqual(planLiveGpsToPin({ fix: fixAt(phone, 5), green: null }), none);
   assert.deepEqual(planLiveGpsToPin({ fix: fixAt(phone, 5), green: { lat: 0, lng: 0 } }), none);
+
+  // Up to TO_GREEN_LIVE_MAX_YD is a number; past it is — / unavailable, never a big number.
+  const atCap = northOf(green, -TO_GREEN_LIVE_MAX_YD + 1);
+  const atCapYards = planLiveGpsToPin({ fix: fixAt(atCap, 5), green });
+  assert.ok(atCapYards.yards != null && atCapYards.yards <= TO_GREEN_LIVE_MAX_YD);
+  assert.equal(atCapYards.unavailable, false);
+  for (const far of [northOf(green, -(TO_GREEN_LIVE_MAX_YD + 5)), northOf(green, -12_000)]) {
+    assert.deepEqual(planLiveGpsToPin({ fix: fixAt(far, 5), green }), {
+      yards: null,
+      quality: 'none',
+      unavailable: true,
+    });
+    assert.deepEqual(planLiveGpsToPin({ fix: fixAt(far, 20), green }), {
+      yards: null,
+      quality: 'none',
+      unavailable: true,
+    });
+  }
+  assert.equal(COPY.unavailable, 'Unavailable');
 
   const unavailable = yardsToGreenPlayerLabel(none, { hasFix: false, hasGreen: true });
   assert.equal(unavailable.value, '—');
@@ -442,8 +462,9 @@ test('live GPS → pin badge sits under the header and stays up during Add shot'
   const corner = hole.slice(hole.lastIndexOf('<View', hole.lastIndexOf('styles.headerCorner', start)), start + 400);
   assert.match(corner, /pointerEvents="none"/);
   assert.match(corner, /top: \(headerBottom \?\? insets\.top \+ 6 \+ tapTarget \+ 16\) \+ 6/);
-  assert.match(corner, /<YardsToGreenBadge\s+compact\s+approximateOnSoft\s+result=\{liveGpsToPin\}/);
+  assert.match(corner, /<YardsToGreenBadge\s+compact\s+approximateOnSoft\s+unavailable=\{liveGpsToPin\.unavailable\}\s+result=\{liveGpsToPin\}/);
   assert.match(corner, /hasFix=\{liveGpsToPin\.quality !== 'none'\}/);
+  assert.match(corner, /unavailable=\{liveGpsToPin\.unavailable\}/);
   // Not gated by placeHint, placeMode, or hideYardsOverlay.
   const before = hole.slice(hole.lastIndexOf('\n', hole.lastIndexOf('styles.headerCorner', start) - 40), start);
   assert.doesNotMatch(before, /placeHint|placeMode|hideYardsOverlay|catchUpFullScreen/);
@@ -455,4 +476,6 @@ test('live GPS → pin badge sits under the header and stays up during Add shot'
   const badge = readFileSync(new URL('../ui/YardsToGreenBadge.tsx', import.meta.url), 'utf8');
   assert.match(badge, /approximateOnSoft && result\.quality === 'soft'/);
   assert.match(badge, /COPY\.approximate/);
+  assert.match(badge, /unavailable && label\.value === '—'/);
+  assert.match(badge, /COPY\.unavailable/);
 });

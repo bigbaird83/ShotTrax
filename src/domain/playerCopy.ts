@@ -50,6 +50,7 @@ export const COPY = {
   hardMissNeedPinsDetail: 'Tee and green are not on file.',
   pinSheet: 'Pin sheet',
   approximate: 'Approximate',
+  unavailable: 'Unavailable',
   share: 'Share',
   shareFail: "Couldn't open share",
   shareLive: 'Share live',
