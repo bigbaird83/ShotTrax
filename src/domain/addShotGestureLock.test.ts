@@ -409,10 +409,9 @@ test('Signal Lab: TF 50 Marker-only one-finger to-pin drag; MapView keeps pan/pi
 
   const start = { lat: 37.001, lng: -122.0 };
   const live = { lat: 37.002, lng: -122.001 };
-  assert.deepEqual(toPinMarkerCoordinate({ placedTo: start, dragOrigin: null }), start);
-  assert.deepEqual(toPinMarkerCoordinate({ placedTo: live, dragOrigin: start }), start);
-  assert.notDeepEqual(toPinMarkerCoordinate({ placedTo: live, dragOrigin: start }), live);
-  assert.equal(toPinMarkerCoordinate({ placedTo: null, dragOrigin: null }), null);
+  assert.deepEqual(toPinMarkerCoordinate({ live: null, placedTo: start }), start);
+  assert.deepEqual(toPinMarkerCoordinate({ live, placedTo: start }), live);
+  assert.equal(toPinMarkerCoordinate({ live: null, placedTo: null }), null);
   const dragYards = liveShotYardsFromThisFromPin({ from, pin: live, phone });
   assert.equal(dragYards, roundYards(haversineYards(from, live)));
   assert.notEqual(dragYards, roundYards(haversineYards(from, start)));

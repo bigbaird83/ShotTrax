@@ -90,6 +90,16 @@ import {
   dragYardsSitUnderConfirm,
   toGreenYardsSitOnGreen,
   toPinFollowsFinger,
+  ADD_SHOT_TO_PIN_STEM_OVERLAP_PX,
+  addShotPathDotInAdditionToDragPin,
+  addShotShowsPathDot,
+  addShotToPinAnchor,
+  addShotToPinBox,
+  addShotToPinGlyph,
+  addShotToPinTracksViewChanges,
+  addShotToPinVisualScale,
+  liveDragPointForLines,
+  placeToDraftFromDragRelease,
 } from './placeToDrag';
 import { placedPinUsesJumpGate, placedShotAsksPast400 } from './shotSource';
 import { COPY } from './playerCopy';
@@ -467,7 +477,7 @@ test('to pin follows the finger; live yards are this shot only; nothing stores b
   assert.equal(addShotMapOwnsTwoFingerWhilePinLive(), true);
   assert.equal(addShotToPinStopPropagation(), true);
   assert.equal(addShotToPinDragUsesMarkCoords(), true);
-  assert.deepEqual(toPinMarkerCoordinate({ placedTo: drag, dragOrigin: from }), from);
+  assert.deepEqual(toPinMarkerCoordinate({ live: null, placedTo: drag }), drag);
   assert.doesNotMatch(map, /scrollEnabled=\{!panFrozen\}/);
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   assert.match(hole, /freezePan=\{placeMode === 'to' \|\| placeMode === 'edit-to'\}/);
@@ -570,13 +580,13 @@ test('Add shot from-pin is tee when empty, last landing after marks — never ho
   assert.doesNotMatch(map, /showsUserLocation=\{true\}/);
 });
 
-test('TF 50: hold-drag freezes Marker coordinate; yards follow the real mark', () => {
+test('hold-drag Marker follows the live point; yards follow the real mark', () => {
   const origin = drag;
   const next = { lat: drag.lat + 0.002, lng: drag.lng };
-  assert.deepEqual(toPinMarkerCoordinate({ placedTo: origin, dragOrigin: null }), origin);
-  assert.deepEqual(toPinMarkerCoordinate({ placedTo: next, dragOrigin: origin }), origin);
-  assert.equal(toPinMarkerCoordinate({ placedTo: null, dragOrigin: null }), null);
-  assert.deepEqual(toPinMarkerCoordinate({ placedTo: origin, dragOrigin: { lat: 0, lng: 0 } }), origin);
+  assert.deepEqual(toPinMarkerCoordinate({ live: null, placedTo: origin }), origin);
+  assert.deepEqual(toPinMarkerCoordinate({ live: next, placedTo: origin }), next);
+  assert.equal(toPinMarkerCoordinate({ live: null, placedTo: null }), null);
+  assert.deepEqual(toPinMarkerCoordinate({ live: { lat: 0, lng: 0 }, placedTo: origin }), origin);
 
   const live = liveShotYardsFromThisFromPin({ from, pin: next, phone });
   assert.equal(live, roundYards(haversineYards(from, next)));
@@ -618,4 +628,79 @@ test('empty hole frames first-shot tee; after a closed drive Add shot starts at 
   assert.equal(addShotEmptyHoleUsesFirstShotFraming(), true);
   assert.equal(addShotAfterMarksUsesLastLanding(), true);
   assert.equal(addShotAlwaysFirstShotStyle(), false);
+});
+
+test('landing pin stays on the dashed shot line while dragging', () => {
+  const start = drag;
+  const green = { lat: drag.lat + 0.004, lng: drag.lng };
+  const moves = [
+    { lat: drag.lat + 0.0005, lng: drag.lng - 0.0003 },
+    { lat: drag.lat + 0.0011, lng: drag.lng + 0.0002 },
+    { lat: drag.lat + 0.0019, lng: drag.lng - 0.0004 },
+  ];
+  for (const live of moves) {
+    const pin = toPinMarkerCoordinate({ live, placedTo: start });
+    const linePoint = liveDragPointForLines({ live, placed: start });
+    const lines = planDragShotLines({ from, drag: linePoint, green });
+    // Never frozen on the drag-start point.
+    assert.notDeepEqual(pin, start);
+    // Pin, shot-line end, to-green start, and yards chip all read one point.
+    assert.deepEqual(pin, live);
+    assert.deepEqual(lines.shot?.to, pin);
+    assert.deepEqual(lines.toGreen?.from, pin);
+    assert.equal(lines.shot?.yards, roundYards(haversineYards(from, live)));
+  }
+  // Invalid live input never invents a point: it falls back to placedTo.
+  assert.deepEqual(toPinMarkerCoordinate({ live: { lat: Number.NaN, lng: 1 }, placedTo: start }), start);
+  assert.equal(toPinMarkerCoordinate({ live: undefined, placedTo: undefined }), null);
+
+  // Release saves exactly the point the dashed line ends on.
+  const release = { lat: moves[2].lat, lng: moves[2].lng };
+  const saved = placeToDraftFromDragRelease(release);
+  const lineAfter = planDragShotLines({ from, drag: liveDragPointForLines({ live: saved, placed: start }), green });
+  assert.deepEqual(saved, release);
+  assert.deepEqual(lineAfter.shot?.to, saved);
+  assert.equal(placeToDraftFromDragRelease(null), null);
+  assert.equal(placeToDraftFromDragRelease({ lat: Number.NaN, lng: 0 }), null);
+
+  const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
+  assert.match(map, /toPinMarkerCoordinate\(\{ live: liveDrag, placedTo: placedTo \?\? null \}\)/);
+  assert.match(map, /dragLines=\{dragLines\}/);
+  assert.doesNotMatch(map, /dragOrigin: toPinDragOrigin/);
+  const release2 = map.slice(map.indexOf('onDragEnd='), map.indexOf('testID="to-pin-hit"'));
+  assert.ok(release2.indexOf('setLiveDrag(released)') > 0);
+  assert.ok(release2.indexOf('setLiveDrag(released)') < release2.indexOf('onPlaceToDrag({ lat: latitude'));
+});
+
+test('to-pin bitmap tracks view changes while dragging', () => {
+  assert.equal(addShotToPinTracksViewChanges({ dragging: true }), true);
+  assert.equal(addShotToPinTracksViewChanges({ dragging: false }), true);
+});
+
+test('pressed to-pin grows inside a fixed hit box so the tip stays on the line', () => {
+  const idle = addShotToPinGlyph(addShotToPinVisualScale(false));
+  const pressed = addShotToPinGlyph(addShotToPinVisualScale(true));
+  assert.ok(pressed.head > idle.head);
+  assert.deepEqual(addShotToPinBox(addShotToPinVisualScale(true)), addShotToPinBox(1));
+  for (const g of [idle, pressed]) {
+    const box = addShotToPinBox();
+    assert.ok(g.head <= box.width);
+    assert.ok(g.head + g.stemHeight - ADD_SHOT_TO_PIN_STEM_OVERLAP_PX <= box.height);
+  }
+  assert.deepEqual(addShotToPinGlyph(Number.NaN), idle);
+  assert.deepEqual(addShotToPinAnchor(), { x: 0.5, y: 1 });
+
+  const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
+  assert.match(map, /addShotToPinGlyph\(addShotToPinVisualScale\(toPinEngaged\)\)/);
+  assert.doesNotMatch(map, /\* addShotToPinVisualScale/);
+  assert.doesNotMatch(map, /addShotToPinBox\(addShotToPinVisualScale/);
+});
+
+test('extra path dot hides while the real landing pin is on the map', () => {
+  assert.equal(addShotPathDotInAdditionToDragPin(), false);
+  assert.equal(addShotShowsPathDot({ pinVisible: true }), false);
+  assert.equal(addShotShowsPathDot({ pinVisible: false }), true);
+  const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
+  assert.match(map, /addShotShowsPathDot\(\{ pinVisible \}\)/);
+  assert.match(map, /pinVisible=\{toPinMapCoordinate != null\}/);
 });

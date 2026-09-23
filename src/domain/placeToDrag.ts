@@ -66,7 +66,7 @@ export function toPinYardsRecalcOnReleaseOnly(): false {
   return false;
 }
 
-/** Lines and chips read the live map point. The marker coordinate stays put. */
+/** Lines, chips, and the pin Marker all read the same live map point. */
 export function dragLinesFollowLivePoint(): true {
   return true;
 }
@@ -80,10 +80,11 @@ export function liveDragPointForLines(args: {
 }
 
 /**
- * Add-shot to-pin grows on press and stays large while dragging so the mark
- * is easy to see. Release restores 1. Layout hit size does not change.
+ * Add-shot to-pin grows on press and stays larger while dragging so the mark
+ * is easy to see. Release restores 1. The hit box never changes size — only
+ * the glyph inside it grows, bottom-aligned, so the tip stays on the line.
  */
-export const ADD_SHOT_TO_PIN_PRESSED_SCALE = 2;
+export const ADD_SHOT_TO_PIN_PRESSED_SCALE = 1.25;
 
 export function addShotToPinScalesUpOnPressOrDrag(): true {
   return true;
@@ -114,36 +115,64 @@ export function addShotToPinAnchor(): { x: 0.5; y: 1 } {
   return { x: 0.5, y: 1 };
 }
 
-export function addShotToPinBox(scale: number): { width: number; height: number } {
-  const safe = scale > 0 && Number.isFinite(scale) ? scale : 1;
-  return {
-    width: ADD_SHOT_TO_PIN_HIT_W * safe,
-    height: ADD_SHOT_TO_PIN_HIT_H * safe,
-  };
+/**
+ * The Marker's hit box. Fixed at the tight hit size for every scale: growing
+ * the box moves the anchor math and walks the tip off the shot path.
+ */
+export function addShotToPinBox(_scale?: number): { width: number; height: number } {
+  void _scale;
+  return { width: ADD_SHOT_TO_PIN_HIT_W, height: ADD_SHOT_TO_PIN_HIT_H };
 }
 
-/** Dotted-line dot at the shot, in addition to the drag pin. It follows the pin. */
+const TO_PIN_HEAD_PX = 22;
+const TO_PIN_STEM_W_PX = 3;
+const TO_PIN_STEM_H_PX = 16;
+/** Stem tucks this far under the head. */
+export const ADD_SHOT_TO_PIN_STEM_OVERLAP_PX = 2;
+
+/**
+ * Pin glyph sizes for a visual scale. Head grows; the stem gives up length
+ * so head + stem always fit inside the fixed hit box, tip on the bottom edge.
+ */
+export function addShotToPinGlyph(scale: number): {
+  head: number;
+  stemWidth: number;
+  stemHeight: number;
+} {
+  const safe = scale > 0 && Number.isFinite(scale) ? scale : 1;
+  const box = addShotToPinBox();
+  const head = Math.min(Math.round(TO_PIN_HEAD_PX * safe), box.width, box.height);
+  const stemWidth = Math.max(1, Math.round(TO_PIN_STEM_W_PX * safe));
+  const stemHeight = Math.max(
+    0,
+    Math.min(TO_PIN_STEM_H_PX, box.height - head + ADD_SHOT_TO_PIN_STEM_OVERLAP_PX),
+  );
+  return { head, stemWidth, stemHeight };
+}
+
+/** Dotted-line dot at the shot end. Only drawn when no drag pin is on the map. */
 export const ADD_SHOT_PATH_DOT_PX = 22;
 
 export function addShotPathDotFollowsPin(): true {
   return true;
 }
 
-export function addShotPathDotInAdditionToDragPin(): true {
-  return true;
+/** A second green mark beside the real pin reads as two landings. */
+export function addShotPathDotInAdditionToDragPin(): false {
+  return false;
+}
+
+export function addShotShowsPathDot(args: { pinVisible: boolean }): boolean {
+  return !args.pinVisible;
 }
 
 /**
- * Idle and the scale-up frame must refresh the marker bitmap.
- * After that snapshot, drag tracking turns off so the native marker can
- * follow the finger without a yards re-render snapping it back.
+ * The to-pin bitmap refreshes idle, on press, and while dragging so the
+ * drawn pin matches its live coordinate and scale on every frame.
  */
-export function addShotToPinTracksViewChanges(args: {
-  dragOriginSet: boolean;
-  capturingScale: boolean;
-}): boolean {
-  if (!args.dragOriginSet) return true;
-  return args.capturingScale;
+export function addShotToPinTracksViewChanges(args: { dragging: boolean }): true {
+  void args.dragging;
+  return true;
 }
 
 /** Mid-drag does not invent a tee, green, or landing. */
@@ -153,7 +182,8 @@ export function toPinDragInventsMidDrag(): false {
 
 /**
  * The native marker coordinate at release. Missing or invalid stays unset.
- * Never synthesized from the screen or from a course center.
+ * Never synthesized from the screen or from a course center. The dashed line
+ * is moved to this same point before it is saved.
  */
 export function placeToDraftFromDragRelease(
   coord: { lat: number; lng: number } | null | undefined,
@@ -267,16 +297,15 @@ export function addShotToPinStopPropagation(): true {
 }
 
 /**
- * Native Marker drag owns the pin's screen position. Keep the React
- * `coordinate` at drag-start so a live yards re-render cannot snap the
- * annotation and pan the camera. `placedTo` still updates for haversine.
+ * The pin Marker coordinate is the same point the dashed line and yard chips
+ * use: the live drag point, else `placedTo`. Never frozen at drag-start —
+ * a frozen React coordinate lets the pin drift off the dashed line.
  */
 export function toPinMarkerCoordinate(args: {
-  placedTo: LatLng | null;
-  dragOrigin: LatLng | null;
+  live: LatLng | null | undefined;
+  placedTo: LatLng | null | undefined;
 }): LatLng | null {
-  if (isValidLatLng(args.dragOrigin)) return args.dragOrigin;
-  return isValidLatLng(args.placedTo) ? args.placedTo : null;
+  return liveDragPointForLines({ live: args.live, placed: args.placedTo });
 }
 
 /** Drag writes the Marker's map lat/lng — never a pixel, phone, or invented point. */
