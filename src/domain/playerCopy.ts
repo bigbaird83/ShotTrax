@@ -54,6 +54,8 @@ export const COPY = {
   share: 'Share',
   shareFail: "Couldn't open share",
   shareLive: 'Share live',
+  shareScorecard: 'Share scorecard',
+  shareLiveRound: 'Share live round',
   liveBoard: 'Live board',
   liveBoardLede: 'Hole scores for friends. No map.',
   liveBoardPrivacy: 'Scores only — no map.',

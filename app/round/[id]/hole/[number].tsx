@@ -153,7 +153,8 @@ import { describeGpsSource } from '@/src/services/location';
 import { courseNeedsPinSheets, planMissCardCopy } from '@/src/domain/missCard';
 import { thunderbirdCupOnGreen, thunderbirdDailyPin, thunderbirdPinHoleFor } from '@/src/domain/thunderbirdPins';
 import { MENU_SHARE_FALLBACK_MS, toastFromShareAttempt } from '@/src/domain/spectator';
-import { publishRoundScoreboard, shareRoundSnapshot } from '@/src/services/shareRound';
+import { publishRoundScoreboard, shareLiveBoard, shareRoundSnapshot } from '@/src/services/shareRound';
+import { shareKindOrScorecard, type ShareKind } from '@/src/domain/shareChoice';
 import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, undoShotEdit, deleteHoleShot } from '@/src/services/shotActions';
 import { useLiveFix } from '@/src/services/useLiveFix';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
@@ -176,6 +177,7 @@ import { FinishedPuttRows } from '@/src/ui/FinishedPuttRows';
 import { PuttDock } from '@/src/ui/PuttDock';
 import { PuttSheetBody } from '@/src/ui/PuttSheetBody';
 import { ScorecardBody } from '@/src/ui/ScorecardBody';
+import { ShareChoice } from '@/src/ui/ShareChoice';
 import { YardsToGreenBadge } from '@/src/ui/YardsToGreenBadge';
 import { COLOR_THEMES, tapTarget, type, type ColorPalette } from '@/src/ui/theme';
 
@@ -205,6 +207,7 @@ export default function HoleScreen() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButtonRef = useRef<View>(null);
   const pendingShareRef = useRef(false);
+  const pendingShareKindRef = useRef<ShareKind>('scorecard');
   const shareFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [playFrameNonce, setPlayFrameNonce] = useState(0);
   const [mapFramed, setMapFramed] = useState(false);
@@ -810,14 +813,19 @@ export default function HoleScreen() {
       shareFallbackRef.current = null;
     }
     const anchor = findNodeHandle(menuButtonRef.current);
+    const kind = shareKindOrScorecard(pendingShareKindRef.current);
+    pendingShareKindRef.current = 'scorecard';
     void toastFromShareAttempt(() =>
-      shareRoundSnapshot(db, id, { currentHoleNumber: holeNumber, anchor }),
+      kind === 'live'
+        ? shareLiveBoard(db, id, { currentHoleNumber: holeNumber, anchor })
+        : shareRoundSnapshot(db, id, { currentHoleNumber: holeNumber, anchor }),
     ).then((fail) => {
       if (fail) setToast(fail);
     });
   }, [db, id, holeNumber]);
 
-  const queueMenuShare = useCallback(() => {
+  const queueMenuShare = useCallback((kind: ShareKind = 'scorecard') => {
+    pendingShareKindRef.current = shareKindOrScorecard(kind);
     pendingShareRef.current = true;
     setMenuOpen(false);
     setScorecardOpen(false);
@@ -1859,11 +1867,7 @@ export default function HoleScreen() {
               router.push({ pathname: '/nerd-out', params: { roundId: id } });
             }}
           />
-          <BigButton
-            label={COPY.share}
-            variant="ghost"
-            onPress={queueMenuShare}
-          />
+          <ShareChoice variant="ghost" onPick={queueMenuShare} />
           <BigButton
             label={COPY.liveBoard}
             variant="ghost"
