@@ -43,6 +43,29 @@ export function holeDurationMs(row: LivePaceHole): number | null {
   return end - start;
 }
 
+export type HoleStartStampInput = {
+  number: number;
+  score: number | null;
+  puttsDone: boolean;
+  startedAt: string | null;
+  completedAt: string | null;
+};
+
+function holeStampInputDone(row: HoleStartStampInput): boolean {
+  return row.completedAt != null || row.puttsDone || row.score != null;
+}
+
+/**
+ * True when opening `number` means the player is actually on it: it is not
+ * started or finished yet, and every earlier hole is finished (Made it /
+ * Hole Out, or a posted score). Peeking ahead at later holes is false.
+ */
+export function planHoleStartStamp(holes: HoleStartStampInput[], number: number): boolean {
+  const target = holes.find((row) => row.number === number);
+  if (!target || target.startedAt != null || holeStampInputDone(target)) return false;
+  return holes.filter((row) => row.number < number).every(holeStampInputDone);
+}
+
 export function planLivePace(args: {
   holes: LivePaceHole[];
   nowMs: number;

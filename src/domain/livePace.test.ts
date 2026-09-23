@@ -8,7 +8,9 @@ import {
   formatToPar,
   holeDurationMs,
   planLivePace,
+  planHoleStartStamp,
   planLiveScoreTotals,
+  type HoleStartStampInput,
   type LivePaceHole,
 } from './livePace';
 import {
@@ -113,8 +115,9 @@ test('share round only sends putts after Made it / Hole Out and stamps come from
   assert.match(finishOut, /stampHoleCompleted/);
   assert.match(repo, /completed_at = COALESCE\(completed_at, \?\)/);
   const start = repo.slice(repo.indexOf('export function markHoleStarted'), repo.indexOf('function stampHoleCompleted'));
-  assert.match(start, /started_at IS NULL AND completed_at IS NULL/);
-  assert.match(start, /finished_at IS NULL/);
+  assert.match(start, /planHoleStartStamp/);
+  assert.match(start, /finishedAt != null/);
+  assert.match(start, /started_at IS NULL/);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   assert.ok(hole.indexOf('markHoleStarted(db, id, holeNumber)') < hole.indexOf('publishRoundScoreboard(db, id, { currentHoleNumber'));
@@ -200,4 +203,50 @@ test('duration and clock formatting', () => {
   assert.equal(formatHoleClock('bad'), '—');
   assert.equal(formatHoleClock(new Date(2026, 8, 23, 14, 5).toISOString()), '2:05 PM');
   assert.equal(formatHoleClock(new Date(2026, 8, 23, 0, 30).toISOString()), '12:30 AM');
+});
+
+function stampRow(number: number, partial: Partial<HoleStartStampInput> = {}): HoleStartStampInput {
+  return { number, score: null, puttsDone: false, startedAt: null, completedAt: null, ...partial };
+}
+
+test('start time: only when the player moves on after finishing the prior hole — peeking never stamps', () => {
+  // Fresh round: hole 1 is where play begins.
+  const fresh = [stampRow(1), stampRow(2), stampRow(3), stampRow(4)];
+  assert.equal(planHoleStartStamp(fresh, 1), true);
+
+  // On hole 1 (started, not finished): peeking at 2, 3, 4 stamps nothing.
+  const onOne = [stampRow(1, { startedAt: at(0) }), stampRow(2), stampRow(3), stampRow(4)];
+  assert.equal(planHoleStartStamp(onOne, 2), false);
+  assert.equal(planHoleStartStamp(onOne, 3), false);
+  assert.equal(planHoleStartStamp(onOne, 4), false);
+  // Going back to hole 1 never restamps it.
+  assert.equal(planHoleStartStamp(onOne, 1), false);
+
+  // Made it on hole 1, then move to hole 2 → stamp. Jumping to 3 or 4 still does not.
+  const madeOne = [
+    stampRow(1, { startedAt: at(0), completedAt: at(12), puttsDone: true, score: 4 }),
+    stampRow(2),
+    stampRow(3),
+    stampRow(4),
+  ];
+  assert.equal(planHoleStartStamp(madeOne, 2), true);
+  assert.equal(planHoleStartStamp(madeOne, 3), false);
+  assert.equal(planHoleStartStamp(madeOne, 4), false);
+
+  // A finished hole is never given a start time after the fact.
+  assert.equal(planHoleStartStamp(madeOne, 1), false);
+  assert.equal(planHoleStartStamp([stampRow(1, { score: 4 })], 1), false);
+
+  // Hole Out on 2 (finish stamp, putts done) opens hole 3.
+  const outTwo = [
+    madeOne[0],
+    stampRow(2, { startedAt: at(13), completedAt: at(20), puttsDone: true, score: 3 }),
+    stampRow(3),
+    stampRow(4),
+  ];
+  assert.equal(planHoleStartStamp(outTwo, 3), true);
+  assert.equal(planHoleStartStamp(outTwo, 4), false);
+
+  // Unknown hole number is a no-op.
+  assert.equal(planHoleStartStamp(fresh, 19), false);
 });

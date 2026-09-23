@@ -825,10 +825,10 @@ export default function HoleScreen() {
     shareFallbackRef.current = setTimeout(openQueuedShare, MENU_SHARE_FALLBACK_MS);
   }, [openQueuedShare]);
 
-  // Live follow: stamp the first open of an unfinished hole before the board publishes.
+  // Live follow: stamp start only once every earlier hole is finished — peeking ahead never stamps.
   useEffect(() => {
     markHoleStarted(db, id, holeNumber);
-  }, [db, id, holeNumber]);
+  }, [db, id, holeNumber, revision]);
 
   useEffect(() => {
     publishRoundScoreboard(db, id, { currentHoleNumber: holeNumber });

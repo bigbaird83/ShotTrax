@@ -45,6 +45,7 @@ import {
   type RoundTransferRound,
 } from '../domain/roundTransfer';
 import { newShareBoardCode, normalizeShareBoardCode } from '../domain/liveBoard';
+import { planHoleStartStamp } from '../domain/livePace';
 import { parseSpectatorPayload, type SpectatorPayload } from '../domain/spectator';
 import { planFinishHoleScore, planRecomputeFinishedHoleScore } from '../domain/holeScore';
 import { clampPenaltyStrokes, scoreAfterPenalty, totalPenaltyStrokes } from '../domain/penalty';
@@ -892,17 +893,29 @@ export function updateHolePar(db: SQLiteDatabase, holeId: string, par: number | 
 }
 
 /**
- * Live follow: first open of an unfinished hole in an active round.
- * Never restamps, never stamps a closed hole or a finished round.
+ * Live follow: stamp a hole's start only when the player moves onto it after
+ * every earlier hole is finished. Looking ahead never stamps. Never restamps.
  */
 export function markHoleStarted(db: SQLiteDatabase, roundId: string, number: number): void {
-  db.runSync(
-    `UPDATE holes SET started_at = ?
-     WHERE round_id = ? AND number = ? AND started_at IS NULL AND completed_at IS NULL
-       AND IFNULL(putts_done, 0) = 0
-       AND round_id IN (SELECT id FROM rounds WHERE finished_at IS NULL)`,
-    [new Date().toISOString(), roundId, number],
+  const round = getRound(db, roundId);
+  if (!round || round.finishedAt != null) return;
+  const holes = listHoles(db, roundId);
+  const planned = planHoleStartStamp(
+    holes.map((hole) => ({
+      number: hole.number,
+      score: hole.score,
+      puttsDone: hole.puttsDone,
+      startedAt: hole.startedAt,
+      completedAt: hole.completedAt,
+    })),
+    number,
   );
+  if (!planned) return;
+  db.runSync('UPDATE holes SET started_at = ? WHERE round_id = ? AND number = ? AND started_at IS NULL', [
+    new Date().toISOString(),
+    roundId,
+    number,
+  ]);
 }
 
 /** Live follow: first Made it / Hole Out time. Re-finishing keeps the first stamp. */
