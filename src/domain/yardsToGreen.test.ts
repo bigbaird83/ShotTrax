@@ -448,6 +448,15 @@ test('live GPS → pin badge: number only for good or soft GPS and a real green'
   }
   assert.equal(COPY.unavailable, 'Unavailable');
 
+  // A long-press dropped green (courses with no center-green data) counts as the pin.
+  const dropped = resolveGreenPin({ user: green, course: null });
+  assert.equal(dropped?.source, 'user_estimate');
+  assert.deepEqual(planLiveGpsToPin({ fix: fixAt(phone, 5), green: dropped }), {
+    yards,
+    quality: 'good',
+    unavailable: false,
+  });
+
   const unavailable = yardsToGreenPlayerLabel(none, { hasFix: false, hasGreen: true });
   assert.equal(unavailable.value, '—');
   assert.equal(yardsToGreenPlayerLabel(none, { hasFix: true, hasGreen: false }).value, '—');
@@ -457,6 +466,8 @@ test('live GPS → pin badge sits under the header and stays up during Add shot'
   assert.equal(liveGpsToPinHiddenByPlaceHint(), false);
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   assert.match(hole, /const liveGpsToPin = planLiveGpsToPin\(\{ fix, green \}\)/);
+  // Measures to the hole green (dropped estimate included), not the course-only line green.
+  assert.doesNotMatch(hole, /planLiveGpsToPin\(\{ fix, green: courseGreen/);
   const start = hole.indexOf('testID="live-gps-to-pin"');
   assert.ok(start > 0);
   const corner = hole.slice(hole.lastIndexOf('<View', hole.lastIndexOf('styles.headerCorner', start)), start + 400);
