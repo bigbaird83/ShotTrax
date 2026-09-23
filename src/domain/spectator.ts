@@ -16,6 +16,14 @@ export type SpectatorHoleRow = {
   pinToPinYards: number | null;
   score: number | null;
   approximate: boolean;
+  /** Live follow. Course par only — null when unknown, never invented. */
+  par: number | null;
+  /** Putts after Made it / Hole Out. Null while the hole is open. */
+  putts: number | null;
+  /** ISO time the hole was begun. */
+  startedAt: string | null;
+  /** ISO time Made it / Hole Out fired. */
+  completedAt: string | null;
 };
 
 export type SpectatorPayload = {
@@ -25,6 +33,8 @@ export type SpectatorPayload = {
   finished: boolean;
   live: SpectatorLiveView | null;
   holes: SpectatorHoleRow[];
+  /** ISO time the player's phone last published this board. */
+  updatedAt: string | null;
 };
 
 export type SpectatorShotInput = {
@@ -43,6 +53,11 @@ export type SpectatorHoleInput = {
   number: number;
   score: number | null;
   cardYards?: number | null;
+  par?: number | null;
+  /** Pass only once putts are entered (Made it / Hole Out). */
+  putts?: number | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
   shots: SpectatorShotInput[];
 };
 
@@ -232,6 +247,10 @@ export function planSpectatorHoleRow(hole: SpectatorHoleInput): SpectatorHoleRow
     pinToPinYards: pinToPinYardsFromShots(hole.shots),
     score: hole.score,
     approximate: holeRowIsApproximate(hole.shots),
+    par: hole.par ?? null,
+    putts: hole.putts ?? null,
+    startedAt: asIsoTime(hole.startedAt),
+    completedAt: asIsoTime(hole.completedAt),
   };
 }
 
@@ -241,6 +260,7 @@ export function planSpectatorPayload(args: {
   finished: boolean;
   currentHoleNumber?: number;
   holes: SpectatorHoleInput[];
+  updatedAt?: string | null;
 }): SpectatorPayload {
   const holes = [...args.holes]
     .sort((a, b) => a.number - b.number)
@@ -262,6 +282,7 @@ export function planSpectatorPayload(args: {
           shots: current.shots,
         }),
     holes,
+    updatedAt: asIsoTime(args.updatedAt),
   };
 }
 
@@ -304,6 +325,13 @@ function asString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
+/** Parseable ISO time or null. A bad stamp is dropped, never guessed. */
+export function asIsoTime(value: unknown): string | null {
+  const text = asString(value);
+  if (!text || !Number.isFinite(Date.parse(text))) return null;
+  return text;
+}
+
 export function parseSpectatorPayload(raw: unknown): SpectatorPayload | null {
   if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const rec = raw as Record<string, unknown>;
@@ -334,6 +362,10 @@ export function parseSpectatorPayload(raw: unknown): SpectatorPayload | null {
       pinToPinYards: asFiniteInt(row.pinToPinYards),
       score: asFiniteInt(row.score),
       approximate: row.approximate === true,
+      par: asFiniteInt(row.par),
+      putts: asFiniteInt(row.putts),
+      startedAt: asIsoTime(row.startedAt),
+      completedAt: asIsoTime(row.completedAt),
     });
   }
   return {
@@ -343,6 +375,7 @@ export function parseSpectatorPayload(raw: unknown): SpectatorPayload | null {
     finished,
     live: finished ? null : live,
     holes,
+    updatedAt: asIsoTime(rec.updatedAt),
   };
 }
 

@@ -82,6 +82,10 @@ export type Hole = {
   puttLengths: string[];
   /** True only after Made it. Walking off the green never sets this. */
   puttsDone: boolean;
+  /** ISO time the hole screen first opened for play. Null when never stamped. */
+  startedAt: string | null;
+  /** ISO time Made it / Hole Out first closed the hole. Null until then. */
+  completedAt: string | null;
 };
 
 export type Shot = {

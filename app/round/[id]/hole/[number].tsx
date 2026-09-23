@@ -50,6 +50,7 @@ import {
   updateHolePutts,
   finishHolePutts,
   finishHoleOut,
+  markHoleStarted,
   attachHolePuttLength,
   updateHoleScore,
 } from '@/src/db/repo';
@@ -823,6 +824,11 @@ export default function HoleScreen() {
     if (shareFallbackRef.current) clearTimeout(shareFallbackRef.current);
     shareFallbackRef.current = setTimeout(openQueuedShare, MENU_SHARE_FALLBACK_MS);
   }, [openQueuedShare]);
+
+  // Live follow: stamp the first open of an unfinished hole before the board publishes.
+  useEffect(() => {
+    markHoleStarted(db, id, holeNumber);
+  }, [db, id, holeNumber]);
 
   useEffect(() => {
     publishRoundScoreboard(db, id, { currentHoleNumber: holeNumber });

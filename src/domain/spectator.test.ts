@@ -109,6 +109,10 @@ test('finished share lists every hole with club · pin-to-pin yards · score', (
     pinToPinYards: 155,
     score: 4,
     approximate: false,
+    par: null,
+    putts: null,
+    startedAt: null,
+    completedAt: null,
   });
   assert.deepEqual(payload.holes[1], {
     hole: 2,
@@ -116,6 +120,10 @@ test('finished share lists every hole with club · pin-to-pin yards · score', (
     pinToPinYards: 105,
     score: 3,
     approximate: true,
+    par: null,
+    putts: null,
+    startedAt: null,
+    completedAt: null,
   });
   assert.deepEqual(payload.holes[2], {
     hole: 3,
@@ -123,6 +131,10 @@ test('finished share lists every hole with club · pin-to-pin yards · score', (
     pinToPinYards: null,
     score: null,
     approximate: false,
+    par: null,
+    putts: null,
+    startedAt: null,
+    completedAt: null,
   });
   assert.notEqual(payload.holes[0].pinToPinYards, 412);
   assert.equal(pinToPinYardsFromShots(holes[0].shots), 155);

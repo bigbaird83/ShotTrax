@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { findNodeHandle, StyleSheet, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
@@ -67,6 +67,9 @@ export default function RoundLiveBoardScreen() {
           }}
         />
       </View>
+      {code ? (
+        <BigButton label={COPY.liveFollowOpen} variant="ghost" onPress={() => router.push(`/s/${code}`)} />
+      ) : null}
       {toast ? <Text style={styles.warn}>{toast}</Text> : null}
       {getShareSyncUrl() ? null : <Text style={styles.hint}>{COPY.liveBoardNeedsHost}</Text>}
     </Screen>

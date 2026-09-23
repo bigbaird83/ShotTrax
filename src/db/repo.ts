@@ -135,6 +135,8 @@ type HoleRow = {
   putts: number | null;
   putt_lengths: string | null;
   putts_done: number | null;
+  started_at?: string | null;
+  completed_at?: string | null;
 };
 
 type ShotRow = {
@@ -239,6 +241,8 @@ function mapHole(row: HoleRow): Hole {
       (id) => id ?? '',
     ),
     puttsDone: (row.putts_done ?? 0) === 1,
+    startedAt: row.started_at ?? null,
+    completedAt: row.completed_at ?? null,
   };
 }
 
@@ -887,6 +891,28 @@ export function updateHolePar(db: SQLiteDatabase, holeId: string, par: number | 
   ]);
 }
 
+/**
+ * Live follow: first open of an unfinished hole in an active round.
+ * Never restamps, never stamps a closed hole or a finished round.
+ */
+export function markHoleStarted(db: SQLiteDatabase, roundId: string, number: number): void {
+  db.runSync(
+    `UPDATE holes SET started_at = ?
+     WHERE round_id = ? AND number = ? AND started_at IS NULL AND completed_at IS NULL
+       AND IFNULL(putts_done, 0) = 0
+       AND round_id IN (SELECT id FROM rounds WHERE finished_at IS NULL)`,
+    [new Date().toISOString(), roundId, number],
+  );
+}
+
+/** Live follow: first Made it / Hole Out time. Re-finishing keeps the first stamp. */
+function stampHoleCompleted(db: SQLiteDatabase, holeId: string): void {
+  db.runSync('UPDATE holes SET completed_at = COALESCE(completed_at, ?) WHERE id = ?', [
+    new Date().toISOString(),
+    holeId,
+  ]);
+}
+
 export function updateHoleScore(db: SQLiteDatabase, holeId: string, score: number | null): void {
   db.runSync('UPDATE holes SET score = ? WHERE id = ?', [score, holeId]);
 }
@@ -949,6 +975,7 @@ export function finishHolePutts(
   if (!planned.ok) return;
   updateHolePutts(db, holeId, planned.putts, planned.lengths, true);
   persistCloseHoleScore(db, holeId, planned.putts);
+  stampHoleCompleted(db, holeId);
 }
 
 /** Off-green hole-out. Current club is the shot. No fake putt yards. GIR stays unset. */
@@ -956,6 +983,7 @@ export function finishHoleOut(db: SQLiteDatabase, holeId: string): void {
   const planned = planFinishHoleOut();
   updateHolePutts(db, holeId, planned.putts, planned.lengths, true);
   persistCloseHoleScore(db, holeId, planned.putts);
+  stampHoleCompleted(db, holeId);
   const flag = planFlagLastRealShot(
     db.getAllSync<{ id: string; seq: number }>(
       'SELECT id, seq FROM shots WHERE hole_id = ? ORDER BY seq ASC',

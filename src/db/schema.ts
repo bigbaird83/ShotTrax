@@ -256,6 +256,8 @@ export function migrate(db: SQLiteDatabase): void {
     // Existing stepper putts from the prior cut already count as entered.
     db.execSync('UPDATE holes SET putts_done = 1 WHERE IFNULL(putts, 0) > 0');
   }
+  ensureColumn(db, 'holes', 'started_at', 'TEXT');
+  ensureColumn(db, 'holes', 'completed_at', 'TEXT');
   migrateNoGpsSensingLock(db);
 
   ensureColumn(db, 'clubs', 'typical_carry_yards', 'INTEGER');
