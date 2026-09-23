@@ -127,22 +127,20 @@ test('add-shot lines and yardages follow the live drag point', () => {
   assert.doesNotMatch(map, /transform:\s*\[\{\s*scale:/);
 });
 
-test('enlarged drag pin stays on the path and a larger dot follows the shot', () => {
+test('enlarged drag pin stays on the path; dot only when no pin is shown', () => {
   assert.equal(addShotToPinUsesTransformScale(), false);
   assert.equal(addShotToPinStaysCenteredOnPath(), true);
   assert.deepEqual(addShotToPinAnchor(), { x: 0.5, y: 1 });
   assert.deepEqual(addShotToPinBox(1), { width: ADD_SHOT_TO_PIN_HIT_W, height: ADD_SHOT_TO_PIN_HIT_H });
-  assert.deepEqual(addShotToPinBox(2), {
-    width: ADD_SHOT_TO_PIN_HIT_W * 2,
-    height: ADD_SHOT_TO_PIN_HIT_H * 2,
-  });
+  assert.deepEqual(addShotToPinBox(2), { width: ADD_SHOT_TO_PIN_HIT_W, height: ADD_SHOT_TO_PIN_HIT_H });
   assert.equal(addShotPathDotFollowsPin(), true);
-  assert.equal(addShotPathDotInAdditionToDragPin(), true);
+  assert.equal(addShotPathDotInAdditionToDragPin(), false);
   assert.ok(ADD_SHOT_PATH_DOT_PX >= 20);
 
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   assert.match(map, /addShotToPinAnchor\(\)/);
-  assert.match(map, /addShotToPinBox\(addShotToPinVisualScale\(toPinEngaged\)\)/);
+  assert.match(map, /addShotToPinBox\(\)\.width/);
+  assert.doesNotMatch(map, /addShotToPinBox\(addShotToPinVisualScale/);
   assert.match(map, /testID="shot-path-dot"/);
   assert.match(map, /dragLines\.shot\.to/);
   const dot = map.slice(map.indexOf('testID="shot-path-dot"') - 240, map.indexOf('testID="shot-path-dot"'));

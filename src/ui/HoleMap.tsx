@@ -29,8 +29,10 @@ import {
   ADD_SHOT_TO_PIN_HIT_H,
   ADD_SHOT_TO_PIN_HIT_W,
   addShotPathDotFollowsPin,
+  addShotShowsPathDot,
   addShotToPinAnchor,
   addShotToPinBox,
+  addShotToPinGlyph,
   addShotToPinScalesUpOnPressOrDrag,
   addShotToPinStaysCenteredOnPath,
   addShotToPinTracksViewChanges,
@@ -218,40 +220,16 @@ function TrailFallback({
 type LatLng = { lat: number; lng: number };
 
 /**
- * Owns the in-progress drag point. setState here redraws the lines, yard
- * chips, and path dot without re-rendering the draggable pin, so the native
- * marker keeps following the finger.
+ * Dashed lines, yard chips, and path dot for the in-progress drag point.
+ * `dragLines` end on the same point the to-pin Marker sits on.
  */
 function LiveDragGeometry({
-  placedTo,
-  lineFrom,
-  lineGreen,
-  onPlaceToDrag,
-  setLiveDrag,
+  dragLines,
+  pinVisible,
 }: {
-  placedTo?: LatLng | null;
-  lineFrom?: LatLng | null;
-  lineGreen?: LatLng | null;
-  onPlaceToDrag?: (coord: LatLng) => void;
-  setLiveDrag: { current: (point: LatLng | null) => void };
+  dragLines: ReturnType<typeof planDragShotLines>;
+  pinVisible: boolean;
 }) {
-  const [liveDrag, setLive] = useState<LatLng | null>(null);
-  setLiveDrag.current = setLive;
-
-  useEffect(() => {
-    setLive(null);
-  }, [placedTo?.lat, placedTo?.lng]);
-
-  const dragPoint = liveDragPointForLines({ live: liveDrag, placed: placedTo ?? null });
-  const dragLines = useMemo(() => {
-    if (!onPlaceToDrag || !dragPoint) return { shot: null, toGreen: null };
-    return planDragShotLines({
-      from: lineFrom ?? null,
-      drag: dragPoint,
-      green: lineGreen ?? null,
-    });
-  }, [onPlaceToDrag, lineFrom, lineGreen, dragPoint]);
-
   return (
     <>
       {dragLines.shot ? (
@@ -265,7 +243,7 @@ function LiveDragGeometry({
           lineDashPattern={[8, 6]}
         />
       ) : null}
-      {dragLines.shot && addShotPathDotFollowsPin() ? (
+      {dragLines.shot && addShotPathDotFollowsPin() && addShotShowsPathDot({ pinVisible }) ? (
         <Marker
           coordinate={toCoord(dragLines.shot.to.lat, dragLines.shot.to.lng)}
           anchor={{ x: 0.5, y: 0.5 }}
@@ -351,16 +329,23 @@ function NativeHoleMap({
   const [toPinDragOrigin, setToPinDragOrigin] = useState<{ lat: number; lng: number } | null>(
     null,
   );
-  const setLiveDrag = useRef<(point: { lat: number; lng: number } | null) => void>(() => {});
+  const [liveDrag, setLiveDrag] = useState<{ lat: number; lng: number } | null>(null);
   const [toPinHeld, setToPinHeld] = useState(false);
   const toPinEngaged = toPinHeld || toPinDragOrigin != null;
-  const [toPinTracksView, setToPinTracksView] = useState(false);
   const toPinLive = Boolean(freezePan || onPlaceToDrag);
   const framedForGestures = holeMapKeepsScrollZoomOnceMounted();
-  const toPinCoordinate = toPinMarkerCoordinate({
-    placedTo: placedTo ?? null,
-    dragOrigin: toPinDragOrigin,
-  });
+  // One point for the pin, the dashed line, and the yard chips.
+  const dragPoint = liveDragPointForLines({ live: liveDrag, placed: placedTo ?? null });
+  const toPinCoordinate = toPinMarkerCoordinate({ live: liveDrag, placedTo: placedTo ?? null });
+  const dragLines = useMemo(() => {
+    if (!onPlaceToDrag || !dragPoint) return { shot: null, toGreen: null };
+    return planDragShotLines({
+      from: lineFrom ?? null,
+      drag: dragPoint,
+      green: lineGreen ?? null,
+    });
+  }, [onPlaceToDrag, lineFrom, lineGreen, dragPoint?.lat, dragPoint?.lng]);
+  const toPinGlyph = addShotToPinGlyph(addShotToPinVisualScale(toPinEngaged));
   const toPinMapCoordinate = useMemo(
     () => (toPinCoordinate ? toCoord(toPinCoordinate.lat, toPinCoordinate.lng) : null),
     [toPinCoordinate?.lat, toPinCoordinate?.lng],
@@ -370,16 +355,13 @@ function NativeHoleMap({
     if (!placedTo) {
       setToPinDragOrigin(null);
       setToPinHeld(false);
-      setLiveDrag.current(null);
     }
   }, [placedTo]);
 
+  // A new saved point replaces the live one (release saves that same point).
   useEffect(() => {
-    if (toPinDragOrigin == null) return;
-    setToPinTracksView(true);
-    const timer = setTimeout(() => setToPinTracksView(false), 180);
-    return () => clearTimeout(timer);
-  }, [toPinDragOrigin]);
+    setLiveDrag(null);
+  }, [placedTo?.lat, placedTo?.lng]);
 
   const revealMapsChrome = () => {
     if (allowMapsChrome) setMapsChrome(true);
@@ -775,43 +757,38 @@ function NativeHoleMap({
         {toPinMapCoordinate ? (
           <Marker
             // One-finger hold-drag is this Marker only — tight hit, not a
-            // map-covering View. React coordinate stays at drag-start so a
-            // live yards re-render cannot snap the annotation or pan the
-            // camera. Lines and yard chips follow liveDrag. The draft commits
+            // map-covering View. Its coordinate is the live drag point, the
+            // same one the dashed line and yard chips use. The draft commits
             // on release. The pin tip stays on that path point.
             coordinate={toPinMapCoordinate}
             anchor={addShotToPinAnchor()}
             tappable={false}
             tracksViewChanges={addShotToPinTracksViewChanges({
-              dragOriginSet: toPinDragOrigin != null,
-              capturingScale: toPinTracksView,
+              dragging: toPinDragOrigin != null,
             })}
             stopPropagation
             draggable={Boolean(onPlaceToDrag)}
             onDragStart={() => {
-              if (addShotToPinScalesUpOnPressOrDrag()) {
-                setToPinHeld(true);
-                setToPinTracksView(true);
-              }
+              if (addShotToPinScalesUpOnPressOrDrag()) setToPinHeld(true);
               if (!placedTo) return;
               setToPinDragOrigin(placedTo);
-              setLiveDrag.current(placedTo);
+              setLiveDrag(placedTo);
             }}
             onDrag={(event) => {
               if (!toPinYardsRecalcOnDragMove()) return;
               const { latitude, longitude } = event.nativeEvent.coordinate;
               const point = placeToDraftFromDragRelease({ lat: latitude, lng: longitude });
               if (!point) return;
-              setLiveDrag.current(point);
+              setLiveDrag(point);
             }}
             onDragEnd={(event) => {
               setToPinHeld(false);
               setToPinDragOrigin(null);
-              setToPinTracksView(true);
-              setLiveDrag.current(null);
-              if (!onPlaceToDrag) return;
               const { latitude, longitude } = event.nativeEvent.coordinate;
               const released = placeToDraftFromDragRelease({ lat: latitude, lng: longitude });
+              // Line and pin sit on the released point; that exact point is saved.
+              setLiveDrag(released);
+              if (!onPlaceToDrag) return;
               if (!released) return;
               onPlaceToDrag({ lat: latitude, lng: longitude });
             }}>
@@ -832,8 +809,8 @@ function NativeHoleMap({
                 styles.toPinHit,
                 addShotToPinStaysCenteredOnPath()
                   ? {
-                      width: addShotToPinBox(addShotToPinVisualScale(toPinEngaged)).width,
-                      height: addShotToPinBox(addShotToPinVisualScale(toPinEngaged)).height,
+                      width: addShotToPinBox().width,
+                      height: addShotToPinBox().height,
                       justifyContent: 'flex-end',
                     }
                   : null,
@@ -842,9 +819,9 @@ function NativeHoleMap({
                 style={[
                   styles.toPinHead,
                   {
-                    width: 22 * addShotToPinVisualScale(toPinEngaged),
-                    height: 22 * addShotToPinVisualScale(toPinEngaged),
-                    borderRadius: 11 * addShotToPinVisualScale(toPinEngaged),
+                    width: toPinGlyph.head,
+                    height: toPinGlyph.head,
+                    borderRadius: toPinGlyph.head / 2,
                   },
                 ]}
               />
@@ -852,8 +829,8 @@ function NativeHoleMap({
                 style={[
                   styles.toPinStem,
                   {
-                    width: 3 * addShotToPinVisualScale(toPinEngaged),
-                    height: 16 * addShotToPinVisualScale(toPinEngaged),
+                    width: toPinGlyph.stemWidth,
+                    height: toPinGlyph.stemHeight,
                   },
                 ]}
               />
@@ -878,13 +855,7 @@ function NativeHoleMap({
             <View pointerEvents="none" style={styles.userDot} />
           </Marker>
         ) : null}
-        <LiveDragGeometry
-          placedTo={placedTo}
-          lineFrom={lineFrom}
-          lineGreen={lineGreen}
-          onPlaceToDrag={onPlaceToDrag}
-          setLiveDrag={setLiveDrag}
-        />
+        <LiveDragGeometry dragLines={dragLines} pinVisible={toPinMapCoordinate != null} />
       </MapView>
       ) : null}
       {showMapCover ? (
