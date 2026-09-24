@@ -46,6 +46,7 @@ import {
   setFavorite,
 } from '@/src/domain/favorites';
 import { layoutForPlayedHoles, resolveCourseNumHoles } from '@/src/domain/nineByTwo';
+import { greetingForHour, summarizeHomeRound, toParTone } from '@/src/domain/homeSummary';
 import { formatRoundPaceLine, planLivePace } from '@/src/domain/livePace';
 import { formatHistoryRow, historyDeletePrompt, pastRoundEditAnytime, pastRoundHoleHref } from '@/src/domain/roundHistory';
 import { describeGpsSource } from '@/src/services/location';
@@ -55,12 +56,16 @@ import { takePendingCoursePick } from '@/src/course/pendingCoursePick';
 import type { CoursePick } from '@/src/ui/CoursePicker';
 import { EmptyPanel } from '@/src/ui/EmptyPanel';
 import { HistorySwipeRow } from '@/src/ui/HistorySwipeRow';
+import { Icon } from '@/src/ui/Icon';
+import { QuickTile, StartTile } from '@/src/ui/HomeTiles';
 import { GpsBanner } from '@/src/ui/GpsBanner';
 import { PaintMissBanner } from '@/src/ui/PaintMissBanner';
 import { Screen } from '@/src/ui/Screen';
 import { FullSheet } from '@/src/ui/Sheet';
 import { useColors } from '@/src/ui/ColorThemeProvider';
+import { accentFill, cardBorder, glow, heroFill, tint } from '@/src/ui/surface';
 import { tapTarget, type, type ColorPalette } from '@/src/ui/theme';
+import { TopoRings } from '@/src/ui/TopoRings';
 import { getCurrentFix } from '@/src/services/location';
 import { setWatchCoursePickedHandler } from '@/src/services/watchNearby';
 
@@ -123,6 +128,12 @@ export default function HomeScreen() {
   );
   const rounds = useMemo(() => listRounds(db), [db, revision]);
   const active = useMemo(() => getActiveRound(db), [db, revision]);
+  const activeHoles = useMemo(() => (active ? listHoles(db, active.id) : []), [db, revision, active]);
+  const activeSummary = useMemo(
+    () => (active ? summarizeHomeRound(activeHoles) : null),
+    [active, activeHoles],
+  );
+  const greeting = useMemo(() => greetingForHour(new Date().getHours()), [revision]);
   const clubs = useMemo(() => listClubs(db), [db, revision]);
   const bagPromptOpen = useMemo(() => !hasSeenBagCustomize(db), [db, revision]);
   const typedCarryCount = useMemo(() => countTypedCarries(clubs), [clubs]);
@@ -310,18 +321,39 @@ export default function HomeScreen() {
       })
     : null;
 
+  const lastPlayedChip = picked
+    ? formatLastPlayedChip(lastPlayedAtByCourse[picked.id] ?? lastPlayedAtByCourse[picked.name])
+    : null;
+  const startLabel = (holeCount: 9 | 18) =>
+    picked
+      ? `Start ${holeCount} at ${picked.name}${pickedTee ? ` · ${pickedTee.name}` : ''}`
+      : holeCount === 18
+        ? COPY.start18
+        : COPY.start9;
+
   return (
     <Screen edges={['bottom']} refreshing={refreshing} onRefresh={() => void onRefresh()}>
       <View style={styles.homeBar}>
-        <Text style={styles.title}>{SHOTTRAXX_BRAND}</Text>
+        <View style={styles.brand}>
+          <View style={[styles.mark, accentFill(colors), glow(colors)]}>
+            <Icon name="flag.fill" color={colors.onAccent} size={19} glyph="⚑" />
+          </View>
+          <Text style={styles.title}>{SHOTTRAXX_BRAND}</Text>
+        </View>
         <Pressable
           accessibilityRole="button"
+          accessibilityLabel={COPY.menu}
           onPress={() => router.push('/settings')}
-          style={styles.menuButton}>
-          <Text style={styles.menuButtonText}>{COPY.menu}</Text>
+          style={({ pressed }) => [styles.menuButton, pressed && styles.pressed]}>
+          <Icon name="gearshape.fill" color={colors.cream} size={22} glyph="☰" />
         </Pressable>
       </View>
-      <Text style={styles.lede}>{COPY.homeLede}</Text>
+      {active ? null : (
+        <View style={styles.greeting}>
+          <Text style={styles.kicker}>{greeting}</Text>
+          <Text style={styles.h1}>{COPY.homeHeroTitle}</Text>
+        </View>
+      )}
 
       <FullSheet
         visible={bagPromptOpen}
@@ -340,106 +372,181 @@ export default function HomeScreen() {
 
       {simMessage ? <GpsBanner message={simMessage} /> : null}
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={COPY.courseNamePlaceholder}
-        onPress={() => router.push('/search')}
-        style={styles.searchPill}>
-        <Text style={styles.searchPillText}>{COPY.courseNamePlaceholder}</Text>
-      </Pressable>
+      {active && activeSummary ? (
+        <View style={[styles.hero, heroFill(colors)]}>
+          {colors.flat ? null : <TopoRings color={colors.heroText} />}
+          <View style={styles.liveTag}>
+            <View style={styles.liveDot} />
+            <Text style={styles.liveTagText}>{COPY.roundInProgress.toUpperCase()}</Text>
+          </View>
+          <View>
+            <Text style={styles.heroTitle}>{active.courseName ?? 'Round'}</Text>
+            <Text style={styles.heroMeta}>
+              {active.teeName
+                ? `${formatTeeMeta({
+                    name: active.teeName,
+                    rating: active.teeRating,
+                    slope: active.teeSlope,
+                    totalYards: active.teeTotalYards,
+                  })} · `
+                : ''}
+              {`${active.holeCount} holes`}
+            </Text>
+          </View>
+          <View style={styles.liveBig}>
+            <View>
+              <Text style={styles.heroKicker}>HOLE</Text>
+              <Text style={styles.liveHole}>{activeSummary.currentHole ?? '—'}</Text>
+            </View>
+            <View style={styles.liveStats}>
+              <View style={styles.liveStat}>
+                <Text style={styles.liveStatValue}>{activeSummary.toParLabel ?? '—'}</Text>
+                <Text style={styles.heroMeta}>{`Thru ${activeSummary.thru}`}</Text>
+              </View>
+              <View style={styles.liveStat}>
+                <Text style={styles.liveStatValue}>{activeSummary.putts}</Text>
+                <Text style={styles.heroMeta}>Putts</Text>
+              </View>
+            </View>
+          </View>
+          <View style={styles.progress}>
+            {Array.from({ length: active.holeCount }, (_, i) => {
+              const number = i + 1;
+              const done = activeHoles.some((h) => h.number === number && h.score != null);
+              const current = number === activeSummary.currentHole && !done;
+              return (
+                <View
+                  key={number}
+                  style={[styles.progressSeg, done && styles.progressDone, current && styles.progressCurrent]}
+                />
+              );
+            })}
+          </View>
+          <View style={styles.liveActions}>
+            <BigButton
+              label={COPY.continueRound}
+              style={{ flex: 1.6 }}
+              onPress={() => router.push(playHrefAfterRoundStart(active.id))}
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Finish round"
+              onPress={() => {
+                finishRound(db, active.id);
+                bump();
+                router.push(`/round/${active.id}/summary`);
+              }}
+              style={({ pressed }) => [styles.glassButton, pressed && styles.pressed]}>
+              <Text style={styles.glassButtonText}>Finish</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : (
+        <View style={[styles.hero, heroFill(colors)]}>
+          {colors.flat ? null : <TopoRings color={colors.heroText} />}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={COPY.courseNamePlaceholder}
+            onPress={() => router.push('/search')}
+            style={({ pressed }) => [styles.searchPill, pressed && styles.pressed]}>
+            <Icon name="magnifyingglass" color={colors.heroText} size={18} glyph="⌕" />
+            <Text style={styles.searchPillText} numberOfLines={1}>
+              {COPY.courseNamePlaceholder}
+            </Text>
+          </Pressable>
+          <View style={styles.heroRow}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push('/search')}
+              style={({ pressed }) => [
+                styles.nearPill,
+                accentFill(colors),
+                !pressed && glow(colors),
+                pressed && styles.pressed,
+              ]}>
+              <Icon name="location.fill" color={colors.onAccent} size={15} glyph="◉" />
+              <Text style={styles.nearPillText}>Courses near you</Text>
+            </Pressable>
+            <Text style={styles.heroMeta}>Pull to refresh</Text>
+          </View>
+        </View>
+      )}
 
-      <BigButton
-        label="Courses near you"
-        variant="secondary"
-        onPress={() => router.push('/search')}
-      />
-      <Text style={styles.hint}>{COPY.nearbyHint}</Text>
       {picked ? (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>{picked.name}</Text>
-          {paintSourceLabel ? (
-            <Text testID="paint-source-chip" style={styles.paintSource}>
-              {paintSourceLabel}
-            </Text>
-          ) : null}
+          <View style={styles.courseRow}>
+            <View style={styles.thumb}>
+              <Icon name="flag.fill" color={colors.lime} size={22} glyph="⚑" />
+            </View>
+            <View style={styles.courseText}>
+              <Text style={styles.cardTitle}>{picked.name}</Text>
+              {teeLabel || needsTee ? (
+                <Text style={styles.cardMeta}>{teeLabel ? teeLabel : COPY.pickTee}</Text>
+              ) : null}
+              {paintSourceLabel || lastPlayedChip ? (
+                <View style={styles.chips}>
+                  {paintSourceLabel ? (
+                    <Text testID="paint-source-chip" style={[styles.chip, styles.chipAccent]}>
+                      {paintSourceLabel}
+                    </Text>
+                  ) : null}
+                  {lastPlayedChip ? <Text style={styles.chip}>{lastPlayedChip}</Text> : null}
+                </View>
+              ) : null}
+            </View>
+          </View>
           <PaintMissBanner notice={paintBanner} />
-          {teeLabel || needsTee ? (
-            <Text style={styles.cardMeta}>{teeLabel ? teeLabel : COPY.pickTee}</Text>
-          ) : null}
-          {formatLastPlayedChip(
-            lastPlayedAtByCourse[picked.id] ?? lastPlayedAtByCourse[picked.name],
-          ) ? (
-            <Text style={styles.chip}>
-              {formatLastPlayedChip(lastPlayedAtByCourse[picked.id] ?? lastPlayedAtByCourse[picked.name])}
-            </Text>
-          ) : null}
         </View>
       ) : null}
 
-      {active ? (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>{COPY.roundInProgress}</Text>
-          <Text style={styles.cardMeta}>
-            {active.courseName ?? 'Round'}
-            {active.teeName
-              ? ` · ${formatTeeMeta({
-                  name: active.teeName,
-                  rating: active.teeRating,
-                  slope: active.teeSlope,
-                  totalYards: active.teeTotalYards,
-                })}`
-              : ''}
-            {` · ${active.holeCount} holes`}
-          </Text>
-          <BigButton
-            label={COPY.continueRound}
-            onPress={() => router.push(playHrefAfterRoundStart(active.id))}
-          />
-          <BigButton
-            label="Finish round"
-            variant="ghost"
-            onPress={() => {
-              finishRound(db, active.id);
-              bump();
-              router.push(`/round/${active.id}/summary`);
-            }}
-          />
-        </View>
-      ) : (
-        <View style={{ gap: 10 }}>
-          <BigButton
-            label={
-              picked
-                ? `Start 18 at ${picked.name}${pickedTee ? ` · ${pickedTee.name}` : ''}`
-                : COPY.start18
-            }
+      {active ? null : (
+        <View style={styles.starts}>
+          <StartTile
+            holes={18}
+            primary
+            accessibilityLabel={startLabel(18)}
+            caption={pickedTee ? pickedTee.name : undefined}
             disabled={starting || !canStart}
             onPress={() => onStart(18)}
           />
-          <BigButton
-            label={
-              picked
-                ? `Start 9 at ${picked.name}${pickedTee ? ` · ${pickedTee.name}` : ''}`
-                : COPY.start9
-            }
-            variant="secondary"
+          <StartTile
+            holes={9}
+            accessibilityLabel={startLabel(9)}
             disabled={starting || !canStart}
             onPress={() => onStart(9)}
           />
         </View>
       )}
 
-      <BigButton
-        label={COPY.nerdOut}
-        variant="ghost"
-        onPress={() =>
-          router.push({
-            pathname: '/nerd-out',
-            params: active ? { roundId: active.id } : undefined,
-          })
-        }
-      />
-      <BigButton label={COPY.liveBoardWatch} variant="ghost" onPress={() => router.push('/board')} />
+      <View style={styles.quick}>
+        <QuickTile
+          icon="chart.bar.fill"
+          glyph="▮"
+          color={colors.lime}
+          label={COPY.nerdOut}
+          onPress={() =>
+            router.push({
+              pathname: '/nerd-out',
+              params: active ? { roundId: active.id } : undefined,
+            })
+          }
+        />
+        <QuickTile
+          icon="dot.radiowaves.left.and.right"
+          glyph="◎"
+          color={colors.accent2}
+          label="Live board"
+          accessibilityLabel={COPY.liveBoardWatch}
+          onPress={() => router.push('/board')}
+        />
+        <QuickTile
+          icon="bag.fill"
+          glyph="⛳"
+          color={colors.amber}
+          label="My bag"
+          onPress={() => router.push('/bag')}
+        />
+      </View>
 
       <Text style={styles.section}>{COPY.roundHistory}</Text>
       {rounds.length === 0 ? (
@@ -449,6 +556,16 @@ export default function HomeScreen() {
           const holes = listHoles(db, round.id);
           const scored = holes.filter((h) => h.score != null);
           const total = scored.reduce((sum, h) => sum + (h.score ?? 0), 0);
+          const summary = summarizeHomeRound(holes);
+          const tone = toParTone(summary.toPar);
+          const toneColor =
+            tone === 'good'
+              ? colors.good
+              : tone === 'warn'
+                ? colors.amber
+                : tone === 'bad'
+                  ? colors.red
+                  : colors.muted;
           const open = round.finishedAt == null;
           const paceLine = open
             ? null
@@ -513,26 +630,36 @@ export default function HomeScreen() {
                 ]);
               }}
               rowStyle={styles.row}>
-              {favorite ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={starred ? COPY.unfavorite : COPY.favorite}
-                  onPress={() => starHistoryRound(round)}
-                  style={styles.star}>
-                  <Text style={styles.starText}>{starred ? '★' : '☆'}</Text>
-                </Pressable>
-              ) : null}
+              <View
+                style={[
+                  styles.badge,
+                  { borderColor: tint(toneColor, 0.55), backgroundColor: tint(toneColor, 0.16) },
+                ]}>
+                <Text style={[styles.badgeText, { color: toneColor }]}>{summary.toParLabel ?? '—'}</Text>
+              </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.rowTitle}>{row.courseName}</Text>
+                <Text style={styles.rowTitle} numberOfLines={1}>
+                  {row.courseName}
+                </Text>
                 <Text style={styles.cardMeta}>
                   {row.date} · {row.tees}
                   {open ? ' · in progress' : ''}
                   {paceLine ? ` · ${paceLine}` : ''}
                 </Text>
+                <Text style={styles.relative}>{row.relative}</Text>
               </View>
               <View style={styles.scoreCol}>
-                <Text style={styles.chip}>{row.relative}</Text>
                 <Text style={styles.score}>{row.score}</Text>
+                {favorite ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={starred ? COPY.unfavorite : COPY.favorite}
+                    onPress={() => starHistoryRound(round)}
+                    hitSlop={10}
+                    style={styles.star}>
+                    <Text style={[styles.starText, !starred && styles.starOff]}>{starred ? '★' : '☆'}</Text>
+                  </Pressable>
+                ) : null}
               </View>
             </HistorySwipeRow>
           );
@@ -545,45 +672,119 @@ export default function HomeScreen() {
 function makeStyles(colors: ColorPalette) {
   return StyleSheet.create({
     homeBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-    title: { color: colors.cream, fontSize: type.title, fontWeight: '900', flex: 1 },
+    brand: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+    mark: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    title: { color: colors.cream, fontSize: 22, fontWeight: '900', letterSpacing: -0.4 },
     menuButton: {
+      minWidth: tapTarget,
       minHeight: tapTarget,
-      minWidth: 88,
-      paddingHorizontal: 14,
-      borderRadius: 14,
-      borderWidth: 2,
-      borderColor: colors.line,
+      borderRadius: 20,
       backgroundColor: colors.bgElevated,
+      ...cardBorder(colors),
       alignItems: 'center',
       justifyContent: 'center',
     },
-    menuButtonText: { color: colors.cream, fontWeight: '800', fontSize: type.button },
-    lede: { color: colors.muted, fontSize: type.body, lineHeight: 22 },
-    hint: { color: colors.muted, fontSize: type.tiny },
-    meta: { color: colors.cream, fontSize: type.meta, fontWeight: '700' },
-    searchPill: {
-      minHeight: 56,
-      borderWidth: 1,
-      borderColor: colors.line,
-      borderRadius: 14,
-      paddingHorizontal: 14,
-      backgroundColor: colors.bgElevated,
-      justifyContent: 'center',
+    pressed: { opacity: 0.9, transform: [{ scale: 0.97 }] },
+    greeting: { gap: 4, marginTop: 4 },
+    kicker: {
+      color: colors.muted,
+      fontSize: type.kicker,
+      fontWeight: '800',
+      letterSpacing: 1.6,
+      textTransform: 'uppercase',
     },
-    searchPillText: { color: colors.muted, fontSize: 18, fontWeight: '700' },
+    h1: { color: colors.cream, fontSize: 30, fontWeight: '900', letterSpacing: -0.8 },
+    lede: { color: colors.muted, fontSize: type.body, lineHeight: 22 },
+    hero: { borderRadius: 26, padding: 18, gap: 12, overflow: 'hidden' },
+    heroTitle: { color: colors.heroText, fontSize: 20, fontWeight: '800' },
+    heroMeta: { color: colors.heroText, opacity: 0.75, fontSize: type.meta },
+    heroKicker: {
+      color: colors.heroText,
+      opacity: 0.75,
+      fontSize: type.kicker,
+      fontWeight: '800',
+      letterSpacing: 1.4,
+    },
+    searchPill: {
+      minHeight: 54,
+      borderRadius: 16,
+      paddingHorizontal: 14,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      backgroundColor: colors.flat ? colors.bg : 'rgba(0,0,0,0.22)',
+      borderWidth: colors.flat ? 2 : 1,
+      borderColor: colors.flat ? colors.line : 'rgba(255,255,255,0.16)',
+    },
+    searchPillText: { color: colors.heroText, opacity: 0.85, fontSize: 16, fontWeight: '600', flex: 1 },
+    heroRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+    nearPill: {
+      minHeight: 44,
+      borderRadius: 999,
+      paddingLeft: 12,
+      paddingRight: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    nearPillText: { color: colors.onAccent, fontSize: 15, fontWeight: '800' },
+    liveTag: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    liveDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      backgroundColor: colors.lime,
+      borderWidth: 3,
+      borderColor: tint(colors.lime, 0.35),
+    },
+    liveTagText: { color: colors.heroText, fontSize: type.kicker, fontWeight: '800', letterSpacing: 1.6 },
+    liveBig: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
+    liveHole: { color: colors.heroText, fontSize: 56, fontWeight: '900', letterSpacing: -2, lineHeight: 58 },
+    liveStats: { flexDirection: 'row', gap: 18 },
+    liveStat: { alignItems: 'flex-end' },
+    liveStatValue: { color: colors.heroText, fontSize: 26, fontWeight: '900' },
+    progress: { flexDirection: 'row', gap: 3 },
+    progressSeg: {
+      flex: 1,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: colors.flat ? colors.muted : 'rgba(255,255,255,0.2)',
+      opacity: colors.flat ? 0.35 : 1,
+    },
+    progressDone: { backgroundColor: colors.lime, opacity: 1 },
+    progressCurrent: { backgroundColor: colors.heroText, opacity: 1 },
+    liveActions: { flexDirection: 'row', gap: 10 },
+    glassButton: {
+      flex: 1,
+      minHeight: tapTarget,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.flat ? colors.bg : 'rgba(255,255,255,0.12)',
+      borderWidth: colors.flat ? 2 : 1,
+      borderColor: colors.flat ? colors.line : 'rgba(255,255,255,0.22)',
+    },
+    glassButtonText: { color: colors.heroText, fontSize: 18, fontWeight: '800' },
     card: {
       backgroundColor: colors.bgElevated,
-      borderRadius: 16,
+      borderRadius: 22,
       padding: 14,
       gap: 10,
-      borderWidth: 1,
-      borderColor: colors.line,
+      ...cardBorder(colors),
     },
-    cardTitle: { color: colors.cream, fontSize: 20, fontWeight: '800' },
-    paintSource: { color: colors.muted, fontSize: type.tiny, fontWeight: '600' },
+    courseRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    courseText: { flex: 1, gap: 4 },
+    thumb: {
+      width: 54,
+      height: 54,
+      borderRadius: 16,
+      backgroundColor: colors.accentWash,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    cardTitle: { color: colors.cream, fontSize: 18, fontWeight: '800' },
     cardMeta: { color: colors.muted, fontSize: type.meta },
-    section: { color: colors.cream, fontSize: 18, fontWeight: '800', marginTop: 8 },
-    muted: { color: colors.muted, fontSize: type.body },
+    chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 2 },
     chip: {
       alignSelf: 'flex-start',
       color: colors.cream,
@@ -591,25 +792,39 @@ function makeStyles(colors: ColorPalette) {
       fontWeight: '800',
       backgroundColor: colors.accentWash,
       borderRadius: 999,
-      paddingHorizontal: 8,
+      paddingHorizontal: 9,
       paddingVertical: 4,
       overflow: 'hidden',
     },
+    chipAccent: { color: colors.flat ? colors.lime : colors.cream, backgroundColor: tint(colors.lime, 0.22) },
+    starts: { flexDirection: 'row', gap: 12 },
+    quick: { flexDirection: 'row', gap: 10 },
+    section: { color: colors.cream, fontSize: 19, fontWeight: '800', marginTop: 8 },
     row: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
       alignItems: 'center',
       backgroundColor: colors.bgElevated,
-      padding: 16,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
       borderRadius: 16,
       minHeight: tapTarget + 8,
-      gap: 8,
+      gap: 12,
     },
-    rowTitle: { color: colors.cream, fontSize: 18, fontWeight: '700' },
+    badge: {
+      width: 50,
+      height: 50,
+      borderRadius: 25,
+      borderWidth: 2,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    badgeText: { fontSize: 15, fontWeight: '900' },
+    rowTitle: { color: colors.cream, fontSize: 16, fontWeight: '800' },
+    relative: { color: colors.muted, fontSize: type.tiny, fontWeight: '700', marginTop: 2 },
     scoreCol: { alignItems: 'flex-end', gap: 2 },
-    relative: { color: colors.muted, fontSize: type.tiny, fontWeight: '800' },
-    score: { color: colors.cream, fontSize: 24, fontWeight: '900' },
-    star: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-    starText: { color: colors.lime, fontSize: 28, fontWeight: '900' },
+    score: { color: colors.cream, fontSize: 26, fontWeight: '900', letterSpacing: -0.5 },
+    star: { minWidth: 32, minHeight: 28, alignItems: 'flex-end', justifyContent: 'center' },
+    starText: { color: colors.lime, fontSize: 20, fontWeight: '900' },
+    starOff: { color: colors.muted },
   });
 }

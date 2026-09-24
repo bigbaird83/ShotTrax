@@ -5,6 +5,7 @@ export const SHOTTRAXX_BRAND = 'ShotTraxx™' as const;
 
 export const COPY = {
   homeLede: 'Find a course, pick your tee, start the round.',
+  homeHeroTitle: 'Ready to tee off?',
   home: 'Home',
   back: 'Back',
   nearbyHint: 'Courses near you — pull to refresh.',

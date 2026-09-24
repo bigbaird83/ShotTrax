@@ -1,6 +1,16 @@
 /** Small Settings preset set. No custom color picker. */
 
-export const COLOR_THEME_IDS = ['dark-lime', 'light', 'high-contrast'] as const;
+export const COLOR_THEME_IDS = [
+  'dark-lime',
+  'midnight',
+  'sunset',
+  'clubhouse',
+  'carbon',
+  'links',
+  'glacier',
+  'light',
+  'high-contrast',
+] as const;
 export type ColorThemeId = (typeof COLOR_THEME_IDS)[number];
 
 export const DEFAULT_COLOR_THEME: ColorThemeId = 'dark-lime';
@@ -9,12 +19,18 @@ export const COLOR_THEME_SETTING_KEY = 'color_theme';
 
 export const COLOR_THEME_LABELS: Record<ColorThemeId, string> = {
   'dark-lime': 'Dark lime',
+  midnight: 'Midnight',
+  sunset: 'Sunset',
+  clubhouse: 'Clubhouse',
+  carbon: 'Carbon',
+  links: 'Links',
+  glacier: 'Glacier',
   light: 'Light',
   'high-contrast': 'High contrast',
 };
 
 export function isColorThemeId(value: string | null | undefined): value is ColorThemeId {
-  return value === 'dark-lime' || value === 'light' || value === 'high-contrast';
+  return (COLOR_THEME_IDS as readonly string[]).includes(value ?? '');
 }
 
 export function parseColorThemeId(raw: string | null | undefined): ColorThemeId {

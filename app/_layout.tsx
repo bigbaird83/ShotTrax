@@ -24,9 +24,9 @@ function ThemedNavigation() {
   const colors = useColors();
   const theme = useMemo(
     () => ({
-      ...(themeId === 'light' ? DefaultTheme : DarkTheme),
+      ...(colors.statusBar === 'dark' ? DefaultTheme : DarkTheme),
       colors: {
-        ...(themeId === 'light' ? DefaultTheme.colors : DarkTheme.colors),
+        ...(colors.statusBar === 'dark' ? DefaultTheme.colors : DarkTheme.colors),
         background: colors.bg,
         card: colors.bg,
         primary: colors.cream,
