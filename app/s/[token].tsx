@@ -20,7 +20,7 @@ import {
   type SpectatorPayload,
 } from '@/src/domain/spectator';
 import { COPY } from '@/src/domain/playerCopy';
-import { getSharedPayload, getShareSyncUrl } from '@/src/services/shareSync';
+import { getShareSyncUrl, loadSharedPayload } from '@/src/services/shareSync';
 import { Screen } from '@/src/ui/Screen';
 import { useColors } from '@/src/ui/ColorThemeProvider';
 import { type, type ColorPalette } from '@/src/ui/theme';
@@ -63,6 +63,9 @@ export default function SpectatorScreen() {
     [fromUrl, code, snapshotRaw],
   );
   const [payload, setPayload] = useState<SpectatorPayload | null>(fromUrl ?? fromSnapshot);
+  // `?h=` / `?p=` is first paint only; the share host (or this phone's own row) replaces it.
+  const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const hasHost = getShareSyncUrl() != null;
 
@@ -70,17 +73,33 @@ export default function SpectatorScreen() {
     setPayload(fromUrl ?? fromSnapshot);
   }, [fromUrl, fromSnapshot]);
 
-  // Same phone reads the local share_boards row; other phones need the share host.
+  // Same phone reads the local share_boards row; other phones GET the share host
+  // with the same normalized code the player PUT.
   useEffect(() => {
     if (!code) return undefined;
     let live = true;
-    const apply = (next: SpectatorPayload | null) => {
-      if (live && next) setPayload(next);
-    };
+    let loaded = false;
+    setLoading(true);
+    setLoadFailed(false);
     const refresh = () => {
       setNowMs(Date.now());
-      apply(getShareBoard(db, code));
-      void getSharedPayload(code).then(apply);
+      const local = getShareBoard(db, code);
+      if (local) {
+        loaded = true;
+        setPayload(local);
+        setLoadFailed(false);
+      }
+      void loadSharedPayload(code).then((result) => {
+        if (!live) return;
+        if (result.status === 'ok') {
+          loaded = true;
+          setPayload(result.payload);
+          setLoadFailed(false);
+        } else if (!loaded) {
+          setLoadFailed(true);
+        }
+        setLoading(false);
+      });
     };
     refresh();
     const id = setInterval(refresh, LIVE_BOARD_POLL_MS);
@@ -94,7 +113,12 @@ export default function SpectatorScreen() {
     return (
       <Screen>
         <Text style={styles.kicker}>{COPY.spectatorTitle}</Text>
-        <Text style={styles.muted}>{COPY.spectatorEmpty}</Text>
+        {loading ? (
+          <Text style={styles.muted}>{COPY.spectatorLoading}</Text>
+        ) : (
+          <Text style={styles.warn}>{COPY.spectatorLoadFail}</Text>
+        )}
+        {code ? <Text style={styles.hint}>{`${COPY.liveBoardCode} ${code}`}</Text> : null}
         <Text style={styles.hint}>{COPY.spectatorNeedsNoLocation}</Text>
         <Text style={styles.hint}>{hasHost ? COPY.liveFollowRefresh : COPY.liveBoardNeedsHost}</Text>
       </Screen>
@@ -112,6 +136,7 @@ export default function SpectatorScreen() {
     <Screen>
       <Text style={styles.kicker}>{live || !payload.finished ? COPY.spectatorLive : COPY.spectatorFinished}</Text>
       <Text style={styles.title}>{payload.courseName ?? 'Round'}</Text>
+      {loadFailed ? <Text style={styles.warn}>{COPY.spectatorLoadFail}</Text> : null}
       <View style={styles.card}>
         <Text style={styles.total}>
           {totals.total == null ? '—' : String(totals.total)}
@@ -160,6 +185,7 @@ function makeStyles(colors: ColorPalette) {
     title: { color: colors.cream, fontSize: type.title, fontWeight: '900', marginTop: 6 },
     hint: { color: colors.muted, fontSize: type.tiny, marginTop: 8 },
     muted: { color: colors.muted, fontSize: type.body, marginTop: 6 },
+    warn: { color: colors.orange, fontSize: type.body, fontWeight: '700', marginTop: 6 },
     card: {
       marginTop: 16,
       padding: 16,

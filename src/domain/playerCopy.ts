@@ -72,6 +72,8 @@ export const COPY = {
   spectatorFinished: 'Finished',
   spectatorNeedsNoLocation: 'Spectator view — no location needed.',
   spectatorEmpty: 'Nothing to show yet.',
+  spectatorLoading: 'Loading board…',
+  spectatorLoadFail: "Couldn't load this board",
   longPressGreen: 'Long-press to set the green',
   toGreen: 'To green',
   mark: 'Mark',

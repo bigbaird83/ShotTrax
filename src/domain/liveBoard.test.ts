@@ -57,3 +57,14 @@ test('live board is scores + a code — no map, GPS, or spectator token', () => 
   assert.match(spectator, /COPY\.liveBoardPrivacy/);
   assert.doesNotMatch(spectator, /MapView|react-native-maps|getCurrentFix|expo-location/);
 });
+
+test('typed code, spaced code, and pasted link share one lookup key', () => {
+  assert.equal(normalizeShareBoardCode('BK3MCQ'), 'BK3MCQ');
+  assert.equal(normalizeShareBoardCode('  bk3mcq\n'), 'BK3MCQ');
+  assert.equal(normalizeShareBoardCode('bk3 mcq'), 'BK3MCQ');
+  assert.equal(normalizeShareBoardCode('BK3-MCQ'), 'BK3MCQ');
+  assert.equal(normalizeShareBoardCode('shottrax:///s/BK3MCQ?h=4.4.1.4'), 'BK3MCQ');
+  assert.equal(normalizeShareBoardCode('shottrax:///s/bk3mcq'), 'BK3MCQ');
+  assert.equal(normalizeShareBoardCode('   '), null);
+  assert.equal(normalizeShareBoardCode(null), null);
+});

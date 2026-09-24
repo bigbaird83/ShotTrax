@@ -1,6 +1,6 @@
 import Constants from 'expo-constants';
 import type { SpectatorPayload } from '../domain/spectator';
-import { parseSpectatorPayload } from '../domain/spectator';
+import { fetchSharedBoard, putSharedBoard, type SharedBoardFetch } from '../domain/shareBoardSync';
 
 /**
  * Optional JSON PUT/GET store for the same share token.
@@ -27,35 +27,27 @@ export async function putSharedPayload(
   payload: SpectatorPayload,
   deps: { fetch?: typeof fetch; baseUrl?: string | null } = {},
 ): Promise<boolean> {
-  const base = deps.baseUrl === undefined ? getShareSyncUrl() : deps.baseUrl;
-  if (!base || !token.trim()) return false;
-  const fetchImpl = deps.fetch ?? fetch;
-  try {
-    const res = await fetchImpl(`${base}/${encodeURIComponent(token)}`, {
-      method: 'PUT',
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
+  return putSharedBoard(token, payload, {
+    fetch: deps.fetch ?? fetch,
+    baseUrl: deps.baseUrl === undefined ? getShareSyncUrl() : deps.baseUrl,
+  });
+}
+
+/** Board lookup with the miss / error distinction the spectator screen needs. */
+export async function loadSharedPayload(
+  token: string,
+  deps: { fetch?: typeof fetch; baseUrl?: string | null } = {},
+): Promise<SharedBoardFetch> {
+  return fetchSharedBoard(token, {
+    fetch: deps.fetch ?? fetch,
+    baseUrl: deps.baseUrl === undefined ? getShareSyncUrl() : deps.baseUrl,
+  });
 }
 
 export async function getSharedPayload(
   token: string,
   deps: { fetch?: typeof fetch; baseUrl?: string | null } = {},
 ): Promise<SpectatorPayload | null> {
-  const base = deps.baseUrl === undefined ? getShareSyncUrl() : deps.baseUrl;
-  if (!base || !token.trim()) return null;
-  const fetchImpl = deps.fetch ?? fetch;
-  try {
-    const res = await fetchImpl(`${base}/${encodeURIComponent(token)}`, {
-      headers: { Accept: 'application/json' },
-    });
-    if (!res.ok) return null;
-    return parseSpectatorPayload(await res.json());
-  } catch {
-    return null;
-  }
+  const result = await loadSharedPayload(token, deps);
+  return result.status === 'ok' ? result.payload : null;
 }
