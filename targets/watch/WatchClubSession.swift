@@ -82,6 +82,15 @@ struct WatchHomeState {
   var liveCourseName: String?
   var liveCourseId: String?
   var loading = false
+  /// True while the last homeRequest is on `transferUserInfo` because the phone
+  /// is not interactively reachable. Loud "Queued · will sync" — not a spinner
+  /// and not Phone unavailable.
+  var queued = false
+
+  var refreshLabel: String {
+    if queued { return "Queued · will sync" }
+    return loading ? "Updating…" : "Refresh"
+  }
 
   /// Favorites, each id once.
   var favoriteRows: [HomeCourse] {
@@ -159,6 +168,12 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   private var pendingFavorites: [String: (starred: Bool, at: Date)] = [:]
   private let homeKey = "watchHomeJSON"
   private let pendingFavoriteTTL: TimeInterval = 30
+  /// Wrist-raise / reachability refresh. One transfer is enough; do not queue
+  /// another (each delivery can wake the phone) while this window is open.
+  private var lastAutomaticHomeAt = Date.distantPast
+  private let automaticHomeInterval: TimeInterval = 60
+  /// Collapse the launch burst (activate + Search nearby appear) into one transfer.
+  private let homeRequestCoalesce: TimeInterval = 2
   private var receivedClubList = false
   /// Last complication snapshot written to the app group. Reload only when it changes.
   private var complicationStamp = ""
@@ -212,12 +227,23 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   /// Ask the phone for a fresh Watch Home. Cached rows stay up meanwhile.
-  /// A pocketed phone is often not `isReachable` while `transferUserInfo` still
-  /// delivers, same as a club mark. Loading stays until `watchHome` arrives
-  /// (live reply or phone push). A missed interactive reply does not fail the refresh.
-  func requestHome() {
+  /// A pocketed / backgrounded phone is often not `isReachable` while
+  /// `transferUserInfo` still delivers, same path as `sendReliableQueued`.
+  /// Loading stays until `watchHome` arrives (live reply or phone push).
+  /// A missed interactive reply does not fail the refresh: the wrist shows
+  /// Queued · will sync and keeps waiting on the transfer.
+  /// `interactive` is false for wrist-raise and reachability flaps so those
+  /// do not `sendMessage` (that wakes the phone). The transfer still goes out.
+  func requestHome(interactive: Bool = true) {
     guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
     let session = WCSession.default
+    // A pocketed phone already has a transfer in flight. Do not queue another
+    // wake for the launch burst. A later Refresh still sends.
+    if home.queued && home.loading && !session.isReachable &&
+       Date().timeIntervalSince(lastAutomaticHomeAt) < homeRequestCoalesce {
+      return
+    }
+    lastAutomaticHomeAt = Date()
     home.loading = true
     var payload: [String: Any] = [
       "type": "homeRequest",
@@ -226,19 +252,35 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     attachHomeFix(&payload)
     session.transferUserInfo(payload)
     if session.isReachable {
-      session.sendMessage(payload, replyHandler: { [weak self] reply in
-        DispatchQueue.main.async {
-          guard let self else { return }
-          if let fresh = reply["home"] as? [String: Any] {
-            self.applyWatchHome(fresh)
+      home.queued = false
+      if interactive {
+        session.sendMessage(payload, replyHandler: { [weak self] reply in
+          DispatchQueue.main.async {
+            guard let self else { return }
+            if let fresh = reply["home"] as? [String: Any] {
+              self.applyWatchHome(fresh)
+            }
           }
-        }
-      }, errorHandler: nil)
+        }, errorHandler: { [weak self] _ in
+          DispatchQueue.main.async {
+            // Transfer is already queued. Stay loud — do not mark unavailable.
+            self?.home.queued = true
+          }
+        })
+      }
+    } else {
+      home.queued = true
     }
   }
 
+  /// Wrist raise and reachability changes. Prefer the transfer already in
+  /// flight over another live wake. A new transfer waits out the interval
+  /// so a flapping session does not wake the phone on every raise.
   func refreshHomeIfShowing() {
-    if showsHome { requestHome() }
+    guard showsHome else { return }
+    if home.loading { return }
+    if Date().timeIntervalSince(lastAutomaticHomeAt) < automaticHomeInterval { return }
+    requestHome(interactive: false)
   }
 
   /// Nearby search point. Watch GPS when fresh; otherwise the phone uses its own
@@ -830,9 +872,10 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       next.liveCourseName = live["courseName"] as? String
       next.liveCourseId = live["courseId"] as? String
     }
-    // A delivered home ends Finding courses… / Updating…. Never keep the spinner
-    // just because an older request was still in flight.
+    // A delivered home ends Finding courses… / Updating… / Queued · will sync.
+    // Never keep the spinner just because an older request was still in flight.
     next.loading = false
+    next.queued = false
     let now = Date()
     for (id, pending) in pendingFavorites {
       let phoneHas = next.isFavorite(id)

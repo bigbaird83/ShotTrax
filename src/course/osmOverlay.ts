@@ -7,7 +7,20 @@ import type { OsmFeature, OsmGolfKind, OsmOverlay, OsmOverlayHook, OsmOverlayQue
 export const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
 const DEFAULT_HOLE_RADIUS_M = 1000;
 const DEFAULT_COURSE_RADIUS_M = 1200;
-const OSM_KINDS: OsmGolfKind[] = ['green', 'fairway', 'tee', 'hole'];
+/** Scorecard surfaces. Hole framing still uses only these. */
+const PLAY_KINDS = new Set<OsmGolfKind>(['green', 'fairway', 'tee', 'hole']);
+/**
+ * Hazard and cart-path tags with real OSM volume (taginfo, 2026-09-24):
+ * bunker ~719k, cartpath ~224k (about a third also `highway=service`),
+ * water_hazard ~54k, lateral_water_hazard ~18k.
+ * Not queried: `golf=hazard` (~13), bare `highway=service`, bare `natural=water`.
+ */
+const AREA_HAZARD_KINDS = new Set<OsmGolfKind>(['bunker', 'water_hazard', 'lateral_water_hazard']);
+const OSM_KINDS = new Set<OsmGolfKind>([
+  ...PLAY_KINDS,
+  ...AREA_HAZARD_KINDS,
+  'cartpath',
+]);
 
 export type OsmOverlayDeps = {
   fetch?: typeof fetch;
@@ -31,7 +44,27 @@ function asFiniteNumber(value: unknown): number | null {
 
 function parseOsmKind(tags: Record<string, unknown> | null): OsmGolfKind | null {
   const golf = tags && typeof tags.golf === 'string' ? tags.golf.trim().toLowerCase() : '';
-  return OSM_KINDS.includes(golf as OsmGolfKind) ? (golf as OsmGolfKind) : null;
+  // `golf=cartpath` already covers ways that are also `highway=service`.
+  // A service road or pond with no golf overlay tag is not a cart path or hazard.
+  return OSM_KINDS.has(golf as OsmGolfKind) ? (golf as OsmGolfKind) : null;
+}
+
+function coordinatesClosed(coordinates: LatLng[]): boolean {
+  if (coordinates.length < 4) return false;
+  const first = coordinates[0];
+  const last = coordinates[coordinates.length - 1];
+  return Math.abs(first.lat - last.lat) < 1e-7 && Math.abs(first.lng - last.lng) < 1e-7;
+}
+
+/**
+ * Hole lines and cart paths are strokes. Hazard areas fill only when OSM closed the ring.
+ * Open hazard ways stay lines so the map does not invent a closing edge.
+ * Green / fairway / tee stay polygons, including short rings, as before.
+ */
+export function osmFeatureRendersAsLine(feature: Pick<OsmFeature, 'kind' | 'coordinates'>): boolean {
+  if (feature.kind === 'hole' || feature.kind === 'cartpath') return true;
+  if (AREA_HAZARD_KINDS.has(feature.kind)) return !coordinatesClosed(feature.coordinates);
+  return false;
 }
 
 function parseOsmHoleNumber(tags: Record<string, unknown> | null): number | null {
@@ -99,10 +132,19 @@ export function parseOverpassOverlay(json: unknown): OsmOverlay | null {
 
 export function featuresForHole(overlay: OsmOverlay | null, holeNumber: number): OsmFeature[] {
   if (!overlay) return [];
-  const numbered = overlay.features.filter((f) => f.holeNumber === holeNumber);
-  if (numbered.length > 0) return numbered;
-  // Unmapped hole refs: show unnumbered features in the query bbox, never invent.
-  return overlay.features.filter((f) => f.holeNumber == null);
+  const play = overlay.features.filter((feature) => PLAY_KINDS.has(feature.kind));
+  const numberedPlay = play.filter((feature) => feature.holeNumber === holeNumber);
+  // Unmapped hole refs: show unnumbered play surfaces in the query bbox, never invent.
+  const playForHole =
+    numberedPlay.length > 0 ? numberedPlay : play.filter((feature) => feature.holeNumber == null);
+  // Bunkers and cart paths are almost never hole-numbered. Keep them when OSM sent them
+  // for this hole or with no hole ref. A ref for a different hole stays off this hole.
+  const hazards = overlay.features.filter(
+    (feature) =>
+      !PLAY_KINDS.has(feature.kind) &&
+      (feature.holeNumber === holeNumber || feature.holeNumber == null),
+  );
+  return [...playForHole, ...hazards];
 }
 
 /** OSM tee-box centroid. Missing tee polygon → null, never invented. */
@@ -199,17 +241,25 @@ function overpassQuery(location: LatLng, radiusM: number): string {
   way["golf"="fairway"](around:${r},${lat},${lng});
   way["golf"="tee"](around:${r},${lat},${lng});
   way["golf"="hole"](around:${r},${lat},${lng});
+  way["golf"="bunker"](around:${r},${lat},${lng});
+  way["golf"="water_hazard"](around:${r},${lat},${lng});
+  way["golf"="lateral_water_hazard"](around:${r},${lat},${lng});
+  way["golf"="cartpath"](around:${r},${lat},${lng});
   relation["golf"="green"](around:${r},${lat},${lng});
   relation["golf"="fairway"](around:${r},${lat},${lng});
   relation["golf"="tee"](around:${r},${lat},${lng});
+  relation["golf"="bunker"](around:${r},${lat},${lng});
+  relation["golf"="water_hazard"](around:${r},${lat},${lng});
+  relation["golf"="lateral_water_hazard"](around:${r},${lat},${lng});
 );
 out geom;`;
 }
 
 /**
- * OSM course overlay (golf=green/fairway/tee/hole).
+ * OSM course overlay (golf=green/fairway/tee/hole, plus bunker, water hazard, and cartpath).
  * Returns null when there is no location, the query fails, or OSM has nothing —
- * never invents GeoJSON. OSM par tags are ignored (par comes from course API only).
+ * never invents GeoJSON. Bare service roads and untagged water are not overlays.
+ * OSM par tags are ignored (par comes from course API only).
  */
 export async function fetchOsmOverlay(
   query: OsmOverlayQuery | string,
