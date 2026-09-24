@@ -1,0 +1,84 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>ShotTraxx Icon</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Liberation Sans",sans-serif;background:#111;color:#eee}
+.board{padding:56px 64px;display:inline-block}
+h1{font-size:40px;margin-bottom:8px}.sub{font-size:18px;opacity:.7;margin-bottom:36px;max-width:1150px;line-height:1.45}
+.row{display:flex;gap:56px;align-items:flex-start}
+.opt{display:flex;flex-direction:column;align-items:center;gap:18px}
+.opt .nm{font-size:22px;font-weight:700}.opt .d{font-size:15px;opacity:.65;max-width:300px;text-align:center;line-height:1.4}
+.big{width:300px;height:300px;border-radius:66px;overflow:hidden;box-shadow:0 20px 40px rgba(0,0,0,.5)}
+.big svg,.big img{width:100%;height:100%;display:block}
+.sizes{display:flex;gap:18px;align-items:flex-end}
+.sizes div{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;opacity:.9}
+.sizes i{display:block;overflow:hidden}
+.sizes svg,.sizes img{width:100%;height:100%;display:block}
+/* home screen */
+.home{position:relative;width:430px;height:600px;border-radius:40px;overflow:hidden;background:
+ radial-gradient(260px 200px at 20% 20%, #6b7f96, transparent),radial-gradient(300px 260px at 90% 70%, #8a5a4a, transparent),radial-gradient(300px 240px at 30% 90%, #4d6b4b, transparent),#3b3f45;}
+.home .grid{position:absolute;inset:40px 26px;display:grid;grid-template-columns:repeat(4,1fr);row-gap:26px;justify-items:center;align-content:start}
+.app{display:flex;flex-direction:column;align-items:center;gap:6px;width:80px}
+.app i{width:64px;height:64px;border-radius:15px;overflow:hidden;display:block;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+.app i svg,.app i img{width:100%;height:100%;display:block}
+.app span{font-size:12px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.5);white-space:nowrap}
+.blank{background:linear-gradient(135deg,rgba(255,255,255,.35),rgba(255,255,255,.12))}
+.cap{text-align:center;font-weight:700;font-size:18px;margin-top:14px}
+.crop{background:url(phone.jpg) no-repeat;}
+</style></head><body><div id="root"></div>
+<script>
+let uid=0;
+function icon(v){
+  const id='g'+(uid++);
+  const dark = v!=='lime';
+  const bgA = {night:'#1E5A2E',lime:'#D6FF4A',ink:'#16241C'}[v];
+  const bgB = {night:'#04110A',lime:'#6EE7A0',ink:'#050807'}[v];
+  const arc = {night:'#C8F542',lime:'#0B1A12',ink:'#C8F542'}[v];
+  const flag = {night:'#FFFFFF',lime:'#0B1A12',ink:'#FFFFFF'}[v];
+  const mound1 = {night:'#5DB33A',lime:'#0B1A12',ink:'#C8F542'}[v];
+  const mound2 = {night:'#1F5A1E',lime:'#0B1A12',ink:'#6E9E1E'}[v];
+  const glow = dark ? `<filter id="${id}f" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="14" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>` : `<filter id="${id}f"><feOffset dy="0"/></filter>`;
+  const cx=512, cy=735;
+  const arcPath=(r)=>{const a1=Math.PI*1.12,a2=Math.PI*1.88;return `M ${cx+r*Math.cos(a1)} ${cy+r*Math.sin(a1)} A ${r} ${r} 0 0 1 ${cx+r*Math.cos(a2)} ${cy+r*Math.sin(a2)}`};
+  return `<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg"><defs>
+    <radialGradient id="${id}bg" cx="50%" cy="38%" r="75%"><stop offset="0" stop-color="${bgA}"/><stop offset="1" stop-color="${bgB}"/></radialGradient>
+    <linearGradient id="${id}m" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${mound1}"/><stop offset="1" stop-color="${mound2}"/></linearGradient>
+    ${glow}</defs>
+    <rect width="1024" height="1024" fill="url(#${id}bg)"/>
+    ${v==='ink'?`<rect x="0" y="0" width="1024" height="1024" fill="none" stroke="#C8F542" stroke-opacity=".0"/>`:''}
+    <g filter="url(#${id}f)" fill="none" stroke="${arc}" stroke-linecap="round">
+      <path d="${arcPath(390)}" stroke-width="46" opacity="${dark?.55:.45}"/>
+      <path d="${arcPath(290)}" stroke-width="52" opacity="${dark?.8:.7}"/>
+      <path d="${arcPath(190)}" stroke-width="58"/>
+    </g>
+    <ellipse cx="${cx}" cy="${cy+18}" rx="330" ry="78" fill="url(#${id}m)"/>
+    ${dark?`<ellipse cx="${cx}" cy="${cy-2}" rx="250" ry="30" fill="#ffffff" opacity=".10"/>`:''}
+    <rect x="${cx-15}" y="205" width="30" height="${cy-205+6}" rx="15" fill="${flag}"/>
+    <path d="M ${cx+10} 214 C ${cx+110} 190, ${cx+170} 260, ${cx+300} 250 C ${cx+230} 300, ${cx+230} 350, ${cx+270} 400 C ${cx+160} 395, ${cx+100} 340, ${cx+10} 368 Z" fill="${flag}"/>
+    <circle cx="${cx}" cy="203" r="22" fill="${flag}"/>
+  </svg>`;
+}
+const cur = (w,r)=>`<i style="width:${w}px;height:${w}px;border-radius:${r}px"><div class="crop" style="width:100%;height:100%;background-size:${1320*w/196}px auto;background-position:${-564*w/196}px ${-714*w/196}px"></div></i>`;
+const ic = (v,w,r)=> v==='current'?cur(w,r):`<i style="width:${w}px;height:${w}px;border-radius:${r}px">${icon(v)}</i>`;
+const home = (v)=>`<div class="home"><div class="grid">
+  ${['Photos','Maps','Weather','Mail','Camera','Notes',null,'Clock','Music','Wallet','Settings','News'].map(n=> n===null
+   ? `<div class="app">${ic(v,64,15)}<span>ShotTraxx™</span></div>`
+   : `<div class="app"><i class="blank"></i><span>${n}</span></div>`).join('')}
+</div></div>`;
+const OPTS=[
+ ['night','A · Night green (recommended)','Same colors as today. The flag, green and arcs fill the whole square, with a bright glow so they read at a glance.'],
+ ['lime','B · Lime','Inverted: dark flag and arcs on a bright lime-to-mint gradient. Stands out most on any wallpaper.'],
+ ['ink','C · Ink','Near-black with a lime green and lime arcs. Closest to the current look, just much bigger.'],
+];
+document.getElementById('root').innerHTML = `
+<section id="options" class="board"><h1>New app icon — three options</h1>
+<div class="sub">No words on the icon: at home-screen size (about 60 points) “Shot Traxx” text can’t be read, and iPhone already prints the name underneath. The flag, green and arcs now fill the square instead of a small area in the middle.</div>
+<div class="row">${OPTS.map(([v,n,d])=>`<div class="opt"><div class="big">${icon(v)}</div><div class="nm">${n}</div><div class="d">${d}</div>
+<div class="sizes">${[[60,14,'Home'],[40,9,'Spotlight'],[29,7,'Settings']].map(([w,r,l])=>`<div>${ic(v,w,r)}<span>${l}</span></div>`).join('')}</div></div>`).join('')}</div></section>
+<section id="homescreen" class="board"><h1>On a home screen, actual size</h1>
+<div class="sub">Today’s icon (cropped from your screenshot) next to each option, all at iPhone home-screen size.</div>
+<div class="row">${[['current','Today'],['night','A · Night green'],['lime','B · Lime'],['ink','C · Ink']].map(([v,c])=>`<div>${home(v)}<div class="cap">${c}</div></div>`).join('')}</div></section>
+<section id="export-night" style="width:1024px;height:1024px">${icon('night')}</section>
+<section id="export-lime" style="width:1024px;height:1024px">${icon('lime')}</section>
+<section id="export-ink" style="width:1024px;height:1024px">${icon('ink')}</section>`;
+</script></body></html>
