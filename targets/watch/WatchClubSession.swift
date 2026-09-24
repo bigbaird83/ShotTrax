@@ -191,31 +191,29 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   /// Ask the phone for a fresh Watch Home. Cached rows stay up meanwhile.
+  /// A pocketed phone is often not `isReachable` while `transferUserInfo` still
+  /// delivers, same as a club mark. Loading stays until `watchHome` arrives
+  /// (live reply or phone push). A missed interactive reply does not fail the refresh.
   func requestHome() {
     guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
     let session = WCSession.default
-    guard session.isReachable else {
-      home.loading = false
-      return
-    }
     home.loading = true
     var payload: [String: Any] = [
       "type": "homeRequest",
       "at": isoNow(),
     ]
     attachHomeFix(&payload)
-    session.sendMessage(payload, replyHandler: { [weak self] reply in
-      DispatchQueue.main.async {
-        self?.home.loading = false
-        if let fresh = reply["home"] as? [String: Any] {
-          self?.applyWatchHome(fresh)
+    session.transferUserInfo(payload)
+    if session.isReachable {
+      session.sendMessage(payload, replyHandler: { [weak self] reply in
+        DispatchQueue.main.async {
+          guard let self else { return }
+          if let fresh = reply["home"] as? [String: Any] {
+            self.applyWatchHome(fresh)
+          }
         }
-      }
-    }, errorHandler: { [weak self] _ in
-      DispatchQueue.main.async {
-        self?.home.loading = false
-      }
-    })
+      }, errorHandler: nil)
+    }
   }
 
   func refreshHomeIfShowing() {
@@ -577,6 +575,10 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       sendClubMarkReliable(payload)
       return
     }
+    if isHomeCourseStart(payload) {
+      sendHomeCourseReliable(payload)
+      return
+    }
     guard WCSession.isSupported() else {
       failUnavailable(payload, keepPending: keepPending)
       return
@@ -611,6 +613,21 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   /// TF 53 D: puttPick must not depend on isReachable / one pendingClubPick slot.
   /// transferUserInfo queues in order; sendMessage is extra when the phone is awake.
   private func sendPuttPickReliable(_ payload: [String: Any]) {
+    sendReliableQueued(payload)
+  }
+
+  /// Course pick, round start, and Home/Back must not freeze on PHONE_UNAVAILABLE
+  /// when the phone is only background-reachable. Same queue as a club mark.
+  private func isHomeCourseStart(_ payload: [String: Any]) -> Bool {
+    switch payload["type"] as? String {
+    case "nearbyCoursePick", "startRound", "clubNav":
+      return true
+    default:
+      return false
+    }
+  }
+
+  private func sendHomeCourseReliable(_ payload: [String: Any]) {
     sendReliableQueued(payload)
   }
 
@@ -792,7 +809,9 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       next.liveCourseName = live["courseName"] as? String
       next.liveCourseId = live["courseId"] as? String
     }
-    next.loading = home.loading
+    // A delivered home ends Finding courses… / Updating…. Never keep the spinner
+    // just because an older request was still in flight.
+    next.loading = false
     let now = Date()
     for (id, pending) in pendingFavorites {
       let phoneHas = next.isFavorite(id)
@@ -1054,7 +1073,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     guard !batch.isEmpty else { return }
     sending = false
     for payload in batch {
-      if isPuttPick(payload) || isClubPick(payload) {
+      if isPuttPick(payload) || isClubPick(payload) || isHomeCourseStart(payload) {
         sendReliableQueued(payload, transfer: false)
       } else {
         sendPick(payload, keepPending: true)
