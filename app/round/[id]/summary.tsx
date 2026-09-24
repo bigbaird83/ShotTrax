@@ -163,7 +163,10 @@ export default function RoundSummaryScreen() {
           variant="secondary"
           onPress={() => {
             const anchor = findNodeHandle(shareAnchorRef.current);
-            void toastFromShareAttempt(() => shareRoundSnapshot(db, id, { anchor })).then((fail) => {
+            void toastFromShareAttempt(
+              () => shareRoundSnapshot(db, id, { anchor }),
+              COPY.shareScorecardFail,
+            ).then((fail) => {
               if (fail) setToast(fail);
             });
           }}

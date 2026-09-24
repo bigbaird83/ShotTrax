@@ -20,6 +20,7 @@ import {
   shareFailToast,
   shareMessageIncludesPayloadQuery,
   shareScorecardTotal,
+  scorecardImageShareContent,
   shareSheetContent,
   shareSheetPassesUrl,
   shouldOpenShareSheet,
@@ -329,6 +330,42 @@ test('Menu Share toasts Couldn’t open share when Share.share fails — never a
   assert.doesNotMatch(share, /queryParams: \{ p/);
   assert.doesNotMatch(share, /lat|lng/);
   assert.doesNotMatch(menuShare, /getCurrentFix/);
+});
+
+test('Scorecard Share sends the image only — no message, no link, no text fallback', async () => {
+  assert.deepEqual(scorecardImageShareContent('file:///tmp/shottrax-scorecard.png'), {
+    url: 'file:///tmp/shottrax-scorecard.png',
+  });
+  assert.equal(scorecardImageShareContent(null), null);
+  assert.equal(scorecardImageShareContent(''), null);
+  assert.equal(scorecardImageShareContent('shottrax:///s/x?p=abc'), null);
+  assert.equal(scorecardImageShareContent('https://example.com/card.png'), null);
+  assert.equal(COPY.shareScorecardFail, 'Couldn’t share scorecard.');
+  assert.equal(await toastFromShareAttempt(async () => false, COPY.shareScorecardFail), COPY.shareScorecardFail);
+  assert.equal(
+    await toastFromShareAttempt(async () => {
+      throw new Error('share');
+    }, COPY.shareScorecardFail),
+    COPY.shareScorecardFail,
+  );
+  assert.equal(await toastFromShareAttempt(async () => true, COPY.shareScorecardFail), null);
+
+  const share = readFileSync(new URL('../services/shareRound.ts', import.meta.url), 'utf8');
+  const snapshot = share.slice(
+    share.indexOf('export async function shareRoundSnapshot'),
+    share.indexOf('export async function shareLiveBoard'),
+  );
+  assert.match(snapshot, /scorecardImageShareContent\(imageUrl\)/);
+  assert.match(snapshot, /if \(!content\) return false/);
+  assert.doesNotMatch(snapshot, /planned\.message|shareSheetContent|formatLiveBoardShare/);
+  const live = share.slice(share.indexOf('export async function shareLiveBoard'));
+  assert.match(live, /formatLiveBoardShare/);
+  assert.match(live, /shareSheetContent\(\{ message \}\)/);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const summary = readFileSync(new URL('../../app/round/[id]/summary.tsx', import.meta.url), 'utf8');
+  assert.match(hole, /kind === 'live' \? COPY\.shareFail : COPY\.shareScorecardFail/);
+  assert.match(summary, /COPY\.shareScorecardFail/);
 });
 
 test('TF 62: Menu Share waits for fullScreen Modal dismiss before Share.share', () => {

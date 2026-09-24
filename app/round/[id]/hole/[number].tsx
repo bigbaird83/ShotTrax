@@ -819,6 +819,7 @@ export default function HoleScreen() {
       kind === 'live'
         ? shareLiveBoard(db, id, { currentHoleNumber: holeNumber, anchor })
         : shareRoundSnapshot(db, id, { currentHoleNumber: holeNumber, anchor }),
+      kind === 'live' ? COPY.shareFail : COPY.shareScorecardFail,
     ).then((fail) => {
       if (fail) setToast(fail);
     });

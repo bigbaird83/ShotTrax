@@ -54,6 +54,7 @@ export const COPY = {
   unavailable: 'Unavailable',
   share: 'Share',
   shareFail: "Couldn't open share",
+  shareScorecardFail: 'Couldn’t share scorecard.',
   shareLive: 'Share live',
   shareScorecard: 'Share scorecard',
   shareLiveRound: 'Share live round',
