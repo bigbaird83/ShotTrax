@@ -184,7 +184,7 @@ test('shot review adds nothing for Hole Out with zero putts or an unfinished hol
 test('shot review screen keeps putts off the map and the putter off GPS marks', () => {
   assert.equal(putterOpensPuttSheet({ clubId: PUTTER_CLUB_ID }), true);
   const src = readFileSync(new URL('../../app/review/[id]/shots.tsx', import.meta.url), 'utf8');
-  assert.match(src, /shotReviewPuttLines\(hole\)/);
+  assert.match(src, /shotReviewPuttSummaryLine\(hole\)/);
   assert.match(src, /shotReviewHoleHeader\(hole\)/);
   // HoleMap only gets the GPS shots; putt lines feed the list, never the map.
   assert.match(src, /shots=\{shots\}/);
