@@ -68,6 +68,7 @@ import {
 } from '../domain/confirmUndo';
 import { includeInDistanceAverages, planNoGpsShot, planPlacedShot } from '../domain/shotSource';
 import { planUndoLastShot } from '../domain/undoLastShot';
+import { planUndoLastSoftGpsClubMark } from '../domain/undoSoftGpsClubMark';
 import { planDeleteShot } from '../domain/deleteShot';
 import type {
   Club,
@@ -1321,6 +1322,50 @@ export function applyClosedShot(
       close.shotId,
     ],
   );
+}
+
+/**
+ * Remove only the most recent Soft GPS club mark on this hole.
+ * Newest row reuses undo-last (delete + reopen the shot that tap closed).
+ * An earlier soft mark reuses delete-one (renumber, no neighbor reopen).
+ * Does not start a round and does not clear the rest of the hole.
+ */
+export function undoLastSoftGpsClubMark(
+  db: SQLiteDatabase,
+  roundId: string,
+  holeNumber: number,
+): { ok: true } | { ok: false; reason: 'empty' } {
+  const hole = getHole(db, roundId, holeNumber);
+  if (!hole) return { ok: false, reason: 'empty' };
+  const shots = listShotsForHole(db, hole.id);
+  const plan = planUndoLastSoftGpsClubMark(shots);
+  if (!plan) return { ok: false, reason: 'empty' };
+  if (plan.keepShotIds.length !== shots.length - 1) return { ok: false, reason: 'empty' };
+  if (plan.usesUndoLast) {
+    db.withTransactionSync(() => {
+      deleteShot(db, plan.deleteShotId);
+      if (plan.reopenShotId) reopenShot(db, plan.reopenShotId);
+      setRoundLastClub(db, roundId, plan.nextLastClubId);
+      persistRecomputedHoleScore(db, hole.id);
+    });
+    return { ok: true };
+  }
+  const drop = planDeleteShot(shots, plan.deleteShotId);
+  if (!drop.ok || drop.remaining.length !== plan.keepShotIds.length) {
+    return { ok: false, reason: 'empty' };
+  }
+  db.withTransactionSync(() => {
+    deleteShot(db, drop.deleteShotId);
+    for (const row of drop.renumber) {
+      db.runSync('UPDATE shots SET seq = ? WHERE id = ?', [row.seq, row.id]);
+    }
+    for (const row of drop.yardsUpdates) {
+      db.runSync('UPDATE shots SET distance_yards = ? WHERE id = ?', [row.distanceYards, row.id]);
+    }
+    setRoundLastClub(db, roundId, drop.nextLastClubId);
+    persistRecomputedHoleScore(db, hole.id);
+  });
+  return { ok: true };
 }
 
 /** Forgotten swing: not a GPS distance shot. Never calls acceptFix/haversine. */

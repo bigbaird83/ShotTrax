@@ -256,6 +256,11 @@ test('TF 58 P0: Made pill + 0–3 + hole Putt above the club strip', () => {
   assert.match(madeBtn, /minHeight: 48/);
   assert.match(madeBtn, /outdoorLime/);
   assert.match(madeBtn, /stroke\(Color\("cream"\)/);
+  // Lime fill is clipped to Made's rounded pill — not a rectangle behind it.
+  assert.match(
+    madeBtn,
+    /\.background\(outdoorLime\)\s*(?:\/\/[^\n]*\s*)?\.clipShape\(RoundedRectangle\(cornerRadius: 12\)\)\s*\.contentShape\(RoundedRectangle\(cornerRadius: 12\)\)/,
+  );
   assert.match(sheet, /layoutPriority\(1\)/);
 
   const clubPick = watch.slice(watch.indexOf('private var clubPick'), watch.indexOf('private var moreClubs'));

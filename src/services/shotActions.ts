@@ -16,6 +16,7 @@ import {
   sealOpenShotWithoutGps,
   setRoundLastClub,
   undoLastShot as undoLastShotInRepo,
+  undoLastSoftGpsClubMark as undoLastSoftGpsClubMarkInRepo,
   deleteShotOnHole as deleteShotOnHoleInRepo,
   updateShotClub,
 } from '../db/repo';
@@ -326,6 +327,14 @@ export function undoLastShot(
   args: { roundId: string; holeNumber: number },
 ): boolean {
   return undoLastShotInRepo(db, args.roundId, args.holeNumber).ok;
+}
+
+/** Phone only. Removes the latest Soft GPS club mark — not the rest of the hole. */
+export function undoLastSoftGpsClubMark(
+  db: SQLiteDatabase,
+  args: { roundId: string; holeNumber: number },
+): boolean {
+  return undoLastSoftGpsClubMarkInRepo(db, args.roundId, args.holeNumber).ok;
 }
 
 /** Confirm required. Cancel is a no-op — the shot stays. */

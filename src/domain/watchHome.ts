@@ -1,6 +1,10 @@
 /** Watch Home — the default Watch screen when no hole is live.
  *
- * One screen, two sections: Favorites, then Nearby. Both come from the phone:
+ * Home body is Favorites. Nearby is not the permanent Home list: a top
+ * **Search nearby** button pushes a screen of the same nearby rows.
+ * Back pops that push; Home stays mounted so favorites are not dropped.
+ *
+ * Both lists still come from the phone:
  * - Favorites are the phone's `course.favorites` list. There is no Watch-only list.
  * - Nearby is the same Golf Courses API nearby search the phone Home uses.
  *   Location: a fresh Watch fix when the Watch has one, else a fresh phone fix,
@@ -11,6 +15,7 @@
  *
  * Tapping a row starts the round the same way the phone does (course → holes →
  * tee → Start). Tapping the live round's course continues that round.
+ * Search nearby only pushes — it does not start or continue a round.
  * The star toggles the phone favorite and does not start anything.
  * No Export / Restore on the Watch. No cloud account.
  */
@@ -26,6 +31,22 @@ import { isValidLatLng, type LatLng } from './latLng';
 import type { GpsFix } from './types';
 import { NEARBY_COURSE_FIX_MAX_AGE_MS, NEARBY_COURSE_LIST_MAX, OPEN_PHONE } from './watchNearby';
 import { isIso8601 } from './watchMessages';
+
+/** Home body is Favorites. Nearby is a pushed screen, not the home list. */
+export function watchHomeBodyIsFavoritesOnly(): true {
+  return true;
+}
+
+export function watchHomePermanentlyShowsNearbyList(): false {
+  return false;
+}
+
+/**
+ * Search nearby pushes a screen. It does not start, continue, or replace a round.
+ */
+export function planWatchHomeSearchNearby(): 'push_nearby' {
+  return 'push_nearby';
+}
 
 /** Enough to fill a Watch scroll without a search box. */
 export const WATCH_HOME_FAVORITES_MAX = 12;

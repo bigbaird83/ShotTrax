@@ -10,6 +10,7 @@ import {
   setCourseDistanceUnit,
   setThunderbirdPinSheet,
 } from '@/src/db/repo';
+import { formatBuildStamp, readBuildStamp } from '@/src/domain/buildStamp';
 import { COPY } from '@/src/domain/playerCopy';
 import type { CourseDistanceUnit } from '@/src/domain/courseDistance';
 import { COLOR_THEME_IDS, type ColorThemeId } from '@/src/domain/colorTheme';
@@ -26,6 +27,7 @@ export default function SettingsScreen() {
   const unit = getCourseDistanceUnit(db);
   const themeId = getColorTheme(db);
   const pinSheet = getThunderbirdPinSheet(db);
+  const buildStamp = useMemo(() => formatBuildStamp(readBuildStamp()), []);
 
   const setUnit = (next: CourseDistanceUnit) => {
     setCourseDistanceUnit(db, next);
@@ -87,6 +89,11 @@ export default function SettingsScreen() {
       <Text style={styles.credits}>{COPY.courseDataCredits}</Text>
       <Text style={styles.contact}>{COPY.contactLine}</Text>
       <BigButton label={COPY.contributeCourse} variant="ghost" onPress={() => router.push('/contribute-course')} />
+      {buildStamp ? (
+        <Text style={styles.stamp} selectable>
+          {buildStamp}
+        </Text>
+      ) : null}
     </Screen>
   );
 }
@@ -115,5 +122,6 @@ function makeStyles(colors: ColorPalette) {
     creditsTitle: { color: colors.cream, fontSize: type.body, fontWeight: '800', marginTop: 8 },
     credits: { color: colors.muted, fontSize: type.meta, fontWeight: '600' },
     contact: { color: colors.cream, fontSize: type.body, fontWeight: '800' },
+    stamp: { color: colors.muted, fontSize: type.meta, fontWeight: '600', marginTop: 8 },
   });
 }
