@@ -11,7 +11,8 @@
  * points are replayed through a mocked expo-location feed. Coordinates are
  * never written in this file.
  *
- * TODO: a "+ N putts" line is a separate PR. Step 4 skips that assertion.
+ * Step 4 checks Shot review through shotReviewHoleHeader and shotReviewPuttLines
+ * (the same helpers app/review/[id]/shots.tsx renders). Putt rows stay off the map.
  */
 
 import assert from 'node:assert/strict';
@@ -40,8 +41,10 @@ import { migrate } from '../db/schema';
 import { planClubStrip } from '../domain/clubStrip';
 import { decideCourseCardPaint, showPlayDockForCourseCard } from '../domain/courseCardPaint';
 import { isPutterClubId } from '../domain/defaultBag';
+import { shotPinsForHoleCamera } from '../domain/holeCamera';
 import { loggedHoleStrokes } from '../domain/holeScore';
-import type { LatLng } from '../domain/latLng';
+import { isValidLatLng, type LatLng } from '../domain/latLng';
+import { shotReviewHoleHeader, shotReviewPuttLines } from '../domain/shotReviewLayout';
 import { playHrefAfterHoleChange } from '../domain/playNav';
 import { planPlayDockFinish } from '../domain/putts';
 import { planPlayLayout } from '../domain/playLayout';
@@ -418,6 +421,11 @@ test('round flow', { skip: DatabaseSync ? false : 'node:sqlite needs Node 22.5+'
   const homeScreen = readFileSync(new URL('../../app/(tabs)/index.tsx', import.meta.url), 'utf8');
   assert.match(homeScreen, /historyDeletePrompt/);
   assert.match(homeScreen, /deleteRound\(db, round\.id\)/);
+  const reviewScreen = readFileSync(new URL('../../app/review/[id]/shots.tsx', import.meta.url), 'utf8');
+  assert.match(reviewScreen, /shotReviewPuttLines\(hole\)/);
+  assert.match(reviewScreen, /shotReviewHoleHeader\(hole\)/);
+  assert.match(reviewScreen, /shotPinsForHoleCamera\(shots\)/);
+  assert.match(reviewScreen, /shots=\{shots\}/);
 
   const round = startRound(db, 18, courseName, layout);
   const clubs = listClubs(db, true).filter((club) => !isPutterClubId(club.id));
@@ -615,17 +623,34 @@ test('round flow', { skip: DatabaseSync ? false : 'node:sqlite needs Node 22.5+'
     if (before === total) {
       throw new Error(`Step ${step}: expected round total updated, actual ${show(total)}`);
     }
+    if (!closed) {
+      throw new Error(`Step ${step}: expected a closed hole, actual null`);
+    }
+    const puttLines = shotReviewPuttLines(closed);
+    const expectedPuttLines = planned.lengths.map((id, index) => {
+      const label = PUTT_LENGTHS.find((row) => row.id === id)?.label;
+      return `Putt ${index + 1} · ${label ?? id}`;
+    });
+    check(step, expectedPuttLines, puttLines);
+    check(step, 2, puttLines.length);
+    const header = shotReviewHoleHeader(closed);
+    if (!header.includes('2 putts')) {
+      throw new Error(`Step ${step}: expected Shot review header to include 2 putts, actual ${show(header)}`);
+    }
+    const pins = shotPinsForHoleCamera(shots);
+    const shotsOnMap = shots.filter((shot) => {
+      const start = { lat: shot.startLat ?? Number.NaN, lng: shot.startLng ?? Number.NaN };
+      const end = { lat: shot.endLat ?? Number.NaN, lng: shot.endLng ?? Number.NaN };
+      return isValidLatLng(start) || isValidLatLng(end);
+    });
+    check(step, 2, shotsOnMap.length);
+    const endpoints = shots.reduce((count, shot) => {
+      const start = { lat: shot.startLat ?? Number.NaN, lng: shot.startLng ?? Number.NaN };
+      const end = { lat: shot.endLat ?? Number.NaN, lng: shot.endLng ?? Number.NaN };
+      return count + (isValidLatLng(start) ? 1 : 0) + (isValidLatLng(end) ? 1 : 0);
+    }, 0);
+    check(step, endpoints, pins.length);
   }
-
-  await t.test(
-    'Step 4 +2 putts line',
-    {
-      skip: 'TODO: "+ N putts" line is a separate PR. Not implemented here — assertion skipped.',
-    },
-    () => {
-      throw new Error('Step 4: expected +2 putts, actual (not implemented)');
-    },
-  );
 
   // Step 5 — Watch Made it. Phone handler should land on hole 2 with the dock up.
   await sendMadeIt();
