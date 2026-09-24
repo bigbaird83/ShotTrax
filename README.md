@@ -37,9 +37,9 @@ Cold start still shows the native Expo splash (`splash-icon.png` = first frame o
 
 Nearby course search, hole par, and green centroids are behind [Golf Courses API](https://golfcoursesapi.com/) Pro. See `NOTES.md` and `.env.example`.
 
-**EAS secret name:** `GOLF_COURSES_API_KEY` (set for production, preview, and development). `app.config.js` copies it into `expo.extra.golfCoursesApiKey` so the app can read it on EAS builds via `expo-constants`. **Never commit a key. Do not invent a second secret name in git.**
+**No vendor key ships in the app.** Course search and paint call the share-sync Worker (`EXPO_PUBLIC_SHARE_SYNC_URL`): `{url}/gca/v1/…` for Golf Courses API and `{url}/golfapi/v2.3/…` for golfapi.io. The Worker holds `GOLF_COURSES_API_KEY` and `GOLFAPI_KEY` as Cloudflare secrets (route example: `worker-golf-proxy.js`). **Never commit a key, and never put either key in EAS env or `expo.extra`.**
 
-Unknown courses paint tee + green in a fixed order: **OSM / OpenGolf**, then **GCA Pro** greens (tees only when the payload has them; scorecard-only stays a miss), then **golfapi.io** as the last resort (`GOLFAPI_KEY` / `EXPO_PUBLIC_GOLFAPI_KEY` → `expo.extra.golfApiKey`). A pass is cached on-device (`settings.course.paint.cache`). Set `EXPO_PUBLIC_COURSE_PAINT_CACHE_URL` to a JSON GET/PUT host so a second phone does not buy the same course again. Cache keys are `id:<courseId>` and `name:<name>|<city>|<state>`. A 9-hole loop whose holes 10–18 exactly mirror 1–9 is a **9×2 pass** for other courses — those GPS values are not rewritten. Thunderbird Heber Springs is HARD-MISS: the golfapi seed, device cache, and network golfapi do not paint it. Thin GPS / no key stays a miss. Never invented. Do not call golfapi from CI without the secret.
+Unknown courses paint tee + green in a fixed order: **OSM / OpenGolf**, then **GCA Pro** greens (tees only when the payload has them; scorecard-only stays a miss), then **golfapi.io** as the last resort (through the Worker, which holds `GOLFAPI_KEY`). A pass is cached on-device (`settings.course.paint.cache`). Set `EXPO_PUBLIC_COURSE_PAINT_CACHE_URL` to a JSON GET/PUT host so a second phone does not buy the same course again. Cache keys are `id:<courseId>` and `name:<name>|<city>|<state>`. A 9-hole loop whose holes 10–18 exactly mirror 1–9 is a **9×2 pass** for other courses — those GPS values are not rewritten. Thunderbird Heber Springs is HARD-MISS: the golfapi seed, device cache, and network golfapi do not paint it. Thin GPS / no key stays a miss. Never invented. Do not call golfapi from CI without the secret.
 
 Expo client JS only inlines `EXPO_PUBLIC_*`. For local Expo Go, CoS must also set `EXPO_PUBLIC_GOLF_COURSES_API_KEY` in `.env` **or** map that public name from the existing `GOLF_COURSES_API_KEY` secret in the Expo dashboard (same value).
 
@@ -47,7 +47,7 @@ Expo client JS only inlines `EXPO_PUBLIC_*`. For local Expo Go, CoS must also se
 EXPO_PUBLIC_GOLF_COURSES_API_KEY=your_key_here
 ```
 
-Without a key the nearby / search picker is disabled (graceful copy, no network). Start 9/18 stays off until a real course and tee are picked — no optional free-text course name. Search placeholder is **Search by name, city, state, or zip** (`GET /courses?q=`). Nearby uses a phone fix; search is text / geocode and never Watch GPS or the 15–25 m mark gates. Played courses sit on top of the same list. Missing par stays **Par unknown**. Missing greens stay blank.
+Without `EXPO_PUBLIC_SHARE_SYNC_URL` the nearby / search picker is disabled (graceful copy, no network). Start 9/18 stays off until a real course and tee are picked — no optional free-text course name. Search placeholder is **Search by name, city, state, or zip** (`GET /courses?q=`). Nearby uses a phone fix; search is text / geocode and never Watch GPS or the 15–25 m mark gates. Played courses sit on top of the same list. Missing par stays **Par unknown**. Missing greens stay blank.
 
 Selecting a nearby course **starts** a new round (Start 9/18) or **attaches** par/greens to a round in progress (blank holes only).
 
@@ -308,7 +308,7 @@ ShotTraxx **does not synthesize a fairway or fake points**.
 - Watch club-pick (top-3 + bag + Same club) ships with this IPA. Crown / double-tap stay out.
 - Local SQLite only (no account / cloud).
 - iOS is the target; Android location is wired but maps may need a Google key.
-- Nearby course picker requires Golf Courses API key `GOLF_COURSES_API_KEY` (see `NOTES.md`). Smoke nearby search on a device/EAS build if this environment cannot TLS to golfcoursesapi.com.
+- Nearby course picker requires `EXPO_PUBLIC_SHARE_SYNC_URL` pointing at the Worker that holds `GOLF_COURSES_API_KEY` (see `NOTES.md`). Smoke nearby search on a device/EAS build if this environment cannot TLS to golfcoursesapi.com.
 
 ## Tests
 

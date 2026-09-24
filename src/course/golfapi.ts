@@ -1,22 +1,15 @@
 import { decideCourseCardPaint } from '../domain/courseCardPaint';
 import { haversineYards } from '../domain/haversine';
 import { isCourseCardLatLng, type LatLng } from '../domain/latLng';
+import { getGolfApiProxyBase } from './config';
 import type { CourseHydrate, CourseHydrateHole, CourseHydrateMatch, CourseHydrateTee } from './hydrate';
 import {
   isThunderbirdHeberSpringsIdentity,
   thunderbirdGolfApiPaintBlocked,
 } from './thunderbirdLock';
 
-export const GOLFAPI_BASE = 'https://golfapi.io/api/v2.3';
 export const GOLFAPI_CACHE_SETTING_KEY = 'golfapi.hydrates';
 export const GOLFAPI_KEY_PREFIX = 'golfapi:';
-
-export const GOLFAPI_KEY_NAMES = [
-  'GOLFAPI_KEY',
-  'EXPO_PUBLIC_GOLFAPI_KEY',
-  'GOLF_API_IO_KEY',
-  'EXPO_PUBLIC_GOLF_API_IO_KEY',
-] as const;
 
 type GolfApiCoord = {
   poi: number;
@@ -57,28 +50,12 @@ function trimKey(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function extraGolfApiKey(): string | null {
-  try {
-    const Constants = require('expo-constants').default as {
-      expoConfig?: { extra?: Record<string, unknown> };
-      manifest?: { extra?: Record<string, unknown> };
-    };
-    return (
-      trimKey(Constants.expoConfig?.extra?.golfApiKey) ??
-      trimKey(Constants.manifest?.extra?.golfApiKey)
-    );
-  } catch {
-    return null;
-  }
-}
-
-/** Optional golfapi.io key. Absent → no fetch, never invent. */
-export function getGolfApiKey(): string | null {
-  for (const name of GOLFAPI_KEY_NAMES) {
-    const key = trimKey(process.env[name]);
-    if (key) return key;
-  }
-  return extraGolfApiKey();
+/**
+ * golfapi.io through the share-sync Worker (`{share sync}/golfapi/v2.3`).
+ * The Worker holds `GOLFAPI_KEY`. No Worker → no fetch, never invent.
+ */
+export function getGolfApiBase(): string | null {
+  return getGolfApiProxyBase();
 }
 
 export function golfApiCourseKey(courseId: string): string {
@@ -419,11 +396,11 @@ export function resolveGolfApiHydrateKey(course: CourseHydrateMatch): string | n
 
 async function golfApiGet(
   path: string,
-  key: string,
+  base: string,
   fetchImpl: typeof fetch,
 ): Promise<unknown | null> {
-  const res = await fetchImpl(`${GOLFAPI_BASE}${path}`, {
-    headers: { Accept: 'application/json', Authorization: `Bearer ${key}` },
+  const res = await fetchImpl(`${base}${path}`, {
+    headers: { Accept: 'application/json' },
   });
   if (!res.ok) return null;
   try {
@@ -457,7 +434,7 @@ function courseMatchesHit(course: CourseHydrateMatch, hit: Record<string, unknow
 }
 
 /**
- * Search + course + coordinates. No key / miss / thin → null.
+ * Search + course + coordinates via the Worker. No Worker / miss / thin → null.
  * Last-resort paint source — the waterfall calls this only after OSM/OpenGolf
  * and GCA Pro both hard-miss. Never invents tee/green. Cache hit skips the network.
  */
@@ -483,20 +460,20 @@ export async function fetchGolfApiHydrate(
     if (cached && cached.holes.length > 0) return cached;
   }
 
-  const key = getGolfApiKey();
-  if (!key) return null;
+  const base = getGolfApiBase();
+  if (!base) return null;
   const fetchImpl = deps.fetchImpl ?? globalThis.fetch;
   if (typeof fetchImpl !== 'function') return null;
 
   const q = [course.name, course.city, course.state].filter((part) => trimKey(part)).join(' ');
   if (!q) return null;
-  const search = await golfApiGet(`/courses?country=US&q=${encodeURIComponent(q)}`, key, fetchImpl);
+  const search = await golfApiGet(`/courses?country=US&q=${encodeURIComponent(q)}`, base, fetchImpl);
   const hit = searchHits(search).find((row) => courseMatchesHit(course, row)) ?? null;
   const courseId = trimKey(hit?.courseID) ?? trimKey(hit?.courseId);
   if (!courseId) return null;
 
-  const detail = (await golfApiGet(`/courses/${encodeURIComponent(courseId)}`, key, fetchImpl)) ?? hit;
-  const coordinates = await golfApiGet(`/coordinates/${encodeURIComponent(courseId)}`, key, fetchImpl);
+  const detail = (await golfApiGet(`/courses/${encodeURIComponent(courseId)}`, base, fetchImpl)) ?? hit;
+  const coordinates = await golfApiGet(`/coordinates/${encodeURIComponent(courseId)}`, base, fetchImpl);
   const hydrate = mapGolfApiCourseToHydrate({
     course: detail,
     coordinates,

@@ -27,7 +27,7 @@ import {
   GREENS_NORTH_HILLS_SHERWOOD_CLUBHOUSE,
   applyCourseHydrateToLayout,
   fetchGolfApiCypressHydrate,
-  getGolfApiKey,
+  getGolfApiBase,
   hydrateHoleFor,
   hydrateHolePassesGates,
   inventGreenFromClubhouse,
@@ -741,12 +741,12 @@ test('prefetch meters unique hydrate once and golfapi does not invent without a 
     true,
   );
 
-  const previous = GOLFAPI_KEY_NAMES_SNAPSHOT();
+  const previous = SHARE_SYNC_ENV_SNAPSHOT();
   try {
     for (const name of previous.names) delete process.env[name];
-    assert.equal(getGolfApiKey(), null);
+    assert.equal(getGolfApiBase(), null);
     assert.equal(await fetchGolfApiCypressHydrate(), null);
-    process.env.GOLFAPI_KEY = 'test-key';
+    process.env.EXPO_PUBLIC_SHARE_SYNC_URL = 'https://share.test';
     const bundled = await fetchGolfApiCypressHydrate();
     assert.equal(bundled?.courseKey, CYPRESS_CREEK_CABOT_AR_KEY);
     assert.equal(bundled?.holes.length, 18);
@@ -782,8 +782,8 @@ test('Start Round / hole load apply hydrate before MapView for Cypress', () => {
   assert.ok(osmAt > 0 && gcaAt > osmAt && golfAt > gcaAt);
 });
 
-function GOLFAPI_KEY_NAMES_SNAPSHOT(): { names: string[]; restore: () => void } {
-  const names = ['GOLFAPI_KEY', 'EXPO_PUBLIC_GOLFAPI_KEY', 'GOLF_API_IO_KEY', 'EXPO_PUBLIC_GOLF_API_IO_KEY'];
+function SHARE_SYNC_ENV_SNAPSHOT(): { names: string[]; restore: () => void } {
+  const names = ['EXPO_PUBLIC_SHARE_SYNC_URL'];
   const prev = Object.fromEntries(names.map((name) => [name, process.env[name]]));
   return {
     names,

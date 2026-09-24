@@ -324,11 +324,11 @@ test('OSM miss + GCA paint makes the offline download Ready and skips golfapi', 
   const status = await downloadFavoriteForOffline(course, store, {
     now: () => '2026-09-22T01:05:00.000Z',
     cache: createMemoryCoursePaintCache(),
-    getKey: () => 'gca-test-key',
+    getBaseUrl: () => 'https://share.test/gca/v1',
     fetch: async (input) => {
       const url = String(input);
       urls.push(url);
-      if (url.includes('golfapi.io')) {
+      if (url.includes('/golfapi/')) {
         return new Response(JSON.stringify({ error: 'golfapi must not run' }), { status: 500 });
       }
       if (url.includes('/green-centers')) {
@@ -345,7 +345,7 @@ test('OSM miss + GCA paint makes the offline download Ready and skips golfapi', 
   assert.equal(status, 'ready');
   assert.equal(offlinePackFor(store, course.id)?.status, 'ready');
   assert.equal(urls.some((url) => url.includes('/green-centers')), true);
-  assert.equal(urls.some((url) => url.includes('golfapi.io')), false);
+  assert.equal(urls.some((url) => url.includes('/golfapi/')), false);
 
   const offline = readFileSync(new URL('./offlineFavorite.ts', import.meta.url), 'utf8');
   assert.match(offline, /loadGcaPaintCandidate/);

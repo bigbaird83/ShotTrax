@@ -195,7 +195,7 @@ test('catalog getCourse leaves Thunderbird tees and greens blank — never the c
 test('unconfigured client still searches the local catalog and does not call the network', async () => {
   let calls = 0;
   const client = createCourseDataClient({
-    getKey: () => null,
+    getBaseUrl: () => null,
     fetch: async () => {
       calls += 1;
       throw new Error('network should not run');
@@ -235,7 +235,7 @@ test('unconfigured client still searches the local catalog and does not call the
 
 test('API search results win; catalog fills a Thunderbird miss without duplicating the same club', async () => {
   const client = createCourseDataClient({
-    getKey: () => 'test-key',
+    getBaseUrl: () => 'https://share.test/gca/v1',
     fetch: async (input) => {
       const url = String(input);
       if (url.includes('q=thunderbird')) {

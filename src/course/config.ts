@@ -1,44 +1,57 @@
-const EXTRA_KEY = 'golfCoursesApiKey';
+/**
+ * Course vendors (Golf Courses API, golfapi.io) are reached only through the
+ * share-sync Worker. The Worker holds `GOLF_COURSES_API_KEY` and `GOLFAPI_KEY`
+ * as Cloudflare secrets. No vendor key is ever read by, or baked into, the app.
+ *
+ *   {EXPO_PUBLIC_SHARE_SYNC_URL}/gca/v1/…        → golfcoursesapi.com/api/v1/…
+ *   {EXPO_PUBLIC_SHARE_SYNC_URL}/golfapi/v2.3/…  → golfapi.io/api/v2.3/…
+ *
+ * No share-sync URL → course search is the bundled catalog only, and paint
+ * never calls GCA Pro or golfapi. Never invents.
+ */
+export const SHARE_SYNC_URL_EXTRA_KEY = 'shareSyncUrl';
+export const GCA_PROXY_PATH = '/gca/v1';
+export const GOLFAPI_PROXY_PATH = '/golfapi/v2.3';
 
-function trimKey(value: unknown): string | null {
+function trimUrl(value: unknown): string | null {
   if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
+  const trimmed = value.trim().replace(/\/+$/, '');
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function extraKey(): string | null {
+function extraShareSyncUrl(): string | null {
   try {
     // Lazy: node tests must not load react-native via expo-constants.
     const Constants = require('expo-constants').default as {
       expoConfig?: { extra?: Record<string, unknown> };
       manifest?: { extra?: Record<string, unknown> };
     };
-    const fromExtra = trimKey(Constants.expoConfig?.extra?.[EXTRA_KEY]);
-    if (fromExtra) return fromExtra;
-    return trimKey(Constants.manifest?.extra?.[EXTRA_KEY]);
+    return (
+      trimUrl(Constants.expoConfig?.extra?.[SHARE_SYNC_URL_EXTRA_KEY]) ??
+      trimUrl(Constants.manifest?.extra?.[SHARE_SYNC_URL_EXTRA_KEY])
+    );
   } catch {
     return null;
   }
 }
 
-/**
- * Golf Courses API key. Never hardcode a secret.
- *
- * Resolution order:
- * 1. `EXPO_PUBLIC_GOLF_COURSES_API_KEY` (local Expo / Metro inline)
- * 2. `expo.extra.golfCoursesApiKey` (EAS: `app.config.js` copies the
- *    `GOLF_COURSES_API_KEY` secret at build time)
- * 3. `GOLF_COURSES_API_KEY` (Node tests / config evaluation — not inlined
- *    into the Expo client bundle unless mapped)
- */
-export function getGolfCoursesApiKey(): string | null {
-  const fromPublic = trimKey(process.env.EXPO_PUBLIC_GOLF_COURSES_API_KEY);
-  if (fromPublic) return fromPublic;
-  const fromExtra = extraKey();
-  if (fromExtra) return fromExtra;
-  return trimKey(process.env.GOLF_COURSES_API_KEY);
+/** Share-sync Worker base (`EXPO_PUBLIC_SHARE_SYNC_URL`, then `expo.extra.shareSyncUrl`). */
+export function getCourseProxyHost(): string | null {
+  return trimUrl(process.env.EXPO_PUBLIC_SHARE_SYNC_URL) ?? extraShareSyncUrl();
+}
+
+/** Golf Courses API base through the Worker, or null when no Worker is set. */
+export function getGolfCoursesProxyBase(): string | null {
+  const host = getCourseProxyHost();
+  return host ? `${host}${GCA_PROXY_PATH}` : null;
+}
+
+/** golfapi.io base through the Worker, or null when no Worker is set. */
+export function getGolfApiProxyBase(): string | null {
+  const host = getCourseProxyHost();
+  return host ? `${host}${GOLFAPI_PROXY_PATH}` : null;
 }
 
 export function isGolfCoursesApiConfigured(): boolean {
-  return getGolfCoursesApiKey() != null;
+  return getGolfCoursesProxyBase() != null;
 }

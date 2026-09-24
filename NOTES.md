@@ -22,32 +22,34 @@ Never invent a tee or a green. A miss stays a miss. Bundled hydrates (North Hill
 
 ## golfapi.io runtime hydrate (last resort)
 
-golfapi runs only after OSM/OpenGolf and GCA Pro hard-miss (`GET /courses?country=US`, then `/courses/{id}` + `/coordinates/{id}`). The on-device golfapi blob remains `settings.golfapi.hydrates`. The paint waterfall also writes `settings.course.paint.cache` and, when configured, the shared JSON host. Next open of that course reads the cache only. No key / thin GPS → miss card. Never invents tee/green.
+golfapi runs only after OSM/OpenGolf and GCA Pro hard-miss (`GET /courses?country=US`, then `/courses/{id}` + `/coordinates/{id}`). The on-device golfapi blob remains `settings.golfapi.hydrates`. The paint waterfall also writes `settings.course.paint.cache` and, when configured, the shared JSON host. Next open of that course reads the cache only. No Worker / Worker 503 (no secret) / thin GPS → miss card. Never invents tee/green.
 
-EAS / GitHub secret name: **`GOLFAPI_KEY`** (also `EXPO_PUBLIC_GOLFAPI_KEY` for local Metro). Set it on EAS for production / preview / development like `GOLF_COURSES_API_KEY`. `app.config.js` copies it into `expo.extra.golfApiKey`. Do not commit a key. Do not call golfapi from CI without a key.
+The phone calls golfapi only through the share-sync Worker: `{EXPO_PUBLIC_SHARE_SYNC_URL}/golfapi/v2.3/…`. **`GOLFAPI_KEY`** is a Cloudflare secret on that Worker (and a GitHub Actions secret for the probe script). It is not an EAS env var and not in `expo.extra`. Do not commit a key. Do not call golfapi from CI without a key.
 
 ## Golf Courses API (nearby courses, par, green centroids)
 
 Nearby courses, hole par, and green centroids come from [Golf Courses API](https://golfcoursesapi.com/) (Pro green-centers). **Do not hardcode the key.**
 
-### EAS secret (the only secret name)
+### Keys live on the Worker, not the phone
 
-Create **one** EAS secret named `GOLF_COURSES_API_KEY` for **production**, **preview**, and **development**.
+The app never holds a vendor key. It calls the share-sync Worker at `EXPO_PUBLIC_SHARE_SYNC_URL`:
 
-`app.config.js` copies that value into `expo.extra.golfCoursesApiKey` at EAS build time. The app reads it with `expo-constants`. Do **not** add a second secret name in git.
+- `{url}/gca/v1/courses?…`, `/courses/{id}`, `/courses/{id}/green-centers` → golfcoursesapi.com
+- `{url}/golfapi/v2.3/courses?…`, `/courses/{id}`, `/coordinates/{id}` → golfapi.io
 
-Expo Go / Metro only inlines `EXPO_PUBLIC_*` into client JS. For local dev without EAS, CoS should **also** set `EXPO_PUBLIC_GOLF_COURSES_API_KEY` in `.env` (same key value — not a second EAS secret). Optional: map `EXPO_PUBLIC_GOLF_COURSES_API_KEY` from the existing `GOLF_COURSES_API_KEY` secret in the Expo dashboard env UI, not by committing a key.
+The Worker adds `Authorization: Bearer …` from its Cloudflare secrets `GOLF_COURSES_API_KEY` and `GOLFAPI_KEY`, and passes upstream status codes through. Route example: `worker-golf-proxy.js` (merge it into the existing Worker; it is not deployed from this repo).
 
 ```bash
-# local / Expo Go (copy .env.example → .env; .env is gitignored)
-EXPO_PUBLIC_GOLF_COURSES_API_KEY=your_key_here
-# optional: same name EAS uses (app.config.js copies it into extra)
-GOLF_COURSES_API_KEY=your_key_here
+# on the Worker project, not this repo
+wrangler secret put GOLF_COURSES_API_KEY
+wrangler secret put GOLFAPI_KEY
 ```
 
-Without a key, course search and nearby are disabled and do not call the network. Start 9/18 stays off until a real course (and tee, when the course lists tees) is picked. ShotTraxx never invents a nearby-course list, par, SI, or green coordinate.
+Do **not** set `EXPO_PUBLIC_GOLF_COURSES_API_KEY` / `EXPO_PUBLIC_GOLFAPI_KEY` anywhere (Metro would inline them). `app.config.js` strips `golfCoursesApiKey` / `golfApiKey` from `expo.extra`. `GOLF_COURSES_API_KEY` may stay as an EAS **secret** only for the `eas-build-post-install` probe below; the app bundle never reads it.
 
-When a key is present:
+Without the Worker URL, course search and nearby use the bundled catalog only and do not call the network. Start 9/18 stays off until a real course (and tee, when the course lists tees) is picked. ShotTraxx never invents a nearby-course list, par, SI, or green coordinate.
+
+When the Worker URL is set:
 
 - Nearby search is `GET https://golfcoursesapi.com/api/v1/courses?lat=&lng=&radius=` (radius km, max 100). Phone Home nearby wakes a **phone** fix. Watch Home nearby (below) uses a fresh Watch fix when the Watch has one, else the phone fix, else the last phone location.
 - Text search is `GET /api/v1/courses?q=` (name, city, state). A 5-digit ZIP geocodes, then uses nearby `lat/lng/radius`. Search is text / geocode only — never Watch GPS and never the 15 m / 25 m mark gates.

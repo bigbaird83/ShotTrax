@@ -1,4 +1,4 @@
-import { getGolfCoursesApiKey } from './config';
+import { getGolfCoursesProxyBase } from './config';
 import {
   catalogCourseDetail,
   isLocalCatalogId,
@@ -26,12 +26,12 @@ import {
   type PaintCandidate,
 } from './waterfall';
 
-export const GOLF_COURSES_API_BASE = 'https://golfcoursesapi.com/api/v1';
 const DEFAULT_RADIUS_KM = 25;
 const MAX_RADIUS_KM = 100;
 
 export type CourseDataDeps = {
-  getKey?: () => string | null;
+  /** Worker base for Golf Courses API (`{share sync}/gca/v1`). The key lives on the Worker. */
+  getBaseUrl?: () => string | null;
   fetch?: typeof fetch;
 };
 
@@ -54,16 +54,13 @@ function networkHint(err: unknown): string {
 
 async function apiGet(
   path: string,
-  key: string,
+  base: string,
   fetchImpl: typeof fetch,
 ): Promise<{ status: number; json: unknown }> {
   let res: Response;
   try {
-    res = await fetchImpl(`${GOLF_COURSES_API_BASE}${path}`, {
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${key}`,
-      },
+    res = await fetchImpl(`${base}${path}`, {
+      headers: { Accept: 'application/json' },
     });
   } catch (err) {
     throw new GolfCoursesApiError(networkHint(err));
@@ -81,7 +78,7 @@ async function apiGet(
 }
 
 export type GcaPaintDeps = {
-  getKey?: () => string | null;
+  getBaseUrl?: () => string | null;
   fetch?: typeof fetch;
   /** Already-loaded scorecard holes. Tees ride along when the detail had them. */
   holes?: readonly HoleCourseData[] | null;
@@ -90,7 +87,7 @@ export type GcaPaintDeps = {
 
 /**
  * Same GCA Pro read as live course paint: `GET /courses/:id/green-centers`.
- * No key, a local catalog id, or a non-2xx response is a miss. Never invents a green.
+ * No Worker, a local catalog id, or a non-2xx response is a miss. Never invents a green.
  * When holes were not already loaded, the course detail is read first so tees match live paint.
  */
 export async function loadGcaPaintCandidate(
@@ -99,15 +96,15 @@ export async function loadGcaPaintCandidate(
 ): Promise<{ candidate: PaintCandidate; rows: ReturnType<typeof parseGreenCenters> } | null> {
   const id = courseId?.trim() ?? '';
   if (!id || isLocalCatalogId(id)) return null;
-  const key = (deps.getKey ?? getGolfCoursesApiKey)();
-  if (!key) return null;
+  const base = (deps.getBaseUrl ?? getGolfCoursesProxyBase)();
+  if (!base) return null;
   const fetchImpl = deps.fetch ?? fetch;
   const encoded = encodeURIComponent(id);
   try {
     let holes = deps.holes ?? null;
     let numHoles = deps.numHoles === 9 || deps.numHoles === 18 ? deps.numHoles : null;
     if (!holes) {
-      const detailRes = await apiGet(`/courses/${encoded}`, key, fetchImpl);
+      const detailRes = await apiGet(`/courses/${encoded}`, base, fetchImpl);
       if (detailRes.status >= 200 && detailRes.status < 300) {
         const detail = parseCourseDetail(detailRes.json);
         holes = detail?.holes ?? [];
@@ -118,7 +115,7 @@ export async function loadGcaPaintCandidate(
         holes = [];
       }
     }
-    const greensRes = await apiGet(`/courses/${encoded}/green-centers`, key, fetchImpl);
+    const greensRes = await apiGet(`/courses/${encoded}/green-centers`, base, fetchImpl);
     if (greensRes.status < 200 || greensRes.status >= 300) return null;
     const rows = parseGreenCenters(greensRes.json);
     if (rows.length === 0) return null;
@@ -141,28 +138,29 @@ export async function loadGcaPaintCandidate(
 
 /**
  * Golf Courses API client (nearby courses, scorecard par, Pro green centroids).
- * Disabled when no key is configured — does not invent course or green data.
+ * Calls go through the share-sync Worker, which holds the vendor key.
+ * Disabled when no Worker is configured — does not invent course or green data.
  */
 export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataClient {
-  const getKey = deps.getKey ?? getGolfCoursesApiKey;
+  const getBaseUrl = deps.getBaseUrl ?? getGolfCoursesProxyBase;
   const fetchImpl = deps.fetch ?? fetch;
 
   return {
     isConfigured(): boolean {
-      return getKey() != null;
+      return getBaseUrl() != null;
     },
 
     async nearbyCourses(from: LatLng, radiusKm = DEFAULT_RADIUS_KM): Promise<CourseSummary[]> {
-      const key = getKey();
+      const base = getBaseUrl();
       const radius = Math.min(MAX_RADIUS_KM, Math.max(1, radiusKm));
       const local = nearbyLocalCatalog(from, radius);
-      if (!key) return local;
+      if (!base) return local;
       const query = new URLSearchParams({
         lat: String(from.lat),
         lng: String(from.lng),
         radius: String(radius),
       });
-      const { status, json } = await apiGet(`/courses?${query.toString()}`, key, fetchImpl);
+      const { status, json } = await apiGet(`/courses?${query.toString()}`, base, fetchImpl);
       if (status === 403) {
         throw new GolfCoursesApiError('Courses near you aren’t available.', 403);
       }
@@ -173,13 +171,13 @@ export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataCli
     },
 
     async searchCourses(query: string): Promise<CourseSummary[]> {
-      const key = getKey();
+      const base = getBaseUrl();
       const params = planCourseSearchParams(query);
       if (!params) return [];
       const local = searchLocalCatalog(params.q);
-      if (!key) return local;
+      if (!base) return local;
       const search = new URLSearchParams({ q: params.q });
-      const { status, json } = await apiGet(`/courses?${search.toString()}`, key, fetchImpl);
+      const { status, json } = await apiGet(`/courses?${search.toString()}`, base, fetchImpl);
       if (status === 403) {
         throw new GolfCoursesApiError('Courses aren’t available right now.', 403);
       }
@@ -192,10 +190,10 @@ export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataCli
     async getCourse(id: string): Promise<CourseDetail | null> {
       if (!id.trim()) return null;
       if (isLocalCatalogId(id)) return catalogCourseDetail(id);
-      const key = getKey();
-      if (!key) return catalogCourseDetail(id);
+      const gcaBase = getBaseUrl();
+      if (!gcaBase) return catalogCourseDetail(id);
       const encoded = encodeURIComponent(id);
-      const detailRes = await apiGet(`/courses/${encoded}`, key, fetchImpl);
+      const detailRes = await apiGet(`/courses/${encoded}`, gcaBase, fetchImpl);
       if (detailRes.status === 404) return null;
       if (detailRes.status < 200 || detailRes.status >= 300) {
         throw new GolfCoursesApiError('Couldn’t load that course.', detailRes.status);
@@ -215,7 +213,7 @@ export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataCli
         loadOsm: async () => loadOsmOpenGolfCandidate(match),
         loadGca: async () => {
           const loaded = await loadGcaPaintCandidate(id, {
-            getKey,
+            getBaseUrl,
             fetch: fetchImpl,
             numHoles: detail.holeCount,
             holes: detail.holes,

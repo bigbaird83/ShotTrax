@@ -10,7 +10,7 @@ import type { CourseLayoutSeed } from './layout';
 import { rememberResolvedTee } from './osmOverlay';
 import {
   fetchGolfApiHydrate,
-  getGolfApiKey as readGolfApiKey,
+  getGolfApiBase as readGolfApiBase,
   loadCachedGolfApiHydrate,
   loadCachedHydrate,
   resolveGolfApiHydrateKey,
@@ -654,9 +654,9 @@ export function applyCourseHydrateToLayout(
   return { ...layout, holes };
 }
 
-/** Optional golfapi.io key. Absent → no fetch, never invent. */
-export function getGolfApiKey(): string | null {
-  return readGolfApiKey();
+/** golfapi.io base through the share-sync Worker. Absent → no fetch, never invent. */
+export function getGolfApiBase(): string | null {
+  return readGolfApiBase();
 }
 
 function emptyCourseHole(holeNumber: number): HoleCourseData {
@@ -728,7 +728,7 @@ export async function fillCourseDetailFromGolfApi(
     courseKey: match.courseKey ?? detail.id,
   };
   let hydrate = loadHydrateForCourse(resolvedMatch);
-  if (!hydrateIsUsable(hydrate) && courseDetailNeedsHydrate(detail) && readGolfApiKey()) {
+  if (!hydrateIsUsable(hydrate) && courseDetailNeedsHydrate(detail) && readGolfApiBase()) {
     hydrate = await fetchGolfApiHydrate(resolvedMatch, deps);
   }
   if (!hydrateIsUsable(hydrate) || !hydrate) return detail;
@@ -752,11 +752,11 @@ export async function fillCourseDetailFromGolfApi(
 }
 
 /**
- * Runtime golfapi.io fetch for a miss card. No key → null.
- * Bundled Cypress wins (no network) when a key is present. Never invents.
+ * Runtime golfapi.io fetch (via the Worker) for a miss card. No Worker → null.
+ * Bundled Cypress wins (no network) when the Worker is set. Never invents.
  */
 export async function fetchGolfApiCypressHydrate(): Promise<CourseHydrate | null> {
-  if (!readGolfApiKey()) return null;
+  if (!readGolfApiBase()) return null;
   const bundled = loadCourseHydrate(CYPRESS_CREEK_CABOT_AR_KEY);
   if (hydrateIsUsable(bundled)) return bundled;
   return fetchGolfApiHydrate({ name: 'Cypress Creek Golf Club', city: 'Cabot', state: 'AR' });

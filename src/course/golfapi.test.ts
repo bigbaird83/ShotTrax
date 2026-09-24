@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   fetchGolfApiHydrate,
-  getGolfApiKey,
+  getGolfApiBase,
   loadCachedGolfApiHydrate,
   loadCachedHydrate,
   mapGolfApiCourseToHydrate,
@@ -66,12 +66,12 @@ test('golfapi mapper uses poi 1 loc 2 green and length-matched tee — never inv
 
 test('golfapi fetch is null without a key and cache hit skips the network', async () => {
   resetGolfApiCacheForTests();
-  const names = ['GOLFAPI_KEY', 'EXPO_PUBLIC_GOLFAPI_KEY', 'GOLF_API_IO_KEY', 'EXPO_PUBLIC_GOLF_API_IO_KEY'];
+  const names = ['EXPO_PUBLIC_SHARE_SYNC_URL'];
   const prev = Object.fromEntries(names.map((name) => [name, process.env[name]]));
   let calls = 0;
   try {
     for (const name of names) delete process.env[name];
-    assert.equal(getGolfApiKey(), null);
+    assert.equal(getGolfApiBase(), null);
     assert.equal(
       await fetchGolfApiHydrate(
         { name: 'Thunderbird Country Club', city: 'Heber Springs' },
@@ -81,7 +81,7 @@ test('golfapi fetch is null without a key and cache hit skips the network', asyn
     );
     assert.equal(calls, 0);
 
-    process.env.GOLFAPI_KEY = 'test-key';
+    process.env.EXPO_PUBLIC_SHARE_SYNC_URL = 'https://share.test';
     const poisoned = mapGolfApiCourseToHydrate({
       course: THUNDERBIRD_COURSE,
       coordinates: THUNDERBIRD_COORDS,
@@ -126,7 +126,7 @@ test('golfapi fetch is null without a key and cache hit skips the network', asyn
 
 test('golfapi fetch maps mocked search + coords and does not invent on empty GPS', async () => {
   resetGolfApiCacheForTests();
-  const names = ['GOLFAPI_KEY', 'EXPO_PUBLIC_GOLFAPI_KEY', 'GOLF_API_IO_KEY', 'EXPO_PUBLIC_GOLF_API_IO_KEY'];
+  const names = ['EXPO_PUBLIC_SHARE_SYNC_URL'];
   const prev = Object.fromEntries(names.map((name) => [name, process.env[name]]));
   const sample = {
     ...THUNDERBIRD_COURSE,
@@ -135,7 +135,7 @@ test('golfapi fetch maps mocked search + coords and does not invent on empty GPS
     city: 'Conway',
   };
   try {
-    process.env.GOLFAPI_KEY = 'test-key';
+    process.env.EXPO_PUBLIC_SHARE_SYNC_URL = 'https://share.test';
     let thunderbirdCalls = 0;
     assert.equal(
       await fetchGolfApiHydrate(
@@ -156,9 +156,10 @@ test('golfapi fetch maps mocked search + coords and does not invent on empty GPS
       { name: 'Sample Municipal', city: 'Conway', state: 'AR' },
       {
         now: () => '2026-09-21T14:12:17Z',
-        fetchImpl: async (input) => {
+        fetchImpl: async (input, init) => {
           const url = String(input);
           urls.push(url);
+          assert.equal(new Headers(init?.headers).get('Authorization'), null);
           if (url.includes('/courses?')) {
             return new Response(JSON.stringify([sample]), { status: 200 });
           }
@@ -173,6 +174,7 @@ test('golfapi fetch maps mocked search + coords and does not invent on empty GPS
     assert.equal(fetched?.source, 'golfapi');
     assert.equal(fetched?.holes[0]?.tee?.lat, 35.5250149);
     assert.equal(urls.some((url) => url.includes('country=US')), true);
+    assert.equal(urls.every((url) => url.startsWith('https://share.test/golfapi/v2.3/')), true);
     assert.equal(urls.filter((url) => url.includes('/coordinates/')).length, 1);
 
     resetGolfApiCacheForTests();
@@ -225,11 +227,11 @@ const MISS_DETAIL: CourseDetail = {
 
 test('fillCourseDetailFromGolfApi cache hit skips network and empty coords do not invent', async () => {
   resetGolfApiCacheForTests();
-  const names = ['GOLFAPI_KEY', 'EXPO_PUBLIC_GOLFAPI_KEY', 'GOLF_API_IO_KEY', 'EXPO_PUBLIC_GOLF_API_IO_KEY'];
+  const names = ['EXPO_PUBLIC_SHARE_SYNC_URL'];
   const prev = Object.fromEntries(names.map((name) => [name, process.env[name]]));
   let calls = 0;
   try {
-    process.env.GOLFAPI_KEY = 'test-key';
+    process.env.EXPO_PUBLIC_SHARE_SYNC_URL = 'https://share.test';
     const seeded = mapGolfApiCourseToHydrate({
       course: {
         ...THUNDERBIRD_COURSE,

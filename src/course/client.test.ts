@@ -8,12 +8,11 @@ import {
 } from './golfapi';
 import { fetchOsmOverlay } from './osmOverlay';
 import { resetCoursePaintCacheForTests } from './paintCache';
-import { GOLF_COURSES_API_BASE } from './client';
 
-test('client is unconfigured without a key and does not call the network', async () => {
+test('client is unconfigured without the share-sync Worker and does not call the network', async () => {
   let calls = 0;
   const client = createCourseDataClient({
-    getKey: () => null,
+    getBaseUrl: () => null,
     fetch: async () => {
       calls += 1;
       throw new Error('network should not run');
@@ -31,16 +30,16 @@ test('client is unconfigured without a key and does not call the network', async
   assert.equal(calls, 0);
 });
 
-test('nearbyCourses sends lat/lng/radius with Bearer key and parses data', async () => {
+test('nearbyCourses sends lat/lng/radius through the Worker with no vendor key and parses data', async () => {
   const client = createCourseDataClient({
-    getKey: () => 'test-key',
+    getBaseUrl: () => 'https://share.test/gca/v1',
     fetch: async (input, init) => {
       const url = String(input);
-      assert.match(url, /\/courses\?/);
+      assert.ok(url.startsWith('https://share.test/gca/v1/courses?'));
       assert.match(url, /lat=37/);
       assert.match(url, /lng=-122/);
       const headers = new Headers(init?.headers);
-      assert.equal(headers.get('Authorization'), 'Bearer test-key');
+      assert.equal(headers.get('Authorization'), null);
       return new Response(
         JSON.stringify({
           data: [
@@ -67,7 +66,7 @@ test('nearbyCourses sends lat/lng/radius with Bearer key and parses data', async
 test('searchCourses sends q= for name, city, state, or zip and never invents a course', async () => {
   const urls: string[] = [];
   const client = createCourseDataClient({
-    getKey: () => 'test-key',
+    getBaseUrl: () => 'https://share.test/gca/v1',
     fetch: async (input) => {
       urls.push(String(input));
       return new Response(
@@ -93,7 +92,7 @@ test('getCourse loads scorecard then Pro green-centers', async () => {
   resetCoursePaintCacheForTests();
   const urls: string[] = [];
   const client = createCourseDataClient({
-    getKey: () => 'k',
+    getBaseUrl: () => 'https://share.test/gca/v1',
     fetch: async (input) => {
       const url = String(input);
       urls.push(url);
@@ -139,19 +138,19 @@ test('getCourse loads scorecard then Pro green-centers', async () => {
   assert.deepEqual(detail?.tees[0].holes[0].greenCentroid, { lat: 37.01744, lng: -86.43135 });
   assert.equal(detail?.holes[1].par, 5);
   assert.equal(detail?.holes[1].greenCentroid, null);
-  assert.ok(urls[0]?.startsWith(GOLF_COURSES_API_BASE));
+  assert.ok(urls[0]?.startsWith('https://share.test/gca/v1/'));
   assert.match(urls[1] ?? '', /green-centers/);
-  assert.equal(urls.some((url) => url.includes('golfapi.io')), false);
+  assert.equal(urls.some((url) => url.includes('/golfapi/')), false);
 });
 
 test('getCourse keeps greens blank on 403 Pro-only green-centers — never invents', async () => {
   resetCoursePaintCacheForTests();
-  const names = ['GOLFAPI_KEY', 'EXPO_PUBLIC_GOLFAPI_KEY', 'GOLF_API_IO_KEY', 'EXPO_PUBLIC_GOLF_API_IO_KEY'];
+  const names = ['EXPO_PUBLIC_SHARE_SYNC_URL'];
   const prev = Object.fromEntries(names.map((name) => [name, process.env[name]]));
   try {
     for (const name of names) delete process.env[name];
     const client = createCourseDataClient({
-      getKey: () => 'free-key',
+      getBaseUrl: () => 'https://share.test/gca/v1',
       fetch: async (input) => {
         const url = String(input);
         if (url.includes('green-centers')) {
@@ -187,10 +186,10 @@ test('getCourse keeps greens blank on 403 Pro-only green-centers — never inven
 test('getCourse fills a miss from the golfapi cache and does not invent', async () => {
   resetCoursePaintCacheForTests();
   resetGolfApiCacheForTests();
-  const names = ['GOLFAPI_KEY', 'EXPO_PUBLIC_GOLFAPI_KEY', 'GOLF_API_IO_KEY', 'EXPO_PUBLIC_GOLF_API_IO_KEY'];
+  const names = ['EXPO_PUBLIC_SHARE_SYNC_URL'];
   const prev = Object.fromEntries(names.map((name) => [name, process.env[name]]));
   try {
-    process.env.GOLFAPI_KEY = 'test-key';
+    process.env.EXPO_PUBLIC_SHARE_SYNC_URL = 'https://share.test';
     const seeded = mapGolfApiCourseToHydrate({
       course: {
         courseID: '99',
@@ -212,10 +211,10 @@ test('getCourse fills a miss from the golfapi cache and does not invent', async 
     assert.ok(seeded);
     saveCachedHydrate(seeded!, ['88', 'namecity:cache hit cc|conway']);
     const client = createCourseDataClient({
-      getKey: () => 'gca-key',
+      getBaseUrl: () => 'https://share.test/gca/v1',
       fetch: async (input) => {
         const url = String(input);
-        if (url.includes('golfapi.io')) {
+        if (url.includes('/golfapi/')) {
           throw new Error('cache should skip golfapi');
         }
         if (url.includes('green-centers')) {

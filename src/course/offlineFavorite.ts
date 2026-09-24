@@ -20,8 +20,8 @@ export type OfflineDownloadDeps = {
   now?: () => string;
   onStatus?: (status: OfflinePackStatus) => void;
   resolve?: (course: CourseHydrateMatch) => Promise<CoursePaintResult>;
-  /** Same Golf Courses API key and fetch live paint uses for GCA Pro. */
-  getKey?: () => string | null;
+  /** Same Worker base and fetch live paint uses for GCA Pro. */
+  getBaseUrl?: () => string | null;
   fetch?: typeof fetch;
   cache?: CoursePaintCache;
 };
@@ -45,7 +45,7 @@ async function resolveWithWaterfall(
     loadOsm: async () => loadOsmOpenGolfCandidate(course),
     loadGca: async () => {
       const loaded = await loadGcaPaintCandidate(course.courseKey, {
-        getKey: deps.getKey,
+        getBaseUrl: deps.getBaseUrl,
         fetch: deps.fetch,
       });
       return loaded?.candidate ?? null;
