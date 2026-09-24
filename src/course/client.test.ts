@@ -7,7 +7,7 @@ import {
   saveCachedHydrate,
 } from './golfapi';
 import { fetchOsmOverlay } from './osmOverlay';
-import { resetCoursePaintCacheForTests } from './paintCache';
+import { getSharedCoursePaintCache, resetCoursePaintCacheForTests } from './paintCache';
 
 test('client is unconfigured without the share-sync Worker and does not call the network', async () => {
   let calls = 0;
@@ -269,4 +269,116 @@ test('OSM overlay is skipped without a real location — no invented polygons', 
   );
   assert.equal(overlay, null);
   assert.equal(calls, 0);
+});
+
+const CACHED_TEE = { lat: 35.5250149, lng: -92.0393432 };
+const CACHED_GREEN = { lat: 35.522655, lng: -92.0393088 };
+
+test('worker down uses the last sane paint cache and does not invent par or yards', async () => {
+  resetCoursePaintCacheForTests();
+  let calls = 0;
+  await getSharedCoursePaintCache().put({
+    v: 1,
+    key: 'id:55',
+    aliases: [],
+    source: 'golfapi',
+    name: 'Cached Only CC',
+    city: 'Conway',
+    numHoles: 18,
+    nineByTwo: false,
+    fetchedAt: '2026-09-21T00:00:00Z',
+    holes: [{ hole: 1, tee: CACHED_TEE, green: CACHED_GREEN }],
+  });
+  const offline = createCourseDataClient({
+    getBaseUrl: () => null,
+    fetch: async () => {
+      calls += 1;
+      throw new Error('worker is down');
+    },
+  });
+  const detail = await offline.getCourse('55');
+  assert.equal(calls, 0);
+  assert.equal(detail?.paintResult?.ok, true);
+  assert.equal(detail?.paintResult?.fromCache, true);
+  assert.equal(detail?.paintResult?.source, 'golfapi');
+  assert.equal(detail?.holes.length, 1);
+  assert.deepEqual(detail?.holes[0]?.teeCentroid, CACHED_TEE);
+  assert.deepEqual(detail?.holes[0]?.greenCentroid, CACHED_GREEN);
+  assert.equal(detail?.holes[0]?.par, null);
+  assert.equal(detail?.holes[0]?.yards, null);
+  assert.equal(detail?.location, null);
+
+  let workerCalls = 0;
+  const down = createCourseDataClient({
+    getBaseUrl: () => 'https://share.test/gca/v1',
+    fetch: async () => {
+      workerCalls += 1;
+      throw new Error('network down');
+    },
+  });
+  const again = await down.getCourse('55');
+  assert.equal(workerCalls, 1);
+  assert.deepEqual(again?.holes[0]?.greenCentroid, CACHED_GREEN);
+  assert.equal(again?.paintResult?.fromCache, true);
+  resetCoursePaintCacheForTests();
+});
+
+test('worker down does not paint a cache row that fails the sanity gates', async () => {
+  resetCoursePaintCacheForTests();
+  await getSharedCoursePaintCache().put({
+    v: 1,
+    key: 'id:56',
+    aliases: [],
+    source: 'golfapi',
+    name: 'Thin CC',
+    city: 'Cabot',
+    numHoles: 18,
+    nineByTwo: false,
+    fetchedAt: '2026-09-21T00:00:00Z',
+    holes: [{ hole: 1, tee: null, green: CACHED_GREEN, par: 4, yards: 400 }],
+  });
+  const offline = createCourseDataClient({
+    getBaseUrl: () => null,
+    fetch: async () => {
+      throw new Error('worker is down');
+    },
+  });
+  assert.equal(await offline.getCourse('56'), null);
+
+  const down = createCourseDataClient({
+    getBaseUrl: () => 'https://share.test/gca/v1',
+    fetch: async () => new Response('nope', { status: 503 }),
+  });
+  await assert.rejects(() => down.getCourse('56'), /Couldn’t load that course/);
+  resetCoursePaintCacheForTests();
+});
+
+test('Thunderbird stays HARD-MISS when the worker is down — poisoned cache does not paint', async () => {
+  resetCoursePaintCacheForTests();
+  await getSharedCoursePaintCache().put({
+    v: 1,
+    key: 'id:local:thunderbird-heber-springs-ar',
+    aliases: ['name:thunderbird country club|heber springs|ar'],
+    source: 'golfapi',
+    name: 'Thunderbird Country Club',
+    city: 'Heber Springs',
+    numHoles: 9,
+    nineByTwo: true,
+    fetchedAt: '2026-09-21T00:00:00Z',
+    holes: [{ hole: 1, tee: CACHED_TEE, green: CACHED_GREEN, par: 4, yards: 320 }],
+  });
+  const client = createCourseDataClient({
+    getBaseUrl: () => null,
+    fetch: async () => {
+      throw new Error('worker is down');
+    },
+  });
+  const detail = await client.getCourse('local:thunderbird-heber-springs-ar');
+  assert.equal(detail?.paintResult?.ok, false);
+  assert.equal(detail?.holes[0]?.teeCentroid, null);
+  assert.equal(detail?.holes[0]?.greenCentroid, null);
+  assert.equal(detail?.holes[0]?.par, null);
+  assert.equal(detail?.holes[0]?.yards, null);
+  assert.equal(await getSharedCoursePaintCache().get('id:local:thunderbird-heber-springs-ar'), null);
+  resetCoursePaintCacheForTests();
 });

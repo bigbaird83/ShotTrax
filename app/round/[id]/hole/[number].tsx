@@ -151,7 +151,9 @@ import type { Club, PenaltyReason } from '@/src/domain/types';
 import { lastLandingMark, markToGreen, planLiveGpsToPin, planPlayHeaderYards, toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
 import { yardsToGreen } from '@/src/sensing/yardsToGreen';
 import { describeGpsSource } from '@/src/services/location';
+import { formatPaintSourceChip } from '@/src/domain/courseCard';
 import { courseNeedsPinSheets, planMissCardCopy } from '@/src/domain/missCard';
+import { planPaintMissBanner } from '@/src/domain/paintMiss';
 import { thunderbirdCupOnGreen, thunderbirdDailyPin, thunderbirdPinHoleFor } from '@/src/domain/thunderbirdPins';
 import { MENU_SHARE_FALLBACK_MS, toastFromShareAttempt } from '@/src/domain/spectator';
 import { publishRoundScoreboard, shareLiveBoard, shareRoundSnapshot } from '@/src/services/shareRound';
@@ -659,6 +661,12 @@ export default function HoleScreen() {
     green,
     phone: null,
   });
+  const paintBanner = courseCardPaint.mount
+    ? null
+    : planPaintMissBanner({ hardMiss: needPins, unresolved: true });
+  const paintSourceChip = paintBanner
+    ? formatPaintSourceChip({ ok: false, source: null, fromCache: false })
+    : null;
   useEffect(() => {
     logCourseCardPaint({
       courseName: round?.courseName,
@@ -963,6 +971,10 @@ export default function HoleScreen() {
       yardsQuality: target || teeToGreen.quality !== 'none' || toGreen.quality !== 'none' ? 'good' : 'none',
       lastClubId: sticky?.id ?? null,
       selectedClubId: wheelSelectedId,
+      complication: {
+        yards: liveGpsToPin.yards,
+        quality: liveGpsToPin.quality,
+      },
     },
   );
 
@@ -1388,6 +1400,8 @@ export default function HoleScreen() {
           fmb={fmb}
           osmOverlay={overlay}
           missCopy={missCopy}
+          paintNotice={paintBanner}
+          paintSourceChip={paintSourceChip}
           requestCourse={requestCourse}
           placedFrom={placeMode === 'edit-from' || placeMode === 'edit-to' ? placeFrom : addShotFrom}
           placedTo={placeToDraft ?? placeTo}
@@ -2083,6 +2097,8 @@ export default function HoleScreen() {
             }}
             osmOverlay={osmOverlay}
             missCopy={missCopy}
+            paintNotice={paintBanner}
+            paintSourceChip={paintSourceChip}
             requestCourse={requestCourse}
             lockFrame
             hideYardsOverlay

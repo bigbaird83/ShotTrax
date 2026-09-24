@@ -28,7 +28,7 @@ No build step. Do not start an EAS build and do not change App Store Connect fro
 
 ## Contact line
 
-The Contact section currently says **email TBD**. Edit `docs/privacy/index.html` (the paragraph with `id="contact-email"`) before you rely on it. Course-contribution mail in the app already goes to `ShotTraxx@gmail.com` if you want that inbox.
+The Contact section in `docs/privacy/index.html` (the paragraph with `id="contact-email"`) is [ShotTraxx@gmail.com](mailto:ShotTraxx@gmail.com). Course-contribution mail in the app goes to the same inbox.
 
 ## Export flag
 

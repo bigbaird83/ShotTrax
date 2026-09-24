@@ -78,6 +78,8 @@ test('home course cards show name, distance, and last-played', () => {
   assert.match(home, /lastPlayedAtByCourse/);
   assert.match(home, /formatPaintSourceChip/);
   assert.match(home, /testID="paint-source-chip"/);
+  assert.match(home, /planPaintMissBanner/);
   assert.match(home, /EmptyPanel/);
   assert.match(home, /COPY\.firstRoundHint/);
+  assert.match(picker, /planPaintMissBanner/);
 });

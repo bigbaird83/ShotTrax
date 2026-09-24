@@ -47,6 +47,8 @@ import {
 } from '@/src/domain/placeToDrag';
 import { requestThisCourseVisible } from '@/src/domain/courseRequest';
 import { COPY, showWaitingOnLocationLine } from '@/src/domain/playerCopy';
+import type { PaintMissNotice } from '@/src/domain/paintMiss';
+import { PaintMissBanner } from './PaintMissBanner';
 import { appleBasemapTilesBestEffortOnly } from '@/src/course/startRoundEntry';
 import { isValidLatLng } from '@/src/domain/latLng';
 import { hasClosedGpsTrail, hasGpsStart } from '@/src/domain/shotSource';
@@ -101,6 +103,10 @@ type Props = {
   allowMapsChrome?: boolean;
   /** HARD-MISS / need-pins copy. Default is the generic tee+green miss. */
   missCopy?: { title: string; detail?: string | null };
+  /** Loud miss or quiet catalog-only banner. No coordinates. */
+  paintNotice?: { loud: boolean; title: string; detail: string | null; testID: 'paint-miss-banner' | 'hard-miss-banner' } | null;
+  /** Paired with the banner. Same label as the course-card chip. */
+  paintSourceChip?: string | null;
   /** Miss-card deep link. Does not invent a pin. */
   requestCourse?: { name?: string | null; city?: string | null; courseId?: string | null } | null;
 };
@@ -166,6 +172,8 @@ function TrailFallback({
   hideYardsOverlay,
   frameMiss,
   missCopy,
+  paintNotice,
+  paintSourceChip,
   requestCourse,
 }: {
   holeNumber: number;
@@ -175,6 +183,8 @@ function TrailFallback({
   hideYardsOverlay?: boolean;
   frameMiss?: boolean;
   missCopy?: { title: string; detail?: string | null };
+  paintNotice?: PaintMissNotice | null;
+  paintSourceChip?: string | null;
   requestCourse?: { name?: string | null; city?: string | null; courseId?: string | null } | null;
 }) {
   const yardsOnCard = Boolean(yardsToGreen && yardsToGreen.yards != null && Number.isFinite(yardsToGreen.yards));
@@ -199,8 +209,19 @@ function TrailFallback({
             : undefined
         }>
         <Text style={styles.holeBadgeText}>Hole {holeNumber}</Text>
-        <Text style={styles.missMsg}>{missCopy?.title ?? COPY.courseCardMissingFrame}</Text>
-        {missCopy?.detail ? <Text style={styles.missDetail}>{missCopy.detail}</Text> : null}
+        {paintSourceChip ? (
+          <Text testID="paint-source-chip" style={styles.paintChip}>
+            {paintSourceChip}
+          </Text>
+        ) : null}
+        {paintNotice ? (
+          <PaintMissBanner notice={paintNotice} />
+        ) : (
+          <>
+            <Text style={styles.missMsg}>{missCopy?.title ?? COPY.courseCardMissingFrame}</Text>
+            {missCopy?.detail ? <Text style={styles.missDetail}>{missCopy.detail}</Text> : null}
+          </>
+        )}
         {requestThisCourseVisible({
           course: {
             name: requestCourse?.name,
@@ -341,6 +362,8 @@ function NativeHoleMap({
   showPhonePin,
   allowMapsChrome = true,
   missCopy,
+  paintNotice,
+  paintSourceChip,
   requestCourse,
 }: Props) {
   const mapRef = useRef<MapView | null>(null);
@@ -613,6 +636,8 @@ function NativeHoleMap({
           hideYardsOverlay={hideYardsOverlay}
           frameMiss={Boolean(lockFrame)}
           missCopy={missCopy}
+          paintNotice={paintNotice}
+          paintSourceChip={paintSourceChip}
           requestCourse={requestCourse}
         />
       </View>
@@ -960,7 +985,10 @@ export function HoleMap(props: Props) {
       hasFix={Boolean(props.userFix)}
       hasGreen={Boolean(props.green)}
       hideYardsOverlay={props.hideYardsOverlay}
+      frameMiss={Boolean(props.paintNotice)}
       missCopy={props.missCopy}
+      paintNotice={props.paintNotice}
+      paintSourceChip={props.paintSourceChip}
     />
   );
 
@@ -1066,6 +1094,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.line,
   },
+  paintChip: { color: colors.muted, fontSize: type.tiny, fontWeight: '600' },
   missMsg: { color: colors.cream, fontSize: type.body, lineHeight: 22, fontWeight: '700' },
   missDetail: { color: colors.muted, fontSize: type.meta, lineHeight: 20, fontWeight: '700' },
   fallbackMsg: { color: colors.muted, fontSize: type.meta, lineHeight: 20 },

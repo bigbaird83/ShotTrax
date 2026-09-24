@@ -8,6 +8,7 @@ import type { CourseDetail, CourseSummary, TeeSet } from '@/src/course/types';
 import type { GpsFix } from '@/src/domain/types';
 import { COPY } from '@/src/domain/playerCopy';
 import { formatPaintSourceChip, planCourseCard, type PaintResultWinner } from '@/src/domain/courseCard';
+import { planPaintMissBanner } from '@/src/domain/paintMiss';
 import { deferCourseSearchLayout } from '@/src/domain/courseSearchLayout';
 import {
   planCourseList,
@@ -19,13 +20,14 @@ import { type CourseDistanceUnit } from '@/src/domain/courseDistance';
 import { useDb } from '@/src/db/DbProvider';
 import { getThunderbirdPinSheet, readSettingStore, setThunderbirdPinSheet } from '@/src/db/repo';
 import { holesHaveTeeGreenPaint, requestThisCourseVisible } from '@/src/domain/courseRequest';
-import { favoriteFromSummary, isFavorite, listFavorites, setFavorite } from '@/src/domain/favorites';
+import { courseIsHardMiss, favoriteFromSummary, isFavorite, listFavorites, setFavorite } from '@/src/domain/favorites';
 import { courseNeedsPinSheets } from '@/src/domain/missCard';
 import type { LatLng } from '@/src/domain/latLng';
 import { parseUsZip } from '@/src/domain/zipGeocode';
 import { getCurrentFix } from '@/src/services/location';
 import { geocodeUsZip } from '@/src/services/geocodeZip';
 import { BigButton } from './BigButton';
+import { PaintMissBanner } from './PaintMissBanner';
 import { EmptyPanel } from './EmptyPanel';
 import { useColors } from './ColorThemeProvider';
 import { ThunderbirdPinSheetPicker } from './ThunderbirdPinSheetPicker';
@@ -223,7 +225,26 @@ export function CoursePicker({
     paintKnown: selectedHoles != null,
   });
 
-  const selectedPaint = formatPaintSourceChip(detail?.paintResult);
+  const selectedHardMiss = selected
+    ? courseIsHardMiss({
+        courseKey: selected.id,
+        courseApiId: selected.id,
+        name: selected.name,
+        city: selected.city,
+        state: selected.state,
+        location: selected.location,
+      })
+    : false;
+  const selectedPaintResult = detail?.paintResult ?? (selected ? paintById[selected.id] ?? null : null);
+  const selectedBanner = selected
+    ? planPaintMissBanner({
+        paintResult: selectedPaintResult,
+        hardMiss: selectedHardMiss,
+        unresolved: !teeBusy && detail == null && (selectedPaintResult?.ok === false || error != null),
+      })
+    : null;
+  const selectedPaint = formatPaintSourceChip(selectedPaintResult) ??
+    (selectedBanner ? formatPaintSourceChip({ ok: false, source: null, fromCache: false }) : null);
   const zipMiss = error === COPY.zipGeocodeMiss;
   const emptyNearby = results != null && results.length === 0 && !busy && !zipMiss;
   const needsLocation = error === COPY.nearbyNeedsLocation;
@@ -279,6 +300,7 @@ export function CoursePicker({
               {selectedPaint}
             </Text>
           ) : null}
+          <PaintMissBanner notice={selectedBanner} />
           <Text style={styles.meta}>{placeLine(selected)}</Text>
           <View style={styles.actions}>
             <Pressable
@@ -335,12 +357,27 @@ export function CoursePicker({
       <ScrollView style={styles.list} keyboardShouldPersistTaps="handled">
         {showList
           ? listed.map((course) => {
+              const rowHardMiss = courseIsHardMiss({
+                courseKey: course.id,
+                courseApiId: course.id,
+                name: course.name,
+                city: course.city,
+                state: course.state,
+                location: course.location,
+              });
+              const rowPaint =
+                paintById[course.id] ??
+                (rowHardMiss ? { ok: false as const, source: null, fromCache: false } : null);
+              const rowBanner = planPaintMissBanner({
+                paintResult: rowPaint,
+                hardMiss: rowHardMiss,
+              });
               const card = planCourseCard({
                 name: course.name,
                 distanceMeters: course.distanceMeters,
                 unit: courseDistanceUnit,
                 lastPlayedAt: lastPlayedAtByCourse?.[course.id] ?? lastPlayedAtByCourse?.[course.name],
-                paintResult: paintById[course.id] ?? null,
+                paintResult: rowPaint,
               });
               const starred = favorites.some((row) => row.id === course.id);
               const showRequest = requestThisCourseVisible({
@@ -364,6 +401,7 @@ export function CoursePicker({
                         {card.paintSource}
                       </Text>
                     ) : null}
+                    <PaintMissBanner notice={rowBanner} />
                     <View style={styles.chips}>
                       {card.distance ? <Text style={styles.chip}>{card.distance}</Text> : null}
                       {card.lastPlayed ? <Text style={styles.chip}>{card.lastPlayed}</Text> : null}

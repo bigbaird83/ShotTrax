@@ -20,6 +20,8 @@ Never invent a tee or a green. A miss stays a miss. Bundled hydrates (North Hill
 
 **Server cache.** Optional `EXPO_PUBLIC_COURSE_PAINT_CACHE_URL` (copied to `expo.extra.coursePaintCacheUrl`). JSON `GET/PUT /{key}`, same pattern as share sync. Not a secret. When the URL is unset there is no multi-user host in this repo — the phone keeps the SQLite copy, and a second device buys golfapi once. Point the URL at any JSON object store to share PASSes.
 
+**Miss is loud.** When the share-sync Worker is down or paint cannot be resolved, the course card, picker, and play entry show a banner next to the paint-source chip. A last paint-cache record that passes the existing tee+green gates is used and the banner stays off. A failed gate does not paint. Thunderbird Heber Springs stays HARD-MISS: a quiet catalog-only banner (`Catalog only · HARD-MISS`) so the miss is not a blank GPS map. No invented tee, green, par, yards, or coordinate.
+
 ## golfapi.io runtime hydrate (last resort)
 
 golfapi runs only after OSM/OpenGolf and GCA Pro hard-miss (`GET /courses?country=US`, then `/courses/{id}` + `/coordinates/{id}`). The on-device golfapi blob remains `settings.golfapi.hydrates`. The paint waterfall also writes `settings.course.paint.cache` and, when configured, the shared JSON host. Next open of that course reads the cache only. No Worker / Worker 503 (no secret) / thin GPS → miss card. Never invents tee/green.
