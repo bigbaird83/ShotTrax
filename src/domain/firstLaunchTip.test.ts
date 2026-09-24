@@ -114,6 +114,6 @@ test('build 36 cook gate has Add-shot P0, course pick, icon, tip, and bag distan
 
   const readme = readFileSync(new URL('../../assets/images/README.md', import.meta.url), 'utf8');
   assert.match(readme, /Build 36/);
-  assert.match(readme, /illuminated pin/);
+  assert.match(readme, /white flag/);
   assert.match(readme, /first frame of Doc’s 3s open clip/);
 });

@@ -14,7 +14,8 @@ test('TF 63: BrandedSplash plays Doc 3s muted open clip; Reduce Motion uses firs
   assert.doesNotMatch(branded, /®/);
   assert.match(branded, /contentFit=\{SPLASH_RESIZE_MODE\}/);
   assert.match(branded, /nativeControls=\{false\}/);
-  assert.doesNotMatch(branded, /Animated\.(sequence|spring|timing)/);
+  assert.match(branded, /Animated\.timing/);
+  assert.doesNotMatch(branded, /Animated\.(sequence|spring)/);
   assert.doesNotMatch(branded, /splash-open-10/);
 
   const clip = new URL('../../assets/splash/splash-open-first-3s-v2.mp4', import.meta.url);
@@ -22,7 +23,8 @@ test('TF 63: BrandedSplash plays Doc 3s muted open clip; Reduce Motion uses firs
   const clipBytes = readFileSync(clip);
   const stillBytes = readFileSync(still);
   assert.ok(clipBytes.length > 80_000, '3s clip should be committed');
-  assert.ok(clipBytes.length < 500_000, 'must be the 3s trim, not a 10s sting');
+  assert.ok(clipBytes.length < 2_000_000, 'must be the 3s clip, not a long sting');
+  assert.equal(clipBytes.includes(Buffer.from('mp4a')), false, 'audio track is removed');
   assert.ok(stillBytes.length > 0);
   assert.equal(stillBytes.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
 

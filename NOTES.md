@@ -1,6 +1,6 @@
 # ShotTraxx — P5.x
 
-User-facing name is **ShotTraxx™** (`expo.name`, iOS `CFBundleDisplayName`, Android `label`). Bundle ID `com.shottrax.app` and Expo slug `shottrax` stay unchanged. Home-screen icon files under `assets/images/` are the locked Build 36 night-green Shot/Traxx mark (illuminated pin, three lime arcs). Splash still is the first frame of Doc’s 3s open clip, shown with contain + black letterbox.
+User-facing name is **ShotTraxx™** (`expo.name`, iOS `CFBundleDisplayName`, Android `label`). Bundle ID `com.shottrax.app` and Expo slug `shottrax` stay unchanged. Home-screen icon is the owner flag mark on `#010101` (`assets/images/icon.png`). Android adaptive icons stay the Build 36 art. Splash still is the first frame of Doc’s 3s open clip, shown with contain + black letterbox (`#000101`). The clip plays on cold start only. Its audio track is removed, and playback is muted at volume 0 with `mixWithOthers`.
 
 ## Course paint waterfall
 

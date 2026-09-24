@@ -1,5 +1,5 @@
-/** Locked splash field — black letterbox around the square 960² mark. */
-export const SPLASH_BG = '#000000';
+/** Splash field sampled from the open clip's first-frame edges. */
+export const SPLASH_BG = '#000101';
 
 /** Square splash never uses cover or stretch. */
 export const SPLASH_RESIZE_MODE = 'contain' as const;

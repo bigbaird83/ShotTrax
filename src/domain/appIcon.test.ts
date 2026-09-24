@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
-test('home-screen icon is the locked Build 36 night-green Shot/Traxx art; splash still says ShotTraxx', () => {
+test('home-screen icon is the owner flag mark; splash still says ShotTraxx', () => {
   const app = JSON.parse(readFileSync(new URL('../../app.json', import.meta.url), 'utf8')) as {
     expo: {
       icon: string;
@@ -54,6 +54,6 @@ test('home-screen icon is the locked Build 36 night-green Shot/Traxx art; splash
 
   const readme = readFileSync(new URL('../../assets/images/README.md', import.meta.url), 'utf8');
   assert.match(readme, /Build 36/);
-  assert.match(readme, /illuminated pin/);
+  assert.match(readme, /white flag/);
   assert.match(readme, /first frame of Doc’s 3s open clip/);
 });
