@@ -5,6 +5,7 @@
   "dependencies": {
     "@bacons/apple-targets": "^5.0.0",
     "expo": "~57.0.23",
+    "expo-application": "~57.0.3",
     "expo-constants": "~57.0.18",
     "expo-dev-client": "~57.0.19",
     "expo-device": "~57.0.2",
@@ -51,6 +52,7 @@
     "eas-build-post-install": "node scripts/gca-green-centers-probe.mjs",
     "eas:build:ios": "eas build -p ios --profile production",
     "eas:submit:ios": "eas submit -p ios",
+    "eas:ios:testflight:preflight": "node scripts/print-beta-app-review-preflight.mjs",
     "eas:ios:testflight": "eas workflow:run .eas/workflows/production-ios-testflight.yml"
   },
   "private": true

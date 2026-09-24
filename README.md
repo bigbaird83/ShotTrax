@@ -103,9 +103,19 @@ Do **not** put Apple Team ID, App Store Connect API keys, or `.p8` files in git.
 
 Bundle ID is already `com.shottrax.app`. Marketing version is `0.1.0`; iOS `buildNumber` starts at `1`. The `production` profile auto-increments build numbers on EAS (`cli.appVersionSource`: `remote`).
 
+### Before the next external build
+
+Complete [docs/beta-app-review-preflight.md](docs/beta-app-review-preflight.md) before `eas workflow:run` or `npm run eas:ios:testflight`. Brian (via CoS) has to okay **this** build. The print command does not start a build or change App Store Connect:
+
+```bash
+npm run eas:ios:testflight:preflight
+```
+
 ### Build and send to TestFlight (external group `friends`)
 
 The next production iOS build goes out through EAS Workflows. The workflow builds with the `production` profile, uploads that build, adds it to the App Store Connect **external** group named exactly `friends`, and submits it for Beta App Review.
+
+**What to Test** is the git tip of the sources that run checks out. Job `what_to_test` runs `git log -1 --pretty=format:'%h %s'` after checkout (short SHA + subject, plus a short commit body when there is one) and passes that string to the `testflight` job as `changelog`. Manual `eas workflow:run` leaves `github.commit_message` empty, so the note comes from that git log. Example: `fa07b34 Watch Home: Favorites stay…`. Commit that tip first. A local run without `--ref` also uploads the working tree, so leave the tree clean when the note should describe the binary.
 
 ```bash
 eas workflow:run .eas/workflows/production-ios-testflight.yml
@@ -285,6 +295,8 @@ Defined in `src/config/sensing.ts`. Mark path is `getFix` → `acceptFix`, then 
 | `WALK_BLOCK` | **false** | Walking-length gaps are not blocked |
 
 `soft` and `forced` GPS shots **stay in club averages** (and therefore in top-3 once a club has 5+ closed GPS or Placed shots). Badges mean those qualities are in the mix, not that they were dropped. History / summary still show SOFT / FORCED on GPS shots. Penalties and `no_gps` (`fixQuality: none`) shots are separate and never distance samples. Catch-up **Placed** shots never go through `acceptFix` and have **no** soft/good quality; they still count in averages after the 400-yard confirm.
+
+**Club-mark confidence chip:** each GPS shot-start pin (the club mark) can show a tiny **good / ok / weak** cue from that mark’s stored horizontal accuracy only (`start_accuracy_m`, the same Expo `coords.accuracy` / Watch `horizontalAccuracy` already saved). **good** &lt; 15 m, **ok** 15–25 m inclusive, **weak** &gt; 25 m. Missing, invalid, Placed, and no-GPS marks show no chip. The pin stays on `start_lat` / `start_lng`.
 
 **Putts (Signal Lab lock):** `PUTT_ASSIST`, `AUTO_PUTTS_FROM_GPS`, and `AUTO_PUTTS_FROM_LEAVE_GREEN` are **false**. Walking off the green never invents putts. **Made it** stores only user-chosen buckets (not a GPS count) and advances. **Finish putts · Hole N** is score-only — never a fabricated distance. Putter stays out of averages and top-3. The next hole still opens **Pick a club** (club-select = mark).
 

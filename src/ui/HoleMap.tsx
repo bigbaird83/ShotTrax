@@ -50,8 +50,10 @@ import { COPY, showWaitingOnLocationLine } from '@/src/domain/playerCopy';
 import { appleBasemapTilesBestEffortOnly } from '@/src/course/startRoundEntry';
 import { isValidLatLng } from '@/src/domain/latLng';
 import { hasClosedGpsTrail, hasGpsStart } from '@/src/domain/shotSource';
+import { clubMarkGpsConfidence } from '@/src/domain/gpsConfidence';
 import { planShotTrail, shotTrailDash } from '@/src/domain/shotTrail';
 import { QualityBadge } from './Badge';
+import { CLUB_MARK_CONFIDENCE_LIFT_PX, GpsConfidenceChip } from './GpsConfidenceChip';
 import { FmbRow } from './FmbRow';
 import { YardsToGreenBadge } from './YardsToGreenBadge';
 import { colors, type } from './theme';
@@ -737,6 +739,23 @@ function NativeHoleMap({
             onPress={() => onShotPress?.(shot.id)}
           />
         ))}
+        {shots.filter(hasGpsStart).map((shot) => {
+          const confidence = clubMarkGpsConfidence(shot);
+          if (!confidence) return null;
+          return (
+            <Marker
+              key={`gps-confidence-${shot.id}`}
+              coordinate={toCoord(shot.startLat, shot.startLng)}
+              anchor={{ x: 0.5, y: 1 }}
+              tappable={false}
+              tracksViewChanges
+              zIndex={2}>
+              <View pointerEvents="none" collapsable={false} style={styles.confidenceOnMark}>
+                <GpsConfidenceChip confidence={confidence} />
+              </View>
+            </Marker>
+          );
+        })}
         {closed.map((shot) => (
           <Marker
             key={`end-${shot.id}`}
@@ -1000,6 +1019,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#2F80FF',
     borderWidth: 3,
     borderColor: '#FFFFFF',
+  },
+  confidenceOnMark: {
+    alignItems: 'center',
+    paddingBottom: CLUB_MARK_CONFIDENCE_LIFT_PX,
   },
   toPinHit: {
     width: ADD_SHOT_TO_PIN_HIT_W,
