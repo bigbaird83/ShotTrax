@@ -33,6 +33,18 @@ struct ClubListState {
   /// Player-voice chip is Approximate (never SOFT).
   var showSoft: Bool { yardsQuality == "soft" }
 
+  /// Top-right live yards. Same gate as the phone: good/soft and a positive number, else —.
+  var liveYardsTrusted: Bool {
+    (complicationQuality == "good" || complicationQuality == "soft") && (complicationYards ?? 0) > 0
+  }
+
+  var liveYardsLabel: String {
+    if liveYardsTrusted, let yards = complicationYards {
+      return "\(yards) yd"
+    }
+    return "—"
+  }
+
   func label(for clubId: String) -> String {
     labels[clubId] ?? clubId
   }

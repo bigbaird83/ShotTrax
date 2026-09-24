@@ -2,13 +2,16 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { clubListPayload, clubListPushKey, parseClubList } from './watchMessages';
-import { planPlayHeaderYards } from './yardsToGreen';
+import { planLiveGpsToPin } from './yardsToGreen';
 import {
   COMPLICATION_EMPTY,
   COMPLICATION_FAMILIES,
   COMPLICATION_KIND,
   COMPLICATION_UNAVAILABLE,
+  WATCH_LIVE_YTG_MIN_MS,
   complicationFromHoleMap,
+  nextWatchLiveYtgSnapshot,
+  watchLiveYardsLabel,
 } from './watchComplication';
 
 const listBase = {
@@ -39,12 +42,7 @@ test('complication shows the hole-map yards and nothing else', () => {
 });
 
 test('complication shows Unavailable when the hole map has no trusted yards', () => {
-  const missing = planPlayHeaderYards({
-    phone: null,
-    green: null,
-    tee: null,
-    courseYards: null,
-  });
+  const missing = planLiveGpsToPin({ fix: null, green: null });
   assert.equal(missing.yards, null);
   assert.equal(missing.quality, 'none');
   const face = complicationFromHoleMap({ holeNumber: 4, map: missing });
@@ -79,28 +77,16 @@ test('complication shows Unavailable when the hole map has no trusted yards', ()
   assert.equal(forced.yards, null);
   assert.doesNotMatch(forced.inline, /140/);
 
-  // Missing green and no scorecard yards: the hole map has no number, so the face stays empty.
-  const missingGreen = planPlayHeaderYards({
-    phone: null,
-    green: null,
-    tee: null,
-    courseYards: null,
-  });
+  const missingGreen = planLiveGpsToPin({ fix: null, green: null });
   const missingFace = complicationFromHoleMap({ holeNumber: 8, map: missingGreen });
-  assert.equal(missingGreen.yards, null);
+  assert.equal(missingGreen.quality, 'none');
   assert.equal(missingFace.yards, null);
   assert.equal(missingFace.detail, COMPLICATION_UNAVAILABLE);
-
-  // A published card yardage is the hole map's number even before a green is painted.
-  const card = planPlayHeaderYards({
-    phone: null,
-    green: null,
-    tee: null,
-    courseYards: 371,
-  });
-  const cardFace = complicationFromHoleMap({ holeNumber: 8, map: card });
-  assert.equal(cardFace.yards, card.yards);
-  assert.equal(cardFace.unavailable, card.yards == null);
+  assert.equal(watchLiveYardsLabel(missingGreen).text, COMPLICATION_EMPTY);
+  assert.equal(watchLiveYardsLabel(missingGreen).trusted, false);
+  assert.equal(watchLiveYardsLabel({ yards: 90, quality: 'none' }).text, COMPLICATION_EMPTY);
+  assert.equal(watchLiveYardsLabel({ yards: 164, quality: 'good' }).text, '164 yd');
+  assert.equal(watchLiveYardsLabel({ yards: 150, quality: 'soft' }).trusted, true);
 });
 
 test('complication does not invent Hole 1 when no hole is live', () => {
@@ -182,12 +168,20 @@ test('complication uses the watch widget families and the phone hole-map number'
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const pick = readFileSync(new URL('../../app/round/[id]/club-pick.tsx', import.meta.url), 'utf8');
   const watchPush = hole.slice(hole.indexOf('useWatchClubList'), hole.indexOf('if (!round || !hole)'));
-  assert.match(watchPush, /complication:\s*\{[^}]*playHeaderYards\.yards/s);
-  assert.match(watchPush, /quality: playHeaderYards\.quality/);
-  assert.doesNotMatch(watchPush, /complication:[\s\S]*liveToGreen/);
-  assert.doesNotMatch(watchPush, /complication:[\s\S]*liveGpsToPin/);
-  assert.match(pick, /complication:\s*\{[^}]*playHeaderYards\.yards/s);
-  assert.match(pick, /planPlayHeaderYards\(/);
+  assert.match(watchPush, /complication:\s*\{[^}]*liveGpsToPin\.yards/s);
+  assert.match(watchPush, /quality: liveGpsToPin\.quality/);
+  assert.doesNotMatch(watchPush, /yardsToGreen: liveToGreen\.yards/);
+  assert.doesNotMatch(watchPush, /complication:[\s\S]*playHeaderYards/);
+  assert.match(pick, /complication:\s*\{[^}]*liveGpsToPin\.yards/s);
+  assert.match(pick, /planLiveGpsToPin\(/);
+  assert.match(watchPush, /yardsToGreen: target\?\.dYards/);
+
+  const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  const clubPick = watchUi.slice(watchUi.indexOf('private var clubPick'), watchUi.indexOf('private var moreClubs'));
+  assert.match(clubPick, /session\.list\.statusLine/);
+  assert.match(clubPick, /session\.list\.liveYardsLabel/);
+  assert.ok(clubPick.indexOf('session.list.statusLine') < clubPick.indexOf('session.list.liveYardsLabel'));
+  assert.ok(clubPick.indexOf('session.list.liveYardsLabel') < clubPick.indexOf('session.leave("back")'));
 
   const widget = readFileSync(new URL('../../targets/watch-widget/index.swift', import.meta.url), 'utf8');
   assert.match(widget, /kind: "ShotTraxxHoleYards"/);
@@ -213,4 +207,56 @@ test('complication uses the watch widget families and the phone hole-map number'
     session.slice(session.indexOf('private func persist'), session.indexOf('private func loadFromDefaults')),
     /CLLocation|requestLocation|startUpdatingLocation/,
   );
+  assert.match(session, /var liveYardsLabel/);
+  assert.match(session, /return "—"/);
+});
+
+test('live yards wait between drift updates and clear immediately when untrusted', () => {
+  const first = nextWatchLiveYtgSnapshot({
+    previous: null,
+    holeNumber: 4,
+    live: { yards: 180, quality: 'good' },
+    nowMs: 1_000,
+  });
+  assert.equal(first.commit, true);
+  assert.equal(first.snapshot.yards, 180);
+
+  const soon = nextWatchLiveYtgSnapshot({
+    previous: first.snapshot,
+    holeNumber: 4,
+    live: { yards: 176, quality: 'good' },
+    nowMs: 1_000 + WATCH_LIVE_YTG_MIN_MS - 1,
+  });
+  assert.equal(soon.commit, false);
+  assert.equal(soon.snapshot.yards, 180);
+
+  const later = nextWatchLiveYtgSnapshot({
+    previous: first.snapshot,
+    holeNumber: 4,
+    live: { yards: 170, quality: 'good' },
+    nowMs: 1_000 + WATCH_LIVE_YTG_MIN_MS,
+  });
+  assert.equal(later.commit, true);
+  assert.equal(later.snapshot.yards, 170);
+
+  const lost = nextWatchLiveYtgSnapshot({
+    previous: first.snapshot,
+    holeNumber: 4,
+    live: { yards: 180, quality: 'none' },
+    nowMs: 1_100,
+  });
+  assert.equal(lost.commit, true);
+  assert.equal(lost.snapshot.yards, null);
+  assert.equal(lost.snapshot.quality, 'none');
+  assert.equal(watchLiveYardsLabel({ yards: lost.snapshot.yards, quality: lost.snapshot.quality }).text, '—');
+
+  const holeChange = nextWatchLiveYtgSnapshot({
+    previous: first.snapshot,
+    holeNumber: 5,
+    live: { yards: 400, quality: 'good' },
+    nowMs: 1_100,
+  });
+  assert.equal(holeChange.commit, true);
+  assert.equal(holeChange.snapshot.yards, 400);
+  assert.equal(holeChange.snapshot.holeNumber, 5);
 });

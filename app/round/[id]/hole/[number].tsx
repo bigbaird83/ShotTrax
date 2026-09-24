@@ -964,8 +964,8 @@ export default function HoleScreen() {
       lastClubId: sticky?.id ?? null,
       selectedClubId: wheelSelectedId,
       complication: {
-        yards: playHeaderYards.yards,
-        quality: playHeaderYards.quality,
+        yards: liveGpsToPin.yards,
+        quality: liveGpsToPin.quality,
       },
     },
   );

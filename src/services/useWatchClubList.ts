@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { nextWatchLiveYtgSnapshot, type WatchLiveYtgSnapshot } from '../domain/watchComplication';
 import { clubListPushKey } from '../domain/watchMessages';
 import {
   buildClubList,
@@ -31,13 +32,34 @@ export function useWatchClubList(
     yardsQuality: 'good' | 'soft' | 'forced' | 'none';
     lastClubId?: string | null;
     selectedClubId?: string | null;
-    /** Hole-map yards for the Watch complication. Not the live GPS badge. */
+    /** Live hole-map yards (`planLiveGpsToPin`). Omitted leaves the Watch header unchanged. */
     complication?: { yards: number | null; quality: string } | null;
   },
 ): void {
   const ctxRef = useRef(ctx);
   ctxRef.current = ctx;
-  const payload = buildClubList(list);
+  const holdRef = useRef<WatchLiveYtgSnapshot | null>(null);
+  const restKeyRef = useRef('');
+  const restKey = clubListPushKey(buildClubList({ ...list, complication: undefined }));
+  const decision = list.complication
+    ? nextWatchLiveYtgSnapshot({
+        previous: holdRef.current,
+        holeNumber: list.holeNumber,
+        live: list.complication,
+        nowMs: Date.now(),
+        force: restKey !== restKeyRef.current,
+      })
+    : null;
+  if (decision?.commit) {
+    holdRef.current = decision.snapshot;
+    restKeyRef.current = restKey;
+  }
+  const payload = buildClubList({
+    ...list,
+    complication: decision
+      ? { yards: decision.snapshot.yards, quality: decision.snapshot.quality }
+      : list.complication,
+  });
   // Push clubList on hole change / fix quality change / bag rank change (plus labels / Same club).
   const json = `${clubListPushKey(payload)}\0${payload.lastClubId ?? ''}\0${payload.selectedClubId ?? ''}`;
 
