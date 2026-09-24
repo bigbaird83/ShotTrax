@@ -46,6 +46,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "test": "tsx --test src/domain/*.test.ts src/sensing/*.test.ts src/course/*.test.ts scripts/*.test.ts scripts/*.test.mjs",
+    "test:round-flow": "node --experimental-test-module-mocks --import tsx --test src/integration/roundFlow.test.ts",
     "opengolf:ingest": "node scripts/opengolf-osm-ingest.mjs",
     "typecheck": "tsc --noEmit",
     "gca:greens-probe": "node scripts/gca-green-centers-probe.mjs",
