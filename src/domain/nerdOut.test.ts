@@ -1,31 +1,28 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
-import { clubBookCarry, nerdOutShowsGir, nerdOutShowsStrokesGained, nerdOutShowsTrail, nerdOutTrailUsesHoleCamera, planNerdOut } from './nerdOut';
+import {
+  clubBookCarry,
+  nerdOutShowsClubTable,
+  nerdOutShowsGir,
+  nerdOutShowsStrokesGained,
+  nerdOutShowsTrail,
+  nerdOutTrailUsesHoleCamera,
+  planClubData,
+  planNerdOut,
+} from './nerdOut';
 import { PUTTER_CLUB_ID } from './defaultBag';
 
 test('nerd out uses stored score and putts only', () => {
   const out = planNerdOut({
     holeScores: [4, 5, null, 3],
     holePutts: [2, 1, 0, 2],
-    clubs: [
-      {
-        id: 'club_7i',
-        name: '7 Iron',
-        shortName: '7i',
-        count: 0,
-        avgYards: 0,
-        typicalCarryYards: null,
-        carrySource: null,
-      },
-    ],
   });
   assert.equal(out.score, 12);
   assert.equal(out.putts, 5);
   assert.equal(nerdOutShowsGir(), false);
   assert.equal(nerdOutShowsStrokesGained(), false);
   assert.deepEqual(Object.keys(out).sort(), [
-    'clubs',
     'holesScored',
     'marks',
     'putts',
@@ -44,7 +41,6 @@ test('nerd out leaves score blank when no hole scores are stored', () => {
   const out = planNerdOut({
     holeScores: [null, null],
     holePutts: [0, 0],
-    clubs: [],
   });
   assert.equal(out.score, null);
   assert.equal(out.putts, 0);
@@ -86,7 +82,7 @@ test('estimated seed keeps the estimated badge and is not a live average', () =>
   assert.notEqual(estimated.kind, 'live');
 });
 
-test('nerd out club carries are the same club-book numbers', () => {
+test('club data carries are the same club-book numbers', () => {
   const bookRows = [
     {
       id: 'club_7i',
@@ -116,11 +112,7 @@ test('nerd out club carries are the same club-book numbers', () => {
       carrySource: 'typed' as const,
     },
   ];
-  const out = planNerdOut({
-    holeScores: [5],
-    holePutts: [2],
-    clubs: bookRows,
-  });
+  const out = { clubs: planClubData(bookRows) };
   assert.equal(out.clubs.some((row) => row.id === PUTTER_CLUB_ID), false);
   assert.deepEqual(
     out.clubs.map((row) => ({ id: row.id, yards: row.yards, kind: row.kind, count: row.count })),
@@ -134,14 +126,40 @@ test('nerd out club carries are the same club-book numbers', () => {
   assert.equal(out.clubs[1]?.yards, 175);
 });
 
-test('nerd out trail uses the tee-to-green lock, even from home', () => {
-  assert.equal(nerdOutShowsTrail(), true);
-  assert.equal(nerdOutTrailUsesHoleCamera(), true);
+test('nerd out root is numbers only: no hole maps, no club table', () => {
+  assert.equal(nerdOutShowsTrail(), false);
+  assert.equal(nerdOutShowsClubTable(), false);
   const page = readFileSync(new URL('../../app/nerd-out.tsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(page, /HoleMap/);
+  assert.doesNotMatch(page, /lockHoleCamera|fetchOsmOverlay|listShotsForHole/);
+  assert.doesNotMatch(page, /useLiveFix/);
+  assert.doesNotMatch(page, /listClubAverages|planClubData|clubBookCarry/);
+  assert.doesNotMatch(page, /\.clubs\b/);
+  assert.match(page, /COPY\.reviewRounds/);
+  assert.match(page, /COPY\.clubData/);
+  assert.match(page, /'\/review-rounds'/);
+  assert.match(page, /'\/club-data'/);
+  assert.equal('clubs' in planNerdOut({ holeScores: [4], holePutts: [2] }), false);
+});
+
+test('club data screen carries the club table that left Nerd out', () => {
+  const page = readFileSync(new URL('../../app/club-data.tsx', import.meta.url), 'utf8');
+  assert.match(page, /listClubAverages/);
+  assert.match(page, /planClubData/);
+  assert.match(page, /COPY\.estimated/);
+  assert.match(page, /COPY\.typicalCarry/);
+  assert.doesNotMatch(page, /HoleMap/);
+});
+
+test('shot review uses the tee-to-green lock without live GPS', () => {
+  assert.equal(nerdOutTrailUsesHoleCamera(), true);
+  const page = readFileSync(new URL('../../app/review/[id]/shots.tsx', import.meta.url), 'utf8');
   assert.match(page, /lockHoleCamera/);
   assert.match(page, /lockFrame/);
   assert.match(page, /shotPinsForHoleCamera/);
   assert.match(page, /resolveHoleTee/);
-  assert.match(page, /phone: fix/);
+  assert.match(page, /phone: null/);
+  assert.match(page, /userFix=\{null\}/);
+  assert.doesNotMatch(page, /useLiveFix/);
   assert.doesNotMatch(page, /lockFrame=\{false\}/);
 });

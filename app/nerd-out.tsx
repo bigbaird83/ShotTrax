@@ -1,64 +1,41 @@
-import { useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { getCourseDataClient } from '@/src/course/client';
-import { formatParLabel } from '@/src/course/layout';
-import { teePointForHole, teePointFromHoleFeature } from '@/src/course/osmOverlay';
-import type { OsmOverlay } from '@/src/course/types';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useMemo } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
-import { getRound, listClubAverages, listHoles, listRounds, listShotsForHole } from '@/src/db/repo';
-import { lockHoleCamera, resolveHoleTee, shotPinsForHoleCamera } from '@/src/domain/holeCamera';
+import { getRound, listHoles, listRounds } from '@/src/db/repo';
 import { planNerdOut, planNerdOutLifetime } from '@/src/domain/nerdOut';
 import { COPY } from '@/src/domain/playerCopy';
 import { scorecardDiffLabel } from '@/src/domain/scorecard';
-import { useLiveFix } from '@/src/services/useLiveFix';
-import { HoleMap } from '@/src/ui/HoleMap';
+import { BigButton } from '@/src/ui/BigButton';
 import { Screen } from '@/src/ui/Screen';
 import { useColors } from '@/src/ui/ColorThemeProvider';
 import { type ColorPalette } from '@/src/ui/theme';
-
-const NERD_TRAIL_TO_GREEN = { yards: null, quality: 'none' as const };
 
 function formatToPar(toPar: number | null): string {
   return scorecardDiffLabel(toPar) ?? '—';
 }
 
+/** Nerd out root: high-level numbers only. Hole maps and the club table live on their own screens. */
 export default function NerdOutScreen() {
   const { roundId } = useLocalSearchParams<{ roundId?: string }>();
   const { db, revision } = useDb();
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const [osmOverlay, setOsmOverlay] = useState<OsmOverlay | null>(null);
-  const round = useMemo(
-    () => (roundId ? getRound(db, roundId) : null),
-    [db, roundId, revision],
-  );
-  const holes = useMemo(() => (round ? listHoles(db, round.id) : []), [db, round, revision]);
-  const averages = useMemo(() => listClubAverages(db), [db, revision]);
   const rounds = useMemo(() => listRounds(db), [db, revision]);
-  const fix = useLiveFix(true);
-  const clubRows = useMemo(
-    () =>
-      averages.map((row) => ({
-        id: row.club.id,
-        name: row.club.name,
-        shortName: row.club.shortName,
-        count: row.count,
-        avgYards: row.avgYards,
-        typicalCarryYards: row.typicalCarryYards,
-        carrySource: row.carrySource,
-      })),
-    [averages],
-  );
+  // Current round when opened from play; otherwise the most recent finished round.
+  const round = useMemo(() => {
+    if (roundId) return getRound(db, roundId);
+    return rounds.find((row) => row.finishedAt != null) ?? null;
+  }, [db, roundId, rounds, revision]);
+  const holes = useMemo(() => (round ? listHoles(db, round.id) : []), [db, round, revision]);
   const nerd = useMemo(
     () =>
       planNerdOut({
         holeScores: holes.map((hole) => hole.score),
         holePutts: holes.map((hole) => hole.putts),
         holePars: holes.map((hole) => hole.par),
-        clubs: clubRows,
       }),
-    [holes, clubRows],
+    [holes],
   );
   const lifetime = useMemo(
     () =>
@@ -75,158 +52,77 @@ export default function NerdOutScreen() {
     [db, rounds],
   );
 
-  useEffect(() => {
-    if (!round) {
-      setOsmOverlay(null);
-      return;
-    }
-    const location =
-      round.courseLat != null && round.courseLng != null
-        ? { lat: round.courseLat, lng: round.courseLng }
-        : null;
-    if (!location) {
-      setOsmOverlay(null);
-      return;
-    }
-    let live = true;
-    void getCourseDataClient()
-      .fetchOsmOverlay({
-        courseId: round.courseApiId,
-        location,
-      })
-      .then((overlay) => {
-        if (live) setOsmOverlay(overlay);
-      })
-      .catch(() => {
-        if (live) setOsmOverlay(null);
-      });
-    return () => {
-      live = false;
-    };
-  }, [round]);
-
   return (
     <Screen>
-      <ScrollView contentContainerStyle={styles.pad}>
-        <Text style={styles.kicker}>{COPY.nerdOut}</Text>
-        <Text style={styles.muted}>{COPY.nerdOutLede}</Text>
-        <Text style={styles.hint}>{COPY.nerdOutLimits}</Text>
+      <Text style={styles.kicker}>{COPY.nerdOut}</Text>
+      <Text style={styles.muted}>{COPY.nerdOutLede}</Text>
+      <Text style={styles.hint}>{COPY.nerdOutLimits}</Text>
 
-        {round ? (
-          <View style={styles.block}>
-            <Text style={styles.section}>{COPY.nerdOutThisRound}</Text>
-            <Text style={styles.title}>{round.courseName ?? 'Round'}</Text>
-            <Text style={styles.label}>{COPY.score}</Text>
-            <Text style={styles.value}>{nerd.score ?? '—'}</Text>
-            <Text style={styles.label}>{COPY.nerdOutVsPar}</Text>
-            <Text style={styles.value}>{formatToPar(nerd.toPar)}</Text>
-            <Text style={styles.label}>{COPY.putts}</Text>
-            <Text style={styles.value}>{nerd.putts}</Text>
-            <Text style={styles.label}>{COPY.nerdOutPuttsPerHole}</Text>
-            <Text style={styles.value}>{nerd.puttsPerHole ?? '—'}</Text>
-            <Text style={styles.muted}>
-              {nerd.marks.eagle} eagle · {nerd.marks.birdie} birdie · {nerd.marks.par} par · {nerd.marks.bogey} bogey · {nerd.marks.double} double+
-            </Text>
+      {round ? (
+        <View style={styles.block} testID="nerd-out-this-round">
+          <Text style={styles.section}>
+            {roundId ? COPY.nerdOutThisRound : COPY.nerdOutLastRound}
+          </Text>
+          <Text style={styles.title}>{round.courseName ?? 'Round'}</Text>
+          <View style={styles.grid}>
+            <Stat styles={styles} label={COPY.score} value={nerd.score ?? '—'} />
+            <Stat styles={styles} label={COPY.nerdOutVsPar} value={formatToPar(nerd.toPar)} />
+            <Stat styles={styles} label={COPY.putts} value={nerd.putts} />
+            <Stat styles={styles} label={COPY.nerdOutPuttsPerHole} value={nerd.puttsPerHole ?? '—'} />
           </View>
-        ) : null}
-
-        <View style={styles.block}>
-          <Text style={styles.section}>{COPY.nerdOutLifetime}</Text>
-          <Text style={styles.label}>{COPY.nerdOutFinishedRounds}</Text>
-          <Text style={styles.value}>{lifetime.finishedRounds}</Text>
-          <Text style={styles.label}>{COPY.nerdOutPuttsPerRound}</Text>
-          <Text style={styles.value}>{lifetime.puttsPerRound ?? '—'}</Text>
-          <Text style={styles.muted}>{lifetime.scoredHoles} holes scored.</Text>
+          <Text style={styles.muted}>
+            {nerd.marks.eagle} eagle · {nerd.marks.birdie} birdie · {nerd.marks.par} par · {nerd.marks.bogey} bogey · {nerd.marks.double} double+
+          </Text>
         </View>
+      ) : null}
 
-        {round
-          ? holes.map((hole) => {
-              const shots = listShotsForHole(db, hole.id);
-              const green =
-                hole.greenLat != null && hole.greenLng != null
-                  ? { lat: hole.greenLat, lng: hole.greenLng }
-                  : null;
-              const camera = lockHoleCamera({
-                tee: resolveHoleTee({
-                  holeTee: teePointFromHoleFeature(osmOverlay, hole.number, green),
-                  osmTee: teePointForHole(osmOverlay, hole.number),
-                  green,
-                }),
-                green,
-                shotPins: shotPinsForHoleCamera(shots),
-                phone: fix ? { lat: fix.lat, lng: fix.lng } : null,
-              });
-              if (!camera) return null;
-              return (
-                <View key={`trail-${hole.id}`} style={styles.trail}>
-                  <Text style={styles.label}>
-                    {formatParLabel(hole.par)} · Hole {hole.number}
-                  </Text>
-                  <HoleMap
-                    holeNumber={hole.number}
-                    shots={shots}
-                    userFix={fix}
-                    green={green}
-                    yardsToGreen={NERD_TRAIL_TO_GREEN}
-                    osmOverlay={osmOverlay}
-                    lockFrame
-                    hideYardsOverlay
-                    frameEpoch={`nerd-${hole.number}`}
-                    heading={camera.heading}
-                    framePoints={camera.points.map((point) => ({
-                      latitude: point.lat,
-                      longitude: point.lng,
-                    }))}
-                  />
-                </View>
-              );
-            })
-          : null}
+      <View style={styles.block} testID="nerd-out-lifetime">
+        <Text style={styles.section}>{COPY.nerdOutLifetime}</Text>
+        <View style={styles.grid}>
+          <Stat styles={styles} label={COPY.nerdOutFinishedRounds} value={lifetime.finishedRounds} />
+          <Stat styles={styles} label={COPY.nerdOutPuttsPerRound} value={lifetime.puttsPerRound ?? '—'} />
+          <Stat styles={styles} label={COPY.nerdOutHolesScored} value={lifetime.scoredHoles} />
+        </View>
+      </View>
 
-        {nerd.clubs.map((row) => (
-          <View key={row.id} style={styles.row}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.holeTitle}>{row.name}</Text>
-              <Text style={styles.muted}>
-                {row.kind === 'live'
-                  ? `${row.count} shot${row.count === 1 ? '' : 's'}`
-                  : row.kind === 'estimated'
-                    ? COPY.estimated
-                    : row.kind === 'typed'
-                      ? COPY.typicalCarry
-                      : COPY.noClosedShots}
-              </Text>
-            </View>
-            <Text style={styles.score}>{row.yards != null ? `${row.yards}` : '—'}</Text>
-          </View>
-        ))}
-      </ScrollView>
+      <BigButton
+        label={COPY.reviewRounds}
+        variant="secondary"
+        onPress={() => router.push('/review-rounds')}
+      />
+      <BigButton label={COPY.clubData} variant="secondary" onPress={() => router.push('/club-data')} />
     </Screen>
+  );
+}
+
+function Stat({
+  styles,
+  label,
+  value,
+}: {
+  styles: ReturnType<typeof makeStyles>;
+  label: string;
+  value: string | number;
+}) {
+  return (
+    <View style={styles.stat}>
+      <Text style={styles.label}>{label}</Text>
+      <Text style={styles.value}>{value}</Text>
+    </View>
   );
 }
 
 function makeStyles(colors: ColorPalette) {
   return StyleSheet.create({
-    pad: { paddingBottom: 40, gap: 10 },
     kicker: { color: colors.muted, fontWeight: '800', letterSpacing: 1 },
-    title: { color: colors.cream, fontSize: 28, fontWeight: '900' },
+    title: { color: colors.cream, fontSize: 24, fontWeight: '900' },
     section: { color: colors.cream, fontSize: 18, fontWeight: '800' },
     label: { color: colors.muted, fontSize: 14, fontWeight: '800' },
-    value: { color: colors.cream, fontSize: 36, fontWeight: '900' },
+    value: { color: colors.cream, fontSize: 32, fontWeight: '900' },
     muted: { color: colors.muted, fontSize: 16 },
     hint: { color: colors.muted, fontSize: 14 },
-    block: { gap: 6, backgroundColor: colors.bgElevated, padding: 14, borderRadius: 16 },
-    trail: { gap: 8 },
-    holeTitle: { color: colors.cream, fontSize: 18, fontWeight: '700' },
-    score: { color: colors.cream, fontSize: 24, fontWeight: '900' },
-    row: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      backgroundColor: colors.bgElevated,
-      padding: 12,
-      borderRadius: 14,
-      minHeight: 64,
-    },
+    block: { gap: 8, backgroundColor: colors.bgElevated, padding: 14, borderRadius: 16 },
+    grid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 },
+    stat: { width: '50%', gap: 2 },
   });
 }
