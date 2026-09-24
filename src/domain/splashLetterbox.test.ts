@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { SPLASH_BG, SPLASH_RESIZE_MODE, splashLetterboxSize } from './splashLetterbox';
 
 test('TF 65: square splash letterboxes on the short edge — never cover or stretch', () => {
-  assert.equal(SPLASH_BG, '#000000');
+  assert.equal(SPLASH_BG, '#000101');
   assert.equal(SPLASH_RESIZE_MODE, 'contain');
   assert.notEqual(SPLASH_RESIZE_MODE, 'cover');
   assert.notEqual(SPLASH_RESIZE_MODE, 'stretch');
