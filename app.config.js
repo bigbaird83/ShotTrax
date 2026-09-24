@@ -3,9 +3,9 @@
  *
  * Display name is ShotTraxx™ (`expo.name`, iOS CFBundleDisplayName, Android
  * label). Bundle ID `com.shottrax.app` and slug `shottrax` stay unchanged.
- * Icon paths in app.json (`./assets/images/icon.png` and adaptive siblings)
- * are the locked Build 36 night-green Shot/Traxx mark. `splash-icon.png` is
- * the first frame of Doc’s 3s open clip (same still as splash-first-frame-v2).
+ * `expo.icon` (`./assets/images/icon.png`) is the owner flag mark on `#010101`.
+ * Android adaptive siblings are unchanged. `splash-icon.png` is the first
+ * frame of Doc’s 3s open clip (same still as splash-first-frame-v2).
  *
  * No vendor key rides in the app. Course search and paint go through the
  * share-sync Worker (EXPO_PUBLIC_SHARE_SYNC_URL → expo.extra.shareSyncUrl),

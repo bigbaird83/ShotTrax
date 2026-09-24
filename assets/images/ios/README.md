@@ -1,3 +1,3 @@
-# iOS App Icon sizes (from locked Build 36)
+# iOS App Icon sizes
 
-Generated from `../icon.png`. Expo prebuild still uses `expo.icon` → `../icon.png` and writes the AppIcon set. These files are the same night-green Shot/Traxx pixels at the sizes iOS asks for. Sizes at or under 120px use a thicker-arc master so the rings still read at ~60px.
+Generated from `../icon.png` (owner flag mark, opaque RGB, no alpha). Expo prebuild still uses `expo.icon` → `../icon.png` and writes the AppIcon set. These files are the same pixels at the sizes iOS asks for.

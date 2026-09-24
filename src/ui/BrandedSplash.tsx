@@ -2,11 +2,11 @@ import { useEventListener } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import * as SplashScreen from 'expo-splash-screen';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AccessibilityInfo, Image, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { AccessibilityInfo, Image, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { SHOTTRAXX_BRAND } from '@/src/domain/playerCopy';
 import { SPLASH_BG, SPLASH_RESIZE_MODE, splashLetterboxSize } from '@/src/domain/splashLetterbox';
 
-/** Doc’s open clip, first 3.0s, muted. Square 960² — contain + black letterbox, never cover. */
+/** Doc’s open clip, first 3.0s. Silent: muted, volume 0, audio track removed. Square 960² — contain + black letterbox, never cover. */
 const OPEN_CLIP = require('../../assets/splash/splash-open-first-3s-v2.mp4') as number;
 /** First frame of the 3s clip — Expo native splash, pre-video, and Reduce Motion. */
 const OPEN_STILL = require('../../assets/splash/splash-first-frame-v2.png');
@@ -24,7 +24,7 @@ function hideNativeSplash() {
   void SplashScreen.hideAsync().catch(() => {});
 }
 
-/** JS branded open after the static Expo splash. Muted 3s Doc clip, then onDone. */
+/** JS branded open after the static Expo splash. Plays once on cold start. Tap skips. ~4.5s safety timeout. */
 export function BrandedSplash({ onDone }: Props) {
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
@@ -70,21 +70,21 @@ export function BrandedSplash({ onDone }: Props) {
   return <VideoSplash onDone={finish} />;
 }
 
-function LetterboxedSplash({ children }: { children?: ReactNode }) {
+function LetterboxedSplash({ children, onSkip }: { children?: ReactNode; onSkip: () => void }) {
   const { width, height } = useWindowDimensions();
   const square = splashLetterboxSize(width, height);
 
   return (
-    <View
-      pointerEvents="auto"
+    <Pressable
+      onPress={onSkip}
       accessibilityRole="image"
       accessibilityLabel={SHOTTRAXX_BRAND}
       style={[styles.wrap, StyleSheet.absoluteFill]}>
-      <View style={[styles.mark, square]}>
+      <View pointerEvents="none" style={[styles.mark, square]}>
         <Image source={OPEN_STILL} style={StyleSheet.absoluteFill} resizeMode={SPLASH_RESIZE_MODE} />
         {children}
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -95,14 +95,18 @@ function StillSplash({ onDone }: { onDone: () => void }) {
     return () => clearTimeout(timeout);
   }, [onDone]);
 
-  return <LetterboxedSplash />;
+  return <LetterboxedSplash onSkip={onDone} />;
 }
 
 function VideoSplash({ onDone }: { onDone: () => void }) {
   const player = useVideoPlayer(OPEN_CLIP, (instance) => {
     instance.loop = false;
     instance.muted = true;
-    instance.audioMixingMode = 'mixWithOthers';
+    instance.volume = 0;
+    // No audio track. `auto` lets other apps keep playing while this player is muted.
+    // Unset, expo-video's iOS default is doNotMix, which pauses other audio even when muted.
+    // Do not set mixWithOthers, duckOthers, or an audio session.
+    instance.audioMixingMode = 'auto';
     instance.play();
   });
 
@@ -112,7 +116,7 @@ function VideoSplash({ onDone }: { onDone: () => void }) {
   });
 
   return (
-    <LetterboxedSplash>
+    <LetterboxedSplash onSkip={onDone}>
       <VideoView
         player={player}
         style={StyleSheet.absoluteFill}
