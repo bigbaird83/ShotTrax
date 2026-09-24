@@ -3,7 +3,7 @@ import { Component, type ErrorInfo, type ReactNode, useEffect, useMemo, useRef, 
 import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 import MapView, { Marker, Polygon, Polyline } from 'react-native-maps';
 import type { OsmFeature, OsmGolfKind, OsmOverlay } from '@/src/course/types';
-import { featuresForHole } from '@/src/course/osmOverlay';
+import { featuresForHole, osmFeatureRendersAsLine } from '@/src/course/osmOverlay';
 import type { GpsFix, Shot } from '@/src/domain/types';
 import type { YardsToGreenResult } from '@/src/sensing/yardsToGreen';
 import {
@@ -121,13 +121,26 @@ function toCoord(lat: number, lng: number): Coord {
   return { latitude: lat, longitude: lng };
 }
 
-const OSM_DRAW_ORDER: OsmGolfKind[] = ['fairway', 'tee', 'green', 'hole'];
+const OSM_DRAW_ORDER: OsmGolfKind[] = [
+  'water_hazard',
+  'lateral_water_hazard',
+  'fairway',
+  'bunker',
+  'cartpath',
+  'tee',
+  'green',
+  'hole',
+];
 
 const OSM_STYLE: Record<OsmGolfKind, { fill?: string; stroke: string; width: number }> = {
   fairway: { fill: 'transparent', stroke: 'rgba(125, 207, 122, 0.55)', width: 2 },
   green: { fill: 'transparent', stroke: '#7DCF7A', width: 3 },
   tee: { fill: 'transparent', stroke: '#F5C542', width: 2 },
   hole: { stroke: '#F4F1E8', width: 2 },
+  bunker: { fill: 'rgba(228, 201, 138, 0.35)', stroke: '#E4C98A', width: 2 },
+  water_hazard: { fill: 'rgba(58, 160, 216, 0.3)', stroke: '#3AA0D8', width: 2 },
+  lateral_water_hazard: { fill: 'rgba(58, 160, 216, 0.3)', stroke: '#3AA0D8', width: 2 },
+  cartpath: { stroke: 'rgba(244, 241, 232, 0.8)', width: 2 },
 };
 
 function overlayFeatures(overlay: OsmOverlay | null | undefined, holeNumber: number): OsmFeature[] {
@@ -661,14 +674,14 @@ function NativeHoleMap({
         {osmFeatures.map((feature, index) => {
           const styleOsm = OSM_STYLE[feature.kind];
           const coordinates = feature.coordinates.map((point) => toCoord(point.lat, point.lng));
-          if (feature.kind === 'hole') {
+          if (osmFeatureRendersAsLine(feature)) {
             return (
               <Polyline
-                key={`osm-hole-${index}`}
+                key={`osm-line-${feature.kind}-${index}`}
                 coordinates={coordinates}
                 strokeColor={styleOsm.stroke}
                 strokeWidth={styleOsm.width}
-                lineDashPattern={[8, 6]}
+                {...(feature.kind === 'hole' ? { lineDashPattern: [8, 6] } : {})}
               />
             );
           }

@@ -98,7 +98,7 @@ Zip search is out of scope.
 
 ## OSM overlay
 
-`src/course/osmOverlay.ts` queries Overpass for `golf=green|fairway|tee|hole` around a real green pin or course coordinate. Empty / timeout / unmapped → no overlay (never invented). OSM `par=*` tags are **not** used for scorecard par.
+`src/course/osmOverlay.ts` queries Overpass for `golf=green|fairway|tee|hole` plus `golf=bunker|water_hazard|lateral_water_hazard|cartpath` around a real green pin or course coordinate. Empty / timeout / unmapped → no overlay (never invented). Bare `highway=service`, bare `natural=water`, and `golf=hazard` are not queried. OSM `par=*` tags are **not** used for scorecard par.
 
 ## OpenGolf / OSM follow ingest
 

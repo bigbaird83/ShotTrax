@@ -30,7 +30,7 @@ import {
 import { isValidLatLng, type LatLng } from './latLng';
 import type { GpsFix } from './types';
 import { NEARBY_COURSE_FIX_MAX_AGE_MS, NEARBY_COURSE_LIST_MAX, OPEN_PHONE } from './watchNearby';
-import { isIso8601 } from './watchMessages';
+import { isIso8601, PHONE_UNAVAILABLE, QUEUED_WILL_SYNC } from './watchMessages';
 
 /** Home body is Favorites. Nearby is a pushed screen, not the home list. */
 export function watchHomeBodyIsFavoritesOnly(): true {
@@ -329,6 +329,81 @@ export function planWatchHomeTap(args: {
 /** Watch Home is not a place for backups. */
 export function watchHomeShowsExportRestore(): false {
   return false;
+}
+
+/**
+ * Pocketed / backgrounded phone: homeRequest rides `transferUserInfo`
+ * (same transport as `sendReliableQueued`). Never an interactive poll.
+ */
+export function watchHomeSyncWhenUnreachable(): 'transferUserInfo' {
+  return 'transferUserInfo';
+}
+
+export function watchHomeSendMessageWhenUnreachable(): false {
+  return false;
+}
+
+/** Wrist raise and reachability flaps must not wake the phone with sendMessage. */
+export function watchHomeBackgroundRefreshUsesSendMessage(): false {
+  return false;
+}
+
+/** Loud wrist copy while that transfer is waiting. Not Phone unavailable. */
+export function watchHomeQueuedCopy(): typeof QUEUED_WILL_SYNC {
+  return QUEUED_WILL_SYNC;
+}
+
+export function watchHomeUnavailableCopy(): typeof PHONE_UNAVAILABLE {
+  return PHONE_UNAVAILABLE;
+}
+
+export type WatchHomeRefreshFace = 'home' | 'nearby';
+
+/**
+ * What Home / Search nearby say during a refresh.
+ * Unreachable + in flight → Queued · will sync on both faces.
+ * Reachable + in flight → Updating… (Home) or Finding courses… (empty Nearby).
+ */
+export function watchHomeRefreshStatus(args: {
+  phoneReachable: boolean;
+  loading: boolean;
+  nearbyEmpty: boolean;
+  face: WatchHomeRefreshFace;
+  line?: string;
+}): string {
+  if (args.loading && !args.phoneReachable) return QUEUED_WILL_SYNC;
+  if (args.face === 'nearby' && args.nearbyEmpty) {
+    if (args.loading) return 'Finding courses…';
+    const line = args.line?.trim() ?? '';
+    return line.length > 0 ? line : OPEN_PHONE;
+  }
+  if (args.loading) return 'Updating…';
+  return 'Refresh';
+}
+
+/**
+ * sendMessage and transferUserInfo share one homeRequest `at`. Run the nearby
+ * search once so the live reply and the queued transfer cannot each wake GPS.
+ * A failed attempt is forgotten so the queue can retry that `at`.
+ */
+const homeRequestApplied = new Set<string>();
+const homeRequestInflight = new Set<string>();
+
+export function watchHomeRequestShouldApply(at: string): boolean {
+  if (!at) return true;
+  if (homeRequestApplied.has(at) || homeRequestInflight.has(at)) return false;
+  homeRequestInflight.add(at);
+  return true;
+}
+
+export function watchHomeRequestDidApply(at: string): void {
+  homeRequestInflight.delete(at);
+  if (at) homeRequestApplied.add(at);
+}
+
+export function forgetWatchHomeRequestAt(at: string): void {
+  homeRequestInflight.delete(at);
+  homeRequestApplied.delete(at);
 }
 
 /** Favorites are one list, owned by the phone settings store. */

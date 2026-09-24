@@ -69,7 +69,7 @@ Read-only Pro greens probe (course 4 = Bowling Green CC): `npm run gca:greens-pr
 
 ## OSM overlays
 
-Hole map draws Overpass `golf=green`, `golf=fairway`, `golf=tee`, and `golf=hole` around a real green pin or course coordinate. Unmapped / timeout / empty → no overlay. OSM par tags are ignored.
+Hole map draws Overpass `golf=green`, `golf=fairway`, `golf=tee`, and `golf=hole` around a real green pin or course coordinate. When that response also includes `golf=bunker`, `golf=water_hazard`, `golf=lateral_water_hazard`, or `golf=cartpath`, those outlines are drawn too. Cart paths are often also `highway=service`; a service road or pond without the golf tag is not drawn. Unmapped / timeout / empty → no overlay. OSM par tags are ignored.
 
 ## Install on your iPhone (TestFlight)
 
@@ -170,7 +170,7 @@ EAS credentials for `com.shottrax.app.watch` and `com.shottrax.app.watch.widget`
 ## Maps (`react-native-maps`)
 
 - **iOS:** Apple Maps, `mapType="satellite"` (no Google API key).
-- Hole **number comes from the scorecard**, overlaid on the map. OSM `golf=green/fairway/tee/hole` **outlines** are drawn when Overpass returns them; unmapped holes stay empty (nothing invented).
+- Hole **number comes from the scorecard**, overlaid on the map. OSM `golf=green/fairway/tee/hole` **outlines** are drawn when Overpass returns them. Bunker, water-hazard, and cart-path outlines are drawn only when those OSM features are in the same response. Unmapped holes stay empty (nothing invented).
 - Polylines are **closed GPS and Placed shots** (start→end). Penalties are list rows, not trails. `no_gps` shots have no coordinates and never draw.
 - **Yards to green** uses the sensing hook `yardsToGreen(fix, greenCentroid) → { yards, quality }`. Same haversine and good (<15 m) / soft (15–25 m) bands as shot marks. No fix or no green pin → `{ yards: null, quality: 'none' }` (never invents a pin or a range). Poor GPS (>25 m) is also `none`, matching `acceptFix`. Soft GPS shows a **SOFT** badge. When quality is `none`, the map shows **yards to green — / unavailable**.
 - Course API **green centroids** feed that hook. Long-press (or **Mark green (GPS)**) still drops a **user** pin and wins over the centroid.

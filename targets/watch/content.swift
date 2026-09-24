@@ -120,6 +120,15 @@ struct ContentView: View {
         .buttonStyle(.plain)
       }
 
+      if session.home.queued {
+        Text("Queued · will sync")
+          .font(.system(size: 15, weight: .heavy))
+          .foregroundStyle(Color.orange)
+          .lineLimit(2)
+          .minimumScaleFactor(0.8)
+          .frame(maxWidth: .infinity, alignment: .leading)
+      }
+
       ScrollView {
         VStack(alignment: .leading, spacing: 6) {
           Text("Select course")
@@ -145,17 +154,19 @@ struct ContentView: View {
           }
 
           Button(action: { session.requestHome() }) {
-            Text(session.home.loading ? "Updating…" : "Refresh")
+            Text(session.home.refreshLabel)
               .font(.system(size: 13, weight: .heavy))
-              .foregroundStyle(Color("cream"))
+              .foregroundStyle(session.home.queued ? Color.orange : Color("cream"))
+              .lineLimit(1)
+              .minimumScaleFactor(0.7)
               .frame(maxWidth: .infinity, minHeight: 32)
               .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                  .stroke(Color("muted"), lineWidth: 1)
+                  .stroke(session.home.queued ? Color.orange : Color("muted"), lineWidth: 1)
               )
           }
           .buttonStyle(.plain)
-          .disabled(session.home.loading)
+          .disabled(session.home.loading && !session.home.queued)
           .padding(.top, 4)
         }
       }
@@ -184,6 +195,15 @@ struct ContentView: View {
       }
       .buttonStyle(.plain)
 
+      if session.home.queued {
+        Text("Queued · will sync")
+          .font(.system(size: 15, weight: .heavy))
+          .foregroundStyle(Color.orange)
+          .lineLimit(2)
+          .minimumScaleFactor(0.8)
+          .frame(maxWidth: .infinity, alignment: .leading)
+      }
+
       ScrollView {
         VStack(alignment: .leading, spacing: 6) {
           homeSectionTitle("Nearby")
@@ -192,28 +212,30 @@ struct ContentView: View {
             ForEach(nearby) { course in
               homeRow(course)
             }
-          } else if session.home.loading {
+          } else if session.home.loading && !session.home.queued {
             Text("Finding courses…")
               .font(.system(size: 12, weight: .bold))
               .foregroundStyle(Color("muted"))
-          } else {
+          } else if !session.home.queued {
             Text(session.home.line.isEmpty ? "open the phone" : session.home.line)
               .font(.system(size: 12, weight: .bold))
               .foregroundStyle(Color("cream"))
           }
 
           Button(action: { session.requestHome() }) {
-            Text(session.home.loading ? "Updating…" : "Refresh")
+            Text(session.home.refreshLabel)
               .font(.system(size: 13, weight: .heavy))
-              .foregroundStyle(Color("cream"))
+              .foregroundStyle(session.home.queued ? Color.orange : Color("cream"))
+              .lineLimit(1)
+              .minimumScaleFactor(0.7)
               .frame(maxWidth: .infinity, minHeight: 32)
               .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                  .stroke(Color("muted"), lineWidth: 1)
+                  .stroke(session.home.queued ? Color.orange : Color("muted"), lineWidth: 1)
               )
           }
           .buttonStyle(.plain)
-          .disabled(session.home.loading)
+          .disabled(session.home.loading && !session.home.queued)
           .padding(.top, 4)
         }
       }
@@ -502,11 +524,27 @@ struct ContentView: View {
       let controlHeight = geo.size.height * 0.4
       VStack(alignment: .leading, spacing: 0) {
         VStack(alignment: .leading, spacing: 6) {
-          Text(session.list.statusLine)
-            .font(.system(size: 16, weight: .bold))
-            .foregroundStyle(Color("cream"))
-            .lineLimit(2)
-            .minimumScaleFactor(0.8)
+          // Left stays Hole N · hole yards. Top-right number is live yards; caption sits under it.
+          HStack(alignment: .top, spacing: 6) {
+            Text(session.list.statusLine)
+              .font(.system(size: 16, weight: .bold))
+              .foregroundStyle(Color("cream"))
+              .lineLimit(1)
+              .minimumScaleFactor(0.6)
+              .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .trailing, spacing: 0) {
+              Text(session.list.liveYardsLabel)
+                .font(.system(size: 28, weight: .heavy))
+                .foregroundStyle(session.list.liveYardsTrusted ? Color("accent") : Color("muted"))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+              Text("to hole")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color("muted"))
+                .lineLimit(1)
+            }
+            .fixedSize(horizontal: true, vertical: true)
+          }
           if !session.feedback.isEmpty {
             Text(session.feedback)
               .font(.system(size: 12, weight: .bold))

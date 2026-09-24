@@ -121,6 +121,8 @@ export function buildClubList(args: {
   yardsQuality: 'good' | 'soft' | 'forced' | 'none';
   lastClubId?: string | null;
   selectedClubId?: string | null;
+  /** Hole-map `planPlayHeaderYards`. Omit to leave the complication unchanged. */
+  complication?: { yards: number | null; quality: string } | null;
 }): ClubListMessage {
   const labels: Record<string, string> = {};
   // Phone bag is source of truth. Full enabled bag — never a pre-trimmed top-3.
@@ -140,6 +142,7 @@ export function buildClubList(args: {
     yardsQuality: toWatchYardsQuality(args.yardsQuality),
     lastClubId: args.lastClubId ?? null,
     selectedClubId: args.selectedClubId ?? null,
+    ...(args.complication ? { complication: args.complication } : {}),
   });
 }
 

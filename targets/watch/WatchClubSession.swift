@@ -2,6 +2,9 @@ import CoreLocation
 import Foundation
 import WatchConnectivity
 import WatchKit
+#if canImport(WidgetKit)
+import WidgetKit
+#endif
 
 // Club-pick only. No motion detection, no mic, no sensor auto-mark.
 // Tap → phone club=mark GPS. Undo stays on the phone.
@@ -15,6 +18,10 @@ struct ClubListState {
   var yardsQuality: String = "none"
   var lastClubId: String? = nil
   var selectedClubId: String? = nil
+  /// Hole-map yards for the complication. 0 means no hole — never invent Hole 1.
+  var complicationHole: Int = 0
+  var complicationYards: Int? = nil
+  var complicationQuality: String = "none"
 
   var statusLine: String {
     if yardsQuality != "none", let yards = yardsToGreen, yards > 0 {
@@ -25,6 +32,18 @@ struct ClubListState {
 
   /// Player-voice chip is Approximate (never SOFT).
   var showSoft: Bool { yardsQuality == "soft" }
+
+  /// Top-right live yards. Same gate as the phone: good/soft and a positive number, else —.
+  var liveYardsTrusted: Bool {
+    (complicationQuality == "good" || complicationQuality == "soft") && (complicationYards ?? 0) > 0
+  }
+
+  var liveYardsLabel: String {
+    if liveYardsTrusted, let yards = complicationYards {
+      return "\(yards) yd"
+    }
+    return "—"
+  }
 
   func label(for clubId: String) -> String {
     labels[clubId] ?? clubId
@@ -63,6 +82,15 @@ struct WatchHomeState {
   var liveCourseName: String?
   var liveCourseId: String?
   var loading = false
+  /// True while the last homeRequest is on `transferUserInfo` because the phone
+  /// is not interactively reachable. Loud "Queued · will sync" — not a spinner
+  /// and not Phone unavailable.
+  var queued = false
+
+  var refreshLabel: String {
+    if queued { return "Queued · will sync" }
+    return loading ? "Updating…" : "Refresh"
+  }
 
   /// Favorites, each id once.
   var favoriteRows: [HomeCourse] {
@@ -140,7 +168,15 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   private var pendingFavorites: [String: (starred: Bool, at: Date)] = [:]
   private let homeKey = "watchHomeJSON"
   private let pendingFavoriteTTL: TimeInterval = 30
+  /// Wrist-raise / reachability refresh. One transfer is enough; do not queue
+  /// another (each delivery can wake the phone) while this window is open.
+  private var lastAutomaticHomeAt = Date.distantPast
+  private let automaticHomeInterval: TimeInterval = 60
+  /// Collapse the launch burst (activate + Search nearby appear) into one transfer.
+  private let homeRequestCoalesce: TimeInterval = 2
   private var receivedClubList = false
+  /// Last complication snapshot written to the app group. Reload only when it changes.
+  private var complicationStamp = ""
   /// Watch Back/Cancel on the putt sheet. Blocks phone keep-alive from reopening.
   private var userClosedPutt = false
 
@@ -191,12 +227,23 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   /// Ask the phone for a fresh Watch Home. Cached rows stay up meanwhile.
-  /// A pocketed phone is often not `isReachable` while `transferUserInfo` still
-  /// delivers, same as a club mark. Loading stays until `watchHome` arrives
-  /// (live reply or phone push). A missed interactive reply does not fail the refresh.
-  func requestHome() {
+  /// A pocketed / backgrounded phone is often not `isReachable` while
+  /// `transferUserInfo` still delivers, same path as `sendReliableQueued`.
+  /// Loading stays until `watchHome` arrives (live reply or phone push).
+  /// A missed interactive reply does not fail the refresh: the wrist shows
+  /// Queued · will sync and keeps waiting on the transfer.
+  /// `interactive` is false for wrist-raise and reachability flaps so those
+  /// do not `sendMessage` (that wakes the phone). The transfer still goes out.
+  func requestHome(interactive: Bool = true) {
     guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
     let session = WCSession.default
+    // A pocketed phone already has a transfer in flight. Do not queue another
+    // wake for the launch burst. A later Refresh still sends.
+    if home.queued && home.loading && !session.isReachable &&
+       Date().timeIntervalSince(lastAutomaticHomeAt) < homeRequestCoalesce {
+      return
+    }
+    lastAutomaticHomeAt = Date()
     home.loading = true
     var payload: [String: Any] = [
       "type": "homeRequest",
@@ -205,19 +252,35 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     attachHomeFix(&payload)
     session.transferUserInfo(payload)
     if session.isReachable {
-      session.sendMessage(payload, replyHandler: { [weak self] reply in
-        DispatchQueue.main.async {
-          guard let self else { return }
-          if let fresh = reply["home"] as? [String: Any] {
-            self.applyWatchHome(fresh)
+      home.queued = false
+      if interactive {
+        session.sendMessage(payload, replyHandler: { [weak self] reply in
+          DispatchQueue.main.async {
+            guard let self else { return }
+            if let fresh = reply["home"] as? [String: Any] {
+              self.applyWatchHome(fresh)
+            }
           }
-        }
-      }, errorHandler: nil)
+        }, errorHandler: { [weak self] _ in
+          DispatchQueue.main.async {
+            // Transfer is already queued. Stay loud — do not mark unavailable.
+            self?.home.queued = true
+          }
+        })
+      }
+    } else {
+      home.queued = true
     }
   }
 
+  /// Wrist raise and reachability changes. Prefer the transfer already in
+  /// flight over another live wake. A new transfer waits out the interval
+  /// so a flapping session does not wake the phone on every raise.
   func refreshHomeIfShowing() {
-    if showsHome { requestHome() }
+    guard showsHome else { return }
+    if home.loading { return }
+    if Date().timeIntervalSince(lastAutomaticHomeAt) < automaticHomeInterval { return }
+    requestHome(interactive: false)
   }
 
   /// Nearby search point. Watch GPS when fresh; otherwise the phone uses its own
@@ -809,9 +872,10 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       next.liveCourseName = live["courseName"] as? String
       next.liveCourseId = live["courseId"] as? String
     }
-    // A delivered home ends Finding courses… / Updating…. Never keep the spinner
-    // just because an older request was still in flight.
+    // A delivered home ends Finding courses… / Updating… / Queued · will sync.
+    // Never keep the spinner just because an older request was still in flight.
     next.loading = false
+    next.queued = false
     let now = Date()
     for (id, pending) in pendingFavorites {
       let phoneHas = next.isFavorite(id)
@@ -924,6 +988,22 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       next.yardsToGreen = nil
     }
     next.yardsQuality = message["yardsQuality"] as? String ?? "none"
+    if message["complicationQuality"] != nil {
+      let quality = message["complicationQuality"] as? String ?? "none"
+      next.complicationHole = next.holeNumber >= 1 ? next.holeNumber : 0
+      let yards = Self.complicationInt(message["complicationYards"])
+      if (quality == "good" || quality == "soft"), let yards, yards > 0 {
+        next.complicationYards = yards
+        next.complicationQuality = quality
+      } else {
+        next.complicationYards = nil
+        next.complicationQuality = "none"
+      }
+    } else {
+      next.complicationHole = list.complicationHole
+      next.complicationYards = list.complicationYards
+      next.complicationQuality = list.complicationQuality
+    }
     if let last = message["lastClubId"] as? String, !last.isEmpty {
       next.lastClubId = last
     } else {
@@ -982,6 +1062,12 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     syncRoundStay()
   }
 
+  private static func complicationInt(_ value: Any?) -> Int? {
+    if let yards = value as? Int { return yards }
+    if let yards = value as? NSNumber { return yards.intValue }
+    return nil
+  }
+
   private func persist(_ state: ClubListState) {
     let defaults = UserDefaults(suiteName: "group.com.shottrax.app")
     defaults?.set(state.holeNumber, forKey: "holeNumber")
@@ -991,6 +1077,18 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       defaults?.removeObject(forKey: "yardsToGreen")
     }
     defaults?.set(state.yardsQuality, forKey: "yardsQuality")
+    if state.complicationHole >= 1 {
+      defaults?.set(state.complicationHole, forKey: "complicationHole")
+    } else {
+      defaults?.removeObject(forKey: "complicationHole")
+    }
+    if let yards = state.complicationYards, (state.complicationQuality == "good" || state.complicationQuality == "soft"), yards > 0 {
+      defaults?.set(yards, forKey: "complicationYards")
+      defaults?.set(state.complicationQuality, forKey: "complicationQuality")
+    } else {
+      defaults?.removeObject(forKey: "complicationYards")
+      defaults?.set("none", forKey: "complicationQuality")
+    }
     defaults?.set(state.bag, forKey: "bag")
     defaults?.set(state.top3, forKey: "top3")
     defaults?.set(state.labels, forKey: "labels")
@@ -1015,6 +1113,10 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     if let yards = state.yardsToGreen, state.yardsQuality != "none" {
       obj["yardsToGreen"] = yards
     }
+    obj["complicationQuality"] = state.complicationQuality
+    if let yards = state.complicationYards, (state.complicationQuality == "good" || state.complicationQuality == "soft"), yards > 0 {
+      obj["complicationYards"] = yards
+    }
     if let last = state.lastClubId { obj["lastClubId"] = last }
     if let selected = state.selectedClubId { obj["selectedClubId"] = selected }
     if let data = try? JSONSerialization.data(withJSONObject: obj),
@@ -1022,6 +1124,11 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       defaults?.set(text, forKey: "clubListJSON")
     }
     defaults?.synchronize()
+    let stamp = "\(state.complicationHole)|\(state.complicationYards ?? -1)|\(state.complicationQuality)"
+    if stamp != complicationStamp {
+      complicationStamp = stamp
+      ComplicationReloader.reload()
+    }
   }
 
   private func loadFromDefaults() {
@@ -1044,6 +1151,14 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     next.labels = defaults?.dictionary(forKey: "labels") as? [String: String] ?? [:]
     next.lastClubId = defaults?.string(forKey: "lastClubId")
     next.selectedClubId = defaults?.string(forKey: "selectedClubId")
+    let complicationHole = defaults?.integer(forKey: "complicationHole") ?? 0
+    if complicationHole >= 1 { next.complicationHole = complicationHole }
+    next.complicationQuality = defaults?.string(forKey: "complicationQuality") ?? "none"
+    if defaults?.object(forKey: "complicationYards") != nil,
+       next.complicationQuality == "good" || next.complicationQuality == "soft" {
+      let yards = defaults?.integer(forKey: "complicationYards") ?? 0
+      if yards > 0 { next.complicationYards = yards }
+    }
     if hole > 0 || !next.bag.isEmpty {
       list = next
       receivedClubList = true
@@ -1203,5 +1318,16 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
         startRoundStay()
       }
     }
+  }
+}
+
+enum ComplicationReloader {
+  /// Ask WidgetKit to read the app group. No location fix and no phone session.
+  static func reload() {
+    #if canImport(WidgetKit)
+    if #available(watchOS 9.0, *) {
+      WidgetCenter.shared.reloadTimelines(ofKind: "ShotTraxxHoleYards")
+    }
+    #endif
   }
 }
