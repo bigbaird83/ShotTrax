@@ -25,6 +25,27 @@ public class WatchBridgeModule: Module {
       return WCSession.default.isReachable
     }
 
+    /// Diagnostics only. Reads the session. Does not activate it or send.
+    Function("readLinkStatus") { () -> [String: Any] in
+      guard WCSession.isSupported() else {
+        return ["supported": false]
+      }
+      let session = WCSession.default
+      var status: [String: Any] = [
+        "supported": true,
+        "activated": session.activationState == .activated,
+      ]
+      if session.activationState == .activated {
+        status["paired"] = session.isPaired
+        status["reachable"] = session.isReachable
+        status["remainingComplicationTransfers"] = session.remainingComplicationUserInfoTransfers
+      }
+      if let sentAt = PhoneWatchSession.shared.diagnosticsTimestampMs() {
+        status["lastSentAtMs"] = sentAt
+      }
+      return status
+    }
+
     AsyncFunction("pushClubListJson") { (json: String) in
       PhoneWatchSession.shared.pushClubListJson(json)
     }
@@ -57,6 +78,9 @@ final class PhoneWatchSession: NSObject, WCSessionDelegate {
   private var sentComplicationHole = 0
   private var sentComplicationQuality = ""
   private var sentComplicationYards: Int?
+  /// Diagnostics clock. Set only after a clubList context update or a
+  /// complication transfer is accepted. Never read by the send path.
+  private var lastSuccessfulClubOrComplicationAtMs: Double?
 
   func attach(_ module: WatchBridgeModule) {
     self.module = module
@@ -76,11 +100,30 @@ final class PhoneWatchSession: NSObject, WCSessionDelegate {
     persistStatus(obj)
     guard WCSession.isSupported() else { return }
     let session = WCSession.default
-    try? session.updateApplicationContext(applicationContext())
+    do {
+      try session.updateApplicationContext(applicationContext())
+      noteSuccessfulClubOrComplicationSend()
+    } catch {
+      // Same as the previous try?: a failed context update does not block the live message.
+    }
     if session.isReachable {
       session.sendMessage(safe, replyHandler: nil, errorHandler: nil)
     }
     transferComplicationIfNeeded(safe, session: session)
+  }
+
+  /// Epoch milliseconds of the last accepted clubList context update or complication transfer.
+  func diagnosticsTimestampMs() -> Double? {
+    lock.lock()
+    defer { lock.unlock() }
+    return lastSuccessfulClubOrComplicationAtMs
+  }
+
+  private func noteSuccessfulClubOrComplicationSend() {
+    let ms = Date().timeIntervalSince1970 * 1000
+    lock.lock()
+    lastSuccessfulClubOrComplicationAtMs = ms
+    lock.unlock()
   }
 
   /// ShotTraxxHole on the active face: wake the Watch app in the background so it
@@ -109,6 +152,7 @@ final class PhoneWatchSession: NSObject, WCSessionDelegate {
       transfer.cancel()
     }
     session.transferCurrentComplicationUserInfo(safe)
+    noteSuccessfulClubOrComplicationSend()
     sentComplicationHole = hole
     sentComplicationQuality = quality
     sentComplicationYards = yards

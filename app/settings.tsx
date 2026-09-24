@@ -1,6 +1,6 @@
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import type { ComponentProps } from 'react';
-import { useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
 import {
@@ -12,6 +12,7 @@ import {
   setThunderbirdPinSheet,
 } from '@/src/db/repo';
 import { formatBuildStamp, readBuildStamp } from '@/src/domain/buildStamp';
+import { advanceVersionRowTap, type VersionRowTapState } from '@/src/domain/diagnostics';
 import { COPY } from '@/src/domain/playerCopy';
 import type { CourseDistanceUnit } from '@/src/domain/courseDistance';
 import { COLOR_THEME_IDS, type ColorThemeId } from '@/src/domain/colorTheme';
@@ -33,6 +34,27 @@ export default function SettingsScreen() {
   const themeId = getColorTheme(db);
   const pinSheet = getThunderbirdPinSheet(db);
   const buildStamp = useMemo(() => formatBuildStamp(readBuildStamp()), []);
+  const versionTaps = useRef<VersionRowTapState>({ count: 0, firstAtMs: null });
+  const diagnosticsOpen = useRef(false);
+
+  const openDiagnostics = useCallback(() => {
+    if (diagnosticsOpen.current) return;
+    diagnosticsOpen.current = true;
+    versionTaps.current = { count: 0, firstAtMs: null };
+    router.push('/diagnostics');
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      diagnosticsOpen.current = false;
+    }, []),
+  );
+
+  const onVersionTap = () => {
+    const next = advanceVersionRowTap(versionTaps.current, Date.now());
+    versionTaps.current = { count: next.count, firstAtMs: next.firstAtMs };
+    if (next.open) openDiagnostics();
+  };
 
   const setUnit = (next: CourseDistanceUnit) => {
     setCourseDistanceUnit(db, next);
@@ -112,11 +134,15 @@ export default function SettingsScreen() {
       <Text style={styles.groupLabel}>{COPY.credits}</Text>
       <Text style={styles.credits}>{COPY.courseDataCredits}</Text>
       <Text style={styles.contact}>{COPY.contactLine}</Text>
-      {buildStamp ? (
+      <Pressable
+        accessibilityRole="text"
+        onPress={onVersionTap}
+        onLongPress={openDiagnostics}
+        delayLongPress={600}>
         <Text style={styles.stamp} selectable>
-          {buildStamp}
+          {buildStamp || 'unknown'}
         </Text>
-      ) : null}
+      </Pressable>
     </Screen>
   );
 }
