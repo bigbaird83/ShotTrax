@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { parsePuttPick, puttPickPayload } from './watchMessages';
+import { clubListPayload, parseClubList, parsePuttPick, parsePuttSheet, puttPickPayload } from './watchMessages';
 import {
   enqueueWatchPuttPick,
+  planWatchMadeItAdvance,
   rememberWatchPuttPickAt,
   watchPuttActionsMustReachPhone,
   watchPuttPickDedupesByAt,
@@ -87,4 +88,57 @@ test('TF 53 D: puttPick queues every tap — not one pending slot, not reachable
   const two = applyWatchPuttPickAdds(emptyPuttDraft(), ['inside_3', '3_to_10']);
   assert.equal(two.putts, 2);
   assert.match(session, /uniquePuttAt/);
+});
+
+test('puttPick made on hole 7 → next clubList.holeNumber === 8 and puttSheet.open === false', () => {
+  const made = parsePuttPick({ type: 'puttPick', action: 'made', at: '2026-09-24T12:00:00.000Z' });
+  assert.equal(made?.action, 'made');
+  const last = clubListPayload({
+    top3: ['club_7i', 'club_8i', 'club_6i'],
+    bag: ['club_driver', 'club_7i', 'club_8i', 'club_6i', 'club_putter'],
+    labels: { club_7i: '7i', club_8i: '8i', club_6i: '6i', club_driver: 'Dr', club_putter: 'Putter' },
+    holeNumber: 7,
+    yardsToGreen: 12,
+    yardsQuality: 'good',
+    selectedClubId: 'club_putter',
+    complication: { yards: 12, quality: 'good' },
+  });
+  const plan = planWatchMadeItAdvance({ holeNumber: 7, holeCount: 18, lengths: ['3_to_10'], last });
+  assert.equal(plan.clubList.holeNumber, 8);
+  assert.equal(plan.puttSheet.open, false);
+  assert.equal(plan.puttSheet.done, true);
+  assert.equal(plan.clubList.roundComplete, undefined);
+  assert.deepEqual(plan.clubList.bag, last.bag);
+  // Hole 7's yards never ride onto hole 8, and the putter is not left selected.
+  assert.equal(plan.clubList.yardsToGreen, null);
+  assert.equal(plan.clubList.yardsQuality, 'none');
+  assert.equal(plan.clubList.complicationYards, null);
+  assert.equal(plan.clubList.selectedClubId, undefined);
+  assert.ok(parseClubList(plan.clubList));
+  assert.equal(parsePuttSheet(plan.puttSheet)?.open, false);
+});
+
+test('Made it on the last hole → Round complete, not the Hole 18 putt sheet', () => {
+  const plan = planWatchMadeItAdvance({ holeNumber: 18, holeCount: 18, lengths: [], last: null });
+  assert.equal(plan.clubList.holeNumber, 18);
+  assert.equal(plan.clubList.roundComplete, true);
+  assert.equal(parseClubList(plan.clubList)?.roundComplete, true);
+  assert.equal(plan.puttSheet.open, false);
+  const nine = planWatchMadeItAdvance({ holeNumber: 9, holeCount: 9, lengths: [], last: null });
+  assert.equal(nine.clubList.roundComplete, true);
+});
+
+test('phone Made it pushes the Watch advance; Watch closes the sheet on done / new hole', () => {
+  const hole = readFileSync('app/round/[id]/hole/[number].tsx', 'utf8');
+  const apply = hole.slice(hole.indexOf('const applyMadeIt'), hole.indexOf('const onAttachFinishedPuttLength'));
+  assert.match(apply, /pushWatchMadeItAdvance\(\{ holeNumber: targetHole, holeCount: round\.holeCount/);
+  const watchFn = hole.slice(hole.indexOf('const onWatchPuttPick'), hole.indexOf('useWatchClubList(', hole.indexOf('const onWatchPuttPick')));
+  assert.match(watchFn, /finishHoleOut\(db, row\.id\);[\s\S]*pushWatchMadeItAdvance/);
+  const swift = readFileSync('targets/watch/WatchClubSession.swift', 'utf8');
+  assert.match(swift, /message\["done"\] as\? Bool == true/);
+  assert.match(swift, /holeChanged && putt\.holeNumber != next\.holeNumber/);
+  assert.match(swift, /message\["roundComplete"\]/);
+  const ui = readFileSync('targets/watch/content.swift', 'utf8');
+  assert.match(ui, /session\.list\.roundComplete/);
+  assert.match(ui, /Round complete/);
 });

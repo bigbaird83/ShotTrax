@@ -10,6 +10,7 @@ import {
   COMPLICATION_UNAVAILABLE,
   WATCH_LIVE_YTG_CAPTION,
   WATCH_LIVE_YTG_MIN_MS,
+  complicationFromClubList,
   complicationFromHoleMap,
   nextWatchLiveYtgSnapshot,
   watchLiveYardsLabel,
@@ -30,7 +31,7 @@ test('complication shows the hole-map yards and nothing else', () => {
   assert.equal(face.yards, 164);
   assert.equal(face.quality, 'good');
   assert.equal(face.value, '164');
-  assert.equal(face.inline, 'Hole 3 · 164 yd');
+  assert.equal(face.inline, 'H3 · 164 yd');
   assert.equal(face.detail, null);
 
   const soft = complicationFromHoleMap({
@@ -39,7 +40,7 @@ test('complication shows the hole-map yards and nothing else', () => {
   });
   assert.equal(soft.yards, 150);
   assert.equal(soft.quality, 'soft');
-  assert.equal(soft.inline, 'Hole 7 · 150 yd');
+  assert.equal(soft.inline, 'H7 · 150 yd');
 });
 
 test('complication shows Unavailable when the hole map has no trusted yards', () => {
@@ -51,7 +52,7 @@ test('complication shows Unavailable when the hole map has no trusted yards', ()
   assert.equal(face.unavailable, true);
   assert.equal(face.value, COMPLICATION_EMPTY);
   assert.equal(face.detail, COMPLICATION_UNAVAILABLE);
-  assert.equal(face.inline, `Hole 4 · ${COMPLICATION_EMPTY}`);
+  assert.equal(face.inline, `H4 · ${COMPLICATION_EMPTY}`);
   assert.doesNotMatch(face.inline, /\d+ yd/);
   assert.doesNotMatch(face.value, /\d/);
 
@@ -99,7 +100,7 @@ test('complication does not invent Hole 1 when no hole is live', () => {
   });
   assert.equal(face.holeNumber, null);
   assert.equal(face.inline, COMPLICATION_EMPTY);
-  assert.doesNotMatch(face.inline, /Hole/);
+  assert.doesNotMatch(face.inline, /Hole|H\d/);
 
   const zeroHole = complicationFromHoleMap({
     holeNumber: 0,
@@ -107,8 +108,8 @@ test('complication does not invent Hole 1 when no hole is live', () => {
   });
   assert.equal(zeroHole.holeNumber, null);
   assert.equal(zeroHole.inline, '164 yd');
-  assert.doesNotMatch(zeroHole.inline, /Hole 1/);
-  assert.doesNotMatch(zeroHole.inline, /Hole 0/);
+  assert.doesNotMatch(zeroHole.inline, /H1/);
+  assert.doesNotMatch(zeroHole.inline, /H0/);
 });
 
 test('complication yards ride on clubList and do not replace club-rank yards', () => {
@@ -269,4 +270,50 @@ test('live yards wait between drift updates and clear immediately when untrusted
   assert.equal(holeChange.commit, true);
   assert.equal(holeChange.snapshot.yards, 400);
   assert.equal(holeChange.snapshot.holeNumber, 5);
+});
+
+test('shared clubList payload: null yards + none quality → widget string uses —', () => {
+  const msg = clubListPayload({
+    ...listBase,
+    holeNumber: 7,
+    yardsToGreen: null,
+    yardsQuality: 'none',
+    complication: { yards: null, quality: 'none' },
+  });
+  const stored = parseClubList(JSON.parse(JSON.stringify(msg)));
+  assert.ok(stored);
+  const face = complicationFromClubList(stored);
+  assert.equal(face.inline, `H7 · ${COMPLICATION_EMPTY}`);
+  assert.equal(face.value, COMPLICATION_EMPTY);
+  assert.equal(face.unavailable, true);
+
+  const good = complicationFromClubList(
+    clubListPayload({ ...listBase, holeNumber: 7, yardsToGreen: 142, yardsQuality: 'good', complication: { yards: 142, quality: 'good' } }),
+  );
+  assert.equal(good.inline, 'H7 · 142 yd');
+
+  // Club-rank yards (tee / card number) never stand in for missing live yards or a missing green.
+  const rankOnly = complicationFromClubList(
+    clubListPayload({ ...listBase, holeNumber: 7, yardsToGreen: 410, yardsQuality: 'good' }),
+  );
+  assert.equal(rankOnly.inline, `H7 · ${COMPLICATION_EMPTY}`);
+  assert.doesNotMatch(JSON.stringify(rankOnly), /410/);
+  const noGreen = complicationFromClubList(
+    clubListPayload({ ...listBase, holeNumber: 7, yardsToGreen: 410, yardsQuality: 'good', complication: planLiveGpsToPin({ fix: null, green: null }) }),
+  );
+  assert.equal(noGreen.inline, `H7 · ${COMPLICATION_EMPTY}`);
+
+  const widget = readFileSync(new URL('../../targets/watch-widget/index.swift', import.meta.url), 'utf8');
+  assert.match(widget, /inline = "H\\\(holeNumber\) · \\\(yards\) yd"/);
+  assert.match(widget, /inline = "H\\\(holeNumber\) · —"/);
+  assert.doesNotMatch(widget, /SOFT/);
+  // Phone writes hole + yards + quality to its app group, and wakes the Watch when the face has the complication.
+  const bridge = readFileSync(new URL('../../modules/watch-bridge/ios/WatchBridgeModule.swift', import.meta.url), 'utf8');
+  assert.match(bridge, /forKey: "complicationHole"/);
+  assert.match(bridge, /forKey: "complicationYards"/);
+  assert.match(bridge, /forKey: "complicationQuality"/);
+  assert.match(bridge, /transferCurrentComplicationUserInfo/);
+  assert.match(bridge, /isComplicationEnabled/);
+  const app = readFileSync(new URL('../../targets/watch/index.swift', import.meta.url), 'utf8');
+  assert.match(app, /backgroundTask\(\.watchConnectivity\)/);
 });

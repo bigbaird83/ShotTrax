@@ -33,6 +33,8 @@ struct ContentView: View {
           }
           .padding(.horizontal, 4)
         }
+      } else if session.list.roundComplete && !session.putt.open {
+        roundComplete
       } else if session.putt.open {
         // Compact title only. Fixed 2×2 — Ultra clipped 0–3 and Made.
         // Back/Cancel returns to hole play — no Made/Add, no invent GPS.
@@ -789,6 +791,36 @@ struct ContentView: View {
         )
       }
     }
+  }
+
+  /// Last hole finished (Made it / Hole Out). Never the Hole 18 putt sheet.
+  @ViewBuilder
+  private var roundComplete: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("Round complete")
+        .font(.system(size: 18, weight: .heavy))
+        .foregroundStyle(Color("cream"))
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+      Text("Finish round on your phone.")
+        .font(.system(size: 13, weight: .bold))
+        .foregroundStyle(Color("muted"))
+        .lineLimit(2)
+        .minimumScaleFactor(0.8)
+      if !session.feedback.isEmpty {
+        Text(session.feedback)
+          .font(.system(size: 12, weight: .bold))
+          .foregroundStyle(session.feedback.contains("✓") ? Color("accent") : Color.orange)
+          .lineLimit(2)
+      }
+      Spacer(minLength: 0)
+      Button(action: { session.homeAfterRound() }) {
+        actionPill("Home")
+      }
+      .buttonStyle(.plain)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .padding(.horizontal, 4)
   }
 
   private func carryFromLabel(_ label: String) -> Int? {

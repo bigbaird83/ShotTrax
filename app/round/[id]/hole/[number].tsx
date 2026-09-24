@@ -142,7 +142,7 @@ import {
   type PuttLengthId,
 } from '@/src/domain/putts';
 import { canMoveFromPin, canMoveToPin, type ShotEditSnapshot } from '@/src/domain/shotEdit';
-import { addShotSheetRankYards, addShotSuggestYardsLeft, clubToRankInput, lastClosedShotYards, rankDistanceYards, rankTopClubs, resolveAddShotSuggestTarget, resolveNextShotDistanceTarget } from '@/src/domain/rankClubs';
+import { addShotSheetRankYards, addShotSuggestYardsLeft, clubToRankInput, lastClosedShotYards, rankDistanceYards, rankTopClubs, resolveAddShotSuggestTarget, resolveLiveSuggestTarget, resolveNextShotDistanceTarget, type LiveSuggestHold } from '@/src/domain/rankClubs';
 import { planFinishedHoleMiniSummary } from '@/src/domain/finishedHoleSummary';
 import { planRunningParBadge } from '@/src/domain/runningPar';
 import { planScorecardDismiss } from '@/src/domain/scorecard';
@@ -162,7 +162,7 @@ import { shareKindOrScorecard, type ShareKind } from '@/src/domain/shareChoice';
 import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, undoLastSoftGpsClubMark, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, undoShotEdit, deleteHoleShot } from '@/src/services/shotActions';
 import { useLiveFix } from '@/src/services/useLiveFix';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
-import { pushWatchPuttSheet } from '@/src/services/watchClub';
+import { pushWatchMadeItAdvance, pushWatchPuttSheet } from '@/src/services/watchClub';
 import { MADE_IT_FEEDBACK, PHONE_UNAVAILABLE } from '@/src/domain/watchMessages';
 import { HoleOutBadge, QualityBadge } from '@/src/ui/Badge';
 import { BigButton } from '@/src/ui/BigButton';
@@ -211,6 +211,7 @@ export default function HoleScreen() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButtonRef = useRef<View>(null);
   const pendingShareRef = useRef(false);
+  const suggestHoldRef = useRef<LiveSuggestHold | null>(null);
   const pendingShareKindRef = useRef<ShareKind>('scorecard');
   const shareFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [playFrameNonce, setPlayFrameNonce] = useState(0);
@@ -566,12 +567,24 @@ export default function HoleScreen() {
   const fmb = hasApiFmb(pins) ? formatFmbRow(yardsToGreenDepth(fix, pins)) : null;
   const toGreen = yardsToGreenResult;
   const teeToGreen = markToGreen(holeTee, green);
-  const target = resolveNextShotDistanceTarget({
+  const pinTarget = resolveNextShotDistanceTarget({
     landingToGreen: markToGreen(lastLandingMark(shots), green),
     teeToGreen,
     courseToGreen: toGreen,
     lastClosedYards: lastClosedShotYards(shots),
   });
+  /** Corner badge under the header: live GPS → green pin; — when GPS is poor, no pin, or > 600 yd. */
+  const liveGpsToPin = planLiveGpsToPin({ fix, green });
+  // Suggested top-3 re-rank as the player walks in: live good/soft yards win;
+  // quality none keeps the last good/soft D on this hole; else the pin target.
+  const liveSuggest = resolveLiveSuggestTarget({
+    holeNumber,
+    live: readOnly || marksOnly ? { yards: null, quality: 'none' } : liveGpsToPin,
+    held: suggestHoldRef.current,
+    fallback: pinTarget,
+  });
+  suggestHoldRef.current = liveSuggest.held;
+  const target = liveSuggest.target;
   const ranked = rankTopClubs(
     averages.map((row) => clubToRankInput(row.club, row)),
     target,
@@ -723,8 +736,6 @@ export default function HoleScreen() {
   });
   /** Signal gate: haversine(fix → hydrated green centroid). Never a card number or green-edge. */
   const liveToGreen = yardsToGreen(fix, green);
-  /** Corner badge under the header: live GPS → green pin; — when GPS is poor, no pin, or > 600 yd. */
-  const liveGpsToPin = planLiveGpsToPin({ fix, green });
   // Bottom of the sticky header (status bar + Menu / Hole / Scorecard + shot strip).
   const [headerBottom, setHeaderBottom] = useState<number | null>(null);
   const onHeaderLayout = useCallback((event: LayoutChangeEvent) => {
@@ -783,11 +794,13 @@ export default function HoleScreen() {
       if (readOnly || !planned.ok || !round) return false;
       saveDraft(targetHole, planned, true);
       setPuttOpen(false);
-      void pushWatchPuttSheet({ open: false, holeNumber: targetHole, lengths: planned.lengths });
       celebrateHoleOut();
       if (!madeItAdvancesHole({ sheetHoleNumber: targetHole, currentHoleNumber: holeNumber })) {
+        void pushWatchPuttSheet({ open: false, holeNumber: targetHole, lengths: planned.lengths, done: true });
         return true;
       }
+      // Watch leaves the putt sheet now and shows Hole N+1 (or Round complete).
+      void pushWatchMadeItAdvance({ holeNumber: targetHole, holeCount: round.holeCount, lengths: planned.lengths });
       const dest = holeAfterDone(targetHole, round.holeCount);
       if (dest.kind === 'summary') {
         router.replace(`/round/${id}/summary`);
@@ -914,6 +927,7 @@ export default function HoleScreen() {
         finishHoleOut(db, row.id);
         bump();
         celebrateHoleOut();
+        void pushWatchMadeItAdvance({ holeNumber: target, holeCount: rnd.holeCount, lengths: row.puttLengths.filter(isPuttLengthId) });
         const dest = holeAfterDone(target, rnd.holeCount);
         if (dest.kind === 'summary') router.replace(`/round/${id}/summary`);
         else router.replace(playHrefAfterHoleChange(id, dest.holeNumber));
@@ -970,7 +984,7 @@ export default function HoleScreen() {
       })),
       holeNumber,
       yardsToGreen: target?.dYards ?? teeToGreen.yards ?? toGreen.yards,
-      yardsQuality: target || teeToGreen.quality !== 'none' || toGreen.quality !== 'none' ? 'good' : 'none',
+      yardsQuality: liveSuggest.quality ?? (target || teeToGreen.quality !== 'none' || toGreen.quality !== 'none' ? 'good' : 'none'),
       lastClubId: sticky?.id ?? null,
       selectedClubId: wheelSelectedId,
       complication: {

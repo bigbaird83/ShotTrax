@@ -355,3 +355,48 @@ export function rankTopClubs(
     })
     .slice(0, limit);
 }
+
+/** Last good/soft live D on this hole. Quality none keeps it — never reshuffles to junk clubs. */
+export type LiveSuggestHold = {
+  holeNumber: number;
+  dYards: number;
+  quality: 'good' | 'soft';
+};
+
+/**
+ * Suggested top-3 D while the player walks in (phone strip AND Watch pills).
+ * 1. live `yardsToGreen(fix, green)` when quality is good or soft
+ * 2. else the last good/soft live D on this hole (quality none never replaces it)
+ * 3. else the remaining-pin target (landing / tee → pin, card)
+ * Same `rankTopClubs` seed → ≥5 live rule. Putter never ranks. No invented pin.
+ */
+export function resolveLiveSuggestTarget(args: {
+  holeNumber: number;
+  live: { yards: number | null; quality: ShotFixQuality };
+  held: LiveSuggestHold | null;
+  fallback: DistanceTarget | null;
+}): { target: DistanceTarget | null; held: LiveSuggestHold | null; quality: 'good' | 'soft' | null } {
+  const { live } = args;
+  if (
+    (live.quality === 'good' || live.quality === 'soft') &&
+    live.yards != null &&
+    Number.isFinite(live.yards) &&
+    live.yards > 0
+  ) {
+    const dYards = Math.round(live.yards);
+    return {
+      target: { source: 'yards_to_green', dYards },
+      held: { holeNumber: args.holeNumber, dYards, quality: live.quality },
+      quality: live.quality,
+    };
+  }
+  const held = args.held && args.held.holeNumber === args.holeNumber ? args.held : null;
+  if (held) {
+    return {
+      target: { source: 'yards_to_green', dYards: held.dYards },
+      held,
+      quality: held.quality,
+    };
+  }
+  return { target: args.fallback, held: null, quality: null };
+}

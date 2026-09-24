@@ -31,6 +31,7 @@ import {
   top3SortsByCarryAscending,
   top3SortsByCarryDescending,
   resolveDistanceTarget,
+  resolveLiveSuggestTarget,
   resolveNextShotDistanceTarget,
   resolveRemainingPinTarget,
   shotYardsDistanceTarget,
@@ -845,4 +846,61 @@ test('TF 53: top-3 is closest carry to remaining pin yards — not shortest or l
   );
   assert.match(hole, /addShotSheetOpeningClubIds/);
   assert.match(hole, /placeOpeningItems/);
+});
+
+/** Stock bag, no live shots yet → typical-carry seeds (putter included, never ranks). */
+function stockBagInputs(): RankClubInput[] {
+  return DEFAULT_BAG.map((row) => clubToRankInput({ ...row, enabled: true }, { avgYards: 0, count: 0 }));
+}
+
+function liveTop3(yards: number | null, quality: 'good' | 'soft' | 'none', held: Parameters<typeof resolveLiveSuggestTarget>[0]['held'] = null) {
+  const live = resolveLiveSuggestTarget({ holeNumber: 5, live: { yards, quality }, held, fallback: null });
+  return { live, ids: rankTopClubs(stockBagInputs(), live.target).map((row) => row.id) };
+}
+
+test('walking in re-ranks Suggested: 180 yd good → mid-iron; 90 yd good → wedge; putter never top-3', () => {
+  const far = liveTop3(180, 'good');
+  assert.equal(far.live.target?.dYards, 180);
+  assert.ok(far.ids.some((id) => ['club_4i', 'club_5i', 'club_6i'].includes(id)), far.ids.join(','));
+  assert.ok(!far.ids.includes(PUTTER_CLUB_ID));
+
+  const near = liveTop3(90, 'good', far.live.held);
+  assert.equal(near.live.target?.dYards, 90);
+  assert.ok(near.ids.some((id) => ['club_sw', 'club_gw', 'club_lw', 'club_48', 'club_50'].includes(id)), near.ids.join(','));
+  assert.ok(!near.ids.includes(PUTTER_CLUB_ID));
+  assert.notDeepEqual(near.ids, far.ids);
+
+  // Soft ranks the same way (Approximate on screen).
+  const soft = liveTop3(90, 'soft');
+  assert.deepEqual(soft.ids, near.ids);
+  assert.equal(soft.live.quality, 'soft');
+});
+
+test('90 yd then quality none keeps the 90 yd good ranking — never empty or junk clubs', () => {
+  const good = liveTop3(90, 'good');
+  assert.equal(good.ids.length, 3);
+  const lost = liveTop3(null, 'none', good.live.held);
+  assert.equal(lost.live.target?.dYards, 90);
+  assert.equal(lost.live.quality, 'good');
+  assert.deepEqual(lost.ids, good.ids);
+  // A held D never crosses to another hole: falls back to the pin target there.
+  const nextHole = resolveLiveSuggestTarget({
+    holeNumber: 6,
+    live: { yards: null, quality: 'none' },
+    held: good.live.held,
+    fallback: { source: 'yards_to_green', dYards: 410 },
+  });
+  assert.equal(nextHole.target?.dYards, 410);
+  assert.equal(nextHole.held, null);
+});
+
+test('hole strip and Pick a club rank from live yards; walk-away still ranks from the lie', () => {
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const pick = readFileSync(new URL('../../app/round/[id]/club-pick.tsx', import.meta.url), 'utf8');
+  for (const src of [hole, pick]) {
+    assert.match(src, /resolveLiveSuggestTarget\(\{/);
+    assert.match(src, /fallback: pinTarget/);
+    assert.match(src, /const target = liveSuggest\.target/);
+  }
+  assert.match(pick, /const rankedRef = useRef\(lieRanked\)/);
 });

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { nextWatchLiveYtgSnapshot, type WatchLiveYtgSnapshot } from '../domain/watchComplication';
-import { clubListPushKey } from '../domain/watchMessages';
+import { clubListPushKey, watchSuggestYardsToSend, type WatchSuggestSent } from '../domain/watchMessages';
 import {
   buildClubList,
   pushWatchClubList,
@@ -40,7 +40,20 @@ export function useWatchClubList(
   ctxRef.current = ctx;
   const holdRef = useRef<WatchLiveYtgSnapshot | null>(null);
   const restKeyRef = useRef('');
-  const restKey = clubListPushKey(buildClubList({ ...list, complication: undefined }));
+  const suggestSentRef = useRef<WatchSuggestSent | null>(null);
+  // Walking in: new top-3 set/order or a ≥5 yd move pushes; smaller drift keeps the last yards.
+  const fresh = buildClubList({ ...list, complication: undefined });
+  const suggest: WatchSuggestSent = {
+    holeNumber: fresh.holeNumber,
+    top3: fresh.top3,
+    yardsToGreen: fresh.yardsToGreen,
+    yardsQuality: fresh.yardsQuality,
+  };
+  const suggestYards = watchSuggestYardsToSend({ previous: suggestSentRef.current, next: suggest });
+  suggestSentRef.current = { ...suggest, yardsToGreen: suggestYards };
+  const restKey = clubListPushKey(
+    buildClubList({ ...list, yardsToGreen: suggestYards, complication: undefined }),
+  );
   const decision = list.complication
     ? nextWatchLiveYtgSnapshot({
         previous: holdRef.current,
@@ -56,6 +69,7 @@ export function useWatchClubList(
   }
   const payload = buildClubList({
     ...list,
+    yardsToGreen: suggestYards,
     complication: decision
       ? { yards: decision.snapshot.yards, quality: decision.snapshot.quality }
       : list.complication,

@@ -53,6 +53,10 @@ final class PhoneWatchSession: NSObject, WCSessionDelegate {
   /// application context so it never overwrites the clubList a live hole needs.
   private var lastWatchHome: [String: Any]?
   private let lock = NSLock()
+  /// Last hole / quality / yards sent with transferCurrentComplicationUserInfo.
+  private var sentComplicationHole = 0
+  private var sentComplicationQuality = ""
+  private var sentComplicationYards: Int?
 
   func attach(_ module: WatchBridgeModule) {
     self.module = module
@@ -76,6 +80,44 @@ final class PhoneWatchSession: NSObject, WCSessionDelegate {
     if session.isReachable {
       session.sendMessage(safe, replyHandler: nil, errorHandler: nil)
     }
+    transferComplicationIfNeeded(safe, session: session)
+  }
+
+  /// ShotTraxxHole on the active face: wake the Watch app in the background so it
+  /// writes the app group and reloads the widget even when the Watch app is not in
+  /// front. Same clubList payload — no second yardage. watchOS budgets these
+  /// transfers, so hole / quality flips always go and yard drift only in ≥20 yd steps.
+  private func transferComplicationIfNeeded(_ safe: [String: Any], session: WCSession) {
+    guard session.activationState == .activated,
+          session.isPaired,
+          session.isWatchAppInstalled,
+          session.isComplicationEnabled,
+          let quality = safe["complicationQuality"] as? String else { return }
+    let hole = Self.intValue(safe["holeNumber"]) ?? 0
+    let yards = Self.intValue(safe["complicationYards"])
+    let flipped = hole != sentComplicationHole || quality != sentComplicationQuality
+    var moved = false
+    if let yards, let sent = sentComplicationYards {
+      moved = abs(yards - sent) >= 20
+    } else {
+      moved = (yards == nil) != (sentComplicationYards == nil)
+    }
+    guard flipped || moved else { return }
+    // Keep a few transfers for the next hole change.
+    if !flipped, session.remainingComplicationUserInfoTransfers <= 5 { return }
+    for transfer in session.outstandingUserInfoTransfers where transfer.isCurrentComplicationInfo {
+      transfer.cancel()
+    }
+    session.transferCurrentComplicationUserInfo(safe)
+    sentComplicationHole = hole
+    sentComplicationQuality = quality
+    sentComplicationYards = yards
+  }
+
+  private static func intValue(_ value: Any?) -> Int? {
+    if let number = value as? Int { return number }
+    if let number = value as? NSNumber { return number.intValue }
+    return nil
   }
 
   /// Watch Home: live message when the Watch is awake, plus the application
@@ -152,6 +194,22 @@ final class PhoneWatchSession: NSObject, WCSessionDelegate {
     }
     if let lastClubId = obj["lastClubId"] as? String {
       defaults?.set(lastClubId, forKey: "lastClubId")
+    }
+    // Hole + live yards + quality for the ShotTraxxHole face (same keys the Watch writes).
+    if let quality = obj["complicationQuality"] as? String {
+      if let hole = Self.intValue(obj["holeNumber"]), hole >= 1 {
+        defaults?.set(hole, forKey: "complicationHole")
+      } else {
+        defaults?.removeObject(forKey: "complicationHole")
+      }
+      if quality == "good" || quality == "soft",
+         let yards = Self.intValue(obj["complicationYards"]), yards > 0 {
+        defaults?.set(yards, forKey: "complicationYards")
+        defaults?.set(quality, forKey: "complicationQuality")
+      } else {
+        defaults?.removeObject(forKey: "complicationYards")
+        defaults?.set("none", forKey: "complicationQuality")
+      }
     }
     if let json = try? JSONSerialization.data(withJSONObject: obj),
        let text = String(data: json, encoding: .utf8) {

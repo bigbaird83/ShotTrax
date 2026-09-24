@@ -14,7 +14,7 @@ import { planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
 import { COPY, formatPickerLeftYards, formatSuggestedClubChip } from '@/src/domain/playerCopy';
 import { clubPickLeaveHref, clubPickLeaveRunsAcceptFix, planClubPickLeave } from '@/src/domain/clubPickNav';
 import { putterOpensPuttSheet } from '@/src/domain/putts';
-import { clubToRankInput, lastClosedShotYards, rankDistanceYards, rankTopClubs, resolveNextShotDistanceTarget } from '@/src/domain/rankClubs';
+import { clubToRankInput, lastClosedShotYards, rankDistanceYards, rankTopClubs, resolveLiveSuggestTarget, resolveNextShotDistanceTarget, type LiveSuggestHold } from '@/src/domain/rankClubs';
 import { parseTypedYards } from '@/src/domain/shotSource';
 import { selectClubForMark } from '@/src/domain/stickyClub';
 import { emptyWalkAway, stepWalkAway, walkAwayEligible } from '@/src/domain/walkAway';
@@ -45,6 +45,7 @@ export default function ClubPickScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const leavingRef = useRef(false);
+  const suggestHoldRef = useRef<LiveSuggestHold | null>(null);
 
   const leavePicker = (action: 'back' | 'home') => {
     const plan = planClubPickLeave(action);
@@ -188,17 +189,26 @@ export default function ClubPickScreen() {
     shots,
   });
   const teeToGreen = markToGreen(holeTee, green);
-  const target = resolveNextShotDistanceTarget({
+  const pinTarget = resolveNextShotDistanceTarget({
     landingToGreen: markToGreen(lastLandingMark(shots), green),
     teeToGreen,
     courseToGreen: toGreen,
     lastClosedYards: lastClosedShotYards(shots),
   });
+  const liveGpsToPin = planLiveGpsToPin({ fix, green });
+  // Same walk-in re-rank as the hole strip: live good/soft wins, none keeps the last good D.
+  const liveSuggest = resolveLiveSuggestTarget({
+    holeNumber,
+    live: liveGpsToPin,
+    held: suggestHoldRef.current,
+    fallback: pinTarget,
+  });
+  suggestHoldRef.current = liveSuggest.held;
+  const target = liveSuggest.target;
   const ranked = rankTopClubs(
     averages.map((row) => clubToRankInput(row.club, row)),
     target,
   );
-  const liveGpsToPin = planLiveGpsToPin({ fix, green });
   const stripPlan = planClubStrip({
     clubs: clubs.map((club) => {
       const row = averages.find((item) => item.club.id === club.id);
@@ -253,7 +263,7 @@ export default function ClubPickScreen() {
       })),
       holeNumber,
       yardsToGreen: target?.dYards ?? teeToGreen.yards ?? toGreen.yards,
-      yardsQuality: target || teeToGreen.quality !== 'none' || toGreen.quality !== 'none' ? 'good' : 'none',
+      yardsQuality: liveSuggest.quality ?? (target || teeToGreen.quality !== 'none' || toGreen.quality !== 'none' ? 'good' : 'none'),
       lastClubId: selected?.id ?? null,
       selectedClubId: selected?.id ?? null,
       complication: {
@@ -313,8 +323,13 @@ export default function ClubPickScreen() {
     }
   };
 
-  const rankedRef = useRef(ranked);
-  rankedRef.current = ranked;
+  // Walk-away marks #1 at the lie pin — rank it from the lie, not from where the player walked to.
+  const lieRanked = rankTopClubs(
+    averages.map((row) => clubToRankInput(row.club, row)),
+    pinTarget,
+  );
+  const rankedRef = useRef(lieRanked);
+  rankedRef.current = lieRanked;
   const clubsRef = useRef(clubs);
   clubsRef.current = clubs;
   const markRef = useRef(markClub);

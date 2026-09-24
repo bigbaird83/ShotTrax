@@ -30,7 +30,8 @@ struct HoleYardsProvider: TimelineProvider {
   }
 
   func getTimeline(in context: Context, completion: @escaping (Timeline<HoleYardsEntry>) -> Void) {
-    // The Watch app reloads this timeline when the phone sends a new map number.
+    // The Watch app reloads this timeline (reloadTimelines ofKind ShotTraxxHoleYards)
+    // whenever the app-group hole / yards / quality it writes change.
     // .never avoids a GPS-free poll that would still wake the extension.
     completion(Timeline(entries: [current()], policy: .never))
   }
@@ -46,10 +47,11 @@ struct HoleYardsProvider: TimelineProvider {
     let yards: Int? = trusted ? yardsRaw : nil
     let value = yards.map { String($0) } ?? "—"
     let inline: String
+    // Same text as `complicationFromClubList`: H{n} · {yards} yd, or H{n} · — (quality none / no green).
     if let holeNumber, let yards {
-      inline = "Hole \(holeNumber) · \(yards) yd"
+      inline = "H\(holeNumber) · \(yards) yd"
     } else if let holeNumber {
-      inline = "Hole \(holeNumber) · —"
+      inline = "H\(holeNumber) · —"
     } else if let yards {
       inline = "\(yards) yd"
     } else {

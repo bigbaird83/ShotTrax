@@ -54,6 +54,8 @@ export type ClubListMessage = {
   selectedClubId?: ClubId | null;
   complicationYards?: number | null;
   complicationQuality?: YardsQuality;
+  /** Last hole finished (Made it / Hole Out). Watch shows Round complete, not the putt sheet. */
+  roundComplete?: boolean;
 };
 
 export const CLUB_LIST_KEYS = [
@@ -187,6 +189,7 @@ export function parseClubList(raw: unknown): ClubListMessage | null {
   const selectedClubId =
     typeof row.selectedClubId === 'string' && row.selectedClubId.trim() ? row.selectedClubId : undefined;
   if (selectedClubId) msg.selectedClubId = selectedClubId;
+  if (row.roundComplete === true) msg.roundComplete = true;
   return msg;
 }
 
@@ -347,6 +350,36 @@ export function clubListPayload(args: {
   };
 }
 
+/** Suggested yards on the wrist move when they change by at least this much. */
+export const WATCH_SUGGEST_YARDS_STEP = 5;
+
+export type WatchSuggestSent = {
+  holeNumber: number;
+  top3: ClubId[];
+  yardsToGreen: number | null;
+  yardsQuality: YardsQuality;
+};
+
+/**
+ * Yards to put on the next clubList while walking in. A new top-3 set or order,
+ * a new hole, a quality flip, or a move of ≥5 yd sends the fresh number.
+ * Smaller drift keeps the last sent yards so the wrist is not pinged every step.
+ */
+export function watchSuggestYardsToSend(args: {
+  previous: WatchSuggestSent | null;
+  next: WatchSuggestSent;
+}): number | null {
+  const prev = args.previous;
+  const next = args.next;
+  if (!prev) return next.yardsToGreen;
+  if (prev.holeNumber !== next.holeNumber) return next.yardsToGreen;
+  if (prev.yardsQuality !== next.yardsQuality) return next.yardsToGreen;
+  if (prev.top3.join('|') !== next.top3.join('|')) return next.yardsToGreen;
+  if (prev.yardsToGreen == null || next.yardsToGreen == null) return next.yardsToGreen;
+  if (Math.abs(next.yardsToGreen - prev.yardsToGreen) >= WATCH_SUGGEST_YARDS_STEP) return next.yardsToGreen;
+  return prev.yardsToGreen;
+}
+
 /** Identity for Watch pushes: hole, yards/quality (same bands as phone), bag rank. */
 export function clubListPushKey(msg: ClubListMessage): string {
   return JSON.stringify({
@@ -361,6 +394,7 @@ export function clubListPushKey(msg: ClubListMessage): string {
     selectedClubId: msg.selectedClubId ?? null,
     complicationYards: msg.complicationYards ?? null,
     complicationQuality: msg.complicationQuality ?? null,
+    roundComplete: msg.roundComplete === true,
   });
 }
 
@@ -396,6 +430,8 @@ export type PuttSheetMessage = {
   labels: Record<PuttLengthId, string>;
   canAdd: boolean;
   canMake: boolean;
+  /** Made it / Hole Out finished this hole. Watch closes the sheet even if it opened it locally. */
+  done?: boolean;
 };
 
 /** Watch → Phone. Add a bucket, undo last, or Made it (finishes the hole). */
@@ -421,16 +457,18 @@ export function puttSheetPayload(args: {
   open: boolean;
   holeNumber: number;
   lengths: PuttLengthId[];
+  done?: boolean;
 }): PuttSheetMessage {
   const lengths = args.lengths.filter(isPuttLengthId).slice(0, 5);
   return {
     type: 'puttSheet',
-    open: args.open,
+    open: args.done ? false : args.open,
     holeNumber: args.holeNumber,
     lengths,
     labels: puttLengthLabels(),
     canAdd: lengths.length < 5,
     canMake: true,
+    ...(args.done ? { done: true } : {}),
   };
 }
 
@@ -451,6 +489,7 @@ export function parsePuttSheet(raw: unknown): PuttSheetMessage | null {
     open: row.open,
     holeNumber,
     lengths: row.lengths as PuttLengthId[],
+    done: row.done === true,
   });
 }
 
