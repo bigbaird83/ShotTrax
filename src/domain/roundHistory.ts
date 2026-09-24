@@ -114,6 +114,13 @@ export function historyDeleteRequiresConfirm(): true {
   return true;
 }
 
+/** Hard press on a history row asks to delete, same confirm as the swipe ✕. */
+export const HISTORY_LONG_PRESS_DELETE_MS = 500;
+
+export function historyLongPressDeletes(): true {
+  return true;
+}
+
 export function historyDeletePrompt(): {
   title: typeof COPY.deleteRound;
   body: typeof COPY.deleteRoundConfirm;
