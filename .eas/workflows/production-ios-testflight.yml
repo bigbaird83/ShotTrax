@@ -1,4 +1,4 @@
-# Production iOS → external TestFlight group "friends".
+# Production iOS → external TestFlight group "Friends".
 #
 # Before this run, complete docs/beta-app-review-preflight.md
 # (npm run eas:ios:testflight:preflight — prints only, does not start a build):
@@ -12,7 +12,9 @@
 # empty, so the note is read from git, not from that field.
 # A shallow checkout is enough (`git log -1` only needs this commit).
 #
-# "friends" is an App Store Connect EXTERNAL group. eas submit --groups and
+# "Friends" is the App Store Connect EXTERNAL group name. The match is
+# case-sensitive: the lowercase name made builds 82 and 83 silently skip the
+# external group with no error. eas submit --groups and
 # eas.json submit.groups only accept INTERNAL groups, so this uses the
 # pre-packaged testflight job. submit_beta_review stays true so Beta App
 # Review always runs. Submit profile "production" reads ascAppId from eas.json.
@@ -51,6 +53,6 @@ jobs:
     params:
       build_id: ${{ needs.build_ios.outputs.build_id }}
       profile: production
-      external_groups: ["friends"]
+      external_groups: ["Friends"]
       submit_beta_review: true
       changelog: ${{ needs.what_to_test.outputs.changelog }}
