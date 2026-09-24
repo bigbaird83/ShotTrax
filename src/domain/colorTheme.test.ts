@@ -12,14 +12,21 @@ import {
   persistColorTheme,
 } from './colorTheme';
 
-test('theme preference persists across three presets', () => {
-  assert.deepEqual([...COLOR_THEME_IDS], ['dark-lime', 'light', 'high-contrast']);
+test('theme preference persists across every preset', () => {
+  assert.deepEqual(
+    [...COLOR_THEME_IDS],
+    ['dark-lime', 'midnight', 'sunset', 'clubhouse', 'carbon', 'links', 'glacier', 'light', 'high-contrast'],
+  );
   assert.equal(DEFAULT_COLOR_THEME, 'dark-lime');
   assert.equal(parseColorThemeId(null), 'dark-lime');
   assert.equal(parseColorThemeId('nope'), 'dark-lime');
   assert.equal(COLOR_THEME_LABELS['dark-lime'], 'Dark lime');
   assert.equal(COLOR_THEME_LABELS.light, 'Light');
   assert.equal(COLOR_THEME_LABELS['high-contrast'], 'High contrast');
+  assert.equal(COLOR_THEME_LABELS.midnight, 'Midnight');
+  assert.equal(COLOR_THEME_LABELS.glacier, 'Glacier');
+  assert.equal(parseColorThemeId('sunset'), 'sunset');
+  assert.equal(parseColorThemeId('SUNSET'), 'dark-lime');
   assert.equal(COPY.colorTheme, 'Color theme');
   assert.equal(COPY.themeDarkLime, 'Dark lime');
   assert.equal(COPY.themeLight, 'Light');

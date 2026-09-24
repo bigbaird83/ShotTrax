@@ -10,9 +10,20 @@ export default function TabLayout() {
         headerStyle: { backgroundColor: colors.bg },
         headerTintColor: colors.cream,
         headerTitleStyle: { fontWeight: '800' },
-        tabBarStyle: { backgroundColor: colors.bg, borderTopColor: colors.line },
-        tabBarActiveTintColor: colors.cream,
+        tabBarStyle: {
+          backgroundColor: colors.bgElevated,
+          borderTopWidth: colors.flat ? 2 : 0,
+          borderTopColor: colors.line,
+          borderTopLeftRadius: 26,
+          borderTopRightRadius: 26,
+          paddingHorizontal: 10,
+          paddingTop: 6,
+        },
+        tabBarItemStyle: { borderRadius: 18, marginHorizontal: 4 },
+        tabBarActiveBackgroundColor: colors.flat ? colors.lime : colors.accentWash,
+        tabBarActiveTintColor: colors.flat ? colors.onAccent : colors.cream,
         tabBarInactiveTintColor: colors.muted,
+        tabBarLabelStyle: { fontWeight: '700' },
       }}>
       <Tabs.Screen
         name="index"
