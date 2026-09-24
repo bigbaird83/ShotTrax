@@ -224,7 +224,9 @@ export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataCli
         loadGolfApi: () => loadGolfApiPaintCandidate(match, { fetchImpl }),
         cache: getSharedCoursePaintCache(),
       });
-      if (!paint.ok) return { ...detail, paintSource: 'miss' };
+      if (!paint.ok) {
+        return { ...detail, paintResult: { ok: false, source: null, fromCache: false } };
+      }
       const base =
         paint.source === 'gca' && !paint.fromCache && gcaRows
           ? {
@@ -236,7 +238,10 @@ export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataCli
               })),
             }
           : detail;
-      return { ...applyCoursePaintToDetail(base, paint), paintSource: paint.step };
+      return {
+        ...applyCoursePaintToDetail(base, paint),
+        paintResult: { ok: true, source: paint.source, fromCache: paint.fromCache },
+      };
     },
 
     fetchOsmOverlay(query: OsmOverlayQuery) {
@@ -248,15 +253,15 @@ export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataCli
 /** Local catalog cards never call GCA or network golfapi. Stamp only a free-step winner. */
 async function stampRecordedPaintSource(detail: CourseDetail | null): Promise<CourseDetail | null> {
   if (!detail) return null;
-  const paintSource = await recordedPaintWaterfallStep({
+  const paintResult = await recordedPaintWaterfallStep({
     name: detail.name,
     city: detail.city ?? null,
     state: detail.state ?? null,
     location: detail.location,
     courseKey: detail.id,
   });
-  if (!paintSource) return detail;
-  return { ...detail, paintSource };
+  if (!paintResult) return detail;
+  return { ...detail, paintResult };
 }
 
 let singleton: CourseDataClient | null = null;

@@ -1,3 +1,4 @@
+import type { CoursePaintSource } from '../course/paintCache';
 import { formatCourseDistance, type CourseDistanceUnit } from './courseDistance';
 import { formatHistoryRelativeDay } from './roundHistory';
 
@@ -59,18 +60,25 @@ export type CourseCardPlan = {
   paintSource: string | null;
 };
 
+/** Existing `CoursePaintResult` winner. No coordinates. */
+export type PaintResultWinner = {
+  ok: boolean;
+  source: CoursePaintSource | null;
+  fromCache: boolean;
+};
+
 /**
- * Labels TF/QA can read on the course card. Unknown or unset stays blank —
- * never a guessed source.
- *
- * cache / OSM / GCA / golfapi / miss
+ * Quiet course-card labels. Order is locked:
+ * miss, then cache (`ok && fromCache`), then OSM / GCA / golfapi from `source`.
+ * Unset stays blank.
  */
-export function formatPaintSourceChip(step: string | null | undefined): string | null {
-  if (step === 'cache') return 'cache';
-  if (step === 'osm') return 'OSM';
-  if (step === 'gca') return 'GCA';
-  if (step === 'golfapi') return 'golfapi';
-  if (step === 'miss') return 'miss';
+export function formatPaintSourceChip(result: PaintResultWinner | null | undefined): string | null {
+  if (!result) return null;
+  if (!result.ok) return 'miss';
+  if (result.fromCache) return 'cache';
+  if (result.source === 'osm' || result.source === 'manual_verified') return 'OSM';
+  if (result.source === 'gca') return 'GCA';
+  if (result.source === 'golfapi') return 'golfapi';
   return null;
 }
 
@@ -80,13 +88,13 @@ export function planCourseCard(args: {
   unit?: CourseDistanceUnit;
   lastPlayedAt?: string | null;
   nowMs?: number;
-  paintSource?: string | null;
+  paintResult?: PaintResultWinner | null;
 }): CourseCardPlan {
   const name = args.name.trim() || 'Course';
   return {
     name,
     distance: formatCourseDistance(args.distanceMeters ?? null, args.unit ?? 'mi'),
     lastPlayed: formatLastPlayedChip(args.lastPlayedAt, args.nowMs),
-    paintSource: formatPaintSourceChip(args.paintSource),
+    paintSource: formatPaintSourceChip(args.paintResult),
   };
 }

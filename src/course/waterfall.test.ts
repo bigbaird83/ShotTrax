@@ -86,8 +86,7 @@ test('paint order is OSM, then GCA, then golfapi, and a cache hit skips paid cal
   });
   assert.equal(osm.ok, true);
   assert.equal(osm.source, 'osm');
-  assert.equal(osm.step, 'osm');
-  assert.equal(formatPaintSourceChip(osm.step), 'OSM');
+  assert.equal(formatPaintSourceChip(osm), 'OSM');
   assert.equal(osm.fromCache, false);
   assert.deepEqual(log, ['osm']);
 
@@ -110,8 +109,7 @@ test('paint order is OSM, then GCA, then golfapi, and a cache hit skips paid cal
   assert.equal(again.ok, true);
   assert.equal(again.fromCache, true);
   assert.equal(again.source, 'osm');
-  assert.equal(again.step, 'cache');
-  assert.equal(formatPaintSourceChip(again.step), 'cache');
+  assert.equal(formatPaintSourceChip(again), 'cache');
   assert.deepEqual(log, []);
 });
 
@@ -135,8 +133,7 @@ test('bundled Pleasant Valley is a free hit and skips GCA and golfapi', async ()
   });
   assert.equal(result.ok, true);
   assert.equal(result.source, 'manual_verified');
-  assert.equal(result.step, 'osm');
-  assert.equal(formatPaintSourceChip(result.step), 'OSM');
+  assert.equal(formatPaintSourceChip(result), 'OSM');
   assert.equal(result.holes.length, 18);
   assert.deepEqual(log, ['osm']);
 });
@@ -179,8 +176,7 @@ test('Thunderbird is HARD-MISS: golfapi seed, device cache, and network do not p
     },
   });
   assert.equal(result.ok, false);
-  assert.equal(result.step, 'miss');
-  assert.equal(formatPaintSourceChip(result.step), 'miss');
+  assert.equal(formatPaintSourceChip(result), 'miss');
   assert.equal(result.holes.length, 0);
   assert.deepEqual(log, ['osm']);
   assert.equal(await loadGolfApiPaintCandidate(match), null);
@@ -228,8 +224,7 @@ test('OSM miss + GCA hit skips golfapi', async () => {
   );
   assert.equal(result.ok, true);
   assert.equal(result.source, 'gca');
-  assert.equal(result.step, 'gca');
-  assert.equal(formatPaintSourceChip(result.step), 'GCA');
+  assert.equal(formatPaintSourceChip(result), 'GCA');
   assert.equal(result.fromCache, false);
   assert.deepEqual(result.holes[0]?.green, GREEN);
   assert.equal(result.holes[0]?.tee, null);
@@ -297,8 +292,7 @@ test('both miss calls golfapi once, caches, and the second resolve makes 0 sourc
   );
   assert.equal(first.ok, true);
   assert.equal(first.source, 'golfapi');
-  assert.equal(first.step, 'golfapi');
-  assert.equal(formatPaintSourceChip(first.step), 'golfapi');
+  assert.equal(formatPaintSourceChip(first), 'golfapi');
   assert.equal(first.nineByTwo, true);
   assert.equal(first.fromCache, false);
   assert.deepEqual(log, ['osm', 'gca', 'golfapi']);
@@ -330,15 +324,14 @@ test('both miss calls golfapi once, caches, and the second resolve makes 0 sourc
   assert.equal(second.ok, true);
   assert.equal(second.fromCache, true);
   assert.equal(second.source, 'golfapi');
-  assert.equal(second.step, 'cache');
-  assert.equal(formatPaintSourceChip(second.step), 'cache');
+  assert.equal(formatPaintSourceChip(second), 'cache');
   assert.equal(second.nineByTwo, true);
   assert.deepEqual(log, []);
   assert.ok(gets > getsBefore);
   assert.equal(puts, putsBefore);
 });
 
-test('recorded free steps label cache, OSM, bundled golfapi, and locked miss without a paid call', async () => {
+test('recorded free steps keep source and fromCache without a paid call', async () => {
   const cache = createMemoryCoursePaintCache();
   const unknown = await recordedPaintWaterfallStep(
     { name: 'Nowhere GC', city: 'ZZ', state: 'ZZ', courseKey: 'nope' },
@@ -356,7 +349,8 @@ test('recorded free steps label cache, OSM, bundled golfapi, and locked miss wit
     },
     cache,
   );
-  assert.equal(thunderbird, 'miss');
+  assert.deepEqual(thunderbird, { ok: false, source: null, fromCache: false });
+  assert.equal(formatPaintSourceChip(thunderbird), 'miss');
 
   const ranch = await recordedPaintWaterfallStep(
     {
@@ -367,8 +361,8 @@ test('recorded free steps label cache, OSM, bundled golfapi, and locked miss wit
     },
     cache,
   );
-  assert.equal(ranch, 'golfapi');
-  assert.equal(formatPaintSourceChip(ranch), 'golfapi');
+  assert.deepEqual(ranch, { ok: true, source: 'golfapi', fromCache: true });
+  assert.equal(formatPaintSourceChip(ranch), 'cache');
 
   const resolved = await resolveCoursePaint(
     {
@@ -389,9 +383,9 @@ test('recorded free steps label cache, OSM, bundled golfapi, and locked miss wit
     },
   );
   assert.equal(resolved.ok, true);
-  assert.equal(resolved.step, 'golfapi');
   assert.equal(resolved.fromCache, true);
   assert.equal(resolved.source, 'golfapi');
+  assert.equal(formatPaintSourceChip(resolved), 'cache');
 });
 
 test('failed bundled golfapi seed fetches the network once and a PASS is cached', async () => {

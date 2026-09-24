@@ -1,11 +1,5 @@
 import type { LatLng } from '../domain/latLng';
-
-/**
- * Paint waterfall step that actually returned the card.
- * `cache` is the shared-cache short-circuit. `osm` is the OSM / OpenGolf /
- * manual-verified branch. Absent on a card until paint has resolved.
- */
-export type PaintWaterfallStep = 'cache' | 'osm' | 'gca' | 'golfapi' | 'miss';
+import type { CoursePaintSource } from './paintCache';
 
 export type CourseSummary = {
   id: string;
@@ -61,10 +55,14 @@ export type CourseDetail = {
   /** Pro/Max flag from course detail. Missing/false → no invented greens. */
   greenCentersAvailable: boolean | null;
   /**
-   * Winning paint step from the resolve that filled this card.
-   * Omitted until that resolve runs. Never inferred from coordinates.
+   * `resolveCoursePaint` winner (`ok`, `source`, `fromCache` only).
+   * Absent until that resolve runs. Never inferred from coordinates.
    */
-  paintSource?: PaintWaterfallStep | null;
+  paintResult?: {
+    ok: boolean;
+    source: CoursePaintSource | null;
+    fromCache: boolean;
+  } | null;
 };
 
 export type OsmGolfKind = 'green' | 'fairway' | 'tee' | 'hole';

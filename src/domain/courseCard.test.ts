@@ -40,15 +40,29 @@ test('home course cards show name, distance, and last-played', () => {
   assert.equal(card.lastPlayed, 'Played · Today');
   assert.equal(card.paintSource, null);
 
-  assert.equal(formatPaintSourceChip('cache'), 'cache');
-  assert.equal(formatPaintSourceChip('osm'), 'OSM');
-  assert.equal(formatPaintSourceChip('gca'), 'GCA');
-  assert.equal(formatPaintSourceChip('golfapi'), 'golfapi');
-  assert.equal(formatPaintSourceChip('miss'), 'miss');
-  assert.equal(formatPaintSourceChip('manual_verified'), null);
+  assert.equal(formatPaintSourceChip({ ok: false, source: null, fromCache: false }), 'miss');
+  assert.equal(formatPaintSourceChip({ ok: true, source: 'osm', fromCache: true }), 'cache');
+  assert.equal(formatPaintSourceChip({ ok: true, source: 'golfapi', fromCache: true }), 'cache');
+  assert.equal(formatPaintSourceChip({ ok: true, source: 'gca', fromCache: true }), 'cache');
+  assert.equal(formatPaintSourceChip({ ok: true, source: 'osm', fromCache: false }), 'OSM');
+  assert.equal(formatPaintSourceChip({ ok: true, source: 'manual_verified', fromCache: false }), 'OSM');
+  assert.equal(formatPaintSourceChip({ ok: true, source: 'gca', fromCache: false }), 'GCA');
+  assert.equal(formatPaintSourceChip({ ok: true, source: 'golfapi', fromCache: false }), 'golfapi');
   assert.equal(formatPaintSourceChip(null), null);
-  assert.equal(planCourseCard({ name: 'Cache Hit', paintSource: 'cache' }).paintSource, 'cache');
-  assert.equal(planCourseCard({ name: 'OSM', paintSource: 'osm' }).paintSource, 'OSM');
+  assert.equal(
+    planCourseCard({
+      name: 'Cache Hit',
+      paintResult: { ok: true, source: 'osm', fromCache: true },
+    }).paintSource,
+    'cache',
+  );
+  assert.equal(
+    planCourseCard({
+      name: 'OSM',
+      paintResult: { ok: true, source: 'manual_verified', fromCache: false },
+    }).paintSource,
+    'OSM',
+  );
 
   const picker = readFileSync(new URL('../ui/CoursePicker.tsx', import.meta.url), 'utf8');
   assert.match(picker, /planCourseCard/);

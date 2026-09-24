@@ -278,7 +278,7 @@ export default function HomeScreen() {
       if (pending) void commitRef.current(pending);
     }, []),
   );
-  const paintSourceLabel = formatPaintSourceChip(pickedDetail?.paintSource);
+  const paintSourceLabel = formatPaintSourceChip(pickedDetail?.paintResult);
   const teeLabel = pickedTee
     ? formatTeeMeta({
         name: pickedTee.name,

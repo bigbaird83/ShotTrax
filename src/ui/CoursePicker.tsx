@@ -7,7 +7,7 @@ import { formatTeeHoleYards, formatTeeMeta } from '@/src/course/layout';
 import type { CourseDetail, CourseSummary, TeeSet } from '@/src/course/types';
 import type { GpsFix } from '@/src/domain/types';
 import { COPY } from '@/src/domain/playerCopy';
-import { formatPaintSourceChip, planCourseCard } from '@/src/domain/courseCard';
+import { formatPaintSourceChip, planCourseCard, type PaintResultWinner } from '@/src/domain/courseCard';
 import { deferCourseSearchLayout } from '@/src/domain/courseSearchLayout';
 import {
   planCourseList,
@@ -81,7 +81,7 @@ export function CoursePicker({
   const [listNowMs, setListNowMs] = useState<number | null>(null);
   const [tees, setTees] = useState<TeeSet[] | null>(null);
   const [detail, setDetail] = useState<CourseDetail | null>(null);
-  const [paintSourceById, setPaintSourceById] = useState<Record<string, string>>({});
+  const [paintById, setPaintById] = useState<Record<string, PaintResultWinner>>({});
 
   const onFind = useCallback(async () => {
     setBusy(true);
@@ -185,8 +185,8 @@ export function CoursePicker({
     setDetail(null);
     try {
       const next = await getCourseDataClient().getCourse(course.id);
-      if (next?.paintSource) {
-        setPaintSourceById((current) => ({ ...current, [course.id]: next.paintSource! }));
+      if (next?.paintResult) {
+        setPaintById((current) => ({ ...current, [course.id]: next.paintResult! }));
       }
       const nextTees = next?.tees ?? [];
       deferCourseSearchLayout(() => {
@@ -223,7 +223,7 @@ export function CoursePicker({
     paintKnown: selectedHoles != null,
   });
 
-  const selectedPaint = formatPaintSourceChip(detail?.paintSource);
+  const selectedPaint = formatPaintSourceChip(detail?.paintResult);
   const zipMiss = error === COPY.zipGeocodeMiss;
   const emptyNearby = results != null && results.length === 0 && !busy && !zipMiss;
   const needsLocation = error === COPY.nearbyNeedsLocation;
@@ -340,7 +340,7 @@ export function CoursePicker({
                 distanceMeters: course.distanceMeters,
                 unit: courseDistanceUnit,
                 lastPlayedAt: lastPlayedAtByCourse?.[course.id] ?? lastPlayedAtByCourse?.[course.name],
-                paintSource: paintSourceById[course.id] ?? null,
+                paintResult: paintById[course.id] ?? null,
               });
               const starred = favorites.some((row) => row.id === course.id);
               const showRequest = requestThisCourseVisible({

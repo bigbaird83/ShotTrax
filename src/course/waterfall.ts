@@ -20,7 +20,7 @@ import {
   type CoursePaintHole,
   type CoursePaintSource,
 } from './paintCache';
-import type { CourseDetail, HoleCourseData, PaintWaterfallStep } from './types';
+import type { CourseDetail, HoleCourseData } from './types';
 import {
   isThunderbirdHeberSpringsIdentity,
   thunderbirdGolfApiPaintBlocked,
@@ -56,8 +56,6 @@ export type PaintCandidate = {
 export type CoursePaintHit = {
   ok: true;
   source: CoursePaintSource;
-  /** Branch that returned this card. Cache wins even when `source` is the stored origin. */
-  step: Exclude<PaintWaterfallStep, 'miss'>;
   fromCache: boolean;
   nineByTwo: boolean;
   holes: CoursePaintHole[];
@@ -66,7 +64,6 @@ export type CoursePaintHit = {
 export type CoursePaintMiss = {
   ok: false;
   source: null;
-  step: 'miss';
   fromCache: false;
   nineByTwo: false;
   holes: [];
@@ -215,15 +212,13 @@ function hitFrom(
   holes: CoursePaintHole[],
   nineByTwo: boolean,
   fromCache: boolean,
-  step: Exclude<PaintWaterfallStep, 'miss'>,
 ): CoursePaintHit {
-  return { ok: true, source, step, fromCache, nineByTwo, holes };
+  return { ok: true, source, fromCache, nineByTwo, holes };
 }
 
 const MISS: CoursePaintMiss = {
   ok: false,
   source: null,
-  step: 'miss',
   fromCache: false,
   nineByTwo: false,
   holes: [],
@@ -232,7 +227,8 @@ const MISS: CoursePaintMiss = {
 type FreePaintMatch =
   | {
       kind: 'hit';
-      step: Exclude<PaintWaterfallStep, 'miss'>;
+      /** Shared-cache short-circuit. Bundled golfapi is not this, even when `fromCache` is true. */
+      cacheHit: boolean;
       source: CoursePaintSource;
       holes: CoursePaintHole[];
       nineByTwo: boolean;
@@ -262,7 +258,7 @@ async function matchFreePaintSteps(
       classifyNineByTwo({ numHoles: cached.numHoles, holes: cached.holes }).ok;
     return {
       kind: 'hit',
-      step: 'cache',
+      cacheHit: true,
       source: cached.source,
       holes: cached.holes,
       nineByTwo: nine,
@@ -277,7 +273,7 @@ async function matchFreePaintSteps(
     if (verdict.ok) {
       return {
         kind: 'hit',
-        step: 'osm',
+        cacheHit: false,
         source: osm.source,
         holes: osm.holes,
         nineByTwo: verdict.nineByTwo,
@@ -294,7 +290,7 @@ async function matchFreePaintSteps(
       if (verdict.ok) {
         return {
           kind: 'hit',
-          step: 'golfapi',
+          cacheHit: false,
           source: 'golfapi',
           holes: seeded.holes,
           nineByTwo: verdict.nineByTwo,
@@ -317,14 +313,14 @@ async function matchFreePaintSteps(
 export async function recordedPaintWaterfallStep(
   course: CourseHydrateMatch,
   cache?: CoursePaintCache,
-): Promise<PaintWaterfallStep | null> {
+): Promise<Pick<CoursePaintResult, 'ok' | 'source' | 'fromCache'> | null> {
   const free = await matchFreePaintSteps(
     course,
     cache ?? getSharedCoursePaintCache(),
     async () => loadOsmOpenGolfCandidate(course),
   );
-  if (free.kind === 'hit') return free.step;
-  if (free.kind === 'miss') return 'miss';
+  if (free.kind === 'hit') return { ok: true, source: free.source, fromCache: free.fromCache };
+  if (free.kind === 'miss') return { ok: false, source: null, fromCache: false };
   return null;
 }
 
@@ -366,8 +362,8 @@ export async function resolveCoursePaint(
   const free = await matchFreePaintSteps(course, cache, deps.loadOsm);
   if (free.kind === 'miss') return MISS;
   if (free.kind === 'hit') {
-    if (free.step !== 'cache') await writePass(course, free.candidate, free.nineByTwo, cache, now);
-    return hitFrom(free.source, free.holes, free.nineByTwo, free.fromCache, free.step);
+    if (!free.cacheHit) await writePass(course, free.candidate, free.nineByTwo, cache, now);
+    return hitFrom(free.source, free.holes, free.nineByTwo, free.fromCache);
   }
 
   const gca = await deps.loadGca();
@@ -376,7 +372,7 @@ export async function resolveCoursePaint(
     if (verdict.ok) {
       const nine = classifyNineByTwo({ numHoles: gca.numHoles, holes: gca.holes }).ok;
       await writePass(course, gca, nine, cache, now);
-      return hitFrom('gca', gca.holes, nine, false, 'gca');
+      return hitFrom('gca', gca.holes, nine, false);
     }
   }
 
@@ -385,7 +381,7 @@ export async function resolveCoursePaint(
     const verdict = candidatePasses({ ...golf, source: 'golfapi' });
     if (verdict.ok) {
       await writePass(course, golf, verdict.nineByTwo, cache, now);
-      return hitFrom('golfapi', golf.holes, verdict.nineByTwo, false, 'golfapi');
+      return hitFrom('golfapi', golf.holes, verdict.nineByTwo, false);
     }
   }
 
