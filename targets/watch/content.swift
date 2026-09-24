@@ -502,20 +502,26 @@ struct ContentView: View {
       let controlHeight = geo.size.height * 0.4
       VStack(alignment: .leading, spacing: 0) {
         VStack(alignment: .leading, spacing: 6) {
-          // Left stays Hole N · hole yards. Top-right is live yards to the green.
-          // watchOS keeps the system clock on this screen; this row is the corner we own.
-          HStack(alignment: .firstTextBaseline, spacing: 6) {
+          // Left stays Hole N · hole yards. Top-right number is live yards; caption sits under it.
+          HStack(alignment: .top, spacing: 6) {
             Text(session.list.statusLine)
               .font(.system(size: 16, weight: .bold))
               .foregroundStyle(Color("cream"))
               .lineLimit(1)
               .minimumScaleFactor(0.6)
               .frame(maxWidth: .infinity, alignment: .leading)
-            Text(session.list.liveYardsLabel)
-              .font(.system(size: 16, weight: .bold))
-              .foregroundStyle(session.list.liveYardsTrusted ? Color("accent") : Color("muted"))
-              .lineLimit(1)
-              .minimumScaleFactor(0.6)
+            VStack(alignment: .trailing, spacing: 0) {
+              Text(session.list.liveYardsLabel)
+                .font(.system(size: 28, weight: .heavy))
+                .foregroundStyle(session.list.liveYardsTrusted ? Color("accent") : Color("muted"))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+              Text("to hole")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color("muted"))
+                .lineLimit(1)
+            }
+            .fixedSize(horizontal: true, vertical: true)
           }
           if !session.feedback.isEmpty {
             Text(session.feedback)

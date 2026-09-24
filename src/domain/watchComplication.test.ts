@@ -8,6 +8,7 @@ import {
   COMPLICATION_FAMILIES,
   COMPLICATION_KIND,
   COMPLICATION_UNAVAILABLE,
+  WATCH_LIVE_YTG_CAPTION,
   WATCH_LIVE_YTG_MIN_MS,
   complicationFromHoleMap,
   nextWatchLiveYtgSnapshot,
@@ -85,7 +86,9 @@ test('complication shows Unavailable when the hole map has no trusted yards', ()
   assert.equal(watchLiveYardsLabel(missingGreen).text, COMPLICATION_EMPTY);
   assert.equal(watchLiveYardsLabel(missingGreen).trusted, false);
   assert.equal(watchLiveYardsLabel({ yards: 90, quality: 'none' }).text, COMPLICATION_EMPTY);
-  assert.equal(watchLiveYardsLabel({ yards: 164, quality: 'good' }).text, '164 yd');
+  assert.equal(watchLiveYardsLabel({ yards: 164, quality: 'good' }).text, '164');
+  assert.equal(WATCH_LIVE_YTG_CAPTION, 'to hole');
+  assert.doesNotMatch(watchLiveYardsLabel({ yards: 164, quality: 'good' }).text, /yd/);
   assert.equal(watchLiveYardsLabel({ yards: 150, quality: 'soft' }).trusted, true);
 });
 
@@ -180,8 +183,14 @@ test('complication uses the watch widget families and the phone hole-map number'
   const clubPick = watchUi.slice(watchUi.indexOf('private var clubPick'), watchUi.indexOf('private var moreClubs'));
   assert.match(clubPick, /session\.list\.statusLine/);
   assert.match(clubPick, /session\.list\.liveYardsLabel/);
+  assert.match(clubPick, /Text\("to hole"\)/);
+  assert.match(clubPick, /size: 28/);
+  assert.match(clubPick, /size: 11/);
+  assert.ok(clubPick.indexOf('size: 28') < clubPick.indexOf('Text("to hole")'));
+  assert.ok(clubPick.indexOf('Text("to hole")') < clubPick.indexOf('size: 11'));
   assert.ok(clubPick.indexOf('session.list.statusLine') < clubPick.indexOf('session.list.liveYardsLabel'));
   assert.ok(clubPick.indexOf('session.list.liveYardsLabel') < clubPick.indexOf('session.leave("back")'));
+  assert.match(clubPick, /fixedSize\(horizontal: true, vertical: true\)/);
 
   const widget = readFileSync(new URL('../../targets/watch-widget/index.swift', import.meta.url), 'utf8');
   assert.match(widget, /kind: "ShotTraxxHoleYards"/);
