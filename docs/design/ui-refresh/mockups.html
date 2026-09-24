@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ShotTraxx UI Refresh</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Liberation Sans", "DejaVu Sans", sans-serif; background: #E9E6DF; color: #1a1a1a; -webkit-font-smoothing: antialiased; }
+  .board { padding: 56px 64px 64px; display: inline-block; min-width: 100%; }
+  .board.dark { background: radial-gradient(1200px 700px at 20% 0%, #26302a 0%, #121614 60%); color: #EDEDED; }
+  .board h1 { font-size: 40px; letter-spacing: -0.5px; margin-bottom: 8px; }
+  .board .sub { font-size: 18px; opacity: .7; margin-bottom: 40px; max-width: 1100px; line-height: 1.45; }
+  .row { display: flex; gap: 48px; align-items: flex-start; }
+  .cap { text-align: center; margin-top: 18px; font-weight: 700; font-size: 18px; }
+  .cap small { display: block; font-weight: 400; opacity: .65; font-size: 14px; margin-top: 4px; }
+
+  /* ---------- Themes ---------- */
+  .t-darklime  { --bg:#0B1A12; --bg2:#13261B; --text:#F4F1E8; --muted:#8A9A8E; --accent:#C8F542; --accent2:#6EE7A0; --on:#0B1A12; --line:#1E3A28; --wash:#1C3A24; --good:#7DCF7A; --warn:#F5C542; --bad:#E85D4C; --hero1:#1F5230; --hero2:#0E2217; --heroText:#F4F1E8; --glass:rgba(255,255,255,.07); --glow:rgba(200,245,66,.35); }
+  .t-midnight  { --bg:#0A1022; --bg2:#121A33; --text:#EAF0FF; --muted:#8B97B8; --accent:#4FD8FF; --accent2:#7B6CFF; --on:#06101F; --line:#1F2A4A; --wash:#16254A; --good:#5BE3A8; --warn:#FFD166; --bad:#FF6B6B; --hero1:#23367A; --hero2:#0D1430; --heroText:#EAF0FF; --glass:rgba(255,255,255,.07); --glow:rgba(79,216,255,.35); }
+  .t-sunset    { --bg:#1A0F1F; --bg2:#26162D; --text:#FFF1E8; --muted:#B39AAE; --accent:#FF9A4C; --accent2:#FF4D8D; --on:#1A0F1F; --line:#3A2442; --wash:#3A1E36; --good:#7EE0A1; --warn:#FFD166; --bad:#FF5C5C; --hero1:#6A2448; --hero2:#241028; --heroText:#FFF1E8; --glass:rgba(255,255,255,.07); --glow:rgba(255,120,90,.38); }
+  .t-clubhouse { --bg:#0E1C16; --bg2:#16291F; --text:#F5EEDC; --muted:#9AA894; --accent:#E3B55B; --accent2:#F6DD95; --on:#1A1406; --line:#243A2E; --wash:#2A3322; --good:#86D39A; --warn:#E3B55B; --bad:#E06A55; --hero1:#1F4632; --hero2:#0E1C16; --heroText:#F5EEDC; --glass:rgba(255,255,255,.06); --glow:rgba(227,181,91,.35); }
+  .t-carbon    { --bg:#111214; --bg2:#1B1D21; --text:#F2F2F2; --muted:#9097A0; --accent:#FF6A1A; --accent2:#FFB020; --on:#140800; --line:#2A2D33; --wash:#2A1C12; --good:#6BD68C; --warn:#FFB020; --bad:#FF4D4D; --hero1:#2E3138; --hero2:#141518; --heroText:#F2F2F2; --glass:rgba(255,255,255,.06); --glow:rgba(255,106,26,.35); }
+  .t-links     { --bg:#F4EDE1; --bg2:#FFFBF4; --text:#2B1E14; --muted:#7A6A5A; --accent:#C8553D; --accent2:#E88A4F; --on:#FFFFFF; --line:#E6D8C4; --wash:#F6DDD2; --good:#3E8E4F; --warn:#B8860B; --bad:#B8322A; --hero1:#3F6B3A; --hero2:#27452A; --heroText:#FFF8EC; --glass:rgba(255,255,255,.16); --glow:rgba(200,85,61,.28); }
+  .t-glacier   { --bg:#EEF3F8; --bg2:#FFFFFF; --text:#0F1B2D; --muted:#5E6E84; --accent:#2F6BFF; --accent2:#22C3E6; --on:#FFFFFF; --line:#D6E0EC; --wash:#DCE7FF; --good:#1E9E62; --warn:#C98A00; --bad:#D6453D; --hero1:#2F6BFF; --hero2:#1AA6D6; --heroText:#FFFFFF; --glass:rgba(255,255,255,.2); --glow:rgba(47,107,255,.3); }
+  .t-light     { --bg:#F6F3EA; --bg2:#FFFFFF; --text:#122018; --muted:#5A6B5E; --accent:#4F8A12; --accent2:#8CC63F; --on:#FFFFFF; --line:#DDE3D8; --wash:#E7F4C8; --good:#2E7D32; --warn:#B8860B; --bad:#C0392B; --hero1:#3D7A1A; --hero2:#1F4A12; --heroText:#FFFFFF; --glass:rgba(255,255,255,.16); --glow:rgba(79,138,18,.28); }
+  .t-hc        { --bg:#000; --bg2:#000; --text:#FFF; --muted:#E8E8E8; --accent:#E6FF00; --accent2:#E6FF00; --on:#000; --line:#FFF; --wash:#1A1A00; --good:#00FF6A; --warn:#FFE600; --bad:#FF2D2D; --hero1:#000; --hero2:#000; --heroText:#FFF; --glass:rgba(255,255,255,0); --glow:rgba(0,0,0,0); }
+
+  /* ---------- Phone ---------- */
+  .phone { width: 390px; height: 844px; border-radius: 54px; padding: 12px; background: #0a0a0a; box-shadow: 0 30px 60px rgba(0,0,0,.35), inset 0 0 0 2px #333; flex: none; }
+  .screen { position: relative; width: 100%; height: 100%; border-radius: 43px; overflow: hidden; background: var(--bg); color: var(--text); }
+  .status { height: 50px; display: flex; align-items: center; justify-content: space-between; padding: 8px 28px 0 34px; font-weight: 700; font-size: 15px; }
+  .island { position: absolute; top: 11px; left: 50%; width: 118px; height: 34px; margin-left: -59px; background: #000; border-radius: 20px; z-index: 5; }
+  .sicons { display: flex; gap: 6px; align-items: center; }
+  .content { padding: 4px 18px 120px; display: flex; flex-direction: column; gap: 12px; }
+
+  /* header */
+  .hdr { display: flex; align-items: center; justify-content: space-between; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .mark { width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(135deg, var(--accent), var(--accent2)); display: grid; place-items: center; box-shadow: 0 6px 16px var(--glow); }
+  .t-hc .mark { box-shadow: none; }
+  .word { font-size: 22px; font-weight: 700; letter-spacing: -.4px; }
+  .word sup { font-size: 10px; opacity: .6; }
+  .iconbtn { width: 46px; height: 46px; border-radius: 16px; display: grid; place-items: center; background: var(--bg2); border: 1px solid var(--line); }
+  .t-hc .iconbtn { border-width: 2px; }
+  .kicker { font-size: 11px; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase; color: var(--muted); }
+  .h1 { font-size: 30px; font-weight: 700; letter-spacing: -.8px; line-height: 1.05; }
+
+  /* hero */
+  .hero { position: relative; border-radius: 26px; padding: 18px; overflow: hidden; background: linear-gradient(150deg, var(--hero1), var(--hero2)); color: var(--heroText); border: 1px solid rgba(255,255,255,.08); }
+  .t-hc .hero { border: 2px solid #fff; }
+  .hero .topo, .live .topo { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .18; }
+  .t-hc .live .topo { display: none; }
+  .t-hc .hero .topo { display: none; }
+  .search { position: relative; display: flex; align-items: center; gap: 10px; height: 52px; border-radius: 16px; padding: 0 14px; background: rgba(0,0,0,.22); border: 1px solid rgba(255,255,255,.14); font-size: 15px; color: rgba(255,255,255,.72); }
+  .t-links .search, .t-glacier .search, .t-light .search { background: rgba(255,255,255,.18); border-color: rgba(255,255,255,.35); color: rgba(255,255,255,.9); }
+  .t-hc .search { background: #000; border: 2px solid #fff; color: #fff; }
+  .hero-row { position: relative; display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+  .near { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px 0 10px; border-radius: 999px; background: var(--accent); color: var(--on); font-weight: 700; font-size: 14px; box-shadow: 0 6px 18px var(--glow); }
+  .hero-meta { font-size: 12px; opacity: .75; }
+
+  /* course card */
+  .card { border-radius: 22px; background: var(--bg2); border: 1px solid var(--line); padding: 14px 16px; }
+  .t-hc .card { border-width: 2px; }
+  .course { display: flex; gap: 12px; align-items: center; }
+  .thumb { width: 54px; height: 54px; border-radius: 16px; background: linear-gradient(160deg, var(--wash), var(--bg2)); display: grid; place-items: center; border: 1px solid var(--line); flex: none; }
+  .ctitle { font-size: 17px; font-weight: 700; }
+  .cmeta { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+  .chips { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .chip { font-size: 10.5px; font-weight: 700; letter-spacing: .4px; padding: 4px 9px; border-radius: 999px; background: var(--wash); color: var(--text); }
+  .chip.acc { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); }
+  .t-links .chip.acc, .t-glacier .chip.acc, .t-light .chip.acc { color: var(--accent); }
+  .t-hc .chip { border: 1.5px solid #fff; background: #000; }
+
+  /* start tiles */
+  .starts { display: grid; grid-template-columns: 1.35fr 1fr; gap: 12px; }
+  .tile { position: relative; border-radius: 24px; height: 118px; padding: 14px 16px; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; }
+  .tile.primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: var(--on); box-shadow: 0 14px 30px var(--glow), inset 0 1px 0 rgba(255,255,255,.35); }
+  .tile.secondary { background: var(--bg2); border: 1.5px solid var(--line); color: var(--text); }
+  .t-hc .tile.secondary { border: 2px solid #fff; }
+  .tile .num { font-size: 48px; font-weight: 700; letter-spacing: -2px; line-height: .9; }
+  .tile .lbl { font-size: 12px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; }
+  .tile .go { position: absolute; right: 14px; top: 14px; width: 34px; height: 34px; border-radius: 12px; display: grid; place-items: center; background: rgba(0,0,0,.14); }
+  .tile.secondary .go { background: var(--wash); }
+  .tile .shine { position: absolute; right: -40px; bottom: -60px; width: 160px; height: 160px; border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,.35), transparent 65%); }
+  .t-hc .tile .shine { display: none; }
+
+  /* quick actions */
+  .quick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .qa { border-radius: 20px; background: var(--bg2); border: 1px solid var(--line); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .t-hc .qa { border-width: 2px; }
+  .qa .ic { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; }
+  .qa .t { font-size: 13px; font-weight: 700; }
+
+  /* history */
+  .sect { display: flex; justify-content: space-between; align-items: baseline; margin-top: 4px; }
+  .sect .h { font-size: 19px; font-weight: 700; letter-spacing: -.3px; }
+  .sect .a { font-size: 13px; font-weight: 700; color: var(--accent); }
+  .hist { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
+  .badge { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 15px; flex: none; }
+  .hist .score { margin-left: auto; text-align: right; }
+  .hist .score b { display: block; font-size: 24px; letter-spacing: -.5px; }
+  .hist .score span { font-size: 11px; color: var(--muted); }
+
+  /* tab bar */
+  .fade { position:absolute; left:0; right:0; bottom:0; height:150px; background:linear-gradient(to bottom, transparent, var(--bg) 55%); pointer-events:none; }
+  .tabbar { position: absolute; left: 16px; right: 16px; bottom: 26px; height: 68px; border-radius: 26px; background: color-mix(in srgb, var(--bg2) 82%, transparent); backdrop-filter: blur(20px); border: 1px solid var(--line); display: flex; align-items: center; justify-content: space-around; padding: 0 8px; box-shadow: 0 12px 30px rgba(0,0,0,.3); }
+  .t-links .tabbar, .t-glacier .tabbar, .t-light .tabbar { box-shadow: 0 12px 30px rgba(40,30,20,.12); }
+  .t-hc .tabbar { border-width: 2px; background: #000; }
+  .tab { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 700; color: var(--muted); width: 74px; padding: 8px 0; border-radius: 18px; }
+  .tab.on { color: var(--text); background: var(--wash); }
+  .t-hc .tab.on { background: #E6FF00; color: #000; }
+  .homeind { position: absolute; bottom: 8px; left: 50%; width: 134px; height: 5px; margin-left: -67px; border-radius: 3px; background: var(--text); opacity: .6; }
+
+  /* live round */
+  .live { position: relative; border-radius: 26px; padding: 16px; background: linear-gradient(150deg, var(--hero1), var(--hero2)); color: var(--heroText); overflow: hidden; border: 1px solid rgba(255,255,255,.08); }
+  .t-hc .live { border: 2px solid #E6FF00; }
+  .pulse { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700; letter-spacing: 1.6px; }
+  .pulse i { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 30%, transparent); }
+  .live .big { display: flex; align-items: flex-end; justify-content: space-between; margin: 14px 0 12px; }
+  .live .hole { font-size: 56px; font-weight: 700; letter-spacing: -2px; line-height: .85; }
+  .live .hole small { font-size: 14px; letter-spacing: 1px; opacity: .7; display: block; margin-bottom: 6px; font-weight: 700; }
+  .live .stat { text-align: right; }
+  .live .stat b { font-size: 26px; display: block; }
+  .live .stat span { font-size: 12px; opacity: .7; }
+  .prog { display: grid; grid-template-columns: repeat(18, 1fr); gap: 3px; margin-bottom: 14px; }
+  .prog i { height: 6px; border-radius: 3px; background: rgba(255,255,255,.18); }
+  .prog i.d { background: var(--accent); }
+  .prog i.c { background: #fff; }
+  .btn { height: 56px; border-radius: 18px; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 17px; font-weight: 700; }
+  .btn.primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: var(--on); box-shadow: 0 10px 24px var(--glow), inset 0 1px 0 rgba(255,255,255,.35); }
+  .btn.glass { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2); color: var(--heroText); }
+  .btn.secondary { background: var(--bg2); border: 1.5px solid var(--line); color: var(--text); }
+  .btn.ghost { background: transparent; border: 1.5px dashed var(--line); color: var(--text); }
+  .btn.danger { background: linear-gradient(135deg, var(--bad), color-mix(in srgb, var(--bad) 70%, #000)); color: #fff; box-shadow: 0 10px 24px color-mix(in srgb, var(--bad) 35%, transparent); }
+  .t-hc .btn.glass { border: 2px solid #fff; background: #000; }
+  .t-hc .btn.secondary { border-width: 2px; }
+
+  /* menu */
+  .mtitle { font-size: 32px; font-weight: 700; letter-spacing: -.8px; }
+  .grp-h { font-size: 11px; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase; color: var(--muted); margin: 6px 4px -4px; }
+  .themes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .sw { border-radius: 18px; padding: 7px 7px 9px; background: var(--bg2); border: 1.5px solid var(--line); position: relative; }
+  .sw.on { border: 2px solid var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent); }
+  .sw .mini { height: 64px; border-radius: 12px; background: var(--sbg); padding: 7px; display: flex; flex-direction: column; gap: 5px; overflow: hidden; }
+  .sw .mini .hb { height: 18px; border-radius: 6px; background: linear-gradient(135deg, var(--sh1), var(--sh2)); }
+  .sw .mini .bt { display: flex; gap: 4px; }
+  .sw .mini .bt i { height: 16px; border-radius: 5px; flex: 1.3; background: linear-gradient(135deg, var(--sa1), var(--sa2)); }
+  .sw .mini .bt i + i { flex: 1; background: var(--sc); }
+  .sw .mini .ln { height: 5px; width: 60%; border-radius: 3px; background: var(--st); opacity: .5; }
+  .sw .nm { font-size: 11.5px; font-weight: 700; margin-top: 7px; text-align: center; }
+  .sw .ck { position: absolute; top: -7px; right: -7px; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; }
+  .list { border-radius: 22px; background: var(--bg2); border: 1px solid var(--line); overflow: hidden; }
+  .t-hc .list { border-width: 2px; }
+  .li { display: flex; align-items: center; gap: 12px; padding: 12px 14px; min-height: 60px; }
+  .li + .li { border-top: 1px solid var(--line); }
+  .li .sq { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; flex: none; }
+  .li .tx { flex: 1; }
+  .li .tx b { display: block; font-size: 15px; }
+  .li .tx span { font-size: 12px; color: var(--muted); }
+  .seg { display: flex; background: var(--wash); border-radius: 12px; padding: 3px; }
+  .seg i { font-style: normal; font-size: 13px; font-weight: 700; padding: 7px 14px; border-radius: 9px; color: var(--muted); }
+  .seg i.on { background: var(--accent); color: var(--on); }
+  .foot { font-size: 11.5px; color: var(--muted); text-align: center; line-height: 1.5; margin-top: 4px; }
+
+  /* gallery */
+  .gal { display: grid; grid-template-columns: repeat(3, 360px); gap: 28px; }
+  .gcard { border-radius: 28px; overflow: hidden; background: var(--bg); color: var(--text); box-shadow: 0 20px 40px rgba(0,0,0,.18); border: 1px solid rgba(0,0,0,.06); }
+  .gcard .top { padding: 18px 18px 0; display: flex; justify-content: space-between; align-items: center; }
+  .gcard .nm { font-size: 20px; font-weight: 700; letter-spacing: -.3px; }
+  .gcard .tag { font-size: 10.5px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; padding: 5px 9px; border-radius: 999px; background: var(--wash); color: var(--text); }
+  .gcard .desc { padding: 6px 18px 0; font-size: 13px; color: var(--muted); min-height: 36px; }
+  .gcard .demo { padding: 14px 18px 18px; display: flex; flex-direction: column; gap: 10px; }
+  .gcard .mhero { height: 64px; border-radius: 18px; background: linear-gradient(150deg, var(--hero1), var(--hero2)); color: var(--heroText); padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; position: relative; overflow: hidden; }
+  .t-hc.gcard .mhero { border: 2px solid #fff; }
+  .gcard .mhero .topo { position:absolute; inset:0; width:100%; height:100%; opacity:.18; }
+  .t-hc.gcard .mhero .topo { display:none; }
+  .gcard .mhero b { font-size: 16px; position: relative; }
+  .gcard .mhero span { font-size: 11px; opacity: .75; display: block; font-weight: 400; margin-top: 2px; }
+  .gcard .mbtns { display: grid; grid-template-columns: 1.3fr 1fr; gap: 8px; }
+  .gcard .mbtns .btn { height: 46px; font-size: 14px; border-radius: 14px; }
+  .dots { display: flex; gap: 6px; }
+  .dots i { width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(128,128,128,.25); }
+
+  /* buttons sheet */
+  .bsheet { width: 560px; border-radius: 32px; background: var(--bg); color: var(--text); padding: 28px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 20px 40px rgba(0,0,0,.25); }
+  .bsheet .lab { font-size: 11px; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase; color: var(--muted); margin-bottom: -6px; }
+  .bsheet .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .pressed { transform: scale(.97); filter: brightness(.92); box-shadow: none !important; }
+  .fab { width: 64px; height: 64px; border-radius: 22px; display: grid; place-items: center; background: linear-gradient(135deg, var(--accent), var(--accent2)); box-shadow: 0 10px 24px var(--glow); }
+
+  /* before */
+  .old .content { gap: 12px; padding-top: 10px; }
+  .old .obtn { min-height: 64px; border-radius: 16px; display: grid; place-items: center; font-size: 20px; font-weight: 700; padding: 0 18px; text-align: center; }
+  .old .obtn.p { background: #C8F542; color: #0B1A12; }
+  .old .obtn.s { background: #13261B; border: 2px solid #1E3A28; color: #F4F1E8; }
+  .old .obtn.g { border: 1px solid #1E3A28; color: #F4F1E8; }
+  .old .oreg { background: #0B1A12; border-top: 1px solid #1E3A28; position: absolute; bottom: 0; left: 0; right: 0; height: 84px; display: flex; justify-content: space-around; padding-top: 10px; font-size: 10px; color: #8A9A8E; }
+  .old .oreg div { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .old .oreg .on { color: #F4F1E8; }
+  .old .onav { height: 44px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 17px; border-bottom: 1px solid #1E3A28; }
+  .notes { max-width: 380px; font-size: 16px; line-height: 1.55; }
+  .notes h3 { font-size: 20px; margin: 0 0 10px; }
+  .notes li { margin: 0 0 10px 18px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+/* ---------- icons (inline SVG, stroke = currentColor) ---------- */
+const I = {
+  gear: (c='currentColor',s=22)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>`,
+  flag: (c='currentColor',s=22)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 22V3"/><path d="M5 3h11l-2 4 2 4H5" fill="${c}" fill-opacity=".9"/></svg>`,
+  star: (c='currentColor',s=22,f=true)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="${f?c:'none'}" stroke="${c}" stroke-width="2" stroke-linejoin="round"><path d="M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2l-5.7 3.1 1.2-6.4-4.7-4.4 6.4-.8z"/></svg>`,
+  bag: (c='currentColor',s=22)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="8" width="12" height="14" rx="3"/><path d="M9 8V4m3 4V2m3 6V5"/><path d="M6 13h12"/></svg>`,
+  chart: (c='currentColor',s=22)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2.4" stroke-linecap="round"><path d="M5 20V12M10 20V5M15 20v-9M20 20V8"/></svg>`,
+  search: (c='currentColor',s=20)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>`,
+  pin: (c='currentColor',s=18)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="${c}"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>`,
+  arrow: (c='currentColor',s=18)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M8 7h9v9"/></svg>`,
+  chev: (c='currentColor',s=18)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>`,
+  live: (c='currentColor',s=22)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="2.5" fill="${c}"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4M4.9 4.9a10 10 0 0 0 0 14.2M19.1 4.9a10 10 0 0 1 0 14.2"/></svg>`,
+  swap: (c='currentColor',s=20)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h14l-4-4M20 16H6l4 4"/></svg>`,
+  plus: (c='currentColor',s=20)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`,
+  ruler: (c='currentColor',s=20)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="8" width="20" height="8" rx="2"/><path d="M6 8v3M10 8v4M14 8v3M18 8v4"/></svg>`,
+  check: (c='currentColor',s=14)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg>`,
+  play: (c='currentColor',s=18)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="${c}"><path d="M7 4l13 8-13 8z"/></svg>`,
+  sheet: (c='currentColor',s=20)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>`,
+  palette: (c='currentColor',s=20)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2.2"><path d="M12 3a9 9 0 1 0 0 18c1.5 0 2-1 2-2s-1-1.5-1-2.5 1-1.5 2-1.5h2a4 4 0 0 0 4-4c0-4.5-4-8-9-8z"/><circle cx="7.5" cy="11" r="1.3" fill="${c}"/><circle cx="10.5" cy="7" r="1.3" fill="${c}"/><circle cx="15.5" cy="7.5" r="1.3" fill="${c}"/></svg>`,
+};
+
+const topo = `<svg class="topo" viewBox="0 0 360 200" preserveAspectRatio="none" fill="none" stroke="white" stroke-width="1.2">
+  ${[0,1,2,3,4,5,6].map(i=>`<ellipse cx="300" cy="30" rx="${40+i*30}" ry="${22+i*18}" />`).join('')}
+  ${[0,1,2,3].map(i=>`<ellipse cx="40" cy="190" rx="${30+i*26}" ry="${16+i*14}" />`).join('')}
+</svg>`;
+
+const THEMES = [
+  { id:'darklime',  name:'Dark lime',     tag:'Current default', desc:'The signature night-green with electric lime.', dots:['#0B1A12','#C8F542','#6EE7A0','#F4F1E8'] },
+  { id:'midnight',  name:'Midnight',      tag:'New · Dark', desc:'Deep navy with an ice-cyan to violet glow.', dots:['#0A1022','#4FD8FF','#7B6CFF','#EAF0FF'] },
+  { id:'sunset',    name:'Sunset',        tag:'New · Dark', desc:'Twilight plum with a coral-to-pink gradient.', dots:['#1A0F1F','#FF9A4C','#FF4D8D','#FFF1E8'] },
+  { id:'clubhouse', name:'Clubhouse',     tag:'New · Dark', desc:'Classic forest green trimmed in champagne gold.', dots:['#0E1C16','#E3B55B','#F6DD95','#F5EEDC'] },
+  { id:'carbon',    name:'Carbon',        tag:'New · Dark', desc:'Graphite with a blaze-orange sport accent.', dots:['#111214','#FF6A1A','#FFB020','#F2F2F2'] },
+  { id:'links',     name:'Links',         tag:'New · Light', desc:'Warm sand and fescue with terracotta buttons.', dots:['#F4EDE1','#C8553D','#3F6B3A','#2B1E14'] },
+  { id:'glacier',   name:'Glacier',       tag:'New · Light', desc:'Crisp cool white with a sky-blue gradient.', dots:['#EEF3F8','#2F6BFF','#22C3E6','#0F1B2D'] },
+  { id:'light',     name:'Light',         tag:'Refreshed', desc:'Daylight cream and fairway green.', dots:['#F6F3EA','#4F8A12','#8CC63F','#122018'] },
+  { id:'hc',        name:'High contrast', tag:'Accessibility', desc:'Pure black, white, and yellow for full sun.', dots:['#000000','#E6FF00','#FFFFFF','#00FF6A'] },
+];
+const SW = { // mini swatch values for the picker
+  darklime:['#0B1A12','#1F5230','#0E2217','#C8F542','#6EE7A0','#13261B','#F4F1E8'],
+  midnight:['#0A1022','#23367A','#0D1430','#4FD8FF','#7B6CFF','#121A33','#EAF0FF'],
+  sunset:['#1A0F1F','#6A2448','#241028','#FF9A4C','#FF4D8D','#26162D','#FFF1E8'],
+  clubhouse:['#0E1C16','#1F4632','#0E1C16','#E3B55B','#F6DD95','#16291F','#F5EEDC'],
+  carbon:['#111214','#2E3138','#141518','#FF6A1A','#FFB020','#1B1D21','#F2F2F2'],
+  links:['#F4EDE1','#3F6B3A','#27452A','#C8553D','#E88A4F','#FFFBF4','#2B1E14'],
+  glacier:['#EEF3F8','#2F6BFF','#1AA6D6','#2F6BFF','#22C3E6','#FFFFFF','#0F1B2D'],
+  light:['#F6F3EA','#3D7A1A','#1F4A12','#4F8A12','#8CC63F','#FFFFFF','#122018'],
+  hc:['#000','#000','#000','#E6FF00','#E6FF00','#000','#FFF'],
+};
+
+const statusBar = () => `<div class="island"></div><div class="status"><span>9:41</span><span class="sicons">
+  <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+  <svg width="26" height="13" viewBox="0 0 26 13" fill="none" stroke="currentColor"><rect x=".5" y=".5" width="22" height="12" rx="3.5" opacity=".5"/><rect x="2.5" y="2.5" width="16" height="8" rx="2" fill="currentColor" stroke="none"/><path d="M24 4.5v4" stroke-width="1.5" opacity=".5"/></svg></span></div>`;
+
+const tabbar = (on='rounds') => `<div class="fade"></div><div class="tabbar">
+  ${[['rounds','Rounds',I.flag],['fav','Favorites',I.star],['bag','Bag',I.bag],['avg','Averages',I.chart]].map(([k,l,f])=>
+    `<div class="tab ${on===k?'on':''}">${f('currentColor',22)}<span>${l}</span></div>`).join('')}
+</div><div class="homeind"></div>`;
+
+const header = () => `<div class="hdr">
+  <div class="brand"><div class="mark">${I.flag('var(--on)',20)}</div><div class="word">ShotTraxx<sup>™</sup></div></div>
+  <div class="iconbtn">${I.gear('var(--text)',22)}</div>
+</div>`;
+
+function relBadge(rel){
+  const n = parseInt(rel,10);
+  const col = rel==='E' ? 'var(--good)' : n<=2 ? 'var(--good)' : n<=6 ? 'var(--warn)' : 'var(--bad)';
+  return `<div class="badge" style="background:color-mix(in srgb, ${col} 18%, transparent); color:${col}; border:2px solid color-mix(in srgb, ${col} 55%, transparent)">${rel}</div>`;
+}
+const history = (rows) => rows.map(([name, meta, rel, score, star]) => `<div class="card hist">
+  ${relBadge(rel)}
+  <div><div class="ctitle" style="font-size:15.5px">${name}</div><div class="cmeta">${meta}</div></div>
+  <div class="score"><b>${score}</b><span>${star ? I.star('var(--accent)',14) : I.star('var(--muted)',14,false)}</span></div>
+</div>`).join('');
+
+const HIST = [
+  ['Greystone Country Club','Sep 21 · Blue · 4h 12m','+4','76',true],
+  ['Mountain Ranch','Sep 14 · White · 4h 31m','+9','81',false],
+  ['Cypress Creek','Sep 7 · Blue · 3h 58m','+2','74',true],
+];
+
+function homeIdle(t){
+  return `<div class="phone t-${t}"><div class="screen">${statusBar()}<div class="content">
+    ${header()}
+    <div><div class="kicker">Good morning</div><div class="h1" style="margin-top:6px">Ready to tee off?</div></div>
+    <div class="hero">${topo}
+      <div class="search">${I.search('currentColor',20)}<span>Search by name, city, state, or zip</span></div>
+      <div class="hero-row"><div class="near">${I.pin('var(--on)',16)} Courses near you</div><div class="hero-meta">12 within 40 mi</div></div>
+    </div>
+    <div class="card course">
+      <div class="thumb">${I.flag('var(--accent)',24)}</div>
+      <div style="flex:1"><div class="ctitle">Greystone Country Club</div>
+        <div class="cmeta">Blue tees · 71.2 / 128 · 6,540 yds</div>
+        <div class="chips"><span class="chip acc">GPS · OSM</span><span class="chip">Played 3 days ago</span></div></div>
+    </div>
+    <div class="starts">
+      <div class="tile primary"><div class="shine"></div><div class="go">${I.play('var(--on)',16)}</div><div class="lbl">Start</div><div><div class="num">18</div><div class="lbl" style="opacity:.8">Holes</div></div></div>
+      <div class="tile secondary"><div class="go">${I.play('var(--text)',14)}</div><div class="lbl" style="color:var(--muted)">Start</div><div><div class="num">9</div><div class="lbl" style="color:var(--muted)">Holes</div></div></div>
+    </div>
+    <div class="quick">
+      <div class="qa"><div class="ic" style="background:color-mix(in srgb, var(--accent) 20%, transparent)">${I.chart('var(--accent)',20)}</div><div class="t">Nerd out</div></div>
+      <div class="qa"><div class="ic" style="background:color-mix(in srgb, var(--accent2) 20%, transparent)">${I.live('var(--accent2)',20)}</div><div class="t">Live board</div></div>
+      <div class="qa"><div class="ic" style="background:color-mix(in srgb, var(--warn) 20%, transparent)">${I.bag('var(--warn)',20)}</div><div class="t">My bag</div></div>
+    </div>
+    <div class="sect"><div class="h">Round history</div><div class="a">See all</div></div>
+    ${history(HIST.slice(0,2))}
+  </div>${tabbar()}</div></div>`;
+}
+
+function homeLive(t){
+  return `<div class="phone t-${t}"><div class="screen">${statusBar()}<div class="content">
+    ${header()}
+    <div class="live">${topo}
+      <div style="position:relative;display:flex;justify-content:space-between;align-items:center">
+        <span class="pulse"><i></i>LIVE ROUND</span><span style="font-size:12px;opacity:.75">Started 8:04 AM</span></div>
+      <div style="position:relative;font-size:18px;font-weight:700;margin-top:10px">Greystone Country Club</div>
+      <div style="position:relative;font-size:12.5px;opacity:.75;margin-top:2px">Blue · 71.2 / 128 · 18 holes</div>
+      <div class="big" style="position:relative"><div class="hole"><small>HOLE</small>7</div>
+        <div style="display:flex;gap:18px"><div class="stat"><b>+2</b><span>Thru 6</span></div><div class="stat"><b>11</b><span>Putts</span></div></div></div>
+      <div class="prog" style="position:relative">${Array.from({length:18},(_,i)=>`<i class="${i<6?'d':i===6?'c':''}"></i>`).join('')}</div>
+      <div style="position:relative;display:grid;grid-template-columns:1.6fr 1fr;gap:10px">
+        <div class="btn primary">${I.play('var(--on)',16)} Continue round</div>
+        <div class="btn glass">Finish</div></div>
+    </div>
+    <div class="quick">
+      <div class="qa"><div class="ic" style="background:color-mix(in srgb, var(--accent) 20%, transparent)">${I.chart('var(--accent)',20)}</div><div class="t">Nerd out</div></div>
+      <div class="qa"><div class="ic" style="background:color-mix(in srgb, var(--accent2) 20%, transparent)">${I.live('var(--accent2)',20)}</div><div class="t">Share live</div></div>
+      <div class="qa"><div class="ic" style="background:color-mix(in srgb, var(--warn) 20%, transparent)">${I.bag('var(--warn)',20)}</div><div class="t">My bag</div></div>
+    </div>
+    <div class="sect"><div class="h">Round history</div><div class="a">See all</div></div>
+    ${history(HIST)}
+  </div>${tabbar()}</div></div>`;
+}
+
+function menu(t, sel){
+  const sw = THEMES.map(th => { const [bg,h1,h2,a1,a2,c,tx]=SW[th.id];
+    return `<div class="sw ${th.id===sel?'on':''}" style="--sbg:${bg};--sh1:${h1};--sh2:${h2};--sa1:${a1};--sa2:${a2};--sc:${c};--st:${tx};${th.id==='hc'?'--sc:#000;':''}">
+      ${th.id===sel?`<div class="ck">${I.check('var(--on)',13)}</div>`:''}
+      <div class="mini" ${th.id==='hc'?'style="border:1.5px solid #fff"':''}><div class="hb" ${th.id==='hc'?'style="border:1px solid #fff"':''}></div><div class="bt"><i></i><i ${th.id==='hc'?'style="border:1px solid #fff"':''}></i></div><div class="ln"></div></div>
+      <div class="nm">${th.name}</div></div>`; }).join('');
+  const sq = (col, icon) => `<div class="sq" style="background:color-mix(in srgb, ${col} 20%, transparent)">${icon(col,19)}</div>`;
+  return `<div class="phone t-${t}"><div class="screen">${statusBar()}<div class="content" style="padding-bottom:40px">
+    <div class="hdr"><div class="mtitle">Menu</div><div class="iconbtn" style="font-weight:700;font-size:13px;width:auto;padding:0 14px">Done</div></div>
+    <div class="grp-h">Appearance · Color theme</div>
+    <div class="themes">${sw}</div>
+    <div class="grp-h">Course</div>
+    <div class="list">
+      <div class="li">${sq('var(--accent)',I.ruler)}<div class="tx"><b>Distance units</b><span>Nearby search radius</span></div><div class="seg"><i class="on">mi</i><i>km</i></div></div>
+      <div class="li">${sq('var(--accent2)',I.sheet)}<div class="tx"><b>Thunderbird pin sheet</b><span>Sheet B · this week</span></div>${I.chev('var(--muted)')}</div>
+    </div>
+    <div class="grp-h">Your data</div>
+    <div class="list">
+      <div class="li">${sq('var(--warn)',I.bag)}<div class="tx"><b>Bag</b><span>14 clubs · 11 carries set</span></div>${I.chev('var(--muted)')}</div>
+      <div class="li">${sq('var(--good)',I.swap)}<div class="tx"><b>Export / Restore rounds</b><span>Back up to Files</span></div>${I.chev('var(--muted)')}</div>
+      <div class="li">${sq('var(--bad)',I.plus)}<div class="tx"><b>Contribute a course</b><span>Map a missing tee or green</span></div>${I.chev('var(--muted)')}</div>
+    </div>
+    <div class="foot">Course data © OpenStreetMap contributors · Golf Courses API<br>Build 1.0.0 (36)</div>
+  </div></div></div>`;
+}
+
+function oldHome(){
+  return `<div class="phone old"><div class="screen" style="background:#0B1A12;color:#F4F1E8">${statusBar()}
+  <div class="onav">Rounds</div>
+  <div class="content">
+    <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:28px;font-weight:700">ShotTraxx™</div><div class="obtn s" style="min-width:88px;font-size:16px">Menu</div></div>
+    <div style="color:#8A9A8E;font-size:15px">Find a course, pick your tee, start the round.</div>
+    <div style="min-height:56px;border:1px solid #1E3A28;border-radius:14px;background:#13261B;display:flex;align-items:center;padding:0 14px;color:#8A9A8E;font-weight:700;font-size:17px">Search by name, city, state, or zip</div>
+    <div class="obtn s">Courses near you</div>
+    <div style="color:#8A9A8E;font-size:11px">Courses near you — pull to refresh.</div>
+    <div class="obtn p" style="font-size:18px">Start 18 at Greystone Country Club · Blue</div>
+    <div class="obtn s" style="font-size:18px">Start 9 at Greystone Country Club · Blue</div>
+    <div class="obtn g">Nerd out</div>
+    <div class="obtn g">Watch a live board</div>
+    <div style="font-size:18px;font-weight:700;margin-top:8px">Round history</div>
+  </div>
+  <div class="oreg"><div class="on">${I.flag('currentColor',24)}Rounds</div><div>${I.star('currentColor',24)}Favorites</div><div>${I.bag('currentColor',24)}Bag</div><div>${I.chart('currentColor',24)}Averages</div></div>
+  </div></div>`;
+}
+
+function gallery(){
+  return `<div class="gal">${THEMES.map(th=>`<div class="gcard t-${th.id}">
+    <div class="top"><div class="nm">${th.name}</div><div class="tag">${th.tag}</div></div>
+    <div class="desc">${th.desc}</div>
+    <div class="demo">
+      <div class="mhero">${topo}<b style="white-space:nowrap">Ready to tee off?<span>12 courses within 40 mi</span></b><div class="near" style="height:34px;font-size:12px;position:relative">${I.pin('var(--on)',14)} Near me</div></div>
+      <div class="mbtns"><div class="btn primary">Start 18</div><div class="btn secondary">Start 9</div></div>
+      <div style="display:flex;justify-content:space-between;align-items:center"><div class="dots">${th.dots.map(d=>`<i style="background:${d}"></i>`).join('')}</div>
+        <div style="display:flex;gap:6px"><span class="chip acc">+2</span><span class="chip">Thru 6</span></div></div>
+    </div></div>`).join('')}</div>`;
+}
+
+function buttons(t, title){
+  return `<div class="bsheet t-${t}">
+    <div style="font-size:22px;font-weight:700">${title}</div>
+    <div class="lab">Primary · gradient + glow</div>
+    <div class="pair"><div class="btn primary">${I.play('var(--on)',16)} Start 18 holes</div><div class="btn primary pressed">Pressed · scale 0.97</div></div>
+    <div class="lab">Secondary · raised card</div>
+    <div class="pair"><div class="btn secondary">Start 9 holes</div><div class="btn secondary">${I.pin('var(--accent)',16)} Courses near you</div></div>
+    <div class="lab">Ghost · tertiary</div>
+    <div class="pair"><div class="btn ghost">Nerd out</div><div class="btn ghost">Watch a live board</div></div>
+    <div class="lab">Danger</div>
+    <div class="pair"><div class="btn danger">Delete round</div><div class="btn secondary" style="color:var(--bad)">Finish round</div></div>
+    <div class="lab">Icon tiles · chips · segmented · FAB</div>
+    <div style="display:flex;gap:12px;align-items:center">
+      <div class="iconbtn">${I.gear('var(--text)',22)}</div>
+      <div class="iconbtn" style="background:color-mix(in srgb, var(--accent) 18%, transparent);border-color:transparent">${I.star('var(--accent)',22)}</div>
+      <span class="chip acc">GPS · OSM</span><span class="chip">Blue tees</span>
+      <div class="seg"><i class="on">mi</i><i>km</i></div>
+      <div class="fab" style="margin-left:auto">${I.plus('var(--on)',26)}</div>
+    </div>
+  </div>`;
+}
+
+const S = (id, cls, inner) => `<section id="${id}" class="board ${cls}">${inner}</section>`;
+
+document.getElementById('root').innerHTML = [
+  S('home-themes','dark', `<h1>New Home screen — three of the new themes</h1>
+    <div class="sub">Brand header with a gear icon instead of a “Menu” box · a gradient hero card holds search + “Courses near you” · big 18 / 9 start tiles · quick-action tiles · score-badge history cards · a floating pill tab bar.</div>
+    <div class="row">
+      <div>${homeIdle('darklime')}<div class="cap">Dark lime<small>current default, refreshed</small></div></div>
+      <div>${homeIdle('midnight')}<div class="cap">Midnight<small>new</small></div></div>
+      <div>${homeIdle('sunset')}<div class="cap">Sunset<small>new</small></div></div>
+    </div>`),
+  S('before-after','dark', `<h1>Before → After</h1>
+    <div class="sub">Same content, same tap targets (64pt+), less shouting. The current screen stacks six equal-weight full-width buttons; the new one gives each action a size that matches how often it’s used.</div>
+    <div class="row">
+      <div>${oldHome()}<div class="cap">Today</div></div>
+      <div>${homeIdle('darklime')}<div class="cap">Proposed</div></div>
+      <div class="notes"><h3>What changes</h3><ul>
+        <li><b>One hero, one job.</b> Search and “Courses near you” live together in a gradient card at the top.</li>
+        <li><b>Start tiles.</b> 18 is the big gradient tile with a soft glow, 9 is the quieter card. The course name moves into a course card, so the button labels stay short.</li>
+        <li><b>Quick actions.</b> Nerd out, Live board, and Bag become icon tiles instead of three full-width outline buttons.</li>
+        <li><b>History cards.</b> A color-coded ± par badge (green / amber / red), a big score, and a star.</li>
+        <li><b>Floating tab bar.</b> A glass pill with a highlighted active tab.</li>
+        <li><b>Gear icon</b> replaces the “Menu” text box.</li>
+      </ul></div>
+    </div>`),
+  S('theme-gallery','', `<h1>Color themes — 3 today → 9</h1>
+    <div class="sub">Each theme adds a second accent color (<code>accent2</code>) and hero-gradient stops, so buttons and cards get depth instead of flat fills. High contrast stays flat on purpose, for full sun.</div>
+    ${gallery()}`),
+  S('menu','dark', `<h1>Menu / Settings</h1>
+    <div class="sub">Themes become a grid of live mini-previews with a check badge. Settings are grouped into iOS-style lists with colored icon squares, and mi / km becomes a segmented control.</div>
+    <div class="row">
+      <div>${menu('clubhouse','clubhouse')}<div class="cap">Clubhouse selected</div></div>
+      <div>${menu('glacier','glacier')}<div class="cap">Glacier selected</div></div>
+      <div>${menu('carbon','carbon')}<div class="cap">Carbon selected</div></div>
+    </div>`),
+  S('live-round','dark', `<h1>Home with a round in progress</h1>
+    <div class="sub">When a round is live, the hero becomes a live card: a pulsing LIVE tag, the current hole in big type, score vs par and putts, an 18-segment progress bar, and Continue / Finish.</div>
+    <div class="row">
+      <div>${homeLive('carbon')}<div class="cap">Carbon</div></div>
+      <div>${homeLive('links')}<div class="cap">Links (light)</div></div>
+      <div>${homeLive('hc')}<div class="cap">High contrast</div></div>
+    </div>`),
+  S('buttons','', `<h1>Button system</h1>
+    <div class="sub">Four variants on shared tokens. The pressed state scales to 0.97 and drops the glow (plus the haptic we already fire). Heights stay at 56–64pt for gloved thumbs.</div>
+    <div class="row">${buttons('midnight','Midnight')}${buttons('links','Links')}</div>`),
+].join('');
+</script>
+</body>
+</html>
