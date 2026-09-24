@@ -28,7 +28,13 @@ import {
   watchHomeShowsExportRestore,
   watchKeepsOwnFavoritesList,
 } from './watchHome';
-import { NEARBY_COURSE_LIST_MAX, OPEN_PHONE } from './watchNearby';
+import {
+  forgetWatchCourseStartAt,
+  NEARBY_COURSE_LIST_MAX,
+  OPEN_PHONE,
+  watchCourseStartDidApply,
+  watchCourseStartShouldApply,
+} from './watchNearby';
 
 function memoryStore(): JsonStore & { data: Map<string, string> } {
   const data = new Map<string, string>();
@@ -371,4 +377,62 @@ test('Watch keeps club pick + hole scoring; no Export / Restore, no cloud accoun
   // Highlight is the pill only: fill clipped to the same rounded shape.
   const wheel = ui.slice(ui.indexOf('ForEach(wheelClubs'), ui.indexOf('private var moreClubs'));
   assert.match(wheel, /\.background\(selected \? outdoorLime : Color\("bg"\)\)\s*(\/\/[^\n]*\s*)?\.clipShape\(RoundedRectangle\(cornerRadius: 10\)\)/);
+});
+
+test('Search nearby refreshes when the phone is only background-reachable', () => {
+  const session = read('../../targets/watch/WatchClubSession.swift');
+  const request = session.slice(
+    session.indexOf('/// Ask the phone for a fresh Watch Home'),
+    session.indexOf('func refreshHomeIfShowing'),
+  );
+  assert.match(request, /func requestHome\(\)/);
+  assert.match(request, /transferUserInfo\(payload\)/);
+  assert.match(request, /sendMessage\(payload/);
+  assert.match(request, /"type": "homeRequest"/);
+  assert.match(request, /attachHomeFix/);
+  assert.match(request, /home\.loading = true/);
+  assert.match(request, /if session\.isReachable/);
+  assert.match(request, /reply\["home"\]/);
+  assert.match(request, /applyWatchHome/);
+  // Reachability only adds the fast reply. It must not skip the queued request.
+  assert.doesNotMatch(request, /guard session\.isReachable else/);
+  assert.doesNotMatch(request, /home\.loading = false/);
+  assert.doesNotMatch(request, /failUnavailable|Phone unavailable/);
+
+  const apply = session.slice(
+    session.indexOf('private func applyWatchHome'),
+    session.indexOf('private func saveHome'),
+  );
+  assert.match(apply, /next\.loading = false/);
+
+  const sendFn = session.slice(session.indexOf('private func sendPick'), session.indexOf('private func handleReply'));
+  const beforeFallback = sendFn.slice(0, sendFn.indexOf('guard WCSession.isSupported()'));
+  assert.match(beforeFallback, /isHomeCourseStart\(payload\)/);
+  assert.match(beforeFallback, /sendHomeCourseReliable\(payload\)/);
+  assert.doesNotMatch(beforeFallback, /failUnavailable|Phone unavailable/);
+  const homeStart = sendFn.slice(sendFn.indexOf('private func isHomeCourseStart'));
+  assert.match(homeStart, /"nearbyCoursePick"/);
+  assert.match(homeStart, /"startRound"/);
+  assert.match(homeStart, /"clubNav"/);
+  const reliable = sendFn.slice(
+    sendFn.indexOf('private func sendHomeCourseReliable'),
+    sendFn.indexOf('private func sendReliableQueued'),
+  );
+  assert.match(reliable, /sendReliableQueued\(payload\)/);
+  assert.doesNotMatch(reliable, /failUnavailable|Phone unavailable/);
+
+  const nearby = read('../services/watchNearby.ts');
+  assert.match(nearby, /watchCourseStartShouldApply\(pick\.at\)/);
+  assert.match(nearby, /watchCourseStartShouldApply\(start\.at\)/);
+  assert.match(nearby, /watchCourseStartDidApply/);
+  assert.match(nearby, /forgetWatchCourseStartAt/);
+
+  const at = '2026-09-24T15:00:00.000Z';
+  assert.equal(watchCourseStartShouldApply(at), true);
+  assert.equal(watchCourseStartShouldApply(at), false);
+  watchCourseStartDidApply(at);
+  assert.equal(watchCourseStartShouldApply(at), false);
+  forgetWatchCourseStartAt(at);
+  assert.equal(watchCourseStartShouldApply(at), true);
+  forgetWatchCourseStartAt(at);
 });

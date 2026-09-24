@@ -258,6 +258,36 @@ export function nearbyCoursesPayload(plan: NearbyCoursesPlan): {
   };
 }
 
+/**
+ * sendMessage and transferUserInfo share one `at`. Apply a course pick or
+ * round start once so the live reply and the queued transfer cannot start
+ * two rounds. A failed attempt is forgotten so the queue can retry that `at`.
+ */
+const courseStartApplied = new Set<string>();
+const courseStartInflight = new Set<string>();
+
+export function watchCourseStartShouldApply(at: string): boolean {
+  if (!at) return true;
+  if (courseStartApplied.has(at) || courseStartInflight.has(at)) return false;
+  courseStartInflight.add(at);
+  return true;
+}
+
+export function watchCourseStartDidApply(at: string): void {
+  courseStartInflight.delete(at);
+  if (at) courseStartApplied.add(at);
+}
+
+export function forgetWatchCourseStartAt(at: string): void {
+  courseStartInflight.delete(at);
+  courseStartApplied.delete(at);
+}
+
+/** Drop an in-flight attempt that failed before it committed. A committed `at` stays. */
+export function releaseWatchCourseStart(at: string): void {
+  courseStartInflight.delete(at);
+}
+
 export function nearbyTeesPayload(args: {
   courseId: string;
   courseName: string;

@@ -13,10 +13,14 @@ import { layoutForPlayedHoles, resolveCourseNumHoles } from '@/src/domain/nineBy
 import { playHrefAfterRoundStart } from '@/src/domain/playNav';
 import type { GpsFix } from '@/src/domain/types';
 import {
+  forgetWatchCourseStartAt,
   nearbyCoursesPayload,
   nearbyTeesPayload,
   phoneFixForNearbyCourses,
   planNearbyCourses,
+  releaseWatchCourseStart,
+  watchCourseStartDidApply,
+  watchCourseStartShouldApply,
 } from '@/src/domain/watchNearby';
 import {
   PHONE_UNAVAILABLE,
@@ -193,12 +197,18 @@ export async function handleWatchNearbyJson(json: string): Promise<{ ok: boolean
     if (ctx.hasActiveRound() && !replaceLiveRoundAllowed) {
       return { ok: true, feedback: 'Round in progress' };
     }
+    // Live sendMessage and the queued transfer share `at`.
+    if (!watchCourseStartShouldApply(pick.at)) {
+      return { ok: true, feedback: '' };
+    }
     try {
       const detail = await getCourseDataClient().getCourse(pick.courseId);
       if (!detail && startFavoriteRoundFromWatch(ctx, pick.courseId)) {
+        watchCourseStartDidApply(pick.at);
         return { ok: true, feedback: `Started · ${favoriteName(ctx, pick.courseId)}` };
       }
       if (!detail) {
+        forgetWatchCourseStartAt(pick.at);
         const plan = planNearbyCourses({ phoneFix: null, courses: [], nowMs: Date.now() });
         await pushNearbyJson(nearbyCoursesPayload(plan));
         return { ok: false, feedback: 'open the phone' };
@@ -211,8 +221,10 @@ export async function handleWatchNearbyJson(json: string): Promise<{ ok: boolean
           tees: detail.tees,
         }),
       );
+      watchCourseStartDidApply(pick.at);
       return { ok: true, feedback: detail.name };
     } catch {
+      releaseWatchCourseStart(pick.at);
       return { ok: false, feedback: PHONE_UNAVAILABLE };
     }
   }
@@ -222,15 +234,27 @@ export async function handleWatchNearbyJson(json: string): Promise<{ ok: boolean
     if (ctx.hasActiveRound() && !replaceLiveRoundAllowed) {
       return { ok: true, feedback: 'Round in progress' };
     }
+    if (!watchCourseStartShouldApply(start.at)) {
+      return { ok: true, feedback: '' };
+    }
     try {
       const detail = await getCourseDataClient().getCourse(start.courseId);
-      if (!detail) return { ok: false, feedback: 'open the phone' };
+      if (!detail) {
+        forgetWatchCourseStartAt(start.at);
+        return { ok: false, feedback: 'open the phone' };
+      }
       const holeCount = start.holeCount === 9 ? 9 : 18;
       const tee = start.teeName
         ? detail.tees.find((row) => row.name === start.teeName) ?? null
         : null;
-      if (start.teeName && !tee) return { ok: false, feedback: 'open the phone' };
-      if (detail.tees.length > 0 && !tee) return { ok: false, feedback: 'open the phone' };
+      if (start.teeName && !tee) {
+        forgetWatchCourseStartAt(start.at);
+        return { ok: false, feedback: 'open the phone' };
+      }
+      if (detail.tees.length > 0 && !tee) {
+        forgetWatchCourseStartAt(start.at);
+        return { ok: false, feedback: 'open the phone' };
+      }
       const numHoles = resolveCourseNumHoles({
         detailHoleCount: detail.holeCount,
         catalogHoleCount: catalogEntryById(detail.id)?.holeCount ?? null,
@@ -248,6 +272,7 @@ export async function handleWatchNearbyJson(json: string): Promise<{ ok: boolean
       rememberLayoutHoles(layout);
       const round = startRound(ctx.db, holeCount, detail.name, layout);
       ctx.bump();
+      watchCourseStartDidApply(start.at);
       router.push(playHrefAfterRoundStart(round.id));
       prefetchCourseCardInBackground(layout, {
         holeCount,
@@ -264,6 +289,7 @@ export async function handleWatchNearbyJson(json: string): Promise<{ ok: boolean
       });
       return { ok: true, feedback: tee ? `${detail.name} · ${tee.name}` : detail.name };
     } catch {
+      releaseWatchCourseStart(start.at);
       return { ok: false, feedback: PHONE_UNAVAILABLE };
     }
   }
