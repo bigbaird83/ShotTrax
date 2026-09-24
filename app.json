@@ -46,6 +46,7 @@
     },
     "plugins": [
       "expo-router",
+      "./plugins/withSplashContain",
       [
         "expo-splash-screen",
         {
