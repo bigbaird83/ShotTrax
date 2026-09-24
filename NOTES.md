@@ -62,8 +62,9 @@ When the Worker URL is set:
 
 The Watch opens on **Watch Home** when no hole is live (a live round still opens that hole; the hole's Home button comes back here with **Continue · Hole N**).
 
-- **Favorites** — the phone `course.favorites` list. One list; the Watch keeps no copy of its own beyond a display cache.
-- **Nearby** — the same Golf Courses API nearby search as the phone, run on the phone. Search point: fresh Watch fix → fresh phone fix → last phone location (`watch.home.lastPhoneFix`). No point → empty Nearby, never a guess.
+- **Favorites** — the body of Watch Home. The phone `course.favorites` list. One list; the Watch keeps no copy of its own beyond a display cache.
+- **Search nearby** — a button at the top of Watch Home. It pushes a screen; it does not start a round. Back pops to the same Home (Favorites and the button stay; Home is not remounted).
+- **Nearby** — that pushed screen. The same Golf Courses API nearby search as the phone, run on the phone. Search point: fresh Watch fix → fresh phone fix → last phone location (`watch.home.lastPhoneFix`). No point → empty Nearby, never a guess. Not the permanent Home body.
 - A course shows once: a favorite that is also nearby sits under Favorites (with its distance) and is dropped from Nearby.
 - Row tap starts the round like the phone (course → 9/18 → tee → Start); the live round's course continues it. A favorite with no API detail starts like the phone Favorites row.
 - Star toggles the phone favorite (`favoriteToggle`, sent live + queued; older `at` is ignored). Phone stars/unstars bump the DB, which re-pushes `watchHome` (application context key `watchHome` + live message) so the Watch updates without a relaunch.

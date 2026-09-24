@@ -71,6 +71,7 @@ struct WatchHomeState {
   }
 
   /// Nearby minus anything already under Favorites — a course shows once.
+  /// Shown on the pushed Search nearby screen, not as the Home body.
   var nearbyRows: [HomeCourse] {
     var seen = Set(favorites.map { $0.id })
     return nearby.filter { seen.insert($0.id).inserted }
@@ -151,7 +152,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     nearby.active && (!hasLiveHole || nearbyFromHome)
   }
 
-  /// Watch Home is the face: nearby is up and no course has been tapped.
+  /// Watch Home is the face when no course has been tapped: Favorites, plus
+  /// Search nearby (a push). Not the live hole and not holes/tees.
   var showsHome: Bool {
     showsNearby && nearby.courseId == nil
   }
