@@ -1,6 +1,8 @@
 import { holeCameraHeading, projectHoleCameraScreen } from './holeCamera';
 import { isValidLatLng, type LatLng } from './latLng';
 import { HOLE_MAP_MIN_PAINT_PX } from './mapPaint';
+import { COPY, formatParLabel, formatPuttCount } from './playerCopy';
+import { planFinishedPuttRows } from './putts';
 
 /**
  * Shot review layout. The header, course name, hole chips, and par line stay
@@ -121,4 +123,38 @@ function unprojectHoleCameraScreen(
     lng: center.lng + east / (Math.abs(cosLat) < 1e-6 ? 1 : cosLat),
   };
   return isValidLatLng(point) ? point : null;
+}
+
+type ShotReviewPuttHole = {
+  puttsDone?: boolean;
+  putts: number;
+  puttLengths?: readonly (string | null | undefined)[];
+};
+
+/**
+ * Putt lines after the GPS shot list: "Putt 1 · 3–10", "Putt 2 · No length".
+ * Stats only — never a map pin, a yard number, or a GPS invent.
+ * An unfinished hole or a Hole Out with zero putts adds nothing.
+ */
+export function shotReviewPuttLines(hole: ShotReviewPuttHole): string[] {
+  return planFinishedPuttRows({
+    puttsDone: hole.puttsDone,
+    putts: hole.putts,
+    lengths: hole.puttLengths ?? [],
+  }).map((row) => `Putt ${row.n} · ${row.label}`);
+}
+
+/** "Par 4 · Hole 2 · Score 4 · 2 putts". Putt count only when putts were logged. */
+export function shotReviewHoleHeader(
+  hole: ShotReviewPuttHole & { par: number | null; number: number; score: number | null },
+): string {
+  const putts = shotReviewPuttLines(hole).length;
+  return [
+    formatParLabel(hole.par),
+    `Hole ${hole.number}`,
+    hole.score != null ? `${COPY.score} ${hole.score}` : null,
+    putts > 0 ? formatPuttCount(putts) : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 }

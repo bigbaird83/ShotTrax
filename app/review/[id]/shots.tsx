@@ -2,7 +2,6 @@ import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { getCourseDataClient } from '@/src/course/client';
-import { formatParLabel } from '@/src/course/layout';
 import { teePointForHole, teePointFromHoleFeature } from '@/src/course/osmOverlay';
 import type { OsmOverlay } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
@@ -13,6 +12,8 @@ import {
   SHOT_REVIEW_MAP_MIN_HEIGHT,
   SHOT_REVIEW_SHOT_LIST_MAX_HEIGHT,
   shotReviewFramePoints,
+  shotReviewHoleHeader,
+  shotReviewPuttLines,
   shotReviewShotListWindow,
 } from '@/src/domain/shotReviewLayout';
 import type { Club, Shot } from '@/src/domain/types';
@@ -89,6 +90,8 @@ export default function ReviewShotsScreen() {
         green,
       })
     : null;
+  // Putts are stats-only rows under the shot list. They never become pins.
+  const puttLines = hole ? shotReviewPuttLines(hole) : [];
   const shotPins = shotPinsForHoleCamera(shots);
   const camera = hole
     ? lockHoleCamera({
@@ -122,10 +125,7 @@ export default function ReviewShotsScreen() {
 
       <View style={styles.holeColumn}>
         {hole ? (
-          <Text style={styles.label}>
-            {formatParLabel(hole.par)} · Hole {hole.number}
-            {hole.score != null ? ` · ${COPY.score} ${hole.score}` : ''}
-          </Text>
+          <Text style={styles.label}>{shotReviewHoleHeader(hole)}</Text>
         ) : null}
         <View style={styles.mapSlot} testID="shot-review-map">
           {hole && camera ? (
@@ -153,10 +153,11 @@ export default function ReviewShotsScreen() {
       </View>
 
       <View style={styles.bottom} testID="shot-review-bottom">
-        {hole && shots.length > 0 ? (
+        {hole && (shots.length > 0 || puttLines.length > 0) ? (
           <ReviewShotList
             key={hole.id}
             shots={shots}
+            puttLines={puttLines}
             clubs={clubs}
             textStyle={styles.muted}
             listStyle={styles.shotList}
@@ -186,12 +187,14 @@ export default function ReviewShotsScreen() {
 
 function ReviewShotList({
   shots,
+  puttLines,
   clubs,
   textStyle,
   listStyle,
   contentStyle,
 }: {
   shots: Shot[];
+  puttLines: string[];
   clubs: Record<string, Club>;
   textStyle: StyleProp<TextStyle>;
   listStyle: StyleProp<ViewStyle>;
@@ -213,6 +216,11 @@ function ReviewShotList({
         <Text key={shot.id} style={textStyle}>
           {shot.seq}. {shot.clubId ? (clubs[shot.clubId]?.name ?? 'Club') : '—'}
           {shot.distanceYards != null ? ` · ${Math.round(shot.distanceYards)} yd` : ''}
+        </Text>
+      ))}
+      {puttLines.map((line, i) => (
+        <Text key={`putt-${i}`} style={textStyle}>
+          {line}
         </Text>
       ))}
     </ScrollView>
