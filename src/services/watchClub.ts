@@ -31,6 +31,7 @@ import {
 import {
   drainWatchPuttPickQueue,
   forgetWatchPuttPickAt,
+  planWatchMadeItAdvance,
   queueWatchPuttPickEvent,
   watchPuttPickShouldApply,
 } from '../domain/watchPuttSync';
@@ -59,6 +60,7 @@ export type WatchClubContext = {
 let context: WatchClubContext | null = null;
 let started = false;
 let lastJson = '';
+let lastClubList: ClubListMessage | null = null;
 let lastPuttJson = '';
 let lastClubMark: { clubId: string; appliedAtMs: number } | null = null;
 
@@ -86,6 +88,7 @@ export async function pushWatchClubList(msg: ClubListMessage): Promise<void> {
   try {
     await mod.pushClubListJson(json);
     lastJson = json;
+    lastClubList = msg;
   } catch {
     // Watch is best-effort on Simulator / Android / web.
   }
@@ -95,6 +98,7 @@ export async function pushWatchPuttSheet(args: {
   open: boolean;
   holeNumber: number;
   lengths: PuttLengthId[];
+  done?: boolean;
 }): Promise<void> {
   const msg: PuttSheetMessage = puttSheetPayload(args);
   const json = JSON.stringify(msg);
@@ -111,6 +115,30 @@ export async function pushWatchPuttSheet(args: {
   } catch {
     // Watch is best-effort on Simulator / Android / web.
   }
+}
+
+/**
+ * Made it / Hole Out finished `holeNumber`: close the Watch putt sheet and move
+ * the wrist to Hole N+1 (or Round complete) right away. The next hole screen
+ * pushes its own clubList with real yards after it mounts.
+ */
+export async function pushWatchMadeItAdvance(args: {
+  holeNumber: number;
+  holeCount: number;
+  lengths: PuttLengthId[];
+}): Promise<void> {
+  const plan = planWatchMadeItAdvance({ ...args, last: lastClubList });
+  // clubList goes out first, in this tick — before the next hole screen mounts
+  // and pushes its real clubList, so this placeholder never lands on top of it.
+  await Promise.all([
+    pushWatchClubList(plan.clubList),
+    pushWatchPuttSheet({
+      open: false,
+      holeNumber: plan.puttSheet.holeNumber,
+      lengths: plan.puttSheet.lengths,
+      done: true,
+    }),
+  ]);
 }
 
 export function buildClubList(args: {

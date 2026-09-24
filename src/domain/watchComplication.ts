@@ -63,9 +63,10 @@ export function complicationFromHoleMap(args: {
       : null;
   const unavailable = yards == null;
   const value = yards == null ? COMPLICATION_EMPTY : `${yards}`;
+  // Face text: `H{n} · {yards} yd`, or `H{n} · —` when quality is none / no green.
   let inline: string;
-  if (holeNumber != null && yards != null) inline = `Hole ${holeNumber} · ${yards} yd`;
-  else if (holeNumber != null) inline = `Hole ${holeNumber} · ${COMPLICATION_EMPTY}`;
+  if (holeNumber != null && yards != null) inline = `H${holeNumber} · ${yards} yd`;
+  else if (holeNumber != null) inline = `H${holeNumber} · ${COMPLICATION_EMPTY}`;
   else if (yards != null) inline = `${yards} yd`;
   else inline = COMPLICATION_EMPTY;
   return {
@@ -132,4 +133,24 @@ export function nextWatchLiveYtgSnapshot(args: {
     return { snapshot: next, commit: true };
   }
   return { snapshot: prev, commit: false };
+}
+
+/**
+ * The ShotTraxxHole widget face from the same clubList payload the Watch stores
+ * in the app group. Only the live complication yards count — never the club-rank
+ * `yardsToGreen` (that can be a tee / card number) and never a guessed pin.
+ * Missing complication fields → em dash. `targets/watch-widget/index.swift` mirrors this.
+ */
+export function complicationFromClubList(msg: {
+  holeNumber: number;
+  complicationYards?: number | null;
+  complicationQuality?: YardsQuality;
+}): ComplicationFace {
+  return complicationFromHoleMap({
+    holeNumber: msg.holeNumber,
+    map: {
+      yards: msg.complicationYards ?? null,
+      quality: msg.complicationQuality ?? 'none',
+    },
+  });
 }

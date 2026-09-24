@@ -1,5 +1,9 @@
 /** Watch → phone putt taps. Cart / unreachable must not drop puttPick. */
 
+import { holeAfterDone } from './putts';
+import type { PuttLengthId } from './putts';
+import { puttSheetPayload, type ClubListMessage, type PuttSheetMessage } from './watchMessages';
+
 export const WATCH_PUTT_PICK_DEDUP_MAX = 48;
 
 export type WatchPuttPickQueueRow = {
@@ -98,4 +102,46 @@ export function drainWatchPuttPickQueue(): QueuedPuttPick[] {
   const rows = queued;
   queued = [];
   return rows;
+}
+
+export type WatchMadeItAdvance = {
+  /** Always closed (`done`) so the Watch leaves the putt sheet. */
+  puttSheet: PuttSheetMessage;
+  /** Hole N+1 (yards unknown until the new hole's fix), or the last hole with `roundComplete`. */
+  clubList: ClubListMessage;
+};
+
+/**
+ * Made it / Hole Out on hole N (Watch `puttPick` made or the phone button).
+ * Pushed right away so the wrist moves to Hole N+1 Suggested clubs — the new
+ * hole screen's own clubList follows with real yards. Bag, labels, and top-3
+ * ride over from the last clubList. Yards are none — never carried from hole N.
+ * Last hole → `roundComplete`, never the old putt sheet.
+ */
+export function planWatchMadeItAdvance(args: {
+  holeNumber: number;
+  holeCount: number;
+  lengths: PuttLengthId[];
+  last: ClubListMessage | null;
+}): WatchMadeItAdvance {
+  const puttSheet = puttSheetPayload({
+    open: false,
+    holeNumber: args.holeNumber,
+    lengths: args.lengths,
+    done: true,
+  });
+  const dest = holeAfterDone(args.holeNumber, args.holeCount);
+  const base: ClubListMessage = {
+    type: 'clubList',
+    top3: args.last?.top3 ?? [],
+    bag: args.last?.bag ?? [],
+    labels: args.last?.labels ?? {},
+    holeNumber: dest.kind === 'hole' ? dest.holeNumber : args.holeNumber,
+    yardsToGreen: null,
+    yardsQuality: 'none',
+    complicationYards: null,
+    complicationQuality: 'none',
+  };
+  if (dest.kind === 'summary') base.roundComplete = true;
+  return { puttSheet, clubList: base };
 }

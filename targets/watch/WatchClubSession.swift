@@ -22,6 +22,8 @@ struct ClubListState {
   var complicationHole: Int = 0
   var complicationYards: Int? = nil
   var complicationQuality: String = "none"
+  /// Phone finished the last hole (Made it / Hole Out). Round complete, not the putt sheet.
+  var roundComplete: Bool = false
 
   var statusLine: String {
     if yardsQuality != "none", let yards = yardsToGreen, yards > 0 {
@@ -177,6 +179,23 @@ struct PuttSheetState {
 }
 
 final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLLocationManagerDelegate, WKExtendedRuntimeSessionDelegate {
+  /// One session for the app and for background WatchConnectivity launches.
+  static let shared = WatchClubSession()
+
+  /// Background WatchConnectivity task: stay up until the delivered clubList
+  /// (application context / complication userInfo) has been applied, so the app
+  /// group and the ShotTraxxHole widget move while the Watch app is not in front.
+  static func drainConnectivity() async {
+    _ = shared
+    for _ in 0..<40 {
+      let wc = WCSession.default
+      if wc.activationState == .activated && !wc.hasContentPending { break }
+      try? await Task.sleep(nanoseconds: 250_000_000)
+    }
+    // Let the main-queue applyClubList → persist → reload run before we return.
+    try? await Task.sleep(nanoseconds: 250_000_000)
+  }
+
   @Published var list = ClubListState()
   @Published var putt = PuttSheetState()
   @Published var nearby = NearbyState()
@@ -199,6 +218,9 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   private var complicationStamp = ""
   /// Watch Back/Cancel on the putt sheet. Blocks phone keep-alive from reopening.
   private var userClosedPutt = false
+  /// Hole the phone finished (puttSheet `done`). A late open:true for it must not
+  /// bring the old putt sheet back. Cleared when the Watch opens putts itself.
+  private var finishedPuttHole = 0
 
   var hasLiveHole: Bool {
     receivedClubList || !list.bag.isEmpty
@@ -455,6 +477,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     // waiting on a phone push (TF 53/56: Doc never saw Made).
     if clubId == "club_putter" {
       userClosedPutt = false
+      finishedPuttHole = 0
       var sheet = putt
       sheet.open = true
       if sheet.holeNumber < 1 {
@@ -490,6 +513,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   /// Dedicated Putt control — opens the sheet without selecting putter on the wheel.
   func openPuttSheet() {
     userClosedPutt = false
+    finishedPuttHole = 0
     var sheet = putt
     sheet.open = true
     if sheet.holeNumber < 1 {
@@ -609,6 +633,22 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     if action == "home" {
       requestHome()
     }
+  }
+
+  /// Round complete → Watch Home. Local only: no clubNav, nothing sent to the phone.
+  func homeAfterRound() {
+    feedback = ""
+    putt.open = false
+    nearbyFromHome = true
+    nearby.active = true
+    nearby.awaitingSelect = true
+    nearby.courseId = nil
+    nearby.courseName = nil
+    nearby.tees = []
+    nearby.courses = []
+    nearby.holeCount = nil
+    syncRoundStay()
+    requestHome()
   }
 
   func dismissNearbyToHole() {
@@ -771,12 +811,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       UserDefaults.standard.set(clubId, forKey: "lastClubId")
     }
     if ok, (reply["feedback"] as? String)?.contains("Hole Out") == true {
-      putt.open = false
-      putt.lengths = []
-      putt.canMake = true
-      putt.canAdd = true
-      putt.pending = nil
-      syncRoundStay()
+      closePuttForAdvance(finishedHole: putt.holeNumber)
     }
   }
 
@@ -1034,6 +1069,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     } else {
       next.selectedClubId = nil
     }
+    next.roundComplete = message["roundComplete"] as? Bool ?? false
     let holeChanged = list.holeNumber > 0 && next.holeNumber != list.holeNumber
     if holeChanged {
       // Cypress H10→H11: leftover 56° must not stay armed on the new hole.
@@ -1042,6 +1078,11 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       lastClubTapId = nil
       lastClubTapAt = Date.distantPast
       userClosedPutt = false
+    }
+    // Made it on hole N → the next clubList is Hole N+1 (or Round complete).
+    // Leave the old putt sheet so the wrist shows Suggested clubs.
+    if putt.open, next.roundComplete || (holeChanged && putt.holeNumber != next.holeNumber) {
+      closePuttForAdvance(finishedHole: putt.holeNumber)
     }
     list = next
     persist(next)
@@ -1067,6 +1108,15 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     next.canAdd = message["canAdd"] as? Bool ?? (next.lengths.count < 5)
     next.canMake = true
     let incomingOpen = message["open"] as? Bool ?? false
+    // Made it / Hole Out finished this hole on the phone: always close.
+    if message["done"] as? Bool == true {
+      closePuttForAdvance(finishedHole: next.holeNumber)
+      return
+    }
+    // A late open:true for the hole the phone just finished must not reopen it.
+    if finishedPuttHole > 0, next.holeNumber == finishedPuttHole, !putt.open {
+      return
+    }
     // Phone add/undo can race puttOpen=false and close a Watch-opened sheet
     // (dedicated Putt does not select putter on the wheel). Keep it up.
     // Watch Back/Cancel stays closed — no Made/Add, no invent GPS.
@@ -1139,6 +1189,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
     if let last = state.lastClubId { obj["lastClubId"] = last }
     if let selected = state.selectedClubId { obj["selectedClubId"] = selected }
+    if state.roundComplete { obj["roundComplete"] = true }
     if let data = try? JSONSerialization.data(withJSONObject: obj),
        let text = String(data: data, encoding: .utf8) {
       defaults?.set(text, forKey: "clubListJSON")
@@ -1185,6 +1236,19 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
   }
 
+  /// Hole finished: drop the putt sheet (lengths, pending) and go back to club play.
+  private func closePuttForAdvance(finishedHole: Int) {
+    finishedPuttHole = finishedHole
+    var sheet = PuttSheetState()
+    sheet.holeNumber = finishedHole
+    sheet.open = false
+    putt = sheet
+    if list.selectedClubId == "club_putter" {
+      list.selectedClubId = nil
+    }
+    syncRoundStay()
+  }
+
   private func dropStaleClubPicks(liveHole: Int) {
     pendingQueue.removeAll { payload in
       guard payload["type"] as? String == "clubPick" else { return false }
@@ -1217,7 +1281,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   private func syncRoundStay() {
-    wantsStay = !userLeftApp && (hasLiveHole || putt.open)
+    wantsStay = !userLeftApp && ((hasLiveHole && !list.roundComplete) || putt.open)
     if wantsStay {
       startRoundStay()
     } else {

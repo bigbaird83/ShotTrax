@@ -12,6 +12,8 @@ import {
   WATCH_MESSAGE_TYPES,
   clubListPayload,
   clubListPushKey,
+  WATCH_SUGGEST_YARDS_STEP,
+  watchSuggestYardsToSend,
   clubNavPayload,
   clubPickPayload,
   formatClubMarkedFeedback,
@@ -329,4 +331,16 @@ test('puttPick add needs a bucket; Made it finishes; undo drops the last', () =>
   assert.equal(madeLen?.lengthId, '3_to_10');
   assert.equal(MADE_IT_FEEDBACK, 'Hole Out ✓');
   assert.equal(PUTTS_ON_WATCH, 'Putts');
+});
+
+test('walking in: Watch clubList yards move on a new top-3 or a ≥5 yd change, not every step', () => {
+  assert.equal(WATCH_SUGGEST_YARDS_STEP, 5);
+  const base = { holeNumber: 4, top3: ['club_6i', 'club_7i', 'club_5i'], yardsToGreen: 160, yardsQuality: 'good' as const };
+  assert.equal(watchSuggestYardsToSend({ previous: null, next: base }), 160);
+  assert.equal(watchSuggestYardsToSend({ previous: base, next: { ...base, yardsToGreen: 157 } }), 160);
+  assert.equal(watchSuggestYardsToSend({ previous: base, next: { ...base, yardsToGreen: 155 } }), 155);
+  const reordered = { ...base, top3: ['club_7i', 'club_6i', 'club_8i'], yardsToGreen: 158 };
+  assert.equal(watchSuggestYardsToSend({ previous: base, next: reordered }), 158);
+  assert.equal(watchSuggestYardsToSend({ previous: base, next: { ...base, holeNumber: 5, yardsToGreen: 158 } }), 158);
+  assert.equal(watchSuggestYardsToSend({ previous: base, next: { ...base, yardsQuality: 'soft', yardsToGreen: 158 } }), 158);
 });
