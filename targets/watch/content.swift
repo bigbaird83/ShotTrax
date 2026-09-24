@@ -169,54 +169,56 @@ struct ContentView: View {
   /// Back pops this push; Home (and its favorites) stay on the stack.
   @ViewBuilder
   private var nearbySearch: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 6) {
-        Button(action: {
-          if !homePath.isEmpty { homePath.removeLast() }
-        }) {
-          Text("Back")
-            .font(.system(size: 13, weight: .heavy))
-            .foregroundStyle(Color("cream"))
-            .frame(maxWidth: .infinity, minHeight: 32)
-            .overlay(
-              RoundedRectangle(cornerRadius: 8)
-                .stroke(Color("cream"), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-
-        homeSectionTitle("Nearby")
-        let nearby = session.home.nearbyRows
-        if !nearby.isEmpty {
-          ForEach(nearby) { course in
-            homeRow(course)
-          }
-        } else if session.home.loading {
-          Text("Finding courses…")
-            .font(.system(size: 12, weight: .bold))
-            .foregroundStyle(Color("muted"))
-        } else {
-          Text(session.home.line.isEmpty ? "open the phone" : session.home.line)
-            .font(.system(size: 12, weight: .bold))
-            .foregroundStyle(Color("cream"))
-        }
-
-        Button(action: { session.requestHome() }) {
-          Text(session.home.loading ? "Updating…" : "Refresh")
-            .font(.system(size: 13, weight: .heavy))
-            .foregroundStyle(Color("cream"))
-            .frame(maxWidth: .infinity, minHeight: 32)
-            .overlay(
-              RoundedRectangle(cornerRadius: 8)
-                .stroke(Color("muted"), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-        .disabled(session.home.loading)
-        .padding(.top, 4)
+    VStack(alignment: .leading, spacing: 6) {
+      Button(action: {
+        if !homePath.isEmpty { homePath.removeLast() }
+      }) {
+        Text("Back")
+          .font(.system(size: 13, weight: .heavy))
+          .foregroundStyle(Color("cream"))
+          .frame(maxWidth: .infinity, minHeight: 32)
+          .overlay(
+            RoundedRectangle(cornerRadius: 8)
+              .stroke(Color("cream"), lineWidth: 1)
+          )
       }
-      .padding(.horizontal, 4)
+      .buttonStyle(.plain)
+
+      ScrollView {
+        VStack(alignment: .leading, spacing: 6) {
+          homeSectionTitle("Nearby")
+          let nearby = session.home.nearbyRows
+          if !nearby.isEmpty {
+            ForEach(nearby) { course in
+              homeRow(course)
+            }
+          } else if session.home.loading {
+            Text("Finding courses…")
+              .font(.system(size: 12, weight: .bold))
+              .foregroundStyle(Color("muted"))
+          } else {
+            Text(session.home.line.isEmpty ? "open the phone" : session.home.line)
+              .font(.system(size: 12, weight: .bold))
+              .foregroundStyle(Color("cream"))
+          }
+
+          Button(action: { session.requestHome() }) {
+            Text(session.home.loading ? "Updating…" : "Refresh")
+              .font(.system(size: 13, weight: .heavy))
+              .foregroundStyle(Color("cream"))
+              .frame(maxWidth: .infinity, minHeight: 32)
+              .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                  .stroke(Color("muted"), lineWidth: 1)
+              )
+          }
+          .buttonStyle(.plain)
+          .disabled(session.home.loading)
+          .padding(.top, 4)
+        }
+      }
     }
+    .padding(.horizontal, 4)
     .background(Color("bg").ignoresSafeArea())
     .navigationBarBackButtonHidden(true)
     .toolbar(.hidden, for: .navigationBar)
