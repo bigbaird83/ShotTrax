@@ -39,7 +39,8 @@ export type WatchMessageType = (typeof WATCH_MESSAGE_TYPES)[number];
  * yardsQuality is the same good/soft/none bands as the phone — never invent.
  * lastClubId is optional (Same club on the wrist).
  * complicationYards / complicationQuality are optional live yards for the Watch
- * hole header and complication (`planLiveGpsToPin`). They do not rank clubs.
+ * status line (Hole N · yd), the top-right number, and the complication
+ * (`planLiveGpsToPin`). Null / quality none → Hole N · — . They do not rank clubs.
  * Omit them to leave that number unchanged. quality none clears the yardage.
  */
 export type ClubListMessage = {

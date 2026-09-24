@@ -25,20 +25,22 @@ struct ClubListState {
   /// Phone finished the last hole (Made it / Hole Out). Round complete, not the putt sheet.
   var roundComplete: Bool = false
 
+  /// Top-right live yards. Same gate as the phone: good/soft and a positive number, else —.
+  var liveYardsTrusted: Bool {
+    (complicationQuality == "good" || complicationQuality == "soft") && (complicationYards ?? 0) > 0
+  }
+
+  /// Hole N · live GPS yards, or Hole N · — . Same gate as the top-right number
+  /// and the complication. Club-rank `yardsToGreen` (tee / landing fallback) stays off this line.
   var statusLine: String {
-    if yardsQuality != "none", let yards = yardsToGreen, yards > 0 {
+    if liveYardsTrusted, let yards = complicationYards {
       return "Hole \(holeNumber) · \(yards) yd"
     }
     return "Hole \(holeNumber) · —"
   }
 
-  /// Player-voice chip is Approximate (never SOFT).
-  var showSoft: Bool { yardsQuality == "soft" }
-
-  /// Top-right live yards. Same gate as the phone: good/soft and a positive number, else —.
-  var liveYardsTrusted: Bool {
-    (complicationQuality == "good" || complicationQuality == "soft") && (complicationYards ?? 0) > 0
-  }
+  /// Approximate only beside a live soft yardage. Never SOFT. Never on a dash.
+  var showSoft: Bool { liveYardsTrusted && complicationQuality == "soft" }
 
   var liveYardsLabel: String {
     if liveYardsTrusted, let yards = complicationYards {
