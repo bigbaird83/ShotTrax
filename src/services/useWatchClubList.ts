@@ -31,6 +31,8 @@ export function useWatchClubList(
     yardsQuality: 'good' | 'soft' | 'forced' | 'none';
     lastClubId?: string | null;
     selectedClubId?: string | null;
+    /** Hole-map yards for the Watch complication. Not the live GPS badge. */
+    complication?: { yards: number | null; quality: string } | null;
   },
 ): void {
   const ctxRef = useRef(ctx);

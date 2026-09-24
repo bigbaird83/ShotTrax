@@ -19,7 +19,7 @@ import { parseTypedYards } from '@/src/domain/shotSource';
 import { selectClubForMark } from '@/src/domain/stickyClub';
 import { emptyWalkAway, stepWalkAway, walkAwayEligible } from '@/src/domain/walkAway';
 import type { Club, GpsFix } from '@/src/domain/types';
-import { lastLandingMark, markToGreen, toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
+import { lastLandingMark, markToGreen, planPlayHeaderYards, toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
 import { addNoGpsShot, changeShotClub, markShotWithClub, promptForPlan } from '@/src/services/shotActions';
 import { useLiveFix } from '@/src/services/useLiveFix';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
@@ -198,6 +198,13 @@ export default function ClubPickScreen() {
     averages.map((row) => clubToRankInput(row.club, row)),
     target,
   );
+  const playHeaderYards = planPlayHeaderYards({
+    phone: fix ? { lat: fix.lat, lng: fix.lng } : null,
+    green,
+    tee: holeTee,
+    courseYards: holeRow?.yards ?? null,
+    shots,
+  });
   const stripPlan = planClubStrip({
     clubs: clubs.map((club) => {
       const row = averages.find((item) => item.club.id === club.id);
@@ -255,6 +262,10 @@ export default function ClubPickScreen() {
       yardsQuality: target || teeToGreen.quality !== 'none' || toGreen.quality !== 'none' ? 'good' : 'none',
       lastClubId: selected?.id ?? null,
       selectedClubId: selected?.id ?? null,
+      complication: {
+        yards: playHeaderYards.yards,
+        quality: playHeaderYards.quality,
+      },
     },
   );
 

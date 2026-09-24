@@ -9,6 +9,7 @@
  * Watch never marks alone, never silent-forces, no motion/mic, no auto-detect putts.
  */
 
+import { complicationFromHoleMap } from './watchComplication';
 import { isPutterClubId } from './defaultBag';
 import { isPuttLengthId, PUTT_LENGTHS, type PuttLengthId } from './putts';
 import { OPEN_PHONE } from './watchNearby';
@@ -37,6 +38,9 @@ export type WatchMessageType = (typeof WATCH_MESSAGE_TYPES)[number];
  * yardsToGreen is yardsToGreen().yards (null when quality is none).
  * yardsQuality is the same good/soft/none bands as the phone — never invent.
  * lastClubId is optional (Same club on the wrist).
+ * complicationYards / complicationQuality are optional and are only the hole-map
+ * number for the Watch complication (`planPlayHeaderYards`). They do not rank clubs.
+ * Omit them to leave the complication unchanged. quality none clears the yardage.
  */
 export type ClubListMessage = {
   type: 'clubList';
@@ -48,6 +52,8 @@ export type ClubListMessage = {
   yardsQuality: YardsQuality;
   lastClubId?: ClubId | null;
   selectedClubId?: ClubId | null;
+  complicationYards?: number | null;
+  complicationQuality?: YardsQuality;
 };
 
 export const CLUB_LIST_KEYS = [
@@ -154,6 +160,15 @@ export function parseClubList(raw: unknown): ClubListMessage | null {
   }
   if (!isYardsQuality(row.yardsQuality)) return null;
   if (row.yardsQuality === 'none' || yardsToGreen == null || yardsToGreen <= 0) yardsToGreen = null;
+  const complication = isYardsQuality(row.complicationQuality)
+    ? complicationFromHoleMap({
+        holeNumber,
+        map: {
+          yards: typeof row.complicationYards === 'number' ? row.complicationYards : null,
+          quality: row.complicationQuality,
+        },
+      })
+    : null;
   const msg: ClubListMessage = {
     type: 'clubList',
     top3: row.top3 as string[],
@@ -163,6 +178,10 @@ export function parseClubList(raw: unknown): ClubListMessage | null {
     yardsToGreen,
     yardsQuality: row.yardsQuality,
   };
+  if (complication) {
+    msg.complicationQuality = complication.quality;
+    msg.complicationYards = complication.yards;
+  }
   const lastClubId = typeof row.lastClubId === 'string' && row.lastClubId.trim() ? row.lastClubId : undefined;
   if (lastClubId) msg.lastClubId = lastClubId;
   const selectedClubId =
@@ -296,6 +315,8 @@ export function clubListPayload(args: {
   yardsQuality: YardsQuality;
   lastClubId?: ClubId | null;
   selectedClubId?: ClubId | null;
+  /** Hole-map yards. Omit to leave the Watch complication unchanged. */
+  complication?: { yards: number | null; quality: string } | null;
 }): ClubListMessage {
   const yardsToGreen =
     args.yardsQuality === 'none' ||
@@ -304,6 +325,12 @@ export function clubListPayload(args: {
     args.yardsToGreen <= 0
       ? null
       : Math.round(args.yardsToGreen);
+  const complication = args.complication
+    ? complicationFromHoleMap({
+        holeNumber: args.holeNumber,
+        map: args.complication,
+      })
+    : null;
   return {
     type: 'clubList',
     top3: args.top3,
@@ -314,6 +341,9 @@ export function clubListPayload(args: {
     yardsQuality: args.yardsQuality,
     ...(args.lastClubId ? { lastClubId: args.lastClubId } : {}),
     ...(args.selectedClubId ? { selectedClubId: args.selectedClubId } : {}),
+    ...(complication
+      ? { complicationQuality: complication.quality, complicationYards: complication.yards }
+      : {}),
   };
 }
 
@@ -329,6 +359,8 @@ export function clubListPushKey(msg: ClubListMessage): string {
     yardsQuality: msg.yardsQuality,
     lastClubId: msg.lastClubId ?? null,
     selectedClubId: msg.selectedClubId ?? null,
+    complicationYards: msg.complicationYards ?? null,
+    complicationQuality: msg.complicationQuality ?? null,
   });
 }
 
