@@ -86,9 +86,9 @@ test('complication shows Unavailable when the hole map has no trusted yards', ()
   assert.equal(watchLiveYardsLabel(missingGreen).text, COMPLICATION_EMPTY);
   assert.equal(watchLiveYardsLabel(missingGreen).trusted, false);
   assert.equal(watchLiveYardsLabel({ yards: 90, quality: 'none' }).text, COMPLICATION_EMPTY);
-  assert.equal(watchLiveYardsLabel({ yards: 164, quality: 'good' }).text, '164');
+  assert.equal(watchLiveYardsLabel({ yards: 142, quality: 'good' }).text, '142 yd');
   assert.equal(WATCH_LIVE_YTG_CAPTION, 'to hole');
-  assert.doesNotMatch(watchLiveYardsLabel({ yards: 164, quality: 'good' }).text, /yd/);
+  assert.doesNotMatch(watchLiveYardsLabel({ yards: 90, quality: 'none' }).text, /90/);
   assert.equal(watchLiveYardsLabel({ yards: 150, quality: 'soft' }).trusted, true);
 });
 
@@ -217,6 +217,7 @@ test('complication uses the watch widget families and the phone hole-map number'
     /CLLocation|requestLocation|startUpdatingLocation/,
   );
   assert.match(session, /var liveYardsLabel/);
+  assert.match(session, /return "\\\(yards\) yd"/);
   assert.match(session, /return "—"/);
 });
 

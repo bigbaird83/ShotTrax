@@ -82,14 +82,14 @@ export function complicationFromHoleMap(args: {
 /** Small caption under the top-right number. Not a second yardage. */
 export const WATCH_LIVE_YTG_CAPTION = 'to hole';
 
-/** Top-right number only. Em dash when the live yards are not trusted. */
+/** Top-right figure: `142 yd`, or an em dash when the live yards are not trusted. */
 export function watchLiveYardsLabel(live: {
   yards: number | null;
   quality: string;
 }): { text: string; trusted: boolean } {
   const face = complicationFromHoleMap({ holeNumber: null, map: live });
   if (face.yards == null) return { text: COMPLICATION_EMPTY, trusted: false };
-  return { text: `${face.yards}`, trusted: true };
+  return { text: `${face.yards} yd`, trusted: true };
 }
 
 export type WatchLiveYtgSnapshot = {

@@ -40,7 +40,7 @@ struct ClubListState {
 
   var liveYardsLabel: String {
     if liveYardsTrusted, let yards = complicationYards {
-      return "\(yards)"
+      return "\(yards) yd"
     }
     return "—"
   }
