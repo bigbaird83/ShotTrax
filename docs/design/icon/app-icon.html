@@ -1,0 +1,51 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>ShotTraxx App Icon</title>
+<style>*{margin:0;padding:0}html,body{background:transparent}#icon{display:block}</style></head>
+<body><div id="icon"></div>
+<script>
+/*
+ * ShotTraxx app icon, option A (night green). Source of truth for every
+ * icon file in assets/images. Query params:
+ *   size=1024          output edge in px
+ *   layer=full|fg|bg|mono
+ *     full  opaque icon (iOS, watch, favicon)
+ *     fg    mark only on transparent, inset to the Android 66% safe zone
+ *     bg    background gradient only
+ *     mono  white mark on transparent, inset (Android themed icon)
+ */
+const q = new URLSearchParams(location.search);
+const size = Number(q.get('size') || 1024);
+const layer = q.get('layer') || 'full';
+const cx = 512, cy = 735;
+const arcPath = (r) => {
+  const a1 = Math.PI * 1.12, a2 = Math.PI * 1.88;
+  return `M ${cx + r * Math.cos(a1)} ${cy + r * Math.sin(a1)} A ${r} ${r} 0 0 1 ${cx + r * Math.cos(a2)} ${cy + r * Math.sin(a2)}`;
+};
+const mono = layer === 'mono';
+const arc = mono ? '#FFFFFF' : '#C8F542';
+const flag = '#FFFFFF';
+const bg = `<rect width="1024" height="1024" fill="url(#bg)"/>`;
+const mark = `
+  <g ${mono ? '' : 'filter="url(#glow)"'} fill="none" stroke="${arc}" stroke-linecap="round">
+    <path d="${arcPath(390)}" stroke-width="46" opacity="${mono ? 1 : 0.55}"/>
+    <path d="${arcPath(290)}" stroke-width="52" opacity="${mono ? 1 : 0.8}"/>
+    <path d="${arcPath(190)}" stroke-width="58"/>
+  </g>
+  <ellipse cx="${cx}" cy="${cy + 18}" rx="330" ry="78" fill="${mono ? '#FFFFFF' : 'url(#mound)'}"/>
+  ${mono ? '' : `<ellipse cx="${cx}" cy="${cy - 2}" rx="250" ry="30" fill="#FFFFFF" opacity=".10"/>`}
+  <rect x="${cx - 15}" y="205" width="30" height="${cy - 205 + 6}" rx="15" fill="${flag}"/>
+  <path d="M ${cx + 10} 214 C ${cx + 110} 190, ${cx + 170} 260, ${cx + 300} 250 C ${cx + 230} 300, ${cx + 230} 350, ${cx + 270} 400 C ${cx + 160} 395, ${cx + 100} 340, ${cx + 10} 368 Z" fill="${flag}"/>
+  <circle cx="${cx}" cy="203" r="22" fill="${flag}"/>`;
+// Android adaptive layers: the mark is 1024-wide art; scale it into the 66% safe zone.
+const inset = (inner) => `<g transform="translate(512 ${512 + 30}) scale(0.62) translate(-512 -${512 + 30})">${inner}</g>`;
+const body =
+  layer === 'bg' ? bg :
+  layer === 'fg' || layer === 'mono' ? inset(mark) :
+  bg + mark;
+document.getElementById('icon').innerHTML = `<svg width="${size}" height="${size}" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="38%" r="75%"><stop offset="0" stop-color="#1E5A2E"/><stop offset="1" stop-color="#04110A"/></radialGradient>
+    <linearGradient id="mound" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5DB33A"/><stop offset="1" stop-color="#1F5A1E"/></linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="14" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>${body}</svg>`;
+</script></body></html>
