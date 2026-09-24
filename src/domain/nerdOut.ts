@@ -63,15 +63,13 @@ function emptyMarks(): NerdOutMarks {
 }
 
 /**
- * End-of-round stats from stored hole scores / putts and the club book.
- * Club carries are `clubBookCarry` on those same rows — nothing invented.
- * Putter is omitted. No GIR. No strokes gained. Vs par only when both exist.
+ * High-level round numbers from stored hole scores / putts only.
+ * No club table, no hole maps. No GIR. No strokes gained. Vs par only when both exist.
  */
 export function planNerdOut(args: {
   holeScores: (number | null)[];
   holePutts: number[];
   holePars?: (number | null)[];
-  clubs: ClubBookRow[];
 }): {
   score: number | null;
   toPar: number | null;
@@ -79,7 +77,6 @@ export function planNerdOut(args: {
   puttsPerHole: number | null;
   holesScored: number;
   marks: NerdOutMarks;
-  clubs: NerdOutClub[];
 } {
   const scored = args.holeScores.filter((score): score is number => score != null);
   const score = scored.length === 0 ? null : scored.reduce((sum, n) => sum + n, 0);
@@ -97,14 +94,6 @@ export function planNerdOut(args: {
     toParSum += holeScore - par;
     toParN += 1;
   });
-  const clubs: NerdOutClub[] = args.clubs
-    .filter((club) => !isPutterClubId(club.id))
-    .map((club) => ({
-      id: club.id,
-      name: club.name,
-      shortName: club.shortName,
-      ...clubBookCarry(club),
-    }));
   return {
     score,
     toPar: toParN === 0 ? null : toParSum,
@@ -112,8 +101,22 @@ export function planNerdOut(args: {
     puttsPerHole: scored.length === 0 ? null : Math.round((putts / scored.length) * 10) / 10,
     holesScored: scored.length,
     marks,
-    clubs,
   };
+}
+
+/**
+ * Club data table — `clubBookCarry` on the club-book rows, putter omitted.
+ * Lives on its own screen, never on the Nerd out root.
+ */
+export function planClubData(clubs: ClubBookRow[]): NerdOutClub[] {
+  return clubs
+    .filter((club) => !isPutterClubId(club.id))
+    .map((club) => ({
+      id: club.id,
+      name: club.name,
+      shortName: club.shortName,
+      ...clubBookCarry(club),
+    }));
 }
 
 /** Finished-round rollup from stored scores/putts only. */
@@ -141,12 +144,17 @@ export function nerdOutShowsStrokesGained(): false {
   return false;
 }
 
-/** End-of-round Nerd out includes the hole trail maps. */
-export function nerdOutShowsTrail(): true {
-  return true;
+/** Nerd out root is numbers only. Hole maps live under Review previous rounds → Shot review. */
+export function nerdOutShowsTrail(): false {
+  return false;
 }
 
-/** Those trails use the same tee-to-green lock as play / Add shot / edit. */
+/** Nerd out root never lists clubs. The table lives under Club data. */
+export function nerdOutShowsClubTable(): false {
+  return false;
+}
+
+/** Shot review maps use the same tee-to-green lock as play / Add shot / edit. */
 export function nerdOutTrailUsesHoleCamera(): true {
   return true;
 }

@@ -13,9 +13,9 @@ import {
   satelliteTilesWarmPerHole,
   startRoundBlocksOnCardPrefetch,
 } from './prefetch';
-import { cachedResolvedTee, rememberResolvedTee } from './osmOverlay';
+import { cachedOsmOverlay, cachedResolvedTee, rememberResolvedTee } from './osmOverlay';
 import type { CourseLayoutSeed } from './layout';
-import type { OsmOverlay } from './types';
+import type { OsmOverlay, OsmOverlayQuery } from './types';
 
 const tee = MAGNOLIA_CC.hole1.tee;
 const green = MAGNOLIA_CC.hole1.green;
@@ -115,6 +115,7 @@ test('missing hole fetches that hole only — never invents from the phone', asy
   assert.deepEqual(frame.tee, tee);
   assert.deepEqual(frame.green, green);
   assert.deepEqual(cachedResolvedTee({ courseId: 'fetch-1', holeNumber: 3, green }), tee);
+  assert.equal(cachedOsmOverlay({ courseId: 'fetch-1', holeNumber: 3, green }), overlay);
 
   const cached = await ensureHoleTeeGreen(
     {
@@ -134,6 +135,123 @@ test('missing hole fetches that hole only — never invents from the phone', asy
   assert.equal(fetched, 1);
   assert.equal(cached.fromCache, true);
   assert.deepEqual(cached.tee, tee);
+  assert.equal(cachedOsmOverlay({ courseId: 'fetch-1', holeNumber: 3, green }), overlay);
+});
+
+test('tee+green already present still remembers hazard overlays from Overpass', async () => {
+  const bunker = [
+    { lat: green.lat + 0.0004, lng: green.lng + 0.0002 },
+    { lat: green.lat + 0.0005, lng: green.lng + 0.0003 },
+    { lat: green.lat + 0.0004, lng: green.lng + 0.0004 },
+    { lat: green.lat + 0.0004, lng: green.lng + 0.0002 },
+  ];
+  const water = [
+    { lat: green.lat - 0.0006, lng: green.lng - 0.0002 },
+    { lat: green.lat - 0.0005, lng: green.lng - 0.0001 },
+    { lat: green.lat - 0.0007, lng: green.lng },
+    { lat: green.lat - 0.0006, lng: green.lng - 0.0002 },
+  ];
+  const lateral = [
+    { lat: green.lat + 0.0002, lng: green.lng - 0.0005 },
+    { lat: green.lat + 0.0003, lng: green.lng - 0.0004 },
+    { lat: green.lat + 0.0001, lng: green.lng - 0.0003 },
+    { lat: green.lat + 0.0002, lng: green.lng - 0.0005 },
+  ];
+  const cartpath = [
+    { lat: tee.lat, lng: tee.lng + 0.0003 },
+    { lat: green.lat, lng: green.lng + 0.0003 },
+  ];
+  const hazards: OsmOverlay = {
+    source: 'osm',
+    geojson: null,
+    features: [
+      { kind: 'bunker', holeNumber: null, coordinates: bunker },
+      { kind: 'water_hazard', holeNumber: null, coordinates: water },
+      { kind: 'lateral_water_hazard', holeNumber: 7, coordinates: lateral },
+      { kind: 'cartpath', holeNumber: null, coordinates: cartpath },
+    ],
+  };
+  const queries: OsmOverlayQuery[] = [];
+  const frame = await ensureHoleTeeGreen(
+    {
+      courseId: 'gca-hit',
+      holeNumber: 7,
+      tee,
+      green,
+      location: home,
+    },
+    {
+      fetchOverlay: async (query) => {
+        queries.push(query);
+        return hazards;
+      },
+    },
+  );
+  assert.equal(queries.length, 1);
+  assert.equal(queries[0].holeNumber, 7);
+  assert.equal(queries[0].radiusM, 1000);
+  assert.deepEqual(queries[0].location, green);
+  assert.equal(frame.fromCache, true);
+  assert.equal(frame.fetched, false);
+  assert.deepEqual(frame.tee, tee);
+  assert.deepEqual(frame.green, green);
+  const cached = cachedOsmOverlay({ courseId: 'gca-hit', holeNumber: 7, green });
+  assert.ok(cached);
+  assert.deepEqual(
+    cached?.features.map((feature) => feature.kind),
+    ['bunker', 'water_hazard', 'lateral_water_hazard', 'cartpath'],
+  );
+  assert.deepEqual(cached?.features[0].coordinates, bunker);
+  assert.deepEqual(cached?.features[1].coordinates, water);
+  assert.deepEqual(cached?.features[2].coordinates, lateral);
+  assert.deepEqual(cached?.features[3].coordinates, cartpath);
+
+  const again = await ensureHoleTeeGreen(
+    {
+      courseId: 'gca-hit',
+      holeNumber: 7,
+      tee,
+      green,
+      location: home,
+    },
+    {
+      fetchOverlay: async (query) => {
+        queries.push(query);
+        return null;
+      },
+    },
+  );
+  assert.equal(queries.length, 1);
+  assert.equal(again.fromCache, true);
+  assert.deepEqual(again.tee, tee);
+  assert.equal(cachedOsmOverlay({ courseId: 'gca-hit', holeNumber: 7, green }), cached);
+});
+
+test('tee+green already present leaves overlay null when Overpass is empty', async () => {
+  let fetched = 0;
+  const frame = await ensureHoleTeeGreen(
+    {
+      courseId: 'gca-empty',
+      holeNumber: 4,
+      tee,
+      green,
+      location: home,
+    },
+    {
+      fetchOverlay: async (query) => {
+        fetched += 1;
+        assert.deepEqual(query.location, green);
+        assert.equal(query.radiusM, 1000);
+        return null;
+      },
+    },
+  );
+  assert.equal(fetched, 1);
+  assert.equal(frame.fromCache, true);
+  assert.equal(frame.fetched, false);
+  assert.deepEqual(frame.tee, tee);
+  assert.deepEqual(frame.green, green);
+  assert.equal(cachedOsmOverlay({ courseId: 'gca-empty', holeNumber: 4, green }), null);
 });
 
 test('background card prefetch remembers every hole tee+green without a phone fix', async () => {

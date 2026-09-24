@@ -50,6 +50,7 @@ import {
   updateHolePutts,
   finishHolePutts,
   finishHoleOut,
+  closeOpenShotToExistingPin,
   markHoleStarted,
   attachHolePuttLength,
   updateHoleScore,
@@ -908,6 +909,7 @@ export default function HoleScreen() {
         if (!row || !rnd || row.puttsDone) {
           return { ok: false, feedback: COPY.puttSheetLede };
         }
+        closeOpenShotToExistingPin(db, row.id, target === holeNumber ? green : null);
         await closeApproachBeforePutts(db, { roundId: id, holeNumber: target });
         finishHoleOut(db, row.id);
         bump();
@@ -919,7 +921,7 @@ export default function HoleScreen() {
       }
       return { ok: false, feedback: PHONE_UNAVAILABLE };
     },
-    [readOnly, holeNumber, saveDraft, applyMadeIt, db, id, bump, celebrateHoleOut],
+    [readOnly, holeNumber, saveDraft, applyMadeIt, db, id, bump, celebrateHoleOut, green],
   );
 
   useWatchClubList(
@@ -1161,6 +1163,7 @@ export default function HoleScreen() {
   const onFinishHole = () => {
     if (readOnly || marksOnly || !hole || !round) return;
     void (async () => {
+      closeOpenShotToExistingPin(db, hole.id, green);
       await closeApproachBeforePutts(db, { roundId: id, holeNumber });
       finishHoleOut(db, hole.id);
       bump();

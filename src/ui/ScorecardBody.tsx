@@ -31,6 +31,7 @@ export function ScorecardBody({
   currentHoleNumber,
   onBack,
   onShare,
+  onShareImage,
   onNerdOut,
   onSelectHole,
 }: {
@@ -38,6 +39,8 @@ export function ScorecardBody({
   currentHoleNumber?: number;
   onBack: () => void;
   onShare?: (kind: ShareKind) => void;
+  /** Saved-round review: one Share scorecard button, image only — no live link pick. */
+  onShareImage?: () => void;
   onNerdOut?: () => void;
   onSelectHole?: (holeNumber: number) => void;
 }) {
@@ -94,6 +97,9 @@ export function ScorecardBody({
         })}
       </View>
       {onShare ? <ShareChoice variant="secondary" onPick={onShare} /> : null}
+      {!onShare && onShareImage ? (
+        <BigButton label={COPY.shareScorecard} variant="secondary" onPress={onShareImage} />
+      ) : null}
       {onNerdOut ? <BigButton label={COPY.nerdOut} variant="ghost" onPress={onNerdOut} /> : null}
       <BigButton label={COPY.back} variant="secondary" onPress={onBack} />
     </View>

@@ -53,6 +53,11 @@ function ThemedNavigation() {
           <Stack.Screen name="search" options={{ title: 'Search', headerBackTitle: 'Home' }} />
           <Stack.Screen name="s/[token]" options={{ title: SHOTTRAXX_BRAND }} />
           <Stack.Screen name="nerd-out" options={{ title: 'Nerd out' }} />
+          <Stack.Screen name="review-rounds" options={{ title: 'Previous rounds' }} />
+          <Stack.Screen name="review/[id]/scorecard" options={{ title: 'Scorecard' }} />
+          <Stack.Screen name="review/[id]/shots" options={{ title: 'Shot review' }} />
+          <Stack.Screen name="review/[id]/stats" options={{ title: 'Stats' }} />
+          <Stack.Screen name="club-data" options={{ title: 'Club data' }} />
           <Stack.Screen name="board" options={{ title: 'Live board' }} />
           <Stack.Screen name="request-course" options={{ title: 'Request this course' }} />
           <Stack.Screen name="rounds-transfer" options={{ title: 'Export / Restore' }} />
