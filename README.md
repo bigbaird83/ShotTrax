@@ -103,17 +103,18 @@ Do **not** put Apple Team ID, App Store Connect API keys, or `.p8` files in git.
 
 Bundle ID is already `com.shottrax.app`. Marketing version is `0.1.0`; iOS `buildNumber` starts at `1`. The `production` profile auto-increments build numbers on EAS (`cli.appVersionSource`: `remote`).
 
-### Build and send to TestFlight
+### Build and send to TestFlight (external group `friends`)
+
+The next production iOS build goes out through EAS Workflows. The workflow builds with the `production` profile, uploads that build, adds it to the App Store Connect **external** group named exactly `friends`, and submits it for Beta App Review.
 
 ```bash
-eas build -p ios --profile production
-# or: npm run eas:build:ios
-
-eas submit -p ios
-# or: npm run eas:submit:ios
+eas workflow:run .eas/workflows/production-ios-testflight.yml
+# or: npm run eas:ios:testflight
 ```
 
-`eas submit -p ios` uploads the production `.ipa` to App Store Connect. After Apple processes it (often 10–15 minutes) it appears in **TestFlight**.
+`friends` is external. `eas submit --groups` and `eas.json` `groups` only accept **internal** groups, so do not put `friends` there. The workflow uses the pre-packaged `testflight` job (`external_groups`, `submit_beta_review: true`) and the existing `submit.production` profile (`ascAppId` only). Apple still has to process the build and approve Beta App Review before external testers can install it.
+
+`eas build -p ios --profile production` / `npm run eas:build:ios` and `eas submit -p ios` / `npm run eas:submit:ios` still upload a production `.ipa`. They do not add the build to `friends`. Use the workflow above for that group.
 
 ### Install on the phone
 
