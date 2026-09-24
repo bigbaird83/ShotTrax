@@ -51,6 +51,10 @@ export const COPY = {
   hardMissNeedPinsDetail: 'Tee and green are not on file.',
   pinSheet: 'Pin sheet',
   approximate: 'Approximate',
+  /** Club-mark confidence cue. Bands stay in code — not shown as meters. */
+  gpsConfidenceGood: 'good',
+  gpsConfidenceOk: 'ok',
+  gpsConfidenceWeak: 'weak',
   unavailable: 'Unavailable',
   share: 'Share',
   shareFail: "Couldn't open share",
