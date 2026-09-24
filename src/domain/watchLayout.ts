@@ -1,7 +1,7 @@
 /**
  * Watch club-pick: map / top area ~60%, control band ~40%.
- * Back, Home, compact Putt, All clubs, and the wheel pills live in the control band.
- * Dedicated Putt shares the Back/Home row as a compact pill so the top-3 strip stays on-screen.
+ * Back, Home, Putt, All clubs, and the wheel pills live in the control band.
+ * Dedicated Putt shares the Back/Home row (same pill as Back / Home) so the top-3 strip stays on-screen.
  */
 
 export const WATCH_MAP_RATIO = 0.6;
@@ -13,8 +13,8 @@ export const WATCH_BACK_HOME_MIN_HEIGHT = 44;
 /** All clubs / Same club under the wheel. */
 export const WATCH_UNDER_WHEEL_MIN_HEIGHT = 40;
 
-/** Compact dedicated Putt on the Back/Home row. Never a tall full-width row. */
-export const WATCH_PUTT_PILL_MIN_HEIGHT = 32;
+/** Dedicated Putt on the Back/Home row, same pill as Back / Home. Never its own full-width row. */
+export const WATCH_PUTT_PILL_MIN_HEIGHT = 44;
 
 export function watchPuttSharesBackHomeRow(): true {
   return true;

@@ -28,7 +28,7 @@ import {
   watchTallPuttPushesClubStripOffScreen,
 } from './watchLayout';
 
-test('TF 59: dedicated Putt is a compact pill on the Back/Home row — clubs stay on-screen', () => {
+test('TF 59: dedicated Putt shares the Back/Home row — clubs stay on-screen', () => {
   assert.equal(watchPlayHasDedicatedPuttControl(), true);
   assert.equal(watchPuttControlOpensPuttSheet(), true);
   assert.equal(watchPuttControlSharesNavRow(), true);
@@ -40,7 +40,7 @@ test('TF 59: dedicated Putt is a compact pill on the Back/Home row — clubs sta
   assert.equal(watchPuttSharesBackHomeRow(), true);
   assert.equal(watchPuttIsCompactPill(), true);
   assert.equal(watchTallPuttPushesClubStripOffScreen(), false);
-  assert.equal(WATCH_PUTT_PILL_MIN_HEIGHT, 32);
+  assert.equal(WATCH_PUTT_PILL_MIN_HEIGHT, 44);
   assert.equal(watchPuttControlAttachWatchFix(), false);
   assert.equal(watchPuttControlInventGps(), false);
 
@@ -50,31 +50,34 @@ test('TF 59: dedicated Putt is a compact pill on the Back/Home row — clubs sta
     clubPick.indexOf('HStack(spacing: 8)'),
     clubPick.indexOf('GeometryReader { wheelGeo'),
   );
-  assert.match(navRow, /Text\("Back"\)/);
-  assert.match(navRow, /Text\("Home"\)/);
-  assert.match(navRow, /Text\("Putt"\)/);
+  assert.match(navRow, /actionPill\("Back"\)/);
+  assert.match(navRow, /actionPill\("Home"\)/);
+  assert.match(navRow, /actionPill\("Putt"\)/);
   assert.match(navRow, /session\.openPuttSheet\(\)/);
   assert.match(navRow, /session\.leave\("back"\)/);
   assert.match(navRow, /session\.leave\("home"\)/);
-  assert.match(navRow, /Capsule\(\)/);
-  assert.match(navRow, /minHeight: 32/);
   assert.doesNotMatch(navRow, /maxWidth: \.infinity, minHeight: 40/);
-  assert.ok(navRow.indexOf('Text("Back")') < navRow.indexOf('Text("Putt")'));
-  assert.ok(navRow.indexOf('Text("Home")') < navRow.indexOf('Text("Putt")'));
+  assert.ok(navRow.indexOf('actionPill("Back")') < navRow.indexOf('actionPill("Putt")'));
+  assert.ok(navRow.indexOf('actionPill("Home")') < navRow.indexOf('actionPill("Putt")'));
+
+  // Back / Home / Putt share one 44pt pill; its fill and hit area are clipped to the shape.
+  const pill = watch.slice(watch.indexOf('private func actionPill'), watch.indexOf('private var clubPick'));
+  assert.match(pill, /minHeight: 44/);
+  assert.match(pill, /\.clipShape\(RoundedRectangle\(cornerRadius: 10\)\)/);
+  assert.match(pill, /\.contentShape\(RoundedRectangle\(cornerRadius: 10\)\)/);
 
   const puttBtn = clubPick.slice(
     clubPick.indexOf('session.openPuttSheet()'),
     clubPick.indexOf('GeometryReader { wheelGeo'),
   );
-  assert.match(puttBtn, /Capsule\(\)/);
-  assert.match(puttBtn, /minHeight: 32/);
+  assert.match(puttBtn, /actionPill\("Putt"\)/);
   assert.doesNotMatch(puttBtn, /maxWidth: \.infinity/);
   assert.doesNotMatch(puttBtn, /minHeight: 40/);
   assert.doesNotMatch(puttBtn, /minHeight: 44/);
 
-  assert.ok(clubPick.indexOf('HStack(spacing: 8)') < clubPick.indexOf('Text("Putt")'));
-  assert.ok(clubPick.indexOf('Text("Putt")') < clubPick.indexOf('ScrollView(.horizontal'));
-  assert.ok(clubPick.indexOf('Text("Putt")') < clubPick.indexOf('GeometryReader { wheelGeo'));
+  assert.ok(clubPick.indexOf('HStack(spacing: 8)') < clubPick.indexOf('actionPill("Putt")'));
+  assert.ok(clubPick.indexOf('actionPill("Putt")') < clubPick.indexOf('ScrollView(.horizontal'));
+  assert.ok(clubPick.indexOf('actionPill("Putt")') < clubPick.indexOf('GeometryReader { wheelGeo'));
   assert.ok(clubPick.indexOf('GeometryReader { wheelGeo') < clubPick.indexOf('Text("Hole Out")'));
   assert.match(clubPick, /layoutPriority\(1\)/);
   assert.doesNotMatch(clubPick, /Text\("Made(?: it)?"\)/);

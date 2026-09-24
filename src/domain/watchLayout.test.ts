@@ -40,7 +40,7 @@ test('282 opening window includes Dr; Watch control band is ~40%; round start fr
   assert.equal(WATCH_CONTROL_RATIO, 0.4);
   assert.equal(WATCH_BACK_HOME_MIN_HEIGHT, 44);
   assert.equal(WATCH_UNDER_WHEEL_MIN_HEIGHT, 40);
-  assert.equal(WATCH_PUTT_PILL_MIN_HEIGHT, 32);
+  assert.equal(WATCH_PUTT_PILL_MIN_HEIGHT, 44);
   assert.equal(WATCH_WHEEL_PILL_HEIGHT, 44);
   assert.equal(watchPuttSharesBackHomeRow(), true);
   assert.equal(watchPuttIsCompactPill(), true);
@@ -127,8 +127,7 @@ test('282 opening window includes Dr; Watch control band is ~40%; round start fr
     clubPick.indexOf('HStack(spacing: 8)'),
     clubPick.indexOf('GeometryReader { wheelGeo'),
   );
-  assert.match(navRow, /Text\("Putt"\)/);
-  assert.match(navRow, /Capsule\(\)/);
+  assert.match(navRow, /actionPill\("Putt"\)/);
   assert.doesNotMatch(navRow, /maxWidth: \.infinity, minHeight: 40/);
   assert.match(watchUi, /stripWindowStart/);
   assert.match(watchUi, /\.prefix\(3\)/);

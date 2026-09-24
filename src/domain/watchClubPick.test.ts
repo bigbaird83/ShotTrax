@@ -123,8 +123,8 @@ test('Watch opens on the same top 3 as the phone; no scroll to hit one', () => {
   const pick = watchUi.slice(watchUi.indexOf('private var clubPick'), watchUi.indexOf('private var moreClubs'));
   assert.match(pick, /session\.leave\("back"\)/);
   assert.match(pick, /session\.leave\("home"\)/);
-  assert.match(pick, /Text\("Back"\)/);
-  assert.match(pick, /Text\("Home"\)/);
+  assert.match(pick, /actionPill\("Back"\)/);
+  assert.match(pick, /actionPill\("Home"\)/);
   assert.match(pick, /\.buttonStyle\(\.plain\)/);
   assert.match(pick, /session\.list\.statusLine/);
   assert.match(pick, /ScrollView\(\.horizontal/);
@@ -144,8 +144,10 @@ test('Watch opens on the same top 3 as the phone; no scroll to hit one', () => {
   assert.equal(watchOneHomeOnly(), true);
   assert.equal(watchSameClubSharesRowWithAllClubs(), false);
   assert.equal(watchBackHomeAreTinyText(), false);
-  assert.equal((pick.match(/Text\("Home"\)/g) ?? []).length, 1);
-  assert.match(pick, /minHeight: 44/);
+  assert.equal((pick.match(/actionPill\("Home"\)/g) ?? []).length, 1);
+  // Back / Home render through the shared 44pt actionPill, defined just above clubPick.
+  const pill = watchUi.slice(watchUi.indexOf('private func actionPill'), watchUi.indexOf('private var clubPick'));
+  assert.match(pill, /minHeight: 44/);
   assert.doesNotMatch(pick, /top3\.enumerated\(\)|TabView|tabViewStyle/);
   const holeOut = pick.slice(holeOutAt, allClubsAt);
   assert.match(holeOut, /Color\("cream"\)/);

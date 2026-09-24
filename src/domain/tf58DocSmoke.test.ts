@@ -191,7 +191,7 @@ test('Signal: TF 58 hole Putt + Made + 0–3 are sheet-only — no invent GPS/ya
   assert.doesNotMatch(sheet, /attachWatchFix|CLLocation|lat|lng/);
   const clubPick = watch.slice(watch.indexOf('private var clubPick'), watch.indexOf('private var moreClubs'));
   assert.match(clubPick, /session\.openPuttSheet\(\)/);
-  assert.ok(clubPick.indexOf('Text("Putt")') < clubPick.indexOf('ScrollView(.horizontal'));
+  assert.ok(clubPick.indexOf('actionPill("Putt")') < clubPick.indexOf('ScrollView(.horizontal'));
 });
 
 test('TF 58 P0: phone-in-cart club mark queues Watch GPS — never freeze on PHONE_UNAVAILABLE', () => {
@@ -264,12 +264,12 @@ test('TF 58 P0: Made pill + 0–3 + hole Putt above the club strip', () => {
   assert.match(sheet, /layoutPriority\(1\)/);
 
   const clubPick = watch.slice(watch.indexOf('private var clubPick'), watch.indexOf('private var moreClubs'));
-  assert.match(clubPick, /Text\("Putt"\)/);
+  assert.match(clubPick, /actionPill\("Putt"\)/);
   assert.match(clubPick, /session\.openPuttSheet\(\)/);
   assert.match(clubPick, /Text\("Hole Out"\)/);
   assert.doesNotMatch(clubPick, WATCH_MADE);
-  assert.ok(clubPick.indexOf('session.leave("back")') < clubPick.indexOf('Text("Putt")'));
-  assert.ok(clubPick.indexOf('Text("Putt")') < clubPick.indexOf('ScrollView(.horizontal'));
+  assert.ok(clubPick.indexOf('session.leave("back")') < clubPick.indexOf('actionPill("Putt")'));
+  assert.ok(clubPick.indexOf('actionPill("Putt")') < clubPick.indexOf('ScrollView(.horizontal'));
   assert.ok(clubPick.indexOf('ScrollView(.horizontal') < clubPick.indexOf('Text("Hole Out")'));
 
   const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
