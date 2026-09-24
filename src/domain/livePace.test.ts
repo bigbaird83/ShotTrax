@@ -372,7 +372,7 @@ test('round history export / restore keeps hole start and finish times', () => {
   assert.equal(old.rounds[0].holes[0].completedAt, null);
 
   const repo = readFileSync(new URL('../db/repo.ts', import.meta.url), 'utf8');
-  const collect = repo.slice(repo.indexOf('export function collectRoundHistoryExport'), repo.indexOf('function roundTransferKey'));
+  const collect = repo.slice(repo.indexOf('export function collectRoundHistoryExport'), repo.indexOf('export function restoreRoundHistory'));
   assert.match(collect, /startedAt: hole\.startedAt/);
   assert.match(collect, /completedAt: hole\.completedAt/);
   const insert = repo.slice(repo.indexOf('function insertTransferredRound'), repo.indexOf('export function finishRound'));

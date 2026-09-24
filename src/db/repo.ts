@@ -41,6 +41,7 @@ import { isValidLatLng } from '../domain/latLng';
 import {
   buildRoundHistoryExport,
   planRoundHistoryImport,
+  planRoundRestoreMerge,
   type RoundHistoryDocument,
   type RoundTransferRound,
 } from '../domain/roundTransfer';
@@ -595,6 +596,7 @@ export function attachCourseToRound(
 
 export function collectRoundHistoryExport(db: SQLiteDatabase, exportedAt: string): RoundHistoryDocument {
   const rounds = listRounds(db).map((round) => ({
+    id: round.id,
     startedAt: round.startedAt,
     finishedAt: round.finishedAt,
     courseName: round.courseName,
@@ -652,51 +654,57 @@ export function collectRoundHistoryExport(db: SQLiteDatabase, exportedAt: string
       })),
     })),
   }));
-  return buildRoundHistoryExport({ rounds, exportedAt });
-}
-
-function roundTransferKey(round: {
-  startedAt: string;
-  courseName: string | null;
-  holeCount: number;
-}): string {
-  return `${round.startedAt}|${round.courseName ?? ''}|${round.holeCount}`;
+  const clubs = listClubs(db).map((club) => ({ id: club.id, name: club.name, shortName: club.shortName }));
+  return buildRoundHistoryExport({ rounds, clubs, exportedAt });
 }
 
 /**
- * Write a planned transfer. New ids. Skips a round already stored with the
- * same start, course, and length so a second restore does not double-count.
- * Does not write a stored average. Club averages recompute from shots.
+ * Merge a rounds file into this phone. Other rounds stay. A round whose id is
+ * already here is replaced (its live-board token is kept). A round already
+ * here without a matching id is skipped so a second restore does not
+ * double-count. Does not write a stored average. Club averages recompute from shots.
  */
 export function restoreRoundHistory(
   db: SQLiteDatabase,
   raw: unknown,
-): { ok: true; rounds: number; shots: number; rejectedShots: number } | { ok: false; reason: string } {
+):
+  | { ok: true; added: number; updated: number; shots: number; rejectedShots: number }
+  | { ok: false; reason: string } {
   const plan = planRoundHistoryImport(raw);
   if (!plan.ok) return plan;
   const clubs = new Set(db.getAllSync<{ id: string }>('SELECT id FROM clubs').map((row) => row.id));
-  const seen = new Set(listRounds(db).map(roundTransferKey));
-  let rounds = 0;
+  const merge = planRoundRestoreMerge({ existing: listRounds(db), incoming: plan.rounds });
   let shots = 0;
   db.withTransactionSync(() => {
-    for (const round of plan.rounds) {
-      const key = roundTransferKey(round);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      insertTransferredRound(db, round, clubs);
-      rounds += 1;
+    for (const round of merge.replace) {
+      const id = round.id as string;
+      const token = getRoundShareToken(db, id);
+      deleteRoundRows(db, id);
+      insertTransferredRound(db, round, clubs, id);
+      if (token) db.runSync('UPDATE rounds SET share_token = ? WHERE id = ?', [token, id]);
+    }
+    for (const round of merge.add) {
+      insertTransferredRound(db, round, clubs, round.id ?? newId());
+    }
+    for (const round of [...merge.replace, ...merge.add]) {
       shots += round.holes.reduce((sum, hole) => sum + hole.shots.length, 0);
     }
   });
-  return { ok: true, rounds, shots, rejectedShots: plan.rejectedShots };
+  return {
+    ok: true,
+    added: merge.add.length,
+    updated: merge.replace.length,
+    shots,
+    rejectedShots: plan.rejectedShots,
+  };
 }
 
 function insertTransferredRound(
   db: SQLiteDatabase,
   round: RoundTransferRound,
   clubs: Set<string>,
+  roundId: string,
 ): void {
-  const roundId = newId();
   const courseLoc = isValidLatLng(
     round.courseLat != null && round.courseLng != null
       ? { lat: round.courseLat, lng: round.courseLng }
@@ -795,15 +803,18 @@ export function finishRound(db: SQLiteDatabase, id: string): void {
 }
 
 export function deleteRound(db: SQLiteDatabase, id: string): void {
-  db.withTransactionSync(() => {
-    const holes = db.getAllSync<{ id: string }>('SELECT id FROM holes WHERE round_id = ?', [id]);
-    for (const hole of holes) {
-      db.runSync('DELETE FROM shots WHERE hole_id = ?', [hole.id]);
-      db.runSync('DELETE FROM hole_penalties WHERE hole_id = ?', [hole.id]);
-    }
-    db.runSync('DELETE FROM holes WHERE round_id = ?', [id]);
-    db.runSync('DELETE FROM rounds WHERE id = ?', [id]);
-  });
+  db.withTransactionSync(() => deleteRoundRows(db, id));
+}
+
+/** Caller owns the transaction. */
+function deleteRoundRows(db: SQLiteDatabase, id: string): void {
+  const holes = db.getAllSync<{ id: string }>('SELECT id FROM holes WHERE round_id = ?', [id]);
+  for (const hole of holes) {
+    db.runSync('DELETE FROM shots WHERE hole_id = ?', [hole.id]);
+    db.runSync('DELETE FROM hole_penalties WHERE hole_id = ?', [hole.id]);
+  }
+  db.runSync('DELETE FROM holes WHERE round_id = ?', [id]);
+  db.runSync('DELETE FROM rounds WHERE id = ?', [id]);
 }
 
 export function setRoundLastClub(db: SQLiteDatabase, roundId: string, clubId: string | null): void {

@@ -1869,6 +1869,14 @@ export default function HoleScreen() {
           />
           <ShareChoice variant="ghost" onPick={queueMenuShare} />
           <BigButton
+            label={COPY.roundsTransfer}
+            variant="ghost"
+            onPress={() => {
+              setMenuOpen(false);
+              router.push('/rounds-transfer');
+            }}
+          />
+          <BigButton
             label={COPY.liveBoard}
             variant="ghost"
             onPress={() => {

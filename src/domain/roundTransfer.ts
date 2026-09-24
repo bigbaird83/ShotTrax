@@ -78,6 +78,8 @@ export type RoundTransferHole = {
 };
 
 export type RoundTransferRound = {
+  /** Local round id. Restore replaces a stored round with the same id. Null in older files. */
+  id: string | null;
   startedAt: string;
   finishedAt: string | null;
   courseName: string | null;
@@ -95,10 +97,18 @@ export type RoundTransferRound = {
   holes: RoundTransferHole[];
 };
 
+/** Bag names so a shot's clubId reads on its own. Restore does not write clubs. */
+export type RoundTransferClub = {
+  id: string;
+  name: string;
+  shortName: string | null;
+};
+
 export type RoundHistoryDocument = {
   kind: typeof ROUND_HISTORY_EXPORT_KIND;
   version: typeof ROUND_HISTORY_EXPORT_VERSION;
   exportedAt: string;
+  clubs: RoundTransferClub[];
   rounds: RoundTransferRound[];
 };
 
@@ -161,6 +171,7 @@ type ExportHoleInput = {
 };
 
 type ExportRoundInput = {
+  id?: string | null;
   startedAt: string;
   finishedAt: string | null;
   courseName: string | null;
@@ -345,6 +356,7 @@ function shotFromExport(shot: ExportShotInput): RoundTransferShot | null {
 
 export function buildRoundHistoryExport(args: {
   rounds: readonly ExportRoundInput[];
+  clubs?: readonly { id: string; name: string; shortName?: string | null }[];
   exportedAt: string;
 }): RoundHistoryDocument {
   const rounds: RoundTransferRound[] = [];
@@ -380,6 +392,7 @@ export function buildRoundHistoryExport(args: {
       });
     }
     rounds.push({
+      id: text(round.id),
       startedAt,
       finishedAt: text(round.finishedAt),
       courseName: text(round.courseName),
@@ -401,6 +414,11 @@ export function buildRoundHistoryExport(args: {
     kind: ROUND_HISTORY_EXPORT_KIND,
     version: ROUND_HISTORY_EXPORT_VERSION,
     exportedAt: text(args.exportedAt) ?? new Date(0).toISOString(),
+    clubs: (args.clubs ?? []).flatMap((club) => {
+      const id = text(club.id);
+      const name = text(club.name);
+      return id && name ? [{ id, name, shortName: text(club.shortName) }] : [];
+    }),
     rounds,
   };
 }
@@ -441,6 +459,7 @@ export function planRoundHistoryImport(raw: unknown): RoundHistoryImport {
     const courseLat = finite(row.courseLat);
     const courseLng = finite(row.courseLng);
     rounds.push({
+      id: text(row.id),
       startedAt,
       finishedAt: text(row.finishedAt),
       courseName: text(row.courseName),
@@ -470,14 +489,71 @@ function safeParse(raw: string): unknown {
   }
 }
 
-export function formatRestoreSummary(args: { rounds: number; shots: number; rejectedShots: number }): string {
-  const rounds = `${args.rounds} round${args.rounds === 1 ? '' : 's'}`;
-  const shots = `${args.shots} shot${args.shots === 1 ? '' : 's'}`;
-  const skipped =
-    args.rejectedShots > 0
-      ? ` ${args.rejectedShots} shot${args.rejectedShots === 1 ? '' : 's'} skipped — no real marks.`
-      : '';
-  return `Restored ${rounds}, ${shots}.${skipped}`;
+/** ShotTraxx-rounds-YYYY-MM-DD.json in the phone's local date. */
+export function roundExportFilename(now: Date): string {
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `ShotTraxx-rounds-${y}-${m}-${d}.json`;
+}
+
+export type RoundRestoreMerge = {
+  /** Rounds not on this phone. Keep the file's id when it has one. */
+  add: RoundTransferRound[];
+  /** Rounds whose id is already on this phone. That round is replaced. */
+  replace: RoundTransferRound[];
+  /** Older files without ids that match a stored round, or a repeated id in the file. */
+  skipped: number;
+};
+
+/**
+ * Merge, never wipe. Same id → replace that one round. Otherwise add, unless
+ * a round with the same start + course + length is already here (older files
+ * carry no id) so a second restore does not double-count.
+ */
+export function planRoundRestoreMerge(args: {
+  existing: readonly { id: string; startedAt: string; courseName: string | null; holeCount: number }[];
+  incoming: readonly RoundTransferRound[];
+}): RoundRestoreMerge {
+  const ids = new Set(args.existing.map((round) => round.id));
+  const keys = new Set(args.existing.map(roundTransferKey));
+  const seenIds = new Set<string>();
+  const add: RoundTransferRound[] = [];
+  const replace: RoundTransferRound[] = [];
+  let skipped = 0;
+  for (const round of args.incoming) {
+    const key = roundTransferKey(round);
+    if (round.id && ids.has(round.id)) {
+      if (seenIds.has(round.id)) {
+        skipped += 1;
+        continue;
+      }
+      seenIds.add(round.id);
+      replace.push(round);
+      continue;
+    }
+    // New round: skip a repeat in the file or the same round already here under another id.
+    if ((round.id && seenIds.has(round.id)) || keys.has(key)) {
+      skipped += 1;
+      continue;
+    }
+    if (round.id) seenIds.add(round.id);
+    keys.add(key);
+    add.push(round);
+  }
+  return { add, replace, skipped };
+}
+
+export function roundTransferKey(round: { startedAt: string; courseName: string | null; holeCount: number }): string {
+  return `${round.startedAt}|${round.courseName ?? ''}|${round.holeCount}`;
+}
+
+export function formatRestoreToast(args: { added: number; updated: number }): string {
+  if (args.added === 0 && args.updated === 0) return 'Those rounds are already on this phone.';
+  const parts: string[] = [];
+  if (args.added > 0) parts.push(`${args.added} round${args.added === 1 ? '' : 's'} added`);
+  if (args.updated > 0) parts.push(`${args.updated} round${args.updated === 1 ? '' : 's'} updated`);
+  return `${parts.join(', ')}.`.replace(/^./, (c) => c.toUpperCase());
 }
 
 export function roundHistoryShareTitle(): 'ShotTraxx™ rounds' {
