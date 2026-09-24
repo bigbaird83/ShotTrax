@@ -82,6 +82,10 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.zipGeocodeMiss, 'Couldn’t find that zip.');
   assert.equal(COPY.hardMissNeedPins, 'HARD-MISS — need pins.');
   assert.equal(COPY.hardMissNeedPinsDetail, 'Tee and green are not on file.');
+  assert.equal(COPY.catalogOnlyHardMiss, 'Catalog only · HARD-MISS');
+  assert.equal(COPY.paintMissLoud, 'Course map missed.');
+  assert.equal(COPY.paintMissLoudDetail, 'No saved tee and green. Not a GPS problem.');
+  assert.doesNotMatch(`${COPY.catalogOnlyHardMiss} ${COPY.paintMissLoud} ${COPY.paintMissLoudDetail}`, /lat|lng|par \d|yd/i);
   assert.equal(COPY.pinSheet, 'Pin sheet');
   assert.equal(COPY.liveBoard, 'Live board');
   assert.equal(COPY.scorecard, 'Scorecard');

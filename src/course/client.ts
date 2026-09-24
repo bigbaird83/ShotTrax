@@ -20,9 +20,9 @@ import { planCourseSearchParams } from '../domain/coursePick';
 import { getSharedCoursePaintCache } from './paintCache';
 import {
   applyCoursePaintToDetail,
+  loadBundledGolfApiCandidate,
   loadGolfApiPaintCandidate,
   loadOsmOpenGolfCandidate,
-  recordedPaintWaterfallStep,
   resolveCoursePaint,
   type PaintCandidate,
 } from './waterfall';
@@ -191,15 +191,28 @@ export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataCli
     async getCourse(id: string): Promise<CourseDetail | null> {
       if (!id.trim()) return null;
       const gcaBase = getBaseUrl();
-      if (isLocalCatalogId(id) || !gcaBase) return stampRecordedPaintSource(catalogCourseDetail(id));
-      const encoded = encodeURIComponent(id);
-      const detailRes = await apiGet(`/courses/${encoded}`, gcaBase, fetchImpl);
-      if (detailRes.status === 404) return null;
+      if (isLocalCatalogId(id) || !gcaBase) {
+        const catalog = catalogCourseDetail(id);
+        if (catalog) return paintWithoutWorker(catalog);
+        return detailFromLastPaintCache(id);
+      }
+      let detailRes: { status: number; json: unknown };
+      try {
+        const encoded = encodeURIComponent(id);
+        detailRes = await apiGet(`/courses/${encoded}`, gcaBase, fetchImpl);
+      } catch (err) {
+        const cached = await detailFromLastPaintCache(id);
+        if (cached) return cached;
+        throw err;
+      }
+      if (detailRes.status === 404) return detailFromLastPaintCache(id);
       if (detailRes.status < 200 || detailRes.status >= 300) {
+        const cached = await detailFromLastPaintCache(id);
+        if (cached) return cached;
         throw new GolfCoursesApiError('Couldn’t load that course.', detailRes.status);
       }
       const detail = parseCourseDetail(detailRes.json);
-      if (!detail) return null;
+      if (!detail) return detailFromLastPaintCache(id);
 
       const match = {
         name: detail.name,
@@ -250,18 +263,59 @@ export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataCli
   };
 }
 
-/** Local catalog cards never call GCA or network golfapi. Stamp only a free-step winner. */
-async function stampRecordedPaintSource(detail: CourseDetail | null): Promise<CourseDetail | null> {
-  if (!detail) return null;
-  const paintResult = await recordedPaintWaterfallStep({
+function emptyCachedDetail(id: string, record: { name: string | null; city: string | null; numHoles: number | null }): CourseDetail {
+  return {
+    id,
+    name: record.name?.trim() || 'Course',
+    holeCount: record.numHoles,
+    location: null,
+    city: record.city,
+    state: null,
+    holes: [],
+    tees: [],
+    greenCentersAvailable: false,
+  };
+}
+
+/**
+ * Cache, OSM, and the bundled golfapi seed. No GCA and no network golfapi.
+ * A miss is stamped so the card can say so. Never invents a coordinate.
+ */
+async function paintWithoutWorker(detail: CourseDetail): Promise<CourseDetail> {
+  const match = {
     name: detail.name,
     city: detail.city ?? null,
     state: detail.state ?? null,
     location: detail.location,
     courseKey: detail.id,
+  };
+  const paint = await resolveCoursePaint(match, {
+    cache: getSharedCoursePaintCache(),
+    loadOsm: async () => loadOsmOpenGolfCandidate(match),
+    loadGca: async () => null,
+    loadGolfApi: async () => loadBundledGolfApiCandidate(match),
   });
-  if (!paintResult) return detail;
-  return { ...detail, paintResult };
+  if (!paint.ok) {
+    return { ...detail, paintResult: { ok: false, source: null, fromCache: false } };
+  }
+  const painted = applyCoursePaintToDetail(detail, paint);
+  return {
+    ...painted,
+    greenCentersAvailable: painted.holes.some((hole) => hole.greenCentroid != null),
+    paintResult: { ok: true, source: paint.source, fromCache: paint.fromCache },
+  };
+}
+
+/**
+ * Last successful paint for this id, only when it passes the waterfall gates.
+ * A failed gate returns null — the stored points are not copied onto the card.
+ */
+async function detailFromLastPaintCache(id: string): Promise<CourseDetail | null> {
+  const record = await getSharedCoursePaintCache().get(`id:${id.trim()}`);
+  if (!record) return null;
+  const painted = await paintWithoutWorker(emptyCachedDetail(id.trim(), record));
+  if (!painted.paintResult?.ok) return null;
+  return painted;
 }
 
 let singleton: CourseDataClient | null = null;
