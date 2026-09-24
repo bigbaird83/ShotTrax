@@ -4,12 +4,14 @@ import { findNodeHandle, Pressable, StyleSheet, Text, View } from 'react-native'
 import { formatParLabel, formatSiLabel, formatTeeMeta } from '@/src/course/layout';
 import { useDb } from '@/src/db/DbProvider';
 import { getRound, listHoles, listPenaltiesForHole, listShotsForHole } from '@/src/db/repo';
+import { roundCompleteForFinalCard } from '@/src/domain/finalCard';
 import { finishedHoleDisplayScore } from '@/src/domain/holeScore';
 import { formatPenaltyRow, totalPenaltyStrokes } from '@/src/domain/penalty';
 import { COPY, holeOutClosedOnShot } from '@/src/domain/playerCopy';
 import { holeClosedByShot } from '@/src/domain/putts';
 import { formatHoleTimeSpan, formatRoundPaceLine, planLivePace } from '@/src/domain/livePace';
 import { toastFromShareAttempt } from '@/src/domain/spectator';
+import { shareFinalCard } from '@/src/services/shareFinalCard';
 import { shareRoundSnapshot } from '@/src/services/shareRound';
 import { reconcileHoleScore } from '@/src/domain/scoreReconcile';
 import { BigButton } from '@/src/ui/BigButton';
@@ -24,6 +26,7 @@ export default function RoundSummaryScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [toast, setToast] = useState<string | null>(null);
   const shareAnchorRef = useRef<View>(null);
+  const finalCardAnchorRef = useRef<View>(null);
   const round = useMemo(() => getRound(db, id), [db, id, revision]);
   const holes = useMemo(() => (round ? listHoles(db, round.id) : []), [db, round, revision]);
 
@@ -48,6 +51,11 @@ export default function RoundSummaryScreen() {
         })
       : hole.score;
     return { hole, shots, penalties, penStrokes, displayScore };
+  });
+  const shareFinalCardNow = roundCompleteForFinalCard({
+    finishedAt: round.finishedAt,
+    holeCount: round.holeCount,
+    holes,
   });
   const scored = holeViews.filter((row) => row.displayScore != null);
   const withPar = scored.filter((row) => row.hole.par != null);
@@ -172,6 +180,23 @@ export default function RoundSummaryScreen() {
           }}
         />
       </View>
+      {shareFinalCardNow ? (
+        <View ref={finalCardAnchorRef} collapsable={false}>
+          <BigButton
+            label={COPY.shareFinalCard}
+            variant="secondary"
+            onPress={() => {
+              const anchor = findNodeHandle(finalCardAnchorRef.current);
+              void toastFromShareAttempt(
+                () => shareFinalCard(db, id, { anchor }),
+                COPY.shareFinalCardFail,
+              ).then((fail) => {
+                if (fail) setToast(fail);
+              });
+            }}
+          />
+        </View>
+      ) : null}
       {toast ? <Text style={styles.warn}>{toast}</Text> : null}
       <BigButton label={COPY.home} variant="ghost" onPress={() => router.replace('/')} />
     </Screen>

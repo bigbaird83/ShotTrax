@@ -69,6 +69,9 @@ export const COPY = {
   shareLive: 'Share live',
   shareScorecard: 'Share scorecard',
   shareLiveRound: 'Share live round',
+  /** Finished round only. Opens the share sheet when tapped. Never shares by itself. */
+  shareFinalCard: 'Share final card',
+  shareFinalCardFail: 'Couldn’t share final card.',
   liveBoard: 'Live board',
   liveBoardLede: 'Hole scores for friends. No map.',
   liveBoardPrivacy: 'Scores only — no map.',
