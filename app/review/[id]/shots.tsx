@@ -15,9 +15,9 @@ import {
   shotReviewFramePoints,
   type ShotReviewBox,
   shotReviewHoleHeader,
-  shotReviewPuttLines,
   shotReviewShotListWindow,
 } from '@/src/domain/shotReviewLayout';
+import { shotReviewPuttSummaryLine } from '@/src/domain/shotReviewPutts';
 import type { Club, Shot } from '@/src/domain/types';
 import { BigButton } from '@/src/ui/BigButton';
 import { HoleMap } from '@/src/ui/HoleMap';
@@ -31,6 +31,7 @@ const REVIEW_TRAIL_TO_GREEN = { yards: null, quality: 'none' as const };
 /**
  * Saved-round shot review: one locked tee-to-green map per hole with the marked shots
  * and their yard chips. Hole list + Prev / Next. No live GPS — the phone fix is never used.
+ * Entered putts are one line under the shots ("+ 2 putts"). They are not map pins.
  *
  * The map slot is the only flexible region (HoleMap's shared card is a fixed height,
  * so this screen overrides it with flex). The shot list and hole buttons are a pinned
@@ -93,8 +94,8 @@ export default function ReviewShotsScreen() {
         green,
       })
     : null;
-  // Putts are stats-only rows under the shot list. They never become pins.
-  const puttLines = hole ? shotReviewPuttLines(hole) : [];
+  // One text line for entered putts. Never a pin, and never a stand-in for a missing count.
+  const puttLine = hole ? shotReviewPuttSummaryLine(hole) : null;
   const shotPins = shotPinsForHoleCamera(shots);
   // Fit tee → GPS shot pins → green to the measured map slot. Putts are not pins.
   const camera = hole ? shotReviewCamera({ tee, green, shotPins, box: mapBox }) : null;
@@ -159,11 +160,11 @@ export default function ReviewShotsScreen() {
       </View>
 
       <View style={styles.bottom} testID="shot-review-bottom">
-        {hole && (shots.length > 0 || puttLines.length > 0) ? (
+        {hole && (shots.length > 0 || puttLine) ? (
           <ReviewShotList
             key={hole.id}
             shots={shots}
-            puttLines={puttLines}
+            puttLine={puttLine}
             clubs={clubs}
             textStyle={styles.muted}
             listStyle={styles.shotList}
@@ -193,14 +194,14 @@ export default function ReviewShotsScreen() {
 
 function ReviewShotList({
   shots,
-  puttLines,
+  puttLine,
   clubs,
   textStyle,
   listStyle,
   contentStyle,
 }: {
   shots: Shot[];
-  puttLines: string[];
+  puttLine: string | null;
   clubs: Record<string, Club>;
   textStyle: StyleProp<TextStyle>;
   listStyle: StyleProp<ViewStyle>;
@@ -224,11 +225,11 @@ function ReviewShotList({
           {shot.distanceYards != null ? ` · ${Math.round(shot.distanceYards)} yd` : ''}
         </Text>
       ))}
-      {puttLines.map((line, i) => (
-        <Text key={`putt-${i}`} style={textStyle}>
-          {line}
+      {puttLine ? (
+        <Text testID="shot-review-putts" style={textStyle}>
+          {puttLine}
         </Text>
-      ))}
+      ) : null}
     </ScrollView>
   );
 }
