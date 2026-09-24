@@ -11,6 +11,7 @@ import {
   holeCameraFramedAfterApply,
   holeCameraHeading,
   holeFrameRegion,
+  holeMapFrameReadyReport,
   holeMapRevealWhenCourseFramePlanned,
   holeMapUserLocationVisible,
   holeNativeCamera,
@@ -473,17 +474,17 @@ function NativeHoleMap({
   );
 
   useEffect(() => {
-    if (!lockFrame) {
-      onFrameReady?.(true);
-      return;
-    }
-    // Miss card: never block hole start / Add shot on a map that will not mount.
-    if (courseCardMiss) {
-      onFrameReady?.(true);
-      return;
-    }
-    onFrameReady?.(holeCameraReady);
-  }, [lockFrame, courseCardMiss, holeCameraReady, onFrameReady]);
+    // frameEpoch is a dependency on purpose. holeCameraReady is not cleared on
+    // Prev/Next or menu/scorecard return (that bounce drops iOS pan/pinch), so
+    // this must re-report or the play dock stays unmounted until Home.
+    onFrameReady?.(
+      holeMapFrameReadyReport({
+        lockFrame: Boolean(lockFrame),
+        courseCardMiss,
+        holeCameraReady,
+      }),
+    );
+  }, [lockFrame, courseCardMiss, holeCameraReady, frameEpoch, onFrameReady]);
 
   useEffect(() => {
     if (lockFrame) {

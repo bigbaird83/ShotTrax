@@ -17,6 +17,8 @@ import {
   holeFrameRegion,
   openingHoleRegionContainsTeeAndGreen,
   planCourseCardCamera,
+  holeMapFrameReadyReport,
+  playDockFramedAfterReadyReport,
 } from './holeCamera';
 import {
   PLAY_DOCK_ACTIONS,
@@ -337,8 +339,34 @@ test('opening, Prev/Next, and Scorecard or Menu return reframe before the dock c
   assert.match(hole, /goToHole/);
   assert.match(hole, /showPlayDockForCourseCard\(\{/);
   assert.match(hole, /paintMounts: courseCardPaint\.mount/);
+  assert.match(hole, /setDockHoleNumber\(holeNumber\)/);
+  const holeFx = hole.slice(
+    hole.indexOf('useEffect(() => {\n    setSelectedClubId(null);'),
+    hole.indexOf('}, [holeNumber]);') + '}, [holeNumber]);'.length,
+  );
+  assert.match(holeFx, /setSelectedClubId\(null\)/);
+  assert.doesNotMatch(holeFx, /setMapFramed\(false\)/);
+  assert.equal(
+    playDockFramedAfterReadyReport({
+      reportedReady: holeMapFrameReadyReport({
+        lockFrame: true,
+        courseCardMiss: false,
+        holeCameraReady: true,
+      }),
+      clearedAfterReport: false,
+    }),
+    true,
+  );
   const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
   assert.match(map, /onFrameReady/);
+  assert.match(map, /holeMapFrameReadyReport/);
+  const reportFx = map.slice(
+    map.indexOf('holeMapFrameReadyReport({'),
+    map.indexOf('}, [lockFrame, courseCardMiss, holeCameraReady, frameEpoch, onFrameReady]);') +
+      '}, [lockFrame, courseCardMiss, holeCameraReady, frameEpoch, onFrameReady]);'.length,
+  );
+  assert.match(reportFx, /frameEpoch/);
+  assert.doesNotMatch(reportFx, /setHoleCameraReady\(false\)/);
   assert.match(map, /styles\.userDot/);
   assert.match(map, /holeMapUserLocationVisible\(\{/);
   assert.doesNotMatch(

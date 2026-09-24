@@ -211,6 +211,14 @@ export default function HoleScreen() {
   const shareFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [playFrameNonce, setPlayFrameNonce] = useState(0);
   const [mapFramed, setMapFramed] = useState(false);
+  // Hide the dock when the hole param changes before paint. This cannot be a
+  // holeNumber effect: that effect runs after HoleMap's onFrameReady and would
+  // leave mapFramed false, so the club strip stays unmounted until Home.
+  const [dockHoleNumber, setDockHoleNumber] = useState(holeNumber);
+  if (holeNumber !== dockHoleNumber) {
+    setDockHoleNumber(holeNumber);
+    setMapFramed(false);
+  }
   const [dockPassMap, setDockPassMap] = useState(false);
   const addShotFromRef = useRef<LatLng | null>(null);
   const [confirmUndo, setConfirmUndo] = useState<ConfirmUndoWindow | null>(null);
@@ -422,7 +430,6 @@ export default function HoleScreen() {
   }, [holeNumber, slideX]);
 
   useEffect(() => {
-    setMapFramed(false);
     setSelectedClubId(null);
   }, [holeNumber]);
 
