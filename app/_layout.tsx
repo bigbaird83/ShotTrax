@@ -5,6 +5,7 @@ import { View } from 'react-native';
 import { DbProvider } from '@/src/db/DbProvider';
 import { startWatchClubBridge } from '@/src/services/watchClub';
 import { useWatchNearbyStart } from '@/src/services/useWatchNearbyStart';
+import { shouldPlaySplash } from '@/src/domain/splashDismiss';
 import { BrandedSplash } from '@/src/ui/BrandedSplash';
 import { ColorThemeProvider, useColors, useColorTheme } from '@/src/ui/ColorThemeProvider';
 import { SHOTTRAXX_BRAND } from '@/src/domain/playerCopy';
@@ -70,9 +71,22 @@ function ThemedNavigation() {
   );
 }
 
+/** Process lifetime. Returning from background does not remount a new splash. */
+let splashDismissedThisProcess = false;
+
 export default function RootLayout() {
-  const [splashDone, setSplashDone] = useState(false);
-  const onSplashDone = useCallback(() => setSplashDone(true), []);
+  const [splashDone, setSplashDone] = useState(
+    () =>
+      !shouldPlaySplash({
+        isColdStart: true,
+        returningFromBackground: false,
+        alreadyDismissed: splashDismissedThisProcess,
+      }),
+  );
+  const onSplashDone = useCallback(() => {
+    splashDismissedThisProcess = true;
+    setSplashDone(true);
+  }, []);
 
   useEffect(() => {
     startWatchClubBridge();

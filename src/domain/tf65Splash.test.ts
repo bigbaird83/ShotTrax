@@ -30,8 +30,9 @@ test('TF 65: attached v2 square clip + first-frame still, contain + black letter
   const branded = readFileSync(new URL('../ui/BrandedSplash.tsx', import.meta.url), 'utf8');
   assert.match(branded, /splash-open-first-3s-v2\.mp4/);
   assert.match(branded, /splash-first-frame-v2\.png/);
-  assert.match(branded, /splashLetterboxSize/);
   assert.match(branded, /SPLASH_RESIZE_MODE/);
+  assert.match(branded, /audioMixingMode = 'mixWithOthers'/);
+  assert.match(branded, /planSplashDismiss/);
   assert.match(branded, /contentFit=\{SPLASH_RESIZE_MODE\}/);
   assert.match(branded, /resizeMode=\{SPLASH_RESIZE_MODE\}/);
   assert.match(branded, /\.muted\s*=\s*true/);
@@ -51,20 +52,20 @@ test('TF 65: attached v2 square clip + first-frame still, contain + black letter
   const stillBytes = readFileSync(still);
   const iconBytes = readFileSync(splashIcon);
   assert.ok(clipBytes.length > 80_000, '3s clip should be committed');
-  assert.ok(clipBytes.length < 500_000, 'must be the 3s trim, not a 10s sting');
+  assert.ok(clipBytes.length < 2_000_000, 'must be the 3s clip, not a long sting');
   assert.ok(statSync(clip).size > 80_000);
   assert.equal(stillBytes.equals(iconBytes), true, 'Expo splash and JS still must be the same frame 0');
   const { width, height } = pngSize(stillBytes);
-  assert.equal(width, 960);
-  assert.equal(height, 960);
+  assert.equal(width, 784);
+  assert.equal(height, 1168);
 
   const expo = splashPlugin();
   assert.equal(expo.image, './assets/images/splash-icon.png');
   assert.equal(expo.resizeMode, 'contain');
-  assert.equal(expo.backgroundColor, '#000000');
+  assert.equal(expo.backgroundColor, '#000101');
   assert.equal(expo.dark?.image, './assets/images/splash-icon.png');
   assert.equal(expo.dark?.resizeMode, 'contain');
-  assert.equal(expo.dark?.backgroundColor, '#000000');
+  assert.equal(expo.dark?.backgroundColor, '#000101');
   assert.notEqual(expo.resizeMode, 'cover');
   assert.notEqual(expo.dark?.resizeMode, 'cover');
 

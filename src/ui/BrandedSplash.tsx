@@ -2,17 +2,17 @@ import { useEventListener } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import * as SplashScreen from 'expo-splash-screen';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AccessibilityInfo, Image, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { AccessibilityInfo, Animated, Image, Pressable, StyleSheet, View } from 'react-native';
 import { SHOTTRAXX_BRAND } from '@/src/domain/playerCopy';
-import { SPLASH_BG, SPLASH_RESIZE_MODE, splashLetterboxSize } from '@/src/domain/splashLetterbox';
+import { SPLASH_BG, SPLASH_RESIZE_MODE } from '@/src/domain/splashLetterbox';
+import { SPLASH_SAFETY_MS, planSplashDismiss, type SplashDismissEvent } from '@/src/domain/splashDismiss';
 
-/** Doc’s open clip, first 3.0s. Silent: muted, volume 0, audio track removed. Square 960² — contain + black letterbox, never cover. */
+/** Owner open clip, 3.0s, portrait. Contain on the sampled field — never cover. */
 const OPEN_CLIP = require('../../assets/splash/splash-open-first-3s-v2.mp4') as number;
 /** First frame of the 3s clip — Expo native splash, pre-video, and Reduce Motion. */
 const OPEN_STILL = require('../../assets/splash/splash-first-frame-v2.png');
 
 const REDUCE_MOTION_MS = 400;
-const FAILSAFE_MS = 4500;
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -24,19 +24,46 @@ function hideNativeSplash() {
   void SplashScreen.hideAsync().catch(() => {});
 }
 
-/** JS branded open after the static Expo splash. Plays once on cold start. Tap skips. ~4.5s safety timeout. */
+/**
+ * Full-screen overlay after the static Expo splash. Cold start only.
+ * The clip's AAC track is kept in the file. Playback is muted: expo-video
+ * sets AVAudioSession category playback, which ignores the silent switch.
+ * mixWithOthers keeps that from pausing other audio. Tap skips. 5s safety timeout.
+ */
 export function BrandedSplash({ onDone }: Props) {
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
-  const finishedRef = useRef(false);
+  const dismissingRef = useRef(false);
+  const notifiedRef = useRef(false);
+  const opacity = useRef(new Animated.Value(1)).current;
   const [reduceMotion, setReduceMotion] = useState<boolean | null>(null);
 
-  const finish = useCallback(() => {
-    if (finishedRef.current) return;
-    finishedRef.current = true;
+  const notify = useCallback(() => {
+    if (notifiedRef.current) return;
+    notifiedRef.current = true;
     hideNativeSplash();
     onDoneRef.current();
   }, []);
+
+  const dismiss = useCallback(
+    (event: SplashDismissEvent) => {
+      const plan = planSplashDismiss(event, dismissingRef.current);
+      if (!plan.dismiss) return;
+      dismissingRef.current = true;
+      hideNativeSplash();
+      if (plan.fadeMs <= 0) {
+        notify();
+        return;
+      }
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: plan.fadeMs,
+        useNativeDriver: true,
+      }).start(() => notify());
+      setTimeout(notify, plan.fadeMs + 80);
+    },
+    [notify, opacity],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -53,70 +80,75 @@ export function BrandedSplash({ onDone }: Props) {
   }, []);
 
   useEffect(() => {
-    if (reduceMotion === null) return;
-    const timeout = setTimeout(finish, FAILSAFE_MS);
+    const timeout = setTimeout(() => dismiss('timeout'), SPLASH_SAFETY_MS);
     return () => clearTimeout(timeout);
-  }, [reduceMotion, finish]);
+  }, [dismiss]);
 
   if (reduceMotion === null) {
     // Native Expo splash stays up — no JS black frame while we pick a path.
     return null;
   }
 
-  if (reduceMotion) {
-    return <StillSplash onDone={finish} />;
-  }
-
-  return <VideoSplash onDone={finish} />;
-}
-
-function LetterboxedSplash({ children, onSkip }: { children?: ReactNode; onSkip: () => void }) {
-  const { width, height } = useWindowDimensions();
-  const square = splashLetterboxSize(width, height);
-
   return (
-    <Pressable
-      onPress={onSkip}
-      accessibilityRole="image"
-      accessibilityLabel={SHOTTRAXX_BRAND}
-      style={[styles.wrap, StyleSheet.absoluteFill]}>
-      <View pointerEvents="none" style={[styles.mark, square]}>
-        <Image source={OPEN_STILL} style={StyleSheet.absoluteFill} resizeMode={SPLASH_RESIZE_MODE} />
-        {children}
-      </View>
-    </Pressable>
+    <Animated.View
+      pointerEvents="box-none"
+      style={[styles.wrap, StyleSheet.absoluteFill, { opacity }]}>
+      {reduceMotion ? (
+        <StillSplash onDismiss={dismiss} />
+      ) : (
+        <VideoSplash onDismiss={dismiss} />
+      )}
+    </Animated.View>
   );
 }
 
-function StillSplash({ onDone }: { onDone: () => void }) {
-  useEffect(() => {
-    hideNativeSplash();
-    const timeout = setTimeout(onDone, REDUCE_MOTION_MS);
-    return () => clearTimeout(timeout);
-  }, [onDone]);
-
-  return <LetterboxedSplash onSkip={onDone} />;
+function SplashFrame({ children, onSkip }: { children?: ReactNode; onSkip: () => void }) {
+  return (
+    <View
+      pointerEvents="auto"
+      accessibilityRole="image"
+      accessibilityLabel={SHOTTRAXX_BRAND}
+      style={StyleSheet.absoluteFill}>
+      <Image source={OPEN_STILL} style={StyleSheet.absoluteFill} resizeMode={SPLASH_RESIZE_MODE} />
+      {children}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Skip splash"
+        onPress={onSkip}
+        style={StyleSheet.absoluteFill}
+      />
+    </View>
+  );
 }
 
-function VideoSplash({ onDone }: { onDone: () => void }) {
+function StillSplash({ onDismiss }: { onDismiss: (event: SplashDismissEvent) => void }) {
+  useEffect(() => {
+    hideNativeSplash();
+    const timeout = setTimeout(() => onDismiss('end'), REDUCE_MOTION_MS);
+    return () => clearTimeout(timeout);
+  }, [onDismiss]);
+
+  return <SplashFrame onSkip={() => onDismiss('tap')} />;
+}
+
+function VideoSplash({ onDismiss }: { onDismiss: (event: SplashDismissEvent) => void }) {
+  const startedRef = useRef(false);
   const player = useVideoPlayer(OPEN_CLIP, (instance) => {
     instance.loop = false;
     instance.muted = true;
     instance.volume = 0;
-    // No audio track. `auto` lets other apps keep playing while this player is muted.
-    // Unset, expo-video's iOS default is doNotMix, which pauses other audio even when muted.
-    // Do not set mixWithOthers, duckOthers, or an audio session.
-    instance.audioMixingMode = 'auto';
+    instance.audioMixingMode = 'mixWithOthers';
+    // Decode under the native splash. hideAsync runs on the first frame.
     instance.play();
   });
 
-  useEventListener(player, 'playToEnd', onDone);
+  useEventListener(player, 'playToEnd', () => onDismiss('end'));
   useEventListener(player, 'statusChange', ({ status, error }) => {
-    if (status === 'error' || error) onDone();
+    if (status === 'error' || error) onDismiss('error');
   });
 
   return (
-    <LetterboxedSplash onSkip={onDone}>
+    <SplashFrame onSkip={() => onDismiss('tap')}>
       <VideoView
         player={player}
         style={StyleSheet.absoluteFill}
@@ -126,20 +158,19 @@ function VideoSplash({ onDone }: { onDone: () => void }) {
         allowsPictureInPicture={false}
         allowsVideoFrameAnalysis={false}
         fullscreenOptions={{ enable: false }}
-        onFirstFrameRender={hideNativeSplash}
+        onFirstFrameRender={() => {
+          hideNativeSplash();
+          if (startedRef.current) return;
+          startedRef.current = true;
+        }}
       />
-    </LetterboxedSplash>
+    </SplashFrame>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
-    alignItems: 'center',
     backgroundColor: SPLASH_BG,
-    justifyContent: 'center',
     zIndex: 1000,
-  },
-  mark: {
-    overflow: 'hidden',
   },
 });
