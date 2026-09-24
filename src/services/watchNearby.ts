@@ -6,7 +6,9 @@ import { applyCourseHydrateToLayout } from '@/src/course/hydrate';
 import type { CourseDetail, CourseSummary } from '@/src/course/types';
 import { layoutFromTee } from '@/src/course/layout';
 import { prefetchCourseCardInBackground, rememberLayoutHoles } from '@/src/course/prefetch';
-import { attachCourseToRound, startRound } from '@/src/db/repo';
+import { favoriteStartHoleCount, layoutForFavoriteStart } from '@/src/course/startRoundEntry';
+import { attachCourseToRound, readSettingStore, startRound } from '@/src/db/repo';
+import { listFavorites } from '@/src/domain/favorites';
 import { layoutForPlayedHoles, resolveCourseNumHoles } from '@/src/domain/nineByTwo';
 import { playHrefAfterRoundStart } from '@/src/domain/playNav';
 import type { GpsFix } from '@/src/domain/types';
@@ -61,6 +63,11 @@ function summaryFromDetail(detail: CourseDetail): CourseSummary {
   };
 }
 
+/** Watch Home is open — a course tap there may start a new round (Home → Select course). */
+export function allowWatchCoursePickDuringRound(): void {
+  replaceLiveRoundAllowed = true;
+}
+
 export function setWatchNearbyContext(next: WatchNearbyContext | null): void {
   context = next;
 }
@@ -101,6 +108,33 @@ async function resolvePhoneFix(ctx: WatchNearbyContext): Promise<GpsFix | null> 
   const live = ctx.phoneFix() ?? getLastLiveFix();
   if (phoneFixForNearbyCourses({ phoneFix: live, nowMs })) return live;
   return null;
+}
+
+function favoriteName(ctx: WatchNearbyContext, courseId: string): string {
+  return listFavorites(readSettingStore(ctx.db)).find((row) => row.id === courseId)?.name ?? '';
+}
+
+/**
+ * A favorite with no API detail (e.g. starred from a past round) starts the way
+ * the phone Favorites row does: catalog hole count, hydrate fill, hole 1.
+ */
+function startFavoriteRoundFromWatch(ctx: WatchNearbyContext, courseId: string): boolean {
+  const favorite = listFavorites(readSettingStore(ctx.db)).find((row) => row.id === courseId);
+  if (!favorite) return false;
+  const holeCount = favoriteStartHoleCount(favorite);
+  const layout = layoutForFavoriteStart(favorite);
+  rememberLayoutHoles(layout);
+  const round = startRound(ctx.db, holeCount, favorite.name, layout);
+  ctx.bump();
+  router.push(playHrefAfterRoundStart(round.id));
+  prefetchCourseCardInBackground(layout, {
+    holeCount,
+    applyLayout: (painted) => {
+      attachCourseToRound(ctx.db, round.id, favorite.name, painted);
+      ctx.bump();
+    },
+  });
+  return true;
 }
 
 export async function pushWatchNearbyCourses(opts?: {
@@ -161,6 +195,9 @@ export async function handleWatchNearbyJson(json: string): Promise<{ ok: boolean
     }
     try {
       const detail = await getCourseDataClient().getCourse(pick.courseId);
+      if (!detail && startFavoriteRoundFromWatch(ctx, pick.courseId)) {
+        return { ok: true, feedback: `Started · ${favoriteName(ctx, pick.courseId)}` };
+      }
       if (!detail) {
         const plan = planNearbyCourses({ phoneFix: null, courses: [], nowMs: Date.now() });
         await pushNearbyJson(nearbyCoursesPayload(plan));

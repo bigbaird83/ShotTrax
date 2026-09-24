@@ -49,12 +49,23 @@ Without a key, course search and nearby are disabled and do not call the network
 
 When a key is present:
 
-- Nearby search is `GET https://golfcoursesapi.com/api/v1/courses?lat=&lng=&radius=` (radius km, max 100). Nearby wakes a **phone** fix — never Watch GPS.
+- Nearby search is `GET https://golfcoursesapi.com/api/v1/courses?lat=&lng=&radius=` (radius km, max 100). Phone Home nearby wakes a **phone** fix. Watch Home nearby (below) uses a fresh Watch fix when the Watch has one, else the phone fix, else the last phone location.
 - Text search is `GET /api/v1/courses?q=` (name, city, state). A 5-digit ZIP geocodes, then uses nearby `lat/lng/radius`. Search is text / geocode only — never Watch GPS and never the 15 m / 25 m mark gates.
 - Course detail is `GET /api/v1/courses/:id` (named teeboxes → par, SI/handicap, hole yardage, rating, slope)
 - Flow: search or nearby → one list with played courses on top → select course → select named tee. Start 9/18 stays off until that pick is real.
 - Green centroids are `GET /api/v1/courses/:id/green-centers` (**Pro/Max**; `403` on free → greens stay blank)
 - Missing par is **Par unknown**. Missing SI is **SI unknown**. Missing rating/slope/yardage stay blank. Missing green stays empty — yards to green shows **—** and **Waiting on green location.**
+
+### Watch Home
+
+The Watch opens on **Watch Home** when no hole is live (a live round still opens that hole; the hole's Home button comes back here with **Continue · Hole N**).
+
+- **Favorites** — the phone `course.favorites` list. One list; the Watch keeps no copy of its own beyond a display cache.
+- **Nearby** — the same Golf Courses API nearby search as the phone, run on the phone. Search point: fresh Watch fix → fresh phone fix → last phone location (`watch.home.lastPhoneFix`). No point → empty Nearby, never a guess.
+- A course shows once: a favorite that is also nearby sits under Favorites (with its distance) and is dropped from Nearby.
+- Row tap starts the round like the phone (course → 9/18 → tee → Start); the live round's course continues it. A favorite with no API detail starts like the phone Favorites row.
+- Star toggles the phone favorite (`favoriteToggle`, sent live + queued; older `at` is ignored). Phone stars/unstars bump the DB, which re-pushes `watchHome` (application context key `watchHome` + live message) so the Watch updates without a relaunch.
+- No Export / Restore and no account on the Watch.
 
 **Smoke:** `golfcoursesapi.com` may fail TLS on some boxes. Confirm nearby search on a **device or EAS build**, not only CI.
 

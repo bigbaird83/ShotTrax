@@ -5,6 +5,8 @@ export type WatchBridgeNative = {
   isReachable: () => boolean;
   pushClubListJson: (json: string) => Promise<void>;
   pushWatchMessageJson?: (json: string) => Promise<void>;
+  /** Watch Home (favorites + nearby). Rides in the application context next to clubList. */
+  pushWatchHomeJson?: (json: string) => Promise<void>;
   replyClubPick: (token: string, json: string) => Promise<void>;
   addListener: (
     event: string,

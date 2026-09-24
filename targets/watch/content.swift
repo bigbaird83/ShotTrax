@@ -7,36 +7,12 @@ struct ContentView: View {
 
   var body: some View {
     Group {
-      if session.showsNearby, session.nearby.awaitingSelect {
-        VStack(alignment: .leading, spacing: 8) {
-          if session.hasLiveHole {
-            nearbyBack
-          }
-          Button(action: { session.requestNearby() }) {
-            Text("Select course")
-              .font(.headline.weight(.heavy))
-              .frame(maxWidth: .infinity, minHeight: 44)
-          }
-          .buttonStyle(.bordered)
-          .disabled(session.sending)
-        }
-        .padding(.horizontal, 4)
-      } else if session.showsNearby, session.nearby.openPhone {
-        VStack(alignment: .leading, spacing: 8) {
-          if session.hasLiveHole {
-            nearbyBack
-          }
-          Text(session.nearby.line.isEmpty ? "open the phone" : session.nearby.line)
-            .font(.footnote.weight(.bold))
-            .foregroundStyle(Color("cream"))
-        }
-        .padding(.horizontal, 4)
+      if session.showsHome {
+        watchHome
       } else if session.showsNearby {
         ScrollView {
           VStack(alignment: .leading, spacing: 8) {
-            if session.hasLiveHole {
-              nearbyBack
-            }
+            coursesBack
             statusHeader
             nearbyStart
           }
@@ -83,16 +59,144 @@ struct ContentView: View {
     .background(Color("bg").ignoresSafeArea())
     .onAppear { session.noteScenePhase("active") }
     .onChange(of: scenePhase) { phase in
-      if phase == .active { session.noteScenePhase("active") }
+      if phase == .active {
+        session.noteScenePhase("active")
+        session.refreshHomeIfShowing()
+      }
       if phase == .inactive { session.noteScenePhase("inactive") }
       if phase == .background { session.noteScenePhase("background") }
     }
   }
 
+  // MARK: Watch Home — Favorites + Nearby from the phone. One row per course.
+
   @ViewBuilder
-  private var nearbyBack: some View {
-    Button(action: { session.dismissNearbyToHole() }) {
-      Text("Back")
+  private var watchHome: some View {
+    ScrollView {
+      VStack(alignment: .leading, spacing: 6) {
+        if session.hasLiveHole {
+          Button(action: { session.dismissNearbyToHole() }) {
+            Text("Continue · Hole \(session.list.holeNumber)")
+              .font(.system(size: 15, weight: .heavy))
+              .foregroundStyle(Color("bg"))
+              .lineLimit(1)
+              .minimumScaleFactor(0.7)
+              .frame(maxWidth: .infinity, minHeight: 40)
+              .background(outdoorLime)
+              .clipShape(RoundedRectangle(cornerRadius: 10))
+          }
+          .buttonStyle(.plain)
+        }
+        Text("Select course")
+          .font(.system(size: 16, weight: .heavy))
+          .foregroundStyle(Color("cream"))
+        if !session.feedback.isEmpty {
+          Text(session.feedback)
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(session.feedback.contains("✓") || session.feedback.contains("★") ? Color("accent") : Color.orange)
+            .lineLimit(2)
+        }
+
+        let favorites = session.home.favoriteRows
+        let nearby = session.home.nearbyRows
+        if !favorites.isEmpty {
+          homeSectionTitle("Favorites")
+          ForEach(favorites) { course in
+            homeRow(course)
+          }
+        }
+        homeSectionTitle("Nearby")
+        if !nearby.isEmpty {
+          ForEach(nearby) { course in
+            homeRow(course)
+          }
+        } else if session.home.loading {
+          Text("Finding courses…")
+            .font(.system(size: 12, weight: .bold))
+            .foregroundStyle(Color("muted"))
+        } else {
+          Text(session.home.line.isEmpty ? "open the phone" : session.home.line)
+            .font(.system(size: 12, weight: .bold))
+            .foregroundStyle(Color("cream"))
+        }
+
+        Button(action: { session.requestHome() }) {
+          Text(session.home.loading ? "Updating…" : "Refresh")
+            .font(.system(size: 13, weight: .heavy))
+            .foregroundStyle(Color("cream"))
+            .frame(maxWidth: .infinity, minHeight: 32)
+            .overlay(
+              RoundedRectangle(cornerRadius: 8)
+                .stroke(Color("muted"), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(session.home.loading)
+        .padding(.top, 4)
+      }
+      .padding(.horizontal, 4)
+    }
+  }
+
+  @ViewBuilder
+  private func homeSectionTitle(_ title: String) -> some View {
+    Text(title.uppercased())
+      .font(.system(size: 11, weight: .heavy))
+      .foregroundStyle(Color("muted"))
+      .padding(.top, 4)
+  }
+
+  /// Name area starts / continues the round. Star toggles the phone favorite only.
+  @ViewBuilder
+  private func homeRow(_ course: HomeCourse) -> some View {
+    let live = session.isLiveCourse(course)
+    HStack(spacing: 4) {
+      Button(action: { session.openHomeCourse(course) }) {
+        VStack(alignment: .leading, spacing: 1) {
+          Text(course.name)
+            .font(.system(size: 15, weight: .heavy))
+            .foregroundStyle(Color("cream"))
+            .lineLimit(2)
+            .minimumScaleFactor(0.8)
+            .multilineTextAlignment(.leading)
+          if live {
+            Text("Continue round")
+              .font(.system(size: 11, weight: .heavy))
+              .foregroundStyle(outdoorLime)
+          } else if let distance = course.distanceLabel {
+            Text(distance)
+              .font(.system(size: 11, weight: .bold))
+              .foregroundStyle(Color("muted"))
+          }
+        }
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .padding(.horizontal, 8)
+        .contentShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+          RoundedRectangle(cornerRadius: 10)
+            .stroke(live ? outdoorLime : Color("cream"), lineWidth: live ? 2 : 1)
+        )
+      }
+      .buttonStyle(.plain)
+      .disabled(session.sending)
+
+      Button(action: { session.toggleFavorite(course) }) {
+        Image(systemName: course.favorite ? "star.fill" : "star")
+          .font(.system(size: 18, weight: .bold))
+          .foregroundStyle(course.favorite ? outdoorLime : Color("cream"))
+          .frame(width: 34, height: 44)
+          .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel(Text(course.favorite ? "Remove favorite" : "Add favorite"))
+    }
+  }
+
+  /// Holes / Tees → back to Watch Home (live round stays put).
+  @ViewBuilder
+  private var coursesBack: some View {
+    Button(action: { session.backToHome() }) {
+      Text("Courses")
         .font(.system(size: 13, weight: .heavy))
         .foregroundStyle(Color("cream"))
         .frame(maxWidth: .infinity, minHeight: 32)
@@ -104,15 +208,12 @@ struct ContentView: View {
     .buttonStyle(.plain)
   }
 
-  /// After a course pick: Holes / Tees. List only is "Courses near you".
+  /// After a course pick: Holes / Tees. Before a pick the face is Watch Home.
   private var nearbyNavTitle: String {
-    if session.nearby.courseId != nil {
-      if session.nearby.holeCount != nil, !session.nearby.tees.isEmpty {
-        return "Tees"
-      }
-      return "Holes"
+    if session.nearby.holeCount != nil, !session.nearby.tees.isEmpty {
+      return "Tees"
     }
-    return "Courses near you"
+    return "Holes"
   }
 
   /// Pick reply echoes the course name in orange — hide that so the title is once.
@@ -145,6 +246,7 @@ struct ContentView: View {
   @ViewBuilder
   private var nearbyStart: some View {
     if session.nearby.courseId != nil {
+      // Watch Home owns the course list. This is holes → tees for the tapped course.
       // One cream title through holes → tees. Never orange + leftover white row.
       if let name = session.nearby.courseName {
         Text(name)
@@ -177,16 +279,6 @@ struct ContentView: View {
           .buttonStyle(.bordered)
           .disabled(session.sending)
         }
-      }
-    } else {
-      ForEach(session.nearby.courses) { course in
-        Button(action: { session.pickCourse(courseId: course.id) }) {
-          Text(course.name)
-            .font(.headline.weight(.heavy))
-            .frame(maxWidth: .infinity, minHeight: 40)
-        }
-        .buttonStyle(.bordered)
-        .disabled(session.sending)
       }
     }
   }
@@ -374,10 +466,8 @@ struct ContentView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.65)
                         .frame(width: pillWidth, height: 44)
-                        .background(
-                          RoundedRectangle(cornerRadius: 10)
-                            .fill(selected ? outdoorLime : Color("bg"))
-                        )
+                        // Fill is clipped to the pill — no square halo / overflow box.
+                        .background(selected ? outdoorLime : Color("bg"))
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                         .contentShape(RoundedRectangle(cornerRadius: 10))
                         .overlay(
