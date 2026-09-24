@@ -121,6 +121,7 @@ import {
 } from '@/src/domain/firstLaunchTip';
 import { planPlacedShot } from '@/src/domain/shotSource';
 import { planUndoPlacePins } from '@/src/domain/undoLastShot';
+import { planUndoLastSoftGpsClubMark } from '@/src/domain/undoSoftGpsClubMark';
 import type { LatLng } from '@/src/domain/latLng';
 import { formatPenaltyRow, PENALTY_REASONS, totalPenaltyStrokes } from '@/src/domain/penalty';
 import {
@@ -155,7 +156,7 @@ import { thunderbirdCupOnGreen, thunderbirdDailyPin, thunderbirdPinHoleFor } fro
 import { MENU_SHARE_FALLBACK_MS, toastFromShareAttempt } from '@/src/domain/spectator';
 import { publishRoundScoreboard, shareLiveBoard, shareRoundSnapshot } from '@/src/services/shareRound';
 import { shareKindOrScorecard, type ShareKind } from '@/src/domain/shareChoice';
-import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, undoShotEdit, deleteHoleShot } from '@/src/services/shotActions';
+import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, undoLastSoftGpsClubMark, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, undoShotEdit, deleteHoleShot } from '@/src/services/shotActions';
 import { useLiveFix } from '@/src/services/useLiveFix';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
 import { pushWatchPuttSheet } from '@/src/services/watchClub';
@@ -1057,6 +1058,18 @@ export default function HoleScreen() {
     bump();
   };
 
+  const softGpsUndo = planUndoLastSoftGpsClubMark(shots);
+  const onUndoSoftGps = () => {
+    if (readOnly || placing) return;
+    if (!pastRoundCanAddShot(marksOnly)) return;
+    const ok = undoLastSoftGpsClubMark(db, { roundId: id, holeNumber });
+    if (!ok) return;
+    hapticTap();
+    setEditUndo(null);
+    setConfirmUndo(null);
+    bump();
+  };
+
   const onEndShot = async (force = false) => {
     if (readOnly || !open || !pastRoundCanAddShot(marksOnly)) return;
     setBusy(true);
@@ -1621,6 +1634,20 @@ export default function HoleScreen() {
               ) : null}
               {!readOnly && confirmUndoIsLive(confirmUndo, nowMs) ? (
                 <Pressable onPress={onConfirmUndo} style={styles.overlayLink}>
+                  <Text style={styles.backLabel}>{COPY.undoLast}</Text>
+                </Pressable>
+              ) : null}
+              {!readOnly &&
+              !placing &&
+              pastRoundCanAddShot(marksOnly) &&
+              softGpsUndo?.usesUndoLast &&
+              !confirmUndoIsLive(confirmUndo, nowMs) ? (
+                <Pressable
+                  testID="undo-last-soft-gps"
+                  accessibilityRole="button"
+                  accessibilityLabel={COPY.undoLast}
+                  onPress={onUndoSoftGps}
+                  style={styles.overlayLink}>
                   <Text style={styles.backLabel}>{COPY.undoLast}</Text>
                 </Pressable>
               ) : null}
