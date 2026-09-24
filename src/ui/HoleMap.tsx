@@ -16,6 +16,7 @@ import {
   holeMapUserLocationVisible,
   holeNativeCamera,
   regionIsHoleFrame,
+  type HoleNativeCamera,
 } from '@/src/domain/holeCamera';
 import {
   holeMapBoxIsPaintable,
@@ -93,6 +94,8 @@ type Props = {
   heading?: number | null;
   /** Changes when Add shot takes the screen so the hole is framed again. */
   frameEpoch?: string;
+  /** Box-fitted camera (Shot review). Replaces the span camera; lockFrame still decides when it applies. */
+  fitCamera?: HoleNativeCamera | null;
   /** Play header already shows to-green. Keep the map badge for Add shot. */
   hideYardsOverlay?: boolean;
   /** Parent hides the dock until the hole — not the house — is on screen. */
@@ -357,6 +360,7 @@ function NativeHoleMap({
   lockFrame,
   heading,
   frameEpoch,
+  fitCamera,
   hideYardsOverlay,
   onFrameReady,
   showPhonePin,
@@ -459,6 +463,15 @@ function NativeHoleMap({
   }, [lockFrame, framePoints, osmOverlay, holeNumber, green]);
 
   const holeUpCamera = useMemo(() => {
+    if (fitCamera && holeNativeCameraIsPaintable(fitCamera)) {
+      return {
+        center: fitCamera.center,
+        heading: fitCamera.heading,
+        pitch: 0 as const,
+        altitude: fitCamera.altitude,
+        zoom: fitCamera.zoom,
+      };
+    }
     const cameraHeading =
       heading != null && Number.isFinite(heading)
         ? heading
@@ -467,7 +480,7 @@ function NativeHoleMap({
           : null;
     if (cameraHeading == null || lockedPoints.length === 0) return null;
     return holeNativeCamera(lockedPoints, cameraHeading);
-  }, [lockedPoints, heading]);
+  }, [lockedPoints, heading, fitCamera]);
 
   const lockedRegion = useMemo(() => {
     if (lockedPoints.length > 0) return holeFrameRegion(lockedPoints);
@@ -492,7 +505,7 @@ function NativeHoleMap({
   holeCenterRef.current = holeCenter;
 
   const lockKey = lockFrame
-    ? `${(framePoints ?? []).map((point) => `${point.latitude},${point.longitude}`).join('|')}|h:${heading ?? 'none'}|e:${frameEpoch ?? ''}`
+    ? `${(framePoints ?? []).map((point) => `${point.latitude},${point.longitude}`).join('|')}|h:${heading ?? 'none'}|e:${frameEpoch ?? ''}|c:${fitCamera ? `${fitCamera.center.latitude},${fitCamera.center.longitude},${fitCamera.zoom}` : ''}`
     : '';
 
   const applyLockedCamera = () =>
