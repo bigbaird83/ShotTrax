@@ -50,6 +50,8 @@ import {
   diagnoseCourseCardHole,
   playAndAddShotShareFrameEpoch,
   playMapFrameEpoch,
+  holeMapFrameReadyReport,
+  playDockFramedAfterReadyReport,
   addShotChangesFrameEpoch,
   addShotReframesAfterOpen,
   addShotRemountsCamera,
@@ -112,6 +114,34 @@ test('planCourseCardCamera is tee+green only; phone, house, and a lone pin never
   assert.equal(playMapFrameEpoch({ holeNumber: 3, nonce: 2 }), 'play-3-2');
   assert.notEqual(playMapFrameEpoch({ holeNumber: 3, nonce: 2 }), 'catchup');
   assert.equal(holeMapScrollZoomAfterFrame({ lockFrame: true, holeCameraReady: true }), true);
+});
+
+test('play dock comes back when the frame epoch changes and holeCameraReady stays true', () => {
+  const ready = holeMapFrameReadyReport({
+    lockFrame: true,
+    courseCardMiss: false,
+    holeCameraReady: true,
+  });
+  const waiting = holeMapFrameReadyReport({
+    lockFrame: true,
+    courseCardMiss: false,
+    holeCameraReady: false,
+  });
+  assert.equal(ready, true);
+  assert.equal(waiting, false);
+  assert.equal(
+    holeMapFrameReadyReport({ lockFrame: true, courseCardMiss: true, holeCameraReady: false }),
+    true,
+  );
+  assert.equal(
+    holeMapFrameReadyReport({ lockFrame: false, courseCardMiss: false, holeCameraReady: false }),
+    true,
+  );
+  // Prev/Next and menu/scorecard return re-report this value. The dock shows
+  // again. A holeNumber effect that clears mapFramed after the report sticks it off.
+  assert.equal(playDockFramedAfterReadyReport({ reportedReady: ready, clearedAfterReport: false }), true);
+  assert.equal(playDockFramedAfterReadyReport({ reportedReady: ready, clearedAfterReport: true }), false);
+  assert.equal(playDockFramedAfterReadyReport({ reportedReady: waiting, clearedAfterReport: false }), false);
 });
 
 test('Fairway Research: same-point or absurd span is not a course-card camera', () => {

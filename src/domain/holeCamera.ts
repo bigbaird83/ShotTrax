@@ -82,6 +82,35 @@ export function playMapFrameEpoch(args: { holeNumber: number; nonce: number }): 
   return `play-${args.holeNumber}-${args.nonce}`;
 }
 
+/**
+ * Value HoleMap passes to onFrameReady.
+ * Prev/Next, menu close, and scorecard close set the play dock's mapFramed
+ * flag false and change this epoch. holeCameraReady stays true so iOS pan/pinch
+ * never bounce off — the report must run again anyway, or the club strip stays
+ * unmounted until Home remounts the round.
+ */
+export function holeMapFrameReadyReport(args: {
+  lockFrame: boolean;
+  courseCardMiss: boolean;
+  holeCameraReady: boolean;
+}): boolean {
+  if (!args.lockFrame || args.courseCardMiss) return true;
+  return args.holeCameraReady;
+}
+
+/**
+ * Dock visibility after that report. A holeNumber effect that clears mapFramed
+ * runs after HoleMap and sticks the strip off. The clear has to happen during
+ * render, before the report.
+ */
+export function playDockFramedAfterReadyReport(args: {
+  reportedReady: boolean;
+  clearedAfterReport: boolean;
+}): boolean {
+  if (args.clearedAfterReport) return false;
+  return args.reportedReady;
+}
+
 /** MapView is born with scroll/zoom on. Never bounce them off — iOS will not reattach. */
 export function holeMapScrollZoomAfterFrame(_args?: {
   lockFrame?: boolean;
