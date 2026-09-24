@@ -36,10 +36,12 @@ import {
   toPinYardsRecalcOnReleaseOnly,
 } from './placeToDrag';
 import {
+  HISTORY_LONG_PRESS_DELETE_MS,
   HISTORY_SWIPE_DELETE_PX,
   HISTORY_SWIPE_EDIT_PX,
   HISTORY_SWIPE_OPEN_PX,
   HISTORY_SWIPE_REVEAL_PX,
+  historyLongPressDeletes,
   historySwipeRestOffset,
   historySwipeRevealFitsActions,
   historySwipeShouldOpen,
@@ -93,6 +95,19 @@ test('history swipe snaps fully open on a short left swipe', () => {
   assert.match(swipe, /HISTORY_SWIPE_EDIT_PX/);
   assert.match(swipe, /HISTORY_SWIPE_DELETE_PX/);
   assert.doesNotMatch(swipe, /flex:\s*1/);
+});
+
+test('hard press on a history row asks to delete; swipe Edit and ✕ stay', () => {
+  assert.equal(historyLongPressDeletes(), true);
+  assert.ok(HISTORY_LONG_PRESS_DELETE_MS >= 300 && HISTORY_LONG_PRESS_DELETE_MS <= 800);
+
+  const swipe = readFileSync(new URL('../ui/HistorySwipeRow.tsx', import.meta.url), 'utf8');
+  assert.match(swipe, /onLongPress=\{\(\) => \{\s*hapticWarn\(\);\s*onDelete\(\);/);
+  assert.match(swipe, /delayLongPress=\{HISTORY_LONG_PRESS_DELETE_MS\}/);
+  assert.match(swipe, /COPY\.edit/);
+  assert.match(swipe, /✕/);
+  assert.match(swipe, /onPress=\{onDelete\}/);
+  assert.doesNotMatch(swipe, /deleteRound\(/);
 });
 
 test('add-shot lines and yardages follow the live drag point', () => {

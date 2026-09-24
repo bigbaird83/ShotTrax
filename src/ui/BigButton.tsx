@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
 import { useColors } from './ColorThemeProvider';
+import { accentFill, cardBorder, dangerFill, glow } from './surface';
 import { tapTarget, type ColorPalette } from './theme';
 
 type Props = {
@@ -22,6 +23,7 @@ export function BigButton({ label, onPress, variant = 'primary', disabled, style
       style={({ pressed }) => [
         styles.base,
         variant === 'primary' && styles.primary,
+        variant === 'primary' && !disabled && !pressed && styles.primaryGlow,
         variant === 'secondary' && styles.secondary,
         variant === 'danger' && styles.danger,
         variant === 'ghost' && styles.ghost,
@@ -33,7 +35,7 @@ export function BigButton({ label, onPress, variant = 'primary', disabled, style
         style={[
           styles.label,
           (variant === 'secondary' || variant === 'ghost') && styles.labelOnDark,
-          variant === 'danger' && styles.labelOnDark,
+          variant === 'danger' && styles.labelOnDanger,
         ]}>
         {label}
       </Text>
@@ -45,23 +47,20 @@ function makeStyles(colors: ColorPalette) {
   return StyleSheet.create({
     base: {
       minHeight: tapTarget,
-      borderRadius: 16,
+      borderRadius: 18,
       alignItems: 'center',
       justifyContent: 'center',
       paddingHorizontal: 20,
       paddingVertical: 14,
     },
-    primary: {
-      backgroundColor: colors.lime,
-    },
+    primary: accentFill(colors),
+    primaryGlow: glow(colors),
     secondary: {
       backgroundColor: colors.bgElevated,
-      borderWidth: 2,
-      borderColor: colors.line,
+      ...cardBorder(colors),
+      borderWidth: colors.flat ? 2 : 1.5,
     },
-    danger: {
-      backgroundColor: colors.orange,
-    },
+    danger: dangerFill(colors),
     ghost: {
       backgroundColor: 'transparent',
       borderWidth: 1,
@@ -71,7 +70,8 @@ function makeStyles(colors: ColorPalette) {
       opacity: 0.45,
     },
     pressed: {
-      opacity: 0.8,
+      opacity: 0.9,
+      transform: [{ scale: 0.97 }],
     },
     label: {
       fontSize: 20,
@@ -80,6 +80,9 @@ function makeStyles(colors: ColorPalette) {
     },
     labelOnDark: {
       color: colors.cream,
+    },
+    labelOnDanger: {
+      color: colors.flat ? colors.bg : '#FFFFFF',
     },
   });
 }

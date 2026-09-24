@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import {
+  HISTORY_LONG_PRESS_DELETE_MS,
   HISTORY_SWIPE_DELETE_PX,
   HISTORY_SWIPE_EDIT_PX,
   HISTORY_SWIPE_REVEAL_PX,
@@ -9,6 +10,7 @@ import {
 } from '@/src/domain/roundHistory';
 import { COPY } from '@/src/domain/playerCopy';
 import { useColors } from './ColorThemeProvider';
+import { hapticWarn } from './haptics';
 import { type, type ColorPalette } from './theme';
 
 export function HistorySwipeRow({
@@ -102,7 +104,19 @@ export function HistorySwipeRow({
         </Pressable>
       </View>
       <Animated.View style={{ transform: [{ translateX: x }] }} {...pan.panHandlers}>
-        <Pressable accessibilityRole="button" onPress={onPress} style={rowStyle}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityActions={[{ name: 'longpress', label: COPY.deleteRound }]}
+          onAccessibilityAction={(event) => {
+            if (event.nativeEvent.actionName === 'longpress') onDelete();
+          }}
+          onPress={onPress}
+          onLongPress={() => {
+            hapticWarn();
+            onDelete();
+          }}
+          delayLongPress={HISTORY_LONG_PRESS_DELETE_MS}
+          style={rowStyle}>
           {children}
         </Pressable>
       </Animated.View>

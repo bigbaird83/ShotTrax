@@ -2,9 +2,9 @@ import { useEventListener } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import * as SplashScreen from 'expo-splash-screen';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AccessibilityInfo, Animated, Image, Pressable, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, Animated, Image, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { SHOTTRAXX_BRAND } from '@/src/domain/playerCopy';
-import { SPLASH_BG, SPLASH_RESIZE_MODE } from '@/src/domain/splashLetterbox';
+import { SPLASH_BG, SPLASH_RESIZE_MODE, splashLetterboxSize } from '@/src/domain/splashLetterbox';
 import { SPLASH_SAFETY_MS, planSplashDismiss, type SplashDismissEvent } from '@/src/domain/splashDismiss';
 
 /** Owner open clip, 3.0s, portrait. Contain on the sampled field — never cover. */
@@ -101,15 +101,20 @@ export function BrandedSplash({ onDone }: Props) {
   );
 }
 
-function SplashFrame({ children, onSkip }: { children?: ReactNode; onSkip: () => void }) {
+/**
+ * Opaque full-screen field. The art is one contained frame, centered.
+ * Letterbox bars are this background, not a second copy of the still.
+ */
+function SplashStage({ children, onSkip }: { children?: ReactNode; onSkip: () => void }) {
+  const { width, height } = useWindowDimensions();
+  const box = splashLetterboxSize(width, height);
   return (
     <View
       pointerEvents="auto"
       accessibilityRole="image"
       accessibilityLabel={SHOTTRAXX_BRAND}
-      style={StyleSheet.absoluteFill}>
-      <Image source={OPEN_STILL} style={StyleSheet.absoluteFill} resizeMode={SPLASH_RESIZE_MODE} />
-      {children}
+      style={styles.stage}>
+      <View style={[styles.art, { width: box.width, height: box.height }]}>{children}</View>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Skip splash"
@@ -127,7 +132,11 @@ function StillSplash({ onDismiss }: { onDismiss: (event: SplashDismissEvent) => 
     return () => clearTimeout(timeout);
   }, [onDismiss]);
 
-  return <SplashFrame onSkip={() => onDismiss('tap')} />;
+  return (
+    <SplashStage onSkip={() => onDismiss('tap')}>
+      <Image source={OPEN_STILL} style={StyleSheet.absoluteFill} resizeMode={SPLASH_RESIZE_MODE} />
+    </SplashStage>
+  );
 }
 
 function VideoSplash({ onDismiss }: { onDismiss: (event: SplashDismissEvent) => void }) {
@@ -147,7 +156,7 @@ function VideoSplash({ onDismiss }: { onDismiss: (event: SplashDismissEvent) => 
   });
 
   return (
-    <SplashFrame onSkip={() => onDismiss('tap')}>
+    <SplashStage onSkip={() => onDismiss('tap')}>
       <VideoView
         player={player}
         style={StyleSheet.absoluteFill}
@@ -163,7 +172,7 @@ function VideoSplash({ onDismiss }: { onDismiss: (event: SplashDismissEvent) => 
           startedRef.current = true;
         }}
       />
-    </SplashFrame>
+    </SplashStage>
   );
 }
 
@@ -171,5 +180,15 @@ const styles = StyleSheet.create({
   wrap: {
     backgroundColor: SPLASH_BG,
     zIndex: 1000,
+  },
+  stage: {
+    flex: 1,
+    backgroundColor: SPLASH_BG,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  art: {
+    overflow: 'hidden',
+    backgroundColor: SPLASH_BG,
   },
 });
