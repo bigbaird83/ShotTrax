@@ -9,9 +9,9 @@ App Store Connect does not use this note. Paste the privacy URL below.
 
 Once GitHub Pages is live, paste this into **App Store Connect → App Privacy → Privacy Policy URL**:
 
-https://bigbaird83.github.io/ShotTrax/privacy/
+https://bigbaird83.github.io/ShotTraxx/privacy/
 
-The site root (`https://bigbaird83.github.io/ShotTrax/`) only links to that page. Use `/privacy/`.
+The site root (`https://bigbaird83.github.io/ShotTraxx/`) only links to that page. Use `/privacy/`.
 
 ShotTraxx.com can point here later. This GitHub Pages URL is enough to unblock App Store Connect now.
 
@@ -19,10 +19,10 @@ ShotTraxx.com can point here later. This GitHub Pages URL is enough to unblock A
 
 The repo is public. In GitHub:
 
-1. Open [bigbaird83/ShotTrax](https://github.com/bigbaird83/ShotTrax) → **Settings** → **Pages**.
+1. Open [bigbaird83/ShotTraxx](https://github.com/bigbaird83/ShotTraxx) → **Settings** → **Pages**.
 2. **Build and deployment** → **Source**: Deploy from a branch.
 3. **Branch**: `main`, folder **`/docs`**. Save.
-4. Wait until Pages shows a green URL. Open https://bigbaird83.github.io/ShotTrax/privacy/ and confirm the policy loads on a phone.
+4. Wait until Pages shows a green URL. Open https://bigbaird83.github.io/ShotTraxx/privacy/ and confirm the policy loads on a phone.
 
 No build step. Do not start an EAS build and do not change App Store Connect from the repo.
 
