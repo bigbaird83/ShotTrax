@@ -103,9 +103,22 @@ export function formatBuildStamp(parts: BuildStampParts): string {
 type ExpoConstantsLike = {
   appOwnership?: string | null;
   expoVersion?: string | null;
-  expoConfig?: { extra?: Record<string, unknown> | null } | null;
+  expoConfig?: { extra?: unknown } | null;
+  manifest?: { extra?: unknown } | null;
   platform?: { ios?: { buildNumber?: string | null } | null } | null;
 };
+
+/** `expoConfig.extra` first, then the embedded manifest. Same order as course config. */
+export function extraRecordFromConstants(constants: {
+  expoConfig?: { extra?: unknown } | null;
+  manifest?: { extra?: unknown } | null;
+}): Record<string, unknown> | null {
+  const fromConfig = constants.expoConfig?.extra;
+  if (fromConfig && typeof fromConfig === 'object') return fromConfig as Record<string, unknown>;
+  const fromManifest = constants.manifest?.extra;
+  if (fromManifest && typeof fromManifest === 'object') return fromManifest as Record<string, unknown>;
+  return null;
+}
 
 function readExtra(extra: Record<string, unknown> | null | undefined, key: string): string | null {
   const value = extra?.[key];
@@ -134,7 +147,7 @@ function loadApplicationBuildVersion(): string | null {
 export function readBuildStamp(): BuildStampParts {
   const constants = loadConstants();
   const inExpoGo = isExpoGoRuntime(constants);
-  const extra = constants.expoConfig?.extra ?? null;
+  const extra = extraRecordFromConstants(constants);
   return {
     inExpoGo,
     nativeBuildVersion: nativeBuildVersionFromSources({

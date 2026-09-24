@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
   EXPO_GO_FIELD_UNAVAILABLE,
+  extraRecordFromConstants,
   formatBuildStamp,
   isExpoGoRuntime,
   nativeBuildVersionFromSources,
@@ -108,6 +109,24 @@ test('native build version prefers expo-application and never Expo Go’s plist'
     }),
     null,
   );
+});
+
+test('baked extra is read from expoConfig, then the embedded manifest', () => {
+  assert.equal(
+    extraRecordFromConstants({
+      expoConfig: { extra: { easBuildId: EAS, gitCommitHash: SHA } },
+      manifest: { extra: { easBuildId: 'other', gitCommitHash: 'abc' } },
+    })?.easBuildId,
+    EAS,
+  );
+  assert.equal(
+    extraRecordFromConstants({
+      expoConfig: null,
+      manifest: { extra: { easBuildId: EAS, gitCommitHash: SHA } },
+    })?.gitCommitHash,
+    SHA,
+  );
+  assert.equal(extraRecordFromConstants({ expoConfig: null, manifest: null }), null);
 });
 
 test('Expo Go is the Expo Go app, not a dev client that merely lacks an EAS id', () => {
