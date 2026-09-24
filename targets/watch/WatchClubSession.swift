@@ -2,6 +2,9 @@ import CoreLocation
 import Foundation
 import WatchConnectivity
 import WatchKit
+#if canImport(WidgetKit)
+import WidgetKit
+#endif
 
 // Club-pick only. No motion detection, no mic, no sensor auto-mark.
 // Tap → phone club=mark GPS. Undo stays on the phone.
@@ -15,6 +18,10 @@ struct ClubListState {
   var yardsQuality: String = "none"
   var lastClubId: String? = nil
   var selectedClubId: String? = nil
+  /// Hole-map yards for the complication. 0 means no hole — never invent Hole 1.
+  var complicationHole: Int = 0
+  var complicationYards: Int? = nil
+  var complicationQuality: String = "none"
 
   var statusLine: String {
     if yardsQuality != "none", let yards = yardsToGreen, yards > 0 {
@@ -25,6 +32,18 @@ struct ClubListState {
 
   /// Player-voice chip is Approximate (never SOFT).
   var showSoft: Bool { yardsQuality == "soft" }
+
+  /// Top-right live yards. Same gate as the phone: good/soft and a positive number, else —.
+  var liveYardsTrusted: Bool {
+    (complicationQuality == "good" || complicationQuality == "soft") && (complicationYards ?? 0) > 0
+  }
+
+  var liveYardsLabel: String {
+    if liveYardsTrusted, let yards = complicationYards {
+      return "\(yards) yd"
+    }
+    return "—"
+  }
 
   func label(for clubId: String) -> String {
     labels[clubId] ?? clubId
@@ -156,6 +175,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   /// Collapse the launch burst (activate + Search nearby appear) into one transfer.
   private let homeRequestCoalesce: TimeInterval = 2
   private var receivedClubList = false
+  /// Last complication snapshot written to the app group. Reload only when it changes.
+  private var complicationStamp = ""
   /// Watch Back/Cancel on the putt sheet. Blocks phone keep-alive from reopening.
   private var userClosedPutt = false
 
@@ -967,6 +988,22 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       next.yardsToGreen = nil
     }
     next.yardsQuality = message["yardsQuality"] as? String ?? "none"
+    if message["complicationQuality"] != nil {
+      let quality = message["complicationQuality"] as? String ?? "none"
+      next.complicationHole = next.holeNumber >= 1 ? next.holeNumber : 0
+      let yards = Self.complicationInt(message["complicationYards"])
+      if (quality == "good" || quality == "soft"), let yards, yards > 0 {
+        next.complicationYards = yards
+        next.complicationQuality = quality
+      } else {
+        next.complicationYards = nil
+        next.complicationQuality = "none"
+      }
+    } else {
+      next.complicationHole = list.complicationHole
+      next.complicationYards = list.complicationYards
+      next.complicationQuality = list.complicationQuality
+    }
     if let last = message["lastClubId"] as? String, !last.isEmpty {
       next.lastClubId = last
     } else {
@@ -1025,6 +1062,12 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     syncRoundStay()
   }
 
+  private static func complicationInt(_ value: Any?) -> Int? {
+    if let yards = value as? Int { return yards }
+    if let yards = value as? NSNumber { return yards.intValue }
+    return nil
+  }
+
   private func persist(_ state: ClubListState) {
     let defaults = UserDefaults(suiteName: "group.com.shottrax.app")
     defaults?.set(state.holeNumber, forKey: "holeNumber")
@@ -1034,6 +1077,18 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       defaults?.removeObject(forKey: "yardsToGreen")
     }
     defaults?.set(state.yardsQuality, forKey: "yardsQuality")
+    if state.complicationHole >= 1 {
+      defaults?.set(state.complicationHole, forKey: "complicationHole")
+    } else {
+      defaults?.removeObject(forKey: "complicationHole")
+    }
+    if let yards = state.complicationYards, (state.complicationQuality == "good" || state.complicationQuality == "soft"), yards > 0 {
+      defaults?.set(yards, forKey: "complicationYards")
+      defaults?.set(state.complicationQuality, forKey: "complicationQuality")
+    } else {
+      defaults?.removeObject(forKey: "complicationYards")
+      defaults?.set("none", forKey: "complicationQuality")
+    }
     defaults?.set(state.bag, forKey: "bag")
     defaults?.set(state.top3, forKey: "top3")
     defaults?.set(state.labels, forKey: "labels")
@@ -1058,6 +1113,10 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     if let yards = state.yardsToGreen, state.yardsQuality != "none" {
       obj["yardsToGreen"] = yards
     }
+    obj["complicationQuality"] = state.complicationQuality
+    if let yards = state.complicationYards, (state.complicationQuality == "good" || state.complicationQuality == "soft"), yards > 0 {
+      obj["complicationYards"] = yards
+    }
     if let last = state.lastClubId { obj["lastClubId"] = last }
     if let selected = state.selectedClubId { obj["selectedClubId"] = selected }
     if let data = try? JSONSerialization.data(withJSONObject: obj),
@@ -1065,6 +1124,11 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       defaults?.set(text, forKey: "clubListJSON")
     }
     defaults?.synchronize()
+    let stamp = "\(state.complicationHole)|\(state.complicationYards ?? -1)|\(state.complicationQuality)"
+    if stamp != complicationStamp {
+      complicationStamp = stamp
+      ComplicationReloader.reload()
+    }
   }
 
   private func loadFromDefaults() {
@@ -1087,6 +1151,14 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     next.labels = defaults?.dictionary(forKey: "labels") as? [String: String] ?? [:]
     next.lastClubId = defaults?.string(forKey: "lastClubId")
     next.selectedClubId = defaults?.string(forKey: "selectedClubId")
+    let complicationHole = defaults?.integer(forKey: "complicationHole") ?? 0
+    if complicationHole >= 1 { next.complicationHole = complicationHole }
+    next.complicationQuality = defaults?.string(forKey: "complicationQuality") ?? "none"
+    if defaults?.object(forKey: "complicationYards") != nil,
+       next.complicationQuality == "good" || next.complicationQuality == "soft" {
+      let yards = defaults?.integer(forKey: "complicationYards") ?? 0
+      if yards > 0 { next.complicationYards = yards }
+    }
     if hole > 0 || !next.bag.isEmpty {
       list = next
       receivedClubList = true
@@ -1246,5 +1318,16 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
         startRoundStay()
       }
     }
+  }
+}
+
+enum ComplicationReloader {
+  /// Ask WidgetKit to read the app group. No location fix and no phone session.
+  static func reload() {
+    #if canImport(WidgetKit)
+    if #available(watchOS 9.0, *) {
+      WidgetCenter.shared.reloadTimelines(ofKind: "ShotTraxxHoleYards")
+    }
+    #endif
   }
 }

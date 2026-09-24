@@ -1,14 +1,28 @@
 import SwiftUI
 import WidgetKit
 
+/// Yards-to-green on the watch face.
+/// Reads the phone hole-map number the Watch app already stored in the app group.
+/// No location fix and no phone session. Never invents a yardage.
 struct HoleYardsEntry: TimelineEntry {
   let date: Date
-  let line: String
+  let holeNumber: Int?
+  let yards: Int?
+  let inline: String
+  let value: String
+  let unavailable: Bool
 }
 
 struct HoleYardsProvider: TimelineProvider {
   func placeholder(in context: Context) -> HoleYardsEntry {
-    HoleYardsEntry(date: Date(), line: "Hole 1 · —")
+    HoleYardsEntry(
+      date: Date(),
+      holeNumber: nil,
+      yards: nil,
+      inline: "—",
+      value: "—",
+      unavailable: true
+    )
   }
 
   func getSnapshot(in context: Context, completion: @escaping (HoleYardsEntry) -> Void) {
@@ -16,35 +30,84 @@ struct HoleYardsProvider: TimelineProvider {
   }
 
   func getTimeline(in context: Context, completion: @escaping (Timeline<HoleYardsEntry>) -> Void) {
-    let entry = current()
-    completion(Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(60))))
+    // The Watch app reloads this timeline when the phone sends a new map number.
+    // .never avoids a GPS-free poll that would still wake the extension.
+    completion(Timeline(entries: [current()], policy: .never))
   }
 
   private func current() -> HoleYardsEntry {
     let defaults = UserDefaults(suiteName: "group.com.shottrax.app")
-    let hole = defaults?.integer(forKey: "holeNumber") ?? 0
-    let quality = defaults?.string(forKey: "yardsQuality") ?? "none"
-    let hasYards = defaults?.object(forKey: "yardsToGreen") != nil
-    let yards = defaults?.integer(forKey: "yardsToGreen") ?? 0
-    let holeNumber = hole > 0 ? hole : 1
-    let yardsPart: String
-    if quality != "none", hasYards {
-      yardsPart = "\(yards) yd"
+    let hole = defaults?.integer(forKey: "complicationHole") ?? 0
+    let quality = defaults?.string(forKey: "complicationQuality") ?? "none"
+    let hasYards = defaults?.object(forKey: "complicationYards") != nil
+    let yardsRaw = defaults?.integer(forKey: "complicationYards") ?? 0
+    let holeNumber: Int? = hole >= 1 ? hole : nil
+    let trusted = (quality == "good" || quality == "soft") && hasYards && yardsRaw > 0
+    let yards: Int? = trusted ? yardsRaw : nil
+    let value = yards.map { String($0) } ?? "—"
+    let inline: String
+    if let holeNumber, let yards {
+      inline = "Hole \(holeNumber) · \(yards) yd"
+    } else if let holeNumber {
+      inline = "Hole \(holeNumber) · —"
+    } else if let yards {
+      inline = "\(yards) yd"
     } else {
-      yardsPart = "—"
+      inline = "—"
     }
-    return HoleYardsEntry(date: Date(), line: "Hole \(holeNumber) · \(yardsPart)")
+    return HoleYardsEntry(
+      date: Date(),
+      holeNumber: holeNumber,
+      yards: yards,
+      inline: inline,
+      value: value,
+      unavailable: yards == nil
+    )
   }
 }
 
 struct HoleYardsView: View {
+  @Environment(\.widgetFamily) private var family
   var entry: HoleYardsEntry
 
   var body: some View {
-    Text(entry.line)
-      .font(.headline)
-      .minimumScaleFactor(0.6)
-      .widgetAccentable()
+    switch family {
+    case .accessoryCircular:
+      circular
+    case .accessoryCorner:
+      Text(entry.value)
+        .widgetLabel(entry.unavailable ? "Unavailable" : "yd")
+    case .accessoryInline:
+      Text(entry.inline)
+    default:
+      rectangular
+    }
+  }
+
+  private var circular: some View {
+    VStack(spacing: 0) {
+      Text(entry.value)
+        .font(.system(.title3, design: .rounded).weight(.bold))
+        .minimumScaleFactor(0.4)
+      if !entry.unavailable {
+        Text("yd")
+          .font(.system(.caption2, design: .rounded))
+      }
+    }
+    .widgetAccentable()
+  }
+
+  private var rectangular: some View {
+    VStack(alignment: .leading, spacing: 1) {
+      Text(entry.holeNumber.map { "Hole \($0)" } ?? "To green")
+        .font(.caption2)
+        .widgetAccentable()
+      Text(entry.value)
+        .font(.title2.weight(.semibold))
+        .minimumScaleFactor(0.5)
+      Text(entry.unavailable ? "Unavailable" : "yd")
+        .font(.caption2)
+    }
   }
 }
 
@@ -57,8 +120,13 @@ struct HoleYardsWidget: Widget {
           Color("widgetBackground")
         }
     }
-    .configurationDisplayName("Hole")
-    .description("Hole and yards to green")
-    .supportedFamilies([.accessoryInline, .accessoryRectangular, .accessoryCircular])
+    .configurationDisplayName("Yards to green")
+    .description("Yards to the green from the phone hole map. — when that number isn’t available.")
+    .supportedFamilies([
+      .accessoryCircular,
+      .accessoryCorner,
+      .accessoryInline,
+      .accessoryRectangular,
+    ])
   }
 }
