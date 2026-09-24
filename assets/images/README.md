@@ -1,6 +1,6 @@
 # App icons
 
-Home-screen icon is the owner flag mark: a white flag on a green mound with lime rings, centered on near-black `#010101`. No wordmark. The file is 1024² opaque RGB (no alpha, no rounded corners baked in). The mark sits inside the iOS safe area (about 80% of the canvas). Splash / launch still is the first frame of Doc’s 3s open clip (784×1168, `#000101`) — same pixels as `assets/splash/splash-first-frame-v2.png`. Expo and JS show it with `contain` + black letterbox (never `cover`). The open clip plays once on cold start, muted, with `mixWithOthers`.
+Home-screen icon is the owner flag mark: a white flag on a green mound with lime rings, centered on near-black `#010101`. No wordmark. The file is 1024² opaque RGB (no alpha, no rounded corners baked in). The mark sits inside the iOS safe area (about 80% of the canvas). Splash / launch still is the first frame of Doc’s 3s open clip (784×1168, `#000101`) — same pixels as `assets/splash/splash-first-frame-v2.png`. Expo and JS show it with `contain` + black letterbox (never `cover`). The open clip plays once on cold start. Its audio track is removed, and playback is muted at volume 0 with `mixWithOthers`.
 
 | File | Wired from |
 | --- | --- |

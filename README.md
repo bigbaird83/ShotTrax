@@ -31,7 +31,7 @@ To install a store-signed build with Watch on a physical iPhone, use **TestFligh
 
 ## Splash
 
-Cold start still shows the native Expo splash (`splash-icon.png` = first frame of the 3s clip, `resizeMode: contain`, `#000101`). After JS boots, `BrandedSplash` keeps that still until the open clip (`assets/splash/splash-open-first-3s-v2.mp4`) paints its first frame, then hides the native splash and plays the clip once. The AAC track stays in the file. Playback is muted (`mixWithOthers`) because expo-video cannot honor the iOS silent switch. Tap skips. A 5s safety timeout removes the overlay if playback stalls. It runs on cold start only, not when the app returns from the background. The portrait clip is always `contain` + black letterbox (`#000101`), centered — never `cover` or stretch. Reduce Motion skips the clip and shows the same first-frame still (`assets/splash/splash-first-frame-v2.png`), then the same onDone path.
+Cold start still shows the native Expo splash (`splash-icon.png` = first frame of the 3s clip, `resizeMode: contain`, `#000101`). After JS boots, `BrandedSplash` keeps that still until the open clip (`assets/splash/splash-open-first-3s-v2.mp4`) paints its first frame, then hides the native splash and plays the clip once. The audio track is removed. Playback is muted at volume 0 with `mixWithOthers`. Tap skips. A 5s safety timeout removes the overlay if playback stalls. It runs on cold start only, not when the app returns from the background. The portrait clip is always `contain` + black letterbox (`#000101`), centered — never `cover` or stretch. Reduce Motion skips the clip and shows the same first-frame still (`assets/splash/splash-first-frame-v2.png`), then the same onDone path.
 
 ## Golf Courses API (course picker)
 

@@ -26,9 +26,8 @@ function hideNativeSplash() {
 
 /**
  * Full-screen overlay after the static Expo splash. Cold start only.
- * The clip's AAC track is kept in the file. Playback is muted: expo-video
- * sets AVAudioSession category playback, which ignores the silent switch.
- * mixWithOthers keeps that from pausing other audio. Tap skips. 5s safety timeout.
+ * The audio track is removed. Playback is muted (volume 0) and mixWithOthers
+ * so it does not pause other audio. Tap skips. 5s safety timeout.
  */
 export function BrandedSplash({ onDone }: Props) {
   const onDoneRef = useRef(onDone);

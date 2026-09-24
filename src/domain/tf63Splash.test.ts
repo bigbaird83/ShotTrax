@@ -24,7 +24,7 @@ test('TF 63: BrandedSplash plays Doc 3s muted open clip; Reduce Motion uses firs
   const stillBytes = readFileSync(still);
   assert.ok(clipBytes.length > 80_000, '3s clip should be committed');
   assert.ok(clipBytes.length < 2_000_000, 'must be the 3s clip, not a long sting');
-  assert.ok(clipBytes.includes(Buffer.from('mp4a')), 'AAC audio track stays in the file');
+  assert.equal(clipBytes.includes(Buffer.from('mp4a')), false, 'audio track is removed');
   assert.ok(stillBytes.length > 0);
   assert.equal(stillBytes.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
 
