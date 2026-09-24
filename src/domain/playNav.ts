@@ -1,3 +1,5 @@
+import { replayHoleHref } from './roundReplay';
+
 /**
  * Round start and hole change stay on the play/hole view.
  * All clubs is a separate control — never the dest of start / Prev / Next.
@@ -15,12 +17,14 @@ export function playHrefAfterRoundStart(roundId: string): `/round/${string}/hole
   return `/round/${roundId}/hole/1`;
 }
 
-/** Prev hole / Next hole stay on play. Never club-pick. Past edit keeps ?edit=1. */
+/** Prev hole / Next hole stay on play. Never club-pick. Past edit keeps ?edit=1. Review keeps ?review=1. */
 export function playHrefAfterHoleChange(
   roundId: string,
   holeNumber: number,
   keepPastEdit = false,
+  keepReview = false,
 ): string {
+  if (keepReview) return replayHoleHref(roundId, holeNumber);
   const href = playHoleHref(roundId, holeNumber);
   return keepPastEdit ? `${href}?edit=1` : href;
 }

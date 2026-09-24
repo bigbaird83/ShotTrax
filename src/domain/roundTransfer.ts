@@ -2,6 +2,7 @@ import { isClubhousePin } from '../course/hydrate';
 import { haversineYards, roundYards } from './haversine';
 import { isCourseCardLatLng, isValidLatLng, type LatLng } from './latLng';
 import { SHOTTRAXX_BRAND } from './playerCopy';
+import { durableClosedShot } from './roundReplay';
 import type { ShotFixQuality, ShotSource } from './types';
 
 /**
@@ -37,13 +38,16 @@ export function roundImportWritesStoredAverages(): false {
 export type RoundTransferShot = {
   clubId: string | null;
   seq: number;
-  start: LatLng;
-  end: LatLng;
+  /** Null when that mark was never stored. Never filled in. */
+  start: LatLng | null;
+  /** Null when the shot closed without an end pin. */
+  end: LatLng | null;
   startAccuracyM: number | null;
   endAccuracyM: number | null;
   startFixQuality: ShotFixQuality | null;
   endFixQuality: ShotFixQuality | null;
-  distanceYards: number;
+  /** Haversine of two real marks. Null when a mark is missing — never invented. */
+  distanceYards: number | null;
   typedYards: number | null;
   fixQuality: ShotFixQuality | null;
   impossibleJump: boolean;
@@ -243,8 +247,10 @@ function sourceOf(value: unknown): 'gps' | 'placed' | null {
 }
 
 /**
- * A shot imports only with two real marks. Missing, placeholder, or flagged
- * invented coordinates are dropped. Yards are haversine of those marks.
+ * Two real marks import with haversine yards (0 yd is an honest pin that
+ * did not move). A closed shot with one mark, or with none, still imports:
+ * each real pin is kept and the missing one stays null. Yards stay null
+ * unless both pins exist. Invented, placeholder, and no-GPS rows are dropped.
  */
 export function acceptTransferShot(raw: unknown): RoundTransferShot | null {
   if (roundImportInventsCoords()) return null;
@@ -254,33 +260,52 @@ export function acceptTransferShot(raw: unknown): RoundTransferShot | null {
   if (!source) return null;
   const start = readPoint(record.start);
   const end = readPoint(record.end);
-  if (!isValidLatLng(start) || !isValidLatLng(end)) return null;
-  const yards = roundYards(haversineYards(start, end));
-  if (!Number.isFinite(yards) || yards <= 0) return null;
   const seq = finite(record.seq);
   const startedAt = text(record.startedAt);
   if (seq == null || seq < 1 || !startedAt) return null;
+  const endedAt = text(record.endedAt);
   const startFix = fixQuality(record.startFixQuality, source);
   const endFix = fixQuality(record.endFixQuality, source);
-  return {
+  const shared = {
     clubId: text(record.clubId),
     seq,
-    start,
-    end,
     startAccuracyM: finite(record.startAccuracyM),
     endAccuracyM: finite(record.endAccuracyM),
     startFixQuality: startFix,
     endFixQuality: endFix,
-    distanceYards: yards,
     typedYards: finite(record.typedYards),
     fixQuality: fixQuality(record.fixQuality, source) ?? (source === 'gps' ? startFix : null),
     impossibleJump: record.impossibleJump === true,
     startedAt,
-    endedAt: text(record.endedAt),
+    endedAt,
     source,
     suggested: record.suggested === true,
     holeOut: record.holeOut === true,
     averageEligibleAt: text(record.averageEligibleAt),
+  };
+  if (isValidLatLng(start) && isValidLatLng(end)) {
+    const yards = roundYards(haversineYards(start, end));
+    if (!Number.isFinite(yards) || yards < 0) return null;
+    return { ...shared, start, end, distanceYards: yards };
+  }
+  if (!endedAt) return null;
+  const durable = durableClosedShot({
+    seq,
+    startLat: start?.lat ?? null,
+    startLng: start?.lng ?? null,
+    endLat: end?.lat ?? null,
+    endLng: end?.lng ?? null,
+    distanceYards: finite(record.distanceYards),
+    endedAt,
+  });
+  if (!durable) return null;
+  const keptStart = durable.points.find((point) => point.role === 'start') ?? null;
+  const keptEnd = durable.points.find((point) => point.role === 'end') ?? null;
+  return {
+    ...shared,
+    start: keptStart ? { lat: keptStart.lat, lng: keptStart.lng } : null,
+    end: keptEnd ? { lat: keptEnd.lat, lng: keptEnd.lng } : null,
+    distanceYards: durable.distanceYards,
   };
 }
 

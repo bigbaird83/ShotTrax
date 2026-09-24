@@ -73,6 +73,7 @@ import {
   pastRoundMarksOnly,
   pastRoundStoredPaintOnly,
 } from '@/src/domain/roundHistory';
+import { planReplay, planReplayFramePoints, replayReviewRequested } from '@/src/domain/roundReplay';
 import {
   armHoleTransition,
   consumeHoleTransition,
@@ -185,13 +186,15 @@ import { YardsToGreenBadge } from '@/src/ui/YardsToGreenBadge';
 import { COLOR_THEMES, tapTarget, type, type ColorPalette } from '@/src/ui/theme';
 
 export default function HoleScreen() {
-  const { id, number, putts: puttsParam, menu: menuParam, edit: editParam } = useLocalSearchParams<{
-    id: string;
-    number: string;
-    putts?: string;
-    menu?: string;
-    edit?: string;
-  }>();
+  const { id, number, putts: puttsParam, menu: menuParam, edit: editParam, review: reviewParam } =
+    useLocalSearchParams<{
+      id: string;
+      number: string;
+      putts?: string;
+      menu?: string;
+      edit?: string;
+      review?: string;
+    }>();
   const holeNumber = Number(number);
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -265,11 +268,14 @@ export default function HoleScreen() {
     () => (hole ? getOpenShotForHole(db, hole.id) : null),
     [db, hole, revision],
   );
-  const marksOnly = pastRoundMarksOnly({
-    finished: Boolean(round?.finishedAt),
-    editRequested: pastRoundEditRequested(editParam),
-  });
-  const readOnly = Boolean(round?.finishedAt) && !marksOnly;
+  const review = replayReviewRequested(reviewParam);
+  const marksOnly =
+    !review &&
+    pastRoundMarksOnly({
+      finished: Boolean(round?.finishedAt),
+      editRequested: pastRoundEditRequested(editParam),
+    });
+  const readOnly = review || (Boolean(round?.finishedAt) && !marksOnly);
   const historyRoundCount = useMemo(
     () =>
       firstLaunchTipHistoryRoundCount({
@@ -376,7 +382,7 @@ export default function HoleScreen() {
     setMapFramed(false);
     armHoleTransition(holeNavDirection(holeNumber, nextNumber));
     hapticLight();
-    router.replace(playHrefAfterHoleChange(id, nextNumber, marksOnly));
+    router.replace(playHrefAfterHoleChange(id, nextNumber, marksOnly, review));
   };
 
   const lastShotClubId = [...shots].reverse().find((shot) => shot.clubId)?.clubId ?? null;
@@ -656,6 +662,14 @@ export default function HoleScreen() {
     green,
     phone: null,
   });
+  const replayPlan = review ? planReplay(shots) : null;
+  const replayFrame = replayPlan
+    ? planReplayFramePoints({
+        tee: holeTee,
+        green,
+        pins: replayPlan.pins,
+      })
+    : null;
   const courseCardPaint = decideCourseCardPaint({
     tee: holeTee,
     green,
@@ -1421,13 +1435,19 @@ export default function HoleScreen() {
           onFrameReady={setMapFramed}
           heading={courseCardPaint.mount ? courseCamera?.heading ?? null : null}
           framePoints={
-            courseCardPaint.mount && courseCardFrame.ok
-              ? courseCamera?.points.map((point) => ({
+            review && replayFrame
+              ? replayFrame.map((point) => ({
                   latitude: point.lat,
                   longitude: point.lng,
                 }))
-              : undefined
+              : courseCardPaint.mount && courseCardFrame.ok
+                ? courseCamera?.points.map((point) => ({
+                    latitude: point.lat,
+                    longitude: point.lng,
+                  }))
+                : undefined
           }
+          replay={replayPlan}
           placeHint={placeHint}
           onShotPress={placing ? undefined : openEdit}
           onPlacePoint={
@@ -1844,7 +1864,7 @@ export default function HoleScreen() {
             ) : null}
             <Pressable
               accessibilityRole="button"
-              disabled={readOnly || holeNumber <= 1}
+              disabled={(!review && readOnly) || holeNumber <= 1}
               onPress={() => goToHole(holeNumber - 1)}
               style={styles.dockAction}>
               <Text style={styles.dockActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
@@ -1853,7 +1873,7 @@ export default function HoleScreen() {
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              disabled={readOnly || !canAdvanceHole({ holeNumber, holeCount: round.holeCount })}
+              disabled={(!review && readOnly) || !canAdvanceHole({ holeNumber, holeCount: round.holeCount })}
               onPress={() => goToHole(holeNumber + 1)}
               style={styles.dockAction}>
               <Text style={styles.dockActionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>

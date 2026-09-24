@@ -24,6 +24,8 @@ export const COPY = {
   deleteShot: 'Delete shot',
   deleteShotConfirm: 'Delete this shot?',
   roundHistory: 'Round history',
+  reviewRound: 'Review',
+  replayNoPin: 'No pin',
   roundsTransfer: 'Export / Restore rounds',
   roundsTransferHint:
     'Save a copy of your rounds or put them back on this phone. Rounds are stored only on the device unless you export.',

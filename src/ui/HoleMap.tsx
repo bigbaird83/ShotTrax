@@ -55,6 +55,11 @@ import { hasClosedGpsTrail, hasGpsStart } from '@/src/domain/shotSource';
 import { clubMarkGpsConfidence } from '@/src/domain/gpsConfidence';
 import { planDistanceRings } from '@/src/domain/distanceRings';
 import { planShotTrail, shotTrailDash } from '@/src/domain/shotTrail';
+import {
+  formatReplayMissingLine,
+  replayPinTracksViewChanges,
+  type ReplayPlan,
+} from '@/src/domain/roundReplay';
 import { QualityBadge } from './Badge';
 import { CLUB_MARK_CONFIDENCE_LIFT_PX, GpsConfidenceChip } from './GpsConfidenceChip';
 import { FmbRow } from './FmbRow';
@@ -109,6 +114,11 @@ type Props = {
   paintSourceChip?: string | null;
   /** Miss-card deep link. Does not invent a pin. */
   requestCourse?: { name?: string | null; city?: string | null; courseId?: string | null } | null;
+  /**
+   * Round replay. Static pins from closed shots that already have coordinates.
+   * Live start/end markers stay off so a pin is not drawn twice.
+   */
+  replay?: ReplayPlan | null;
 };
 
 const APPLE_TILES_BEST_EFFORT = appleBasemapTilesBestEffortOnly();
@@ -154,6 +164,19 @@ function distanceRingStroke(yards: number): string {
   if (yards <= 100) return 'rgba(244, 241, 232, 0.92)';
   if (yards <= 150) return 'rgba(244, 241, 232, 0.64)';
   return 'rgba(244, 241, 232, 0.42)';
+}
+
+function ReplayMissingLines({ missing }: { missing: ReplayPlan['missing'] }) {
+  if (missing.length === 0) return null;
+  return (
+    <View pointerEvents="none" style={styles.replayMissing} testID="replay-missing-pins">
+      {missing.map((row) => (
+        <Text key={row.seq} style={styles.replayMissingText}>
+          {formatReplayMissingLine(row.seq)}
+        </Text>
+      ))}
+    </View>
+  );
 }
 
 function overlayFeatures(overlay: OsmOverlay | null | undefined, holeNumber: number): OsmFeature[] {
@@ -365,6 +388,7 @@ function NativeHoleMap({
   paintNotice,
   paintSourceChip,
   requestCourse,
+  replay = null,
 }: Props) {
   const mapRef = useRef<MapView | null>(null);
   const framedOnce = useRef(false);
@@ -640,6 +664,7 @@ function NativeHoleMap({
           paintSourceChip={paintSourceChip}
           requestCourse={requestCourse}
         />
+        <ReplayMissingLines missing={replay?.missing ?? []} />
       </View>
     );
   }
@@ -803,18 +828,21 @@ function NativeHoleMap({
             </Marker>
           );
         })}
-        {shots.filter(hasGpsStart).map((shot) => (
-          <Marker
-            key={`start-${shot.id}`}
-            coordinate={toCoord(shot.startLat, shot.startLng)}
-            title={`Shot ${shot.seq}`}
-            description={shot.endedAt ? undefined : 'In play'}
-            pinColor={shot.endedAt ? 'tomato' : 'yellow'}
-            anchor={{ x: 0.5, y: 1 }}
-            onPress={() => onShotPress?.(shot.id)}
-          />
-        ))}
+        {shots.filter(hasGpsStart).map((shot) =>
+          replay ? null : (
+            <Marker
+              key={`start-${shot.id}`}
+              coordinate={toCoord(shot.startLat, shot.startLng)}
+              title={`Shot ${shot.seq}`}
+              description={shot.endedAt ? undefined : 'In play'}
+              pinColor={shot.endedAt ? 'tomato' : 'yellow'}
+              anchor={{ x: 0.5, y: 1 }}
+              onPress={() => onShotPress?.(shot.id)}
+            />
+          ),
+        )}
         {shots.filter(hasGpsStart).map((shot) => {
+          if (replay) return null;
           const confidence = clubMarkGpsConfidence(shot);
           if (!confidence) return null;
           return (
@@ -831,16 +859,31 @@ function NativeHoleMap({
             </Marker>
           );
         })}
-        {closed.map((shot) => (
-          <Marker
-            key={`end-${shot.id}`}
-            coordinate={toCoord(shot.endLat, shot.endLng)}
-            title={`Shot ${shot.seq}`}
-            pinColor="green"
-            anchor={{ x: 0.5, y: 1 }}
-            onPress={() => onShotPress?.(shot.id)}
-          />
-        ))}
+        {closed.map((shot) =>
+          replay ? null : (
+            <Marker
+              key={`end-${shot.id}`}
+              coordinate={toCoord(shot.endLat, shot.endLng)}
+              title={`Shot ${shot.seq}`}
+              pinColor="green"
+              anchor={{ x: 0.5, y: 1 }}
+              onPress={() => onShotPress?.(shot.id)}
+            />
+          ),
+        )}
+        {replay
+          ? replay.pins.map((pin) => (
+              <Marker
+                key={`replay-${pin.key}`}
+                coordinate={toCoord(pin.lat, pin.lng)}
+                title={`Shot ${pin.seq}`}
+                pinColor={pin.role === 'start' ? 'tomato' : 'green'}
+                anchor={{ x: 0.5, y: 1 }}
+                tracksViewChanges={replayPinTracksViewChanges()}
+                tappable={false}
+              />
+            ))
+          : null}
         {(lineFrom ?? (onPlaceToDrag ? null : placedFrom)) ? (
           <Marker
             coordinate={toCoord((lineFrom ?? placedFrom)!.lat, (lineFrom ?? placedFrom)!.lng)}
@@ -940,7 +983,7 @@ function NativeHoleMap({
             tracksViewChanges={false}
           />
         ) : null}
-        {showPhonePin && userDot ? (
+        {showPhonePin && userDot && !replay ? (
           <Marker
             coordinate={userDot}
             anchor={{ x: 0.5, y: 0.5 }}
@@ -972,7 +1015,8 @@ function NativeHoleMap({
           ) : null}
         </View>
       ) : null}
-      {!green && !placeHint ? <Text style={styles.hint}>{COPY.longPressGreen}</Text> : null}
+      {!green && !placeHint && !replay ? <Text style={styles.hint}>{COPY.longPressGreen}</Text> : null}
+      <ReplayMissingLines missing={replay?.missing ?? []} />
     </View>
   );
 }
@@ -1063,6 +1107,24 @@ const styles = StyleSheet.create({
     top: 10,
     right: 10,
     maxWidth: '58%',
+  },
+  replayMissing: {
+    position: 'absolute',
+    left: 10,
+    bottom: 12,
+    maxWidth: '80%',
+    gap: 4,
+  },
+  replayMissingText: {
+    alignSelf: 'flex-start',
+    color: colors.cream,
+    fontSize: type.tiny,
+    fontWeight: '800',
+    backgroundColor: 'rgba(11,26,18,0.88)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    overflow: 'hidden',
   },
   hint: {
     position: 'absolute',

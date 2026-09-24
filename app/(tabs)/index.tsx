@@ -48,6 +48,7 @@ import {
 import { layoutForPlayedHoles, resolveCourseNumHoles } from '@/src/domain/nineByTwo';
 import { formatRoundPaceLine, planLivePace } from '@/src/domain/livePace';
 import { formatHistoryRow, historyDeletePrompt, pastRoundEditAnytime, pastRoundHoleHref } from '@/src/domain/roundHistory';
+import { replayHoleHref } from '@/src/domain/roundReplay';
 import { describeGpsSource } from '@/src/services/location';
 import { BagCarryList, BagCustomizeActions } from '@/src/ui/BagCarryList';
 import { BigButton } from '@/src/ui/BigButton';
@@ -533,6 +534,18 @@ export default function HomeScreen() {
               <View style={styles.scoreCol}>
                 <Text style={styles.chip}>{row.relative}</Text>
                 <Text style={styles.score}>{row.score}</Text>
+                {!open ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={COPY.reviewRound}
+                    testID="history-review"
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      router.push(replayHoleHref(round.id, 1));
+                    }}>
+                    <Text style={styles.review}>{COPY.reviewRound}</Text>
+                  </Pressable>
+                ) : null}
               </View>
             </HistorySwipeRow>
           );
@@ -609,6 +622,7 @@ function makeStyles(colors: ColorPalette) {
     scoreCol: { alignItems: 'flex-end', gap: 2 },
     relative: { color: colors.muted, fontSize: type.tiny, fontWeight: '800' },
     score: { color: colors.cream, fontSize: 24, fontWeight: '900' },
+    review: { color: colors.lime, fontSize: type.tiny, fontWeight: '800' },
     star: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
     starText: { color: colors.lime, fontSize: 28, fontWeight: '900' },
   });

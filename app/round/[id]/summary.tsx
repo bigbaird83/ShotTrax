@@ -9,6 +9,7 @@ import { formatPenaltyRow, totalPenaltyStrokes } from '@/src/domain/penalty';
 import { COPY, holeOutClosedOnShot } from '@/src/domain/playerCopy';
 import { holeClosedByShot } from '@/src/domain/putts';
 import { formatHoleTimeSpan, formatRoundPaceLine, planLivePace } from '@/src/domain/livePace';
+import { replayHoleHref } from '@/src/domain/roundReplay';
 import { toastFromShareAttempt } from '@/src/domain/spectator';
 import { shareRoundSnapshot } from '@/src/services/shareRound';
 import { reconcileHoleScore } from '@/src/domain/scoreReconcile';
@@ -116,7 +117,11 @@ export default function RoundSummaryScreen() {
         return (
           <Pressable
             key={hole.id}
-            onPress={() => router.push(`/round/${id}/hole/${hole.number}`)}
+            onPress={() =>
+              router.push(
+                round.finishedAt ? replayHoleHref(id, hole.number) : `/round/${id}/hole/${hole.number}`,
+              )
+            }
             style={styles.row}>
             <Text style={styles.holeNum}>{hole.number}</Text>
             <View style={{ flex: 1, gap: 4 }}>
