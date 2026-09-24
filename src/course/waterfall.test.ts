@@ -325,7 +325,7 @@ test('both miss calls golfapi once, caches, and the second resolve makes 0 sourc
 test('failed bundled golfapi seed fetches the network once and a PASS is cached', async () => {
   resetCoursePaintCacheForTests();
   resetGolfApiCacheForTests();
-  const names = ['GOLFAPI_KEY', 'EXPO_PUBLIC_GOLFAPI_KEY', 'GOLF_API_IO_KEY', 'EXPO_PUBLIC_GOLF_API_IO_KEY'];
+  const names = ['EXPO_PUBLIC_SHARE_SYNC_URL'];
   const prev = Object.fromEntries(names.map((name) => [name, process.env[name]]));
   const match = {
     name: 'Bad Seed CC',
@@ -334,7 +334,7 @@ test('failed bundled golfapi seed fetches the network once and a PASS is cached'
     courseKey: 'bad-seed-id',
   };
   try {
-    process.env.GOLFAPI_KEY = 'test-key';
+    process.env.EXPO_PUBLIC_SHARE_SYNC_URL = 'https://share.test';
     saveCachedGolfApiHydrate(
       {
         courseKey: 'golfapi:bad-seed',
@@ -561,15 +561,15 @@ test('device paint cache drops a poisoned Thunderbird golfapi row and keeps othe
 test('getCourse buys golfapi once after OSM and GCA miss, then serves the cache', async () => {
   resetCoursePaintCacheForTests();
   resetGolfApiCacheForTests();
-  const names = ['GOLFAPI_KEY', 'EXPO_PUBLIC_GOLFAPI_KEY', 'GOLF_API_IO_KEY', 'EXPO_PUBLIC_GOLF_API_IO_KEY'];
+  const names = ['EXPO_PUBLIC_SHARE_SYNC_URL'];
   const prev = Object.fromEntries(names.map((name) => [name, process.env[name]]));
   let golfCalls = 0;
   let greenCalls = 0;
   try {
-    process.env.GOLFAPI_KEY = 'test-key';
+    process.env.EXPO_PUBLIC_SHARE_SYNC_URL = 'https://share.test';
     const fetchImpl: typeof fetch = async (input) => {
       const url = String(input);
-      if (url.includes('golfapi.io')) {
+      if (url.includes('/golfapi/')) {
         golfCalls += 1;
         if (url.includes('/courses?')) {
           return new Response(
@@ -628,7 +628,7 @@ test('getCourse buys golfapi once after OSM and GCA miss, then serves the cache'
         { status: 200 },
       );
     };
-    const client = createCourseDataClient({ getKey: () => 'gca-key', fetch: fetchImpl });
+    const client = createCourseDataClient({ getBaseUrl: () => 'https://share.test/gca/v1', fetch: fetchImpl });
     const first = await client.getCourse('501');
     assert.equal(first?.holes[0]?.par, 4);
     assert.equal(first?.holes[0]?.teeCentroid?.lat, pair(1).tee?.lat);
