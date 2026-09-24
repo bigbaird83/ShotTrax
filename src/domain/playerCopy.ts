@@ -55,6 +55,7 @@ export const COPY = {
   share: 'Share',
   shareFail: "Couldn't open share",
   shareScorecardFail: 'Couldn’t share scorecard.',
+  shareScorecardAndroid: 'Can’t share the scorecard image on Android.',
   shareLive: 'Share live',
   shareScorecard: 'Share scorecard',
   shareLiveRound: 'Share live round',
