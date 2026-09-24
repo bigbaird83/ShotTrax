@@ -1,5 +1,4 @@
-import { COPY, SHOTTRAXX_BRAND } from './playerCopy';
-import { shareMessageIncludesPayloadQuery, type ShareScorecardHole, shareScorecardTotal } from './spectator';
+import { shareMessageIncludesPayloadQuery, type ShareScorecardHole } from './spectator';
 
 export const LIVE_BOARD_POLL_MS = 8000;
 
@@ -76,24 +75,24 @@ export function snapshotQueryIncludesPayload(text: string): boolean {
 }
 
 /**
- * Friends read hole scores. No club path, no map, no GPS.
- * Optional token-only / snapshot URL — never `?p=`.
+ * Live-round share sheet / message body: the board code and the join link.
+ * Course name, totals, and per-hole scores stay off this text — friends
+ * read the card on the board the link opens. A `?p=` spectator body is dropped.
+ * `holes` / `courseName` are accepted so a caller can pass the card and
+ * still get code + link only.
  */
 export function formatLiveBoardShare(args: {
-  courseName?: string | null;
   code: string;
   url?: string | null;
-  holes: ShareScorecardHole[];
+  courseName?: string | null;
+  holes?: ShareScorecardHole[];
 }): string {
-  const course = args.courseName?.trim() ? args.courseName.trim() : 'Round';
-  const total = shareScorecardTotal(args.holes);
-  const headline = total == null ? course : `${course} · ${total}`;
-  const rows = [...args.holes]
-    .sort((a, b) => a.hole - b.hole)
-    .map((row) => `${row.hole}  ${row.score == null ? '—' : String(row.score)}`);
-  const lines = [`${SHOTTRAXX_BRAND} live board`, headline, `Code ${args.code}`, ...rows];
+  void args.courseName;
+  void args.holes;
+  const lines: string[] = [];
+  const code = args.code.trim();
+  if (code) lines.push(code);
   const url = args.url?.trim();
   if (url && !shareMessageIncludesPayloadQuery(url)) lines.push(url);
-  lines.push(COPY.liveBoardPrivacy);
   return lines.join('\n');
 }

@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { COPY } from './playerCopy';
 import {
   decodeScoreSnapshot,
   encodeScoreSnapshot,
@@ -25,37 +24,59 @@ test('live board is scores + a code — no map, GPS, or spectator token', () => 
   assert.equal(snapshotQueryIncludesPayload('4.3'), false);
 
   const text = formatLiveBoardShare({
-    courseName: 'Magnolia',
     code: 'AB12CD',
     url: 'shottrax:///s/AB12CD?h=4.3',
-    holes: [
-      { hole: 1, score: 4 },
-      { hole: 2, score: 3 },
-      { hole: 3, score: null },
-    ],
   });
-  assert.match(text, /ShotTraxx™ live board/);
+  assert.equal(text, 'AB12CD\nshottrax:///s/AB12CD?h=4.3');
   assert.doesNotMatch(text, /®/);
-  assert.match(text, /Magnolia · 7/);
-  assert.match(text, /Code AB12CD/);
-  assert.match(text, /1  4/);
-  assert.match(text, /shottrax:\/\/\/s\/AB12CD/);
-  assert.match(text, /Scores only/);
   assert.doesNotMatch(text, /[?&]p=/);
   assert.doesNotMatch(text, /lat|lng|GPS|trail/i);
 
   const blocked = formatLiveBoardShare({
-    courseName: 'Magnolia',
     code: 'AB12CD',
     url: 'shottrax:///s/AB12CD?p=abc',
-    holes: [{ hole: 1, score: 4 }],
   });
+  assert.equal(blocked, 'AB12CD');
   assert.doesNotMatch(blocked, /[?&]p=/);
 
   const spectator = readFileSync(new URL('../../app/s/[token].tsx', import.meta.url), 'utf8');
   assert.match(spectator, /decodeScoreSnapshot/);
   assert.match(spectator, /COPY\.liveBoardPrivacy/);
   assert.doesNotMatch(spectator, /MapView|react-native-maps|getCurrentFix|expo-location/);
+});
+
+test('live-round share message is the code and join link only — no hole scores', () => {
+  const holes = [
+    { hole: 1, score: 4 },
+    { hole: 2, score: 6 },
+    { hole: 3, score: null },
+    { hole: 9, score: 8 },
+  ];
+  const code = 'BK3MCQ';
+  const url = 'shottrax:///s/BK3MCQ';
+  const text = formatLiveBoardShare({
+    courseName: 'Magnolia',
+    code,
+    url,
+    holes,
+  });
+
+  assert.equal(text, `${code}\n${url}`);
+  assert.equal(text.split('\n').length, 2);
+  assert.doesNotMatch(text, /Magnolia/);
+  assert.doesNotMatch(text, /Hole\s+\d+/i);
+  assert.doesNotMatch(text, /Hole\s+\d+\s*[:·]/i);
+  assert.doesNotMatch(text, /^\d+\s+\S+/m);
+  assert.doesNotMatch(text, /1\s+4/);
+  assert.doesNotMatch(text, /2\s+6/);
+  assert.doesNotMatch(text, /9\s+8/);
+  assert.doesNotMatch(text, /—/);
+  assert.doesNotMatch(text, /·/);
+  assert.doesNotMatch(text, /Scores only|live board/i);
+  for (const row of holes) {
+    if (row.score == null) continue;
+    assert.equal(text.includes(String(row.score)), false);
+  }
 });
 
 test('typed code, spaced code, and pasted link share one lookup key', () => {
