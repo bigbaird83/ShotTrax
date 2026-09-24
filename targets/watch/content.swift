@@ -533,7 +533,7 @@ struct ContentView: View {
       let controlHeight = geo.size.height * 0.4
       VStack(alignment: .leading, spacing: 0) {
         VStack(alignment: .leading, spacing: 6) {
-          // Left stays Hole N · hole yards. Top-right number is live yards; caption sits under it.
+          // Left is Hole N · live yards, or a dash. Top-right is the same live number.
           HStack(alignment: .top, spacing: 6) {
             Text(session.list.statusLine)
               .font(.system(size: 16, weight: .bold))
