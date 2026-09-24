@@ -10,6 +10,7 @@ import {
   resetCoursePaintCacheForTests,
   type CoursePaintCacheRecord,
 } from './paintCache';
+import { formatPaintSourceChip } from '../domain/courseCard';
 import {
   COURSE_PAINT_WATERFALL,
   cacheShortCircuitsPaidSources,
@@ -17,6 +18,7 @@ import {
   golfApiIsLastResort,
   loadGolfApiPaintCandidate,
   loadOsmOpenGolfCandidate,
+  recordedPaintWaterfallStep,
   resolveCoursePaint,
   type PaintCandidate,
 } from './waterfall';
@@ -84,6 +86,8 @@ test('paint order is OSM, then GCA, then golfapi, and a cache hit skips paid cal
   });
   assert.equal(osm.ok, true);
   assert.equal(osm.source, 'osm');
+  assert.equal(osm.step, 'osm');
+  assert.equal(formatPaintSourceChip(osm.step), 'OSM');
   assert.equal(osm.fromCache, false);
   assert.deepEqual(log, ['osm']);
 
@@ -106,6 +110,8 @@ test('paint order is OSM, then GCA, then golfapi, and a cache hit skips paid cal
   assert.equal(again.ok, true);
   assert.equal(again.fromCache, true);
   assert.equal(again.source, 'osm');
+  assert.equal(again.step, 'cache');
+  assert.equal(formatPaintSourceChip(again.step), 'cache');
   assert.deepEqual(log, []);
 });
 
@@ -129,6 +135,8 @@ test('bundled Pleasant Valley is a free hit and skips GCA and golfapi', async ()
   });
   assert.equal(result.ok, true);
   assert.equal(result.source, 'manual_verified');
+  assert.equal(result.step, 'osm');
+  assert.equal(formatPaintSourceChip(result.step), 'OSM');
   assert.equal(result.holes.length, 18);
   assert.deepEqual(log, ['osm']);
 });
@@ -171,6 +179,8 @@ test('Thunderbird is HARD-MISS: golfapi seed, device cache, and network do not p
     },
   });
   assert.equal(result.ok, false);
+  assert.equal(result.step, 'miss');
+  assert.equal(formatPaintSourceChip(result.step), 'miss');
   assert.equal(result.holes.length, 0);
   assert.deepEqual(log, ['osm']);
   assert.equal(await loadGolfApiPaintCandidate(match), null);
@@ -218,6 +228,8 @@ test('OSM miss + GCA hit skips golfapi', async () => {
   );
   assert.equal(result.ok, true);
   assert.equal(result.source, 'gca');
+  assert.equal(result.step, 'gca');
+  assert.equal(formatPaintSourceChip(result.step), 'GCA');
   assert.equal(result.fromCache, false);
   assert.deepEqual(result.holes[0]?.green, GREEN);
   assert.equal(result.holes[0]?.tee, null);
@@ -285,6 +297,8 @@ test('both miss calls golfapi once, caches, and the second resolve makes 0 sourc
   );
   assert.equal(first.ok, true);
   assert.equal(first.source, 'golfapi');
+  assert.equal(first.step, 'golfapi');
+  assert.equal(formatPaintSourceChip(first.step), 'golfapi');
   assert.equal(first.nineByTwo, true);
   assert.equal(first.fromCache, false);
   assert.deepEqual(log, ['osm', 'gca', 'golfapi']);
@@ -316,10 +330,68 @@ test('both miss calls golfapi once, caches, and the second resolve makes 0 sourc
   assert.equal(second.ok, true);
   assert.equal(second.fromCache, true);
   assert.equal(second.source, 'golfapi');
+  assert.equal(second.step, 'cache');
+  assert.equal(formatPaintSourceChip(second.step), 'cache');
   assert.equal(second.nineByTwo, true);
   assert.deepEqual(log, []);
   assert.ok(gets > getsBefore);
   assert.equal(puts, putsBefore);
+});
+
+test('recorded free steps label cache, OSM, bundled golfapi, and locked miss without a paid call', async () => {
+  const cache = createMemoryCoursePaintCache();
+  const unknown = await recordedPaintWaterfallStep(
+    { name: 'Nowhere GC', city: 'ZZ', state: 'ZZ', courseKey: 'nope' },
+    cache,
+  );
+  assert.equal(unknown, null);
+  assert.equal(formatPaintSourceChip(unknown), null);
+
+  const thunderbird = await recordedPaintWaterfallStep(
+    {
+      name: 'Thunderbird Country Club',
+      city: 'Heber Springs',
+      state: 'AR',
+      courseKey: 'thunderbird-heber-springs-ar',
+    },
+    cache,
+  );
+  assert.equal(thunderbird, 'miss');
+
+  const ranch = await recordedPaintWaterfallStep(
+    {
+      name: 'Mountain Ranch Golf Club',
+      city: 'Fairfield Bay',
+      state: 'AR',
+      courseKey: 'mountain-ranch-fairfield-bay-ar',
+    },
+    cache,
+  );
+  assert.equal(ranch, 'golfapi');
+  assert.equal(formatPaintSourceChip(ranch), 'golfapi');
+
+  const resolved = await resolveCoursePaint(
+    {
+      name: 'Mountain Ranch Golf Club',
+      city: 'Fairfield Bay',
+      state: 'AR',
+      courseKey: 'mountain-ranch-fairfield-bay-ar',
+    },
+    {
+      cache,
+      loadOsm: async () => null,
+      loadGca: async () => {
+        throw new Error('bundled golfapi must skip GCA');
+      },
+      loadGolfApi: async () => {
+        throw new Error('bundled golfapi must skip the network');
+      },
+    },
+  );
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.step, 'golfapi');
+  assert.equal(resolved.fromCache, true);
+  assert.equal(resolved.source, 'golfapi');
 });
 
 test('failed bundled golfapi seed fetches the network once and a PASS is cached', async () => {

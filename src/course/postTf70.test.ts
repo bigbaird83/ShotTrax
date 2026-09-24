@@ -241,7 +241,7 @@ test('Favorites offline states never mark HARD-MISS Ready', async () => {
     now: () => '2026-09-22T01:00:00.000Z',
     resolve: async () => {
       resolved = true;
-      return { ok: true, source: 'osm', fromCache: false, nineByTwo: false, holes: [] };
+      return { ok: true, source: 'osm', step: 'osm', fromCache: false, nineByTwo: false, holes: [] };
     },
   });
   assert.equal(tbStatus, 'miss');

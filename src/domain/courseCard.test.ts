@@ -7,6 +7,7 @@ import {
   courseCardShowsLastPlayed,
   courseCardShowsName,
   formatLastPlayedChip,
+  formatPaintSourceChip,
   lastPlayedAtForCourse,
   planCourseCard,
 } from './courseCard';
@@ -37,16 +38,32 @@ test('home course cards show name, distance, and last-played', () => {
   assert.equal(card.name, 'Pebble Beach');
   assert.equal(card.distance, '8.1 mi');
   assert.equal(card.lastPlayed, 'Played · Today');
+  assert.equal(card.paintSource, null);
+
+  assert.equal(formatPaintSourceChip('cache'), 'cache');
+  assert.equal(formatPaintSourceChip('osm'), 'OSM');
+  assert.equal(formatPaintSourceChip('gca'), 'GCA');
+  assert.equal(formatPaintSourceChip('golfapi'), 'golfapi');
+  assert.equal(formatPaintSourceChip('miss'), 'miss');
+  assert.equal(formatPaintSourceChip('manual_verified'), null);
+  assert.equal(formatPaintSourceChip(null), null);
+  assert.equal(planCourseCard({ name: 'Cache Hit', paintSource: 'cache' }).paintSource, 'cache');
+  assert.equal(planCourseCard({ name: 'OSM', paintSource: 'osm' }).paintSource, 'OSM');
 
   const picker = readFileSync(new URL('../ui/CoursePicker.tsx', import.meta.url), 'utf8');
   assert.match(picker, /planCourseCard/);
   assert.match(picker, /card\.distance/);
   assert.match(picker, /card\.lastPlayed/);
+  assert.match(picker, /card\.paintSource/);
+  assert.match(picker, /testID="paint-source-chip"/);
   assert.match(picker, /thumbZoneMin/);
   assert.doesNotMatch(picker, /colors\.lime/);
+  assert.doesNotMatch(picker, /resolveCoursePaint/);
 
   const home = readFileSync(new URL('../../app/(tabs)/index.tsx', import.meta.url), 'utf8');
   assert.match(home, /lastPlayedAtByCourse/);
+  assert.match(home, /formatPaintSourceChip/);
+  assert.match(home, /testID="paint-source-chip"/);
   assert.match(home, /EmptyPanel/);
   assert.match(home, /COPY\.firstRoundHint/);
 });

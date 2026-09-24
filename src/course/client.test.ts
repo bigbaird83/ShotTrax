@@ -130,6 +130,7 @@ test('getCourse loads scorecard then Pro green-centers', async () => {
   const detail = await client.getCourse('4');
   assert.ok(detail);
   assert.equal(detail?.holes[0].par, 4);
+  assert.equal(detail?.paintSource, 'gca');
   assert.equal(detail?.holes[0].yards, 437);
   assert.equal(detail?.holes[0].handicap, 7);
   assert.deepEqual(detail?.holes[0].greenCentroid, { lat: 37.01744, lng: -86.43135 });
@@ -173,6 +174,7 @@ test('getCourse keeps greens blank on 403 Pro-only green-centers — never inven
     });
     const detail = await client.getCourse('4');
     assert.equal(detail?.holes[0].par, 4);
+    assert.equal(detail?.paintSource, 'miss');
     assert.equal(detail?.holes[0].greenCentroid, null);
     assert.equal(detail?.holes[0].teeCentroid, null);
   } finally {
@@ -236,6 +238,7 @@ test('getCourse fills a miss from the golfapi cache and does not invent', async 
     });
     const detail = await client.getCourse('88');
     assert.equal(detail?.holes[0]?.par, 4);
+    assert.equal(detail?.paintSource, 'golfapi');
     assert.deepEqual(detail?.holes[0]?.teeCentroid, { lat: 35.5250149, lng: -92.0393432 });
     assert.deepEqual(detail?.holes[0]?.greenCentroid, { lat: 35.522655, lng: -92.0393088 });
   } finally {
