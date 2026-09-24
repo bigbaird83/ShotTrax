@@ -8,10 +8,15 @@
  * - Favorites are the phone's `course.favorites` list. There is no Watch-only list.
  * - Nearby is the same Golf Courses API nearby search the phone Home uses.
  *   Location: a fresh Watch fix when the Watch has one, else a fresh phone fix,
- *   else the last phone location. No location → an empty Nearby, never a guess.
+ *   else the phone's last known location. Radius is 40 mi, same as phone nearby.
+ *   The last nearby list is cached on the phone, so a failed or location-less
+ *   refresh still answers with it. No location and no cache → one clear line.
  *
- * A course shows once. A favorite that is also nearby lives under Favorites
- * (with its distance) and is dropped from Nearby, so row ids never repeat.
+ * A course shows once in the payload. A favorite that is also nearby lives under
+ * Favorites (with its distance) and is dropped from `nearby`, so row ids never
+ * repeat. The Search nearby screen adds those nearby favorites back in
+ * distance order (`watchNearbyScreenRows`) so it never looks empty when every
+ * nearby course happens to be starred.
  *
  * Tapping a row starts the round the same way the phone does (course → holes →
  * tee → Start). Tapping the live round's course continues that round.
@@ -28,8 +33,9 @@ import {
   type JsonStore,
 } from './favorites';
 import { isValidLatLng, type LatLng } from './latLng';
+import { COPY } from './playerCopy';
 import type { GpsFix } from './types';
-import { NEARBY_COURSE_FIX_MAX_AGE_MS, NEARBY_COURSE_LIST_MAX, OPEN_PHONE } from './watchNearby';
+import { NEARBY_COURSE_FIX_MAX_AGE_MS, NEARBY_COURSE_LIST_MAX } from './watchNearby';
 import { isIso8601, PHONE_UNAVAILABLE, QUEUED_WILL_SYNC } from './watchMessages';
 
 /** Home body is Favorites. Nearby is a pushed screen, not the home list. */
@@ -53,6 +59,15 @@ export const WATCH_HOME_FAVORITES_MAX = 12;
 
 /** Last phone location is stored so a cold phone can still answer the Watch. */
 export const WATCH_HOME_LAST_PHONE_FIX_KEY = 'watch.home.lastPhoneFix';
+
+/** Last nearby list, so a relaunched or location-less phone still answers. */
+export const WATCH_HOME_LAST_NEARBY_KEY = 'watch.home.lastNearby';
+
+/** Search nearby with no Watch fix, no phone location, and no cached list. */
+export const WATCH_NEARBY_NO_LOCATION = COPY.watchNearbyNoLocation;
+
+/** Search nearby had a location but nothing within 40 mi. */
+export const WATCH_NEARBY_NONE_IN_RADIUS = COPY.watchNearbyNoneInRadius;
 
 export type WatchHomeCourse = {
   id: string;
@@ -169,14 +184,72 @@ export function buildWatchHome(args: {
     favorites,
     nearby: nearbyRows,
     locationSource: args.locationSource,
-    line: nearbyRows.length === 0 && favorites.length === 0 ? OPEN_PHONE : '',
+    line: '',
   };
+  msg.line = watchNearbyEmptyLine(msg);
   const liveName = cleanText(args.live?.courseName);
   if (liveName) {
     const liveId = cleanText(args.live?.courseId);
     msg.live = liveId ? { courseName: liveName, courseId: liveId } : { courseName: liveName };
   }
   return msg;
+}
+
+/**
+ * Search nearby rows: nearby favorites (they carry a distance) plus the rest of
+ * nearby, in distance order. With no nearby rows at all, the phone favorites
+ * are the fallback list — never a dead end while there is something to tap.
+ */
+export function watchNearbyScreenRows(
+  msg: Pick<WatchHomeMessage, 'favorites' | 'nearby'>,
+): WatchHomeCourse[] {
+  const seen = new Set<string>();
+  const rows: WatchHomeCourse[] = [];
+  for (const course of [...msg.favorites.filter((c) => c.distanceMeters !== undefined), ...msg.nearby]) {
+    if (seen.has(course.id)) continue;
+    seen.add(course.id);
+    rows.push(course);
+  }
+  rows.sort(
+    (a, b) =>
+      (a.distanceMeters ?? Number.POSITIVE_INFINITY) - (b.distanceMeters ?? Number.POSITIVE_INFINITY),
+  );
+  return rows.length > 0 ? rows : [...msg.favorites];
+}
+
+/**
+ * Empty-state line for Search nearby. Empty when there are nearby rows.
+ * A known location with nothing in range says so; only a missing location on
+ * both Watch and phone (and no cached list) asks for the phone.
+ */
+export function watchNearbyEmptyLine(
+  msg: Pick<WatchHomeMessage, 'favorites' | 'nearby' | 'locationSource'>,
+): string {
+  const hasNearby = msg.nearby.length > 0 || msg.favorites.some((c) => c.distanceMeters !== undefined);
+  if (hasNearby) return '';
+  return msg.locationSource === 'none' ? WATCH_NEARBY_NO_LOCATION : WATCH_NEARBY_NONE_IN_RADIUS;
+}
+
+/** Cached nearby list from the settings store. Bad rows are dropped, never guessed. */
+export function parseCachedNearby(raw: string | null | undefined): NearbyInput[] {
+  if (!raw) return [];
+  try {
+    const rows = JSON.parse(raw) as unknown;
+    if (!Array.isArray(rows)) return [];
+    const out: NearbyInput[] = [];
+    for (const r of rows) {
+      if (!r || typeof r !== 'object') continue;
+      const rec = r as Record<string, unknown>;
+      const id = cleanText(rec.id);
+      const name = cleanText(rec.name);
+      if (!id || !name) continue;
+      const d = typeof rec.distanceMeters === 'number' ? cleanDistance(rec.distanceMeters) : undefined;
+      out.push(d === undefined ? { id, name } : { id, name, distanceMeters: d });
+    }
+    return out;
+  } catch {
+    return [];
+  }
 }
 
 /** Every row id in render order (Favorites, then Nearby). */
@@ -197,6 +270,7 @@ function fixIsFresh(fix: { timestamp: number } | null | undefined, nowMs: number
 /**
  * Where Watch Home searches from.
  * Fresh Watch fix → fresh phone fix → last phone location (any age) → none.
+ * No Watch GPS never dead-ends while the phone knows where it last was.
  * Accuracy is not gated (15 m / 25 m are shot-mark gates only).
  */
 export function watchHomeSearchPoint(args: {
@@ -375,7 +449,7 @@ export function watchHomeRefreshStatus(args: {
   if (args.face === 'nearby' && args.nearbyEmpty) {
     if (args.loading) return 'Finding courses…';
     const line = args.line?.trim() ?? '';
-    return line.length > 0 ? line : OPEN_PHONE;
+    return line.length > 0 ? line : WATCH_NEARBY_NO_LOCATION;
   }
   if (args.loading) return 'Updating…';
   return 'Refresh';

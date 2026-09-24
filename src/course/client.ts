@@ -17,6 +17,7 @@ import type { CourseDataClient, CourseDetail, CourseSummary, HoleCourseData, Osm
 import type { LatLng } from '../domain/latLng';
 import { isCourseCardLatLng } from '../domain/latLng';
 import { planCourseSearchParams } from '../domain/coursePick';
+import { NEARBY_RADIUS_KM, withinNearbyRadius } from '../domain/nearbyRadius';
 import { getSharedCoursePaintCache } from './paintCache';
 import {
   applyCoursePaintToDetail,
@@ -27,7 +28,8 @@ import {
   type PaintCandidate,
 } from './waterfall';
 
-const DEFAULT_RADIUS_KM = 25;
+/** Phone + Watch Search nearby: 40 mi (≈ 64.4 km). */
+const DEFAULT_RADIUS_KM = NEARBY_RADIUS_KM;
 const MAX_RADIUS_KM = 100;
 
 export type CourseDataDeps = {
@@ -168,7 +170,7 @@ export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataCli
       if (status < 200 || status >= 300) {
         throw new GolfCoursesApiError('Couldn’t load courses nearby.', status);
       }
-      return mergeCatalogSummaries(parseNearbyCourses(json), local);
+      return withinNearbyRadius(mergeCatalogSummaries(parseNearbyCourses(json), local), radius);
     },
 
     async searchCourses(query: string): Promise<CourseSummary[]> {

@@ -346,7 +346,9 @@ test('Watch nearby UI is a short list — no search, bag, settings, or scoring',
   assert.equal(watchShowsScoring(), false);
 
   const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
-  assert.match(watchUi, /open the phone/);
+  // Search nearby never hard-codes “open the phone”; the phone sends the line.
+  assert.doesNotMatch(watchUi, /open the phone/);
+  assert.match(watchUi, /nearbyEmptyLine/);
   assert.match(watchUi, /Select course/);
   // Search nearby is a push button, not a text search box.
   assert.match(watchUi, /Text\("Search nearby"\)/);
