@@ -56,6 +56,9 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.undoLast, 'Undo last');
   assert.equal(COPY.markWithoutClub, 'Mark without club');
   assert.equal(COPY.approximate, 'Approximate');
+  assert.equal(COPY.gpsConfidenceGood, 'good');
+  assert.equal(COPY.gpsConfidenceOk, 'ok');
+  assert.equal(COPY.gpsConfidenceWeak, 'weak');
   assert.equal(COPY.suggested, 'Suggested');
   assert.equal(COPY.changeClub, 'Change club');
   assert.equal(COPY.editShot, 'Edit shot');

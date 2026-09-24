@@ -1,5 +1,5 @@
 import * as Linking from 'expo-linking';
-import { InteractionManager, Share } from 'react-native';
+import { InteractionManager, Platform, Share } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import {
   ensureRoundShareToken,
@@ -16,6 +16,7 @@ import { totalPenaltyStrokes } from '../domain/penalty';
 import { planScorecard, type ScorecardHole } from '../domain/scorecard';
 import { planScorecardImage, renderScorecardPng } from '../domain/scorecardImage';
 import {
+  androidImageUrlShareBlock,
   formatShareScorecard,
   planSpectatorPayload,
   scorecardImageShareContent,
@@ -158,6 +159,8 @@ async function presentShare(
   content: { message: string; title: string; url?: string } | { url: string },
   options?: { anchor?: number },
 ): Promise<boolean> {
+  // Android image-only `{ url }` opens an empty chooser and still resolves.
+  if (androidImageUrlShareBlock(content, Platform.OS)) return false;
   try {
     await new Promise<void>((resolve, reject) => {
       waitForShareHost(() => {
@@ -174,7 +177,7 @@ export async function shareRoundSnapshot(
   db: SQLiteDatabase,
   roundId: string,
   args?: { currentHoleNumber?: number; anchor?: number | null },
-): Promise<boolean> {
+): Promise<boolean | string> {
   const planned = planRoundShare(db, roundId, args);
   if (!planned) return false;
   publishRoundScoreboard(db, roundId, args);
@@ -194,6 +197,9 @@ export async function shareRoundSnapshot(
   // Image only — no message body, no hole list, no link. No image → fail, never a text dump.
   const content = scorecardImageShareContent(imageUrl);
   if (!content) return false;
+  // Preflight the payload. Android cannot carry image `url`; toast instead of a dead sheet.
+  const blocked = androidImageUrlShareBlock(content, Platform.OS);
+  if (blocked) return blocked;
   const options = args?.anchor != null ? { anchor: args.anchor } : undefined;
   return presentShare(content, options);
 }

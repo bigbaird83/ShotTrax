@@ -14,6 +14,7 @@ import {
   planSpectatorHoleRow,
   planSpectatorLive,
   planSpectatorPayload,
+  androidImageUrlShareBlock,
   MENU_SHARE_FALLBACK_MS,
   menuShareMustWaitForDismiss,
   formatShareScorecard,
@@ -328,7 +329,7 @@ test('Menu Share toasts Couldn’t open share when Share.share fails — never a
   assert.doesNotMatch(share, /encodeSpectatorPayload/);
   assert.match(share, /queryParams: \{ h:/);
   assert.doesNotMatch(share, /queryParams: \{ p/);
-  assert.doesNotMatch(share, /lat|lng/);
+  assert.doesNotMatch(share, /\b(lat|lng|latitude|longitude|startLat|startLng|endLat|endLng)\b/);
   assert.doesNotMatch(menuShare, /getCurrentFix/);
 });
 
@@ -357,6 +358,10 @@ test('Scorecard Share sends the image only — no message, no link, no text fall
   );
   assert.match(snapshot, /scorecardImageShareContent\(imageUrl\)/);
   assert.match(snapshot, /if \(!content\) return false/);
+  assert.match(snapshot, /androidImageUrlShareBlock\(content, Platform\.OS\)/);
+  const blockAt = snapshot.indexOf('androidImageUrlShareBlock');
+  const presentAt = snapshot.indexOf('presentShare');
+  assert.ok(blockAt >= 0 && presentAt > blockAt);
   assert.doesNotMatch(snapshot, /planned\.message|shareSheetContent|formatLiveBoardShare/);
   const live = share.slice(share.indexOf('export async function shareLiveBoard'));
   assert.match(live, /formatLiveBoardShare/);
@@ -366,6 +371,46 @@ test('Scorecard Share sends the image only — no message, no link, no text fall
   const summary = readFileSync(new URL('../../app/round/[id]/summary.tsx', import.meta.url), 'utf8');
   assert.match(hole, /kind === 'live' \? COPY\.shareFail : COPY\.shareScorecardFail/);
   assert.match(summary, /COPY\.shareScorecardFail/);
+});
+
+test('Android scorecard image-url share is blocked before the sheet; iOS still shares the PNG', async () => {
+  const png = { url: 'file:///tmp/shottrax-scorecard.png' };
+  assert.equal(androidImageUrlShareBlock(png, 'android'), COPY.shareScorecardAndroid);
+  assert.equal(androidImageUrlShareBlock(scorecardImageShareContent(png.url), 'android'), COPY.shareScorecardAndroid);
+  assert.equal(androidImageUrlShareBlock(png, 'ios'), null);
+  assert.equal(androidImageUrlShareBlock(scorecardImageShareContent(png.url), 'ios'), null);
+  assert.equal(androidImageUrlShareBlock({ url: png.url, message: 'card' }, 'android'), null);
+  assert.equal(androidImageUrlShareBlock({ url: png.url, message: '  ' }, 'android'), COPY.shareScorecardAndroid);
+  assert.equal(androidImageUrlShareBlock({ message: 'Hole 1 · 4' }, 'android'), null);
+  assert.equal(androidImageUrlShareBlock(null, 'android'), null);
+  assert.equal(androidImageUrlShareBlock({ url: '' }, 'android'), null);
+  assert.equal(COPY.shareScorecardAndroid, 'Can’t share the scorecard image on Android.');
+  assert.equal(COPY.shareScorecardFail, 'Couldn’t share scorecard.');
+  assert.doesNotMatch(COPY.shareScorecardAndroid, /lat|lng|GPS|trail/i);
+  assert.equal(
+    await toastFromShareAttempt(async () => COPY.shareScorecardAndroid, COPY.shareScorecardFail),
+    COPY.shareScorecardAndroid,
+  );
+  assert.equal(toastAfterShareAttempt(COPY.shareScorecardAndroid, COPY.shareScorecardFail), COPY.shareScorecardAndroid);
+  assert.equal(await toastFromShareAttempt(async () => false, COPY.shareScorecardFail), COPY.shareScorecardFail);
+  assert.equal(await toastFromShareAttempt(async () => true, COPY.shareScorecardFail), null);
+
+  const share = readFileSync(new URL('../services/shareRound.ts', import.meta.url), 'utf8');
+  const snapshot = share.slice(
+    share.indexOf('export async function shareRoundSnapshot'),
+    share.indexOf('export async function shareLiveBoard'),
+  );
+  assert.match(snapshot, /const blocked = androidImageUrlShareBlock\(content, Platform\.OS\)/);
+  assert.match(snapshot, /if \(blocked\) return blocked/);
+  assert.ok(snapshot.indexOf('androidImageUrlShareBlock') < snapshot.indexOf('return presentShare'));
+  assert.match(snapshot, /return presentShare\(content, options\)/);
+  assert.doesNotMatch(snapshot, /planned\.message|formatShareScorecard|formatLiveBoardShare/);
+  const present = share.slice(share.indexOf('async function presentShare'), share.indexOf('export async function shareRoundSnapshot'));
+  assert.match(present, /if \(androidImageUrlShareBlock\(content, Platform\.OS\)\) return false/);
+  assert.ok(present.indexOf('androidImageUrlShareBlock') < present.indexOf('Share.share'));
+  const live = share.slice(share.indexOf('export async function shareLiveBoard'));
+  assert.match(live, /shareSheetContent\(\{ message \}\)/);
+  assert.doesNotMatch(live, /shareScorecardAndroid|androidImageUrlShareBlock/);
 });
 
 test('TF 62: Menu Share waits for fullScreen Modal dismiss before Share.share', () => {
@@ -396,7 +441,7 @@ test('TF 62: Menu Share waits for fullScreen Modal dismiss before Share.share', 
   assert.match(share, /Share\.share\(content/);
   assert.doesNotMatch(share, /encodeSpectatorPayload/);
   assert.doesNotMatch(open, /getCurrentFix/);
-  assert.doesNotMatch(share, /lat|lng/);
+  assert.doesNotMatch(share, /\b(lat|lng|latitude|longitude|startLat|startLng|endLat|endLng)\b/);
 });
 
 test('hole start / finish ride the PUT, falling back to shot times', () => {

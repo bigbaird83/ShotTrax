@@ -85,8 +85,12 @@ export function shareFailToast(): typeof COPY.shareFail {
   return COPY.shareFail;
 }
 
-/** Toast copy after Share.share. Success / dismiss stays silent. */
-export function toastAfterShareAttempt(opened: boolean, fail: string = shareFailToast()): string | null {
+/** Toast copy after Share.share. Success / dismiss stays silent. A string result is already the toast. */
+export function toastAfterShareAttempt(
+  opened: boolean | string,
+  fail: string = shareFailToast(),
+): string | null {
+  if (typeof opened === 'string') return opened.trim() ? opened : fail;
   return opened ? null : fail;
 }
 
@@ -111,9 +115,12 @@ export function shouldOpenShareSheet(args: {
   return args.queued && !args.menuVisible && args.menuDismissed;
 }
 
-/** Any throw / reject becomes the fail toast — never a silent no-op. */
+/**
+ * Any throw / reject becomes the fail toast — never a silent no-op.
+ * A string result is a preflight toast (Android image-url gap) and replaces `fail`.
+ */
 export async function toastFromShareAttempt(
-  open: () => Promise<boolean>,
+  open: () => Promise<boolean | string>,
   fail: string = shareFailToast(),
 ): Promise<string | null> {
   try {
@@ -121,6 +128,25 @@ export async function toastFromShareAttempt(
   } catch {
     return fail;
   }
+}
+
+/**
+ * React Native `Share` on Android sends `message` only and drops `url`.
+ * An image-only payload still opens the chooser and the Promise resolves,
+ * so the fail toast never runs. That is a dead share.
+ * Returns the player toast when the payload must not reach `Share.share`.
+ * iOS returns null — `{ url }` still opens the sheet.
+ */
+export function androidImageUrlShareBlock(
+  content: { url?: string | null; message?: string | null } | null | undefined,
+  os: string,
+): typeof COPY.shareScorecardAndroid | null {
+  if (os !== 'android') return null;
+  const url = typeof content?.url === 'string' ? content.url.trim() : '';
+  if (!url) return null;
+  const message = typeof content?.message === 'string' ? content.message.trim() : '';
+  if (message.length > 0) return null;
+  return COPY.shareScorecardAndroid;
 }
 
 /** Messages / the share sheet get a scorecard, never a spectator URL. */
