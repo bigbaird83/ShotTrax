@@ -51,6 +51,7 @@
     "eas-build-post-install": "node scripts/gca-green-centers-probe.mjs",
     "eas:build:ios": "eas build -p ios --profile production",
     "eas:submit:ios": "eas submit -p ios",
+    "eas:ios:testflight:preflight": "node scripts/print-beta-app-review-preflight.mjs",
     "eas:ios:testflight": "eas workflow:run .eas/workflows/production-ios-testflight.yml"
   },
   "private": true

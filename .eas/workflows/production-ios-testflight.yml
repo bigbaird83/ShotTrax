@@ -1,20 +1,44 @@
 # Production iOS → external TestFlight group "friends".
 #
-# Run for the next production build (build 80 and earlier are not touched):
+# Before this run, complete docs/beta-app-review-preflight.md
+# (npm run eas:ios:testflight:preflight — prints only, does not start a build):
 #   eas workflow:run .eas/workflows/production-ios-testflight.yml
 #   npm run eas:ios:testflight
 #
+# What to Test is the git tip of the sources this run checks out.
+# what_to_test runs `git log -1 --pretty=format:'%h %s'` (plus a short body)
+# after eas/checkout and passes that string as the testflight changelog.
+# Manual `eas workflow:run` is workflow_dispatch: github.commit_message is
+# empty, so the note is read from git, not from that field.
+# A shallow checkout is enough (`git log -1` only needs this commit).
+#
 # "friends" is an App Store Connect EXTERNAL group. eas submit --groups and
 # eas.json submit.groups only accept INTERNAL groups, so this uses the
-# pre-packaged testflight job. submit_beta_review defaults to true when
-# external_groups is set; it is set explicitly so Beta App Review always runs.
-# Submit profile "production" reads ascAppId from eas.json. Do not put secrets here.
+# pre-packaged testflight job. submit_beta_review stays true so Beta App
+# Review always runs. Submit profile "production" reads ascAppId from eas.json.
+# Do not put secrets here.
 
 name: Production iOS to TestFlight friends
 
 jobs:
+  what_to_test:
+    name: What to Test from git tip
+    outputs:
+      changelog: ${{ steps.tip.outputs.changelog }}
+    steps:
+      - uses: eas/checkout
+      - id: tip
+        name: git log -1 short SHA and subject
+        shell: bash
+        run: |
+          set -euo pipefail
+          note=$(bash scripts/testflight-what-to-test.sh)
+          printf '%s\n' "$note"
+          set-output changelog "$note"
+
   build_ios:
     name: Build iOS
+    needs: [what_to_test]
     type: build
     params:
       platform: ios
@@ -23,11 +47,10 @@ jobs:
   testflight:
     name: Distribute to TestFlight friends
     type: testflight
-    needs: [build_ios]
+    needs: [what_to_test, build_ios]
     params:
       build_id: ${{ needs.build_ios.outputs.build_id }}
       profile: production
       external_groups: ["friends"]
       submit_beta_review: true
-      changelog: |
-        Production build for the external TestFlight group friends.
+      changelog: ${{ needs.what_to_test.outputs.changelog }}

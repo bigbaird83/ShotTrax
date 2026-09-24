@@ -103,9 +103,19 @@ Do **not** put Apple Team ID, App Store Connect API keys, or `.p8` files in git.
 
 Bundle ID is already `com.shottrax.app`. Marketing version is `0.1.0`; iOS `buildNumber` starts at `1`. The `production` profile auto-increments build numbers on EAS (`cli.appVersionSource`: `remote`).
 
+### Before the next external build
+
+Complete [docs/beta-app-review-preflight.md](docs/beta-app-review-preflight.md) before `eas workflow:run` or `npm run eas:ios:testflight`. Brian (via CoS) has to okay **this** build. The print command does not start a build or change App Store Connect:
+
+```bash
+npm run eas:ios:testflight:preflight
+```
+
 ### Build and send to TestFlight (external group `friends`)
 
 The next production iOS build goes out through EAS Workflows. The workflow builds with the `production` profile, uploads that build, adds it to the App Store Connect **external** group named exactly `friends`, and submits it for Beta App Review.
+
+**What to Test** is the git tip of the sources that run checks out. Job `what_to_test` runs `git log -1 --pretty=format:'%h %s'` after checkout (short SHA + subject, plus a short commit body when there is one) and passes that string to the `testflight` job as `changelog`. Manual `eas workflow:run` leaves `github.commit_message` empty, so the note comes from that git log. Example: `fa07b34 Watch Home: Favorites stay…`. Commit that tip first. A local run without `--ref` also uploads the working tree, so leave the tree clean when the note should describe the binary.
 
 ```bash
 eas workflow:run .eas/workflows/production-ios-testflight.yml
