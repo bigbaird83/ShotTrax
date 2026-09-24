@@ -65,7 +65,20 @@ export type CourseDetail = {
   } | null;
 };
 
-export type OsmGolfKind = 'green' | 'fairway' | 'tee' | 'hole';
+/**
+ * Play surfaces, plus hazard and cart-path kinds that OSM actually uses:
+ * `golf=bunker`, `golf=water_hazard`, `golf=lateral_water_hazard`, `golf=cartpath`.
+ * `golf=hazard` (unused), bare `highway=service`, and bare `natural=water` are not kinds.
+ */
+export type OsmGolfKind =
+  | 'green'
+  | 'fairway'
+  | 'tee'
+  | 'hole'
+  | 'bunker'
+  | 'water_hazard'
+  | 'lateral_water_hazard'
+  | 'cartpath';
 
 export type OsmFeature = {
   kind: OsmGolfKind;
@@ -73,7 +86,10 @@ export type OsmFeature = {
   coordinates: LatLng[];
 };
 
-/** OSM fairway/green/tee/hole overlay. Empty/unmapped → null, never invented. */
+/**
+ * OSM fairway/green/tee/hole overlay, plus bunker, water-hazard, and cart-path
+ * outlines when Overpass returned them. Empty/unmapped → null, never invented.
+ */
 export type OsmOverlay = {
   source: 'osm';
   features: OsmFeature[];
