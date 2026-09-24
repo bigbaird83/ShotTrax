@@ -8,10 +8,12 @@ import { listFavorites } from '@/src/domain/favorites';
 import { isValidLatLng, type LatLng } from '@/src/domain/latLng';
 import type { GpsFix } from '@/src/domain/types';
 import {
+  WATCH_HOME_LAST_NEARBY_KEY,
   WATCH_HOME_LAST_PHONE_FIX_KEY,
   applyFavoriteToggle,
   buildWatchHome,
   forgetWatchHomeRequestAt,
+  parseCachedNearby,
   parseFavoriteToggle,
   parseWatchHomeRequest,
   watchFixFromHomeRequest,
@@ -22,7 +24,7 @@ import {
   type WatchHomeMessage,
 } from '@/src/domain/watchHome';
 import { PHONE_UNAVAILABLE, type ClubPickReply } from '@/src/domain/watchMessages';
-import { getCurrentFix } from './location';
+import { getCurrentFix, getLastKnownFix } from './location';
 import { getLastLiveFix } from './useLiveFix';
 import { allowWatchCoursePickDuringRound } from './watchNearby';
 
@@ -41,15 +43,16 @@ let lastPushedJson = '';
 /** Last nearby search — favorites-only changes re-push without the network. */
 let lastNearby: CourseSummary[] = [];
 let lastSource: WatchHomeLocationSource = 'none';
+let nearbyCacheLoaded = false;
+/** A pocketed phone may never answer a GPS wake. Do not hold the Watch reply on it. */
+const PHONE_FIX_WAKE_TIMEOUT_MS = 8_000;
 const toggleAppliedAt = new Map<string, number>();
 
 export function setWatchHomeContext(next: WatchHomeContext | null): void {
   context = next;
 }
 
-function readLastPhoneFix(db: SQLiteDatabase): LatLng | null {
-  const live = getLastLiveFix();
-  if (isValidLatLng(live)) return { lat: live.lat, lng: live.lng };
+function readStoredPhoneFix(db: SQLiteDatabase): LatLng | null {
   try {
     const raw = readSettingStore(db).get(WATCH_HOME_LAST_PHONE_FIX_KEY);
     if (!raw) return null;
@@ -60,7 +63,20 @@ function readLastPhoneFix(db: SQLiteDatabase): LatLng | null {
   }
 }
 
-function rememberPhoneFix(db: SQLiteDatabase, fix: GpsFix | null): void {
+/** Phone's last known location: live fix (any age) → OS last known → stored. */
+async function readLastPhoneFix(db: SQLiteDatabase): Promise<LatLng | null> {
+  const live = getLastLiveFix();
+  if (isValidLatLng(live)) return { lat: live.lat, lng: live.lng };
+  const os = await getLastKnownFix();
+  if (isValidLatLng(os)) {
+    rememberPhoneFix(db, os);
+    return { lat: os.lat, lng: os.lng };
+  }
+  return readStoredPhoneFix(db);
+}
+
+/** Stored so a cold / pocketed phone can still answer Watch Search nearby. */
+export function rememberPhoneFix(db: SQLiteDatabase, fix: LatLng | null | undefined): void {
   if (!isValidLatLng(fix)) return;
   try {
     readSettingStore(db).set(
@@ -72,7 +88,63 @@ function rememberPhoneFix(db: SQLiteDatabase, fix: GpsFix | null): void {
   }
 }
 
+function loadNearbyCache(db: SQLiteDatabase): void {
+  if (nearbyCacheLoaded) return;
+  nearbyCacheLoaded = true;
+  if (lastNearby.length > 0) return;
+  try {
+    lastNearby = parseCachedNearby(readSettingStore(db).get(WATCH_HOME_LAST_NEARBY_KEY)).map(
+      (row): CourseSummary => ({
+        id: row.id,
+        name: row.name,
+        club: null,
+        city: null,
+        state: null,
+        country: null,
+        location: null,
+        distanceMeters: row.distanceMeters ?? null,
+      }),
+    );
+  } catch {
+    lastNearby = [];
+  }
+}
+
+function saveNearbyCache(db: SQLiteDatabase, rows: CourseSummary[]): void {
+  try {
+    readSettingStore(db).set(
+      WATCH_HOME_LAST_NEARBY_KEY,
+      JSON.stringify(
+        rows.map((row) =>
+          row.distanceMeters != null
+            ? { id: row.id, name: row.name, distanceMeters: row.distanceMeters }
+            : { id: row.id, name: row.name },
+        ),
+      ),
+    );
+  } catch {
+    // best-effort
+  }
+}
+
+async function wakePhoneFix(): Promise<GpsFix | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      getCurrentFix(),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), PHONE_FIX_WAKE_TIMEOUT_MS);
+      }),
+    ]);
+  } catch {
+    return null;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 function buildFromCache(ctx: WatchHomeContext): WatchHomeMessage {
+  loadNearbyCache(ctx.db);
   const active = getActiveRound(ctx.db);
   return buildWatchHome({
     favorites: listFavorites(readSettingStore(ctx.db)),
@@ -118,31 +190,33 @@ async function refreshNearby(
   watchFix: { lat: number; lng: number; timestamp: number } | null,
 ): Promise<void> {
   const nowMs = () => ctx.nowMs?.() ?? Date.now();
+  loadNearbyCache(ctx.db);
   let phoneFix: GpsFix | null = null;
+  let lastPhoneFix: LatLng | null = null;
   // Only wake the phone GPS when the Watch has no fresh fix of its own.
   if (!watchHomeSearchPoint({ watchFix, nowMs: nowMs() })) {
-    try {
-      phoneFix = await getCurrentFix();
-    } catch {
-      phoneFix = ctx.phoneFix() ?? getLastLiveFix();
-    }
+    phoneFix = (await wakePhoneFix()) ?? ctx.phoneFix() ?? getLastLiveFix();
     rememberPhoneFix(ctx.db, phoneFix);
+    lastPhoneFix = await readLastPhoneFix(ctx.db);
   }
   const chosen = watchHomeSearchPoint({
     watchFix,
     phoneFix,
-    lastPhoneFix: readLastPhoneFix(ctx.db),
+    lastPhoneFix,
     nowMs: nowMs(),
   });
   if (!chosen) {
-    lastSource = 'none';
+    // No location anywhere. A cached list still answers; only no cache is 'none'.
+    lastSource = lastNearby.length > 0 ? 'last_phone' : 'none';
     return;
   }
   try {
     lastNearby = await getCourseDataClient().nearbyCourses(chosen.point);
     lastSource = chosen.source;
+    saveNearbyCache(ctx.db, lastNearby);
   } catch {
     // Keep the last good list rather than blanking the Watch.
+    lastSource = chosen.source;
   }
 }
 

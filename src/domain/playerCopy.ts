@@ -142,6 +142,10 @@ export const COPY = {
   cancelPlace: 'Cancel',
   confirmPlace: 'Confirm shot',
   openPhone: 'open the phone',
+  /** Watch Search nearby: no Watch fix, no phone location, no cached list. */
+  watchNearbyNoLocation: 'No location on Watch or phone. Open ShotTraxx on your phone.',
+  /** Watch Search nearby: a location is known, the 40 mi search came back empty. */
+  watchNearbyNoneInRadius: 'No courses within 40 mi',
   selectCourse: 'Select course',
   score: 'Score',
   shots: 'Shots',

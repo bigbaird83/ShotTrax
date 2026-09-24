@@ -207,19 +207,26 @@ struct ContentView: View {
       ScrollView {
         VStack(alignment: .leading, spacing: 6) {
           homeSectionTitle("Nearby")
-          let nearby = session.home.nearbyRows
-          if !nearby.isEmpty {
-            ForEach(nearby) { course in
-              homeRow(course)
+          // Phone GCA nearby (40 mi) from the Watch fix, else the phone's fix or
+          // its last known location, else the phone's cached list. Nearby
+          // favorites are included; no nearby rows → favorites below the line.
+          let nearby = session.home.nearbyScreenRows
+          let hasNearby = session.home.line.isEmpty && !nearby.isEmpty
+          if !hasNearby {
+            if session.home.loading && !session.home.queued {
+              Text("Finding courses…")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(Color("muted"))
+            } else if !session.home.queued {
+              Text(session.home.nearbyEmptyLine)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(Color("cream"))
+                .lineLimit(3)
+                .minimumScaleFactor(0.8)
             }
-          } else if session.home.loading && !session.home.queued {
-            Text("Finding courses…")
-              .font(.system(size: 12, weight: .bold))
-              .foregroundStyle(Color("muted"))
-          } else if !session.home.queued {
-            Text(session.home.line.isEmpty ? "open the phone" : session.home.line)
-              .font(.system(size: 12, weight: .bold))
-              .foregroundStyle(Color("cream"))
+          }
+          ForEach(nearby) { course in
+            homeRow(course)
           }
 
           Button(action: { session.requestHome() }) {

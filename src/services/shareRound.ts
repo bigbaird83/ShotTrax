@@ -214,10 +214,8 @@ export async function shareLiveBoard(
   publishRoundScoreboard(db, roundId, args);
   const code = normalizeShareBoardCode(planned.payload.token) ?? planned.payload.token;
   const message = formatLiveBoardShare({
-    courseName: planned.payload.courseName,
     code,
     url: liveBoardShareUrl(planned.payload),
-    holes: planned.holes,
   });
   const options = args?.anchor != null ? { anchor: args.anchor } : undefined;
   return presentShare(shareSheetContent({ message }), options);

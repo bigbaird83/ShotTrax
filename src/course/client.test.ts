@@ -63,6 +63,30 @@ test('nearbyCourses sends lat/lng/radius through the Worker with no vendor key a
   assert.equal(nearby.some((row) => row.id === '4' || row.name === 'Nearby CC'), true);
 });
 
+test('nearbyCourses asks the Worker for a 40 mi radius (64.4 km) and filters past it', async () => {
+  const urls: string[] = [];
+  const client = createCourseDataClient({
+    getBaseUrl: () => 'https://share.test/gca/v1',
+    fetch: async (input) => {
+      urls.push(String(input));
+      return new Response(
+        JSON.stringify({
+          data: [
+            { id: 'in', name: 'Inside GC', latitude: 37.1, longitude: -122, distance_km: 40 },
+            { id: 'out', name: 'Outside GC', latitude: 37.9, longitude: -122, distance_km: 90 },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    },
+  });
+  const nearby = await client.nearbyCourses({ lat: 37, lng: -122 });
+  assert.equal(urls.length, 1);
+  assert.equal(new URL(urls[0]).searchParams.get('radius'), '64.4');
+  assert.equal(nearby.some((row) => row.id === 'in'), true);
+  assert.equal(nearby.some((row) => row.id === 'out'), false);
+});
+
 test('searchCourses sends q= for name, city, state, or zip and never invents a course', async () => {
   const urls: string[] = [];
   const client = createCourseDataClient({

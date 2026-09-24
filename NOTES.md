@@ -53,7 +53,7 @@ Without the Worker URL, course search and nearby use the bundled catalog only an
 
 When the Worker URL is set:
 
-- Nearby search is `GET https://golfcoursesapi.com/api/v1/courses?lat=&lng=&radius=` (radius km, max 100). Phone Home nearby wakes a **phone** fix. Watch Home nearby (below) uses a fresh Watch fix when the Watch has one, else the phone fix, else the last phone location.
+- Nearby search is `GET https://golfcoursesapi.com/api/v1/courses?lat=&lng=&radius=` (radius km, max 100). Phone and Watch Search nearby both use **40 mi (`radius=64.4`)**, and results past 64.4 km are dropped locally (`src/domain/nearbyRadius.ts`). Phone Home nearby wakes a **phone** fix. Watch Home nearby (below) uses a fresh Watch fix when the Watch has one, else the phone fix, else the phone's last known location (live fix → OS last known → stored), else the phone's cached last nearby list. Only with none of those does the Watch say *No location on Watch or phone. Open ShotTraxx on your phone.*
 - Text search is `GET /api/v1/courses?q=` (name, city, state). A 5-digit ZIP geocodes, then uses nearby `lat/lng/radius`. Search is text / geocode only — never Watch GPS and never the 15 m / 25 m mark gates.
 - Course detail is `GET /api/v1/courses/:id` (named teeboxes → par, SI/handicap, hole yardage, rating, slope)
 - Flow: search or nearby → one list with played courses on top → select course → select named tee. Start 9/18 stays off until that pick is real.

@@ -39,6 +39,33 @@ export async function getCurrentFix(): Promise<GpsFix> {
   };
 }
 
+/**
+ * The OS's cached last location — no GPS wake, works while the phone is
+ * pocketed. Null when permission is off or the OS has none. Never invented.
+ */
+export async function getLastKnownFix(): Promise<GpsFix | null> {
+  try {
+    const { status } = await Location.getForegroundPermissionsAsync();
+    if (status !== 'granted') return null;
+    const loc = await Location.getLastKnownPositionAsync();
+    if (!loc) return null;
+    const lat = loc.coords.latitude;
+    const lng = loc.coords.longitude;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const isSimulator = Device.isDevice === false;
+    return {
+      lat,
+      lng,
+      accuracyM: loc.coords.accuracy ?? null,
+      mocked: Boolean(loc.mocked) || isSimulator,
+      isSimulator,
+      timestamp: loc.timestamp,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function describeGpsSource(fix: Pick<GpsFix, 'mocked' | 'isSimulator'>): string | null {
   if (fix.isSimulator) {
     return 'Simulator — move the location pin between shots.';
