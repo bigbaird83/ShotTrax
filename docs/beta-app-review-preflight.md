@@ -15,13 +15,13 @@ eas workflow:run .eas/workflows/production-ios-testflight.yml
 # or: npm run eas:ios:testflight
 ```
 
-The workflow builds iOS with profile `production`, sets TestFlight **What to Test** from the git tip (`short SHA` + subject), adds external group `friends`, and submits Beta App Review (`submit_beta_review: true`). Expo will fail that job if TestFlight test information is missing in App Store Connect.
+The workflow builds iOS with profile `production`, sets TestFlight **What to Test** from the git tip (`short SHA` + subject), adds external group `Friends`, and submits Beta App Review (`submit_beta_review: true`). Expo will fail that job if TestFlight test information is missing in App Store Connect.
 
 ## Checklist
 
 - [ ] **Brian (via CoS) has explicitly okay'd THIS build.** A standing yes does not cover a new tip.
 - [ ] **TestFlight test information** is filled in App Store Connect for ShotTraxx (bundle `com.shottrax.app`, `eas.json` `submit.production.ios.ascAppId`): beta app description, feedback email, and the contact fields on that form. [Provide test information](https://developer.apple.com/help/app-store-connect/test-a-beta-version/provide-test-information).
-- [ ] **External group `friends`** exists in TestFlight. The name must match exactly. It is an external group (`eas submit --groups` cannot add it).
+- [ ] **External group `Friends`** exists in TestFlight. The name must match exactly (case-sensitive). It is an external group (`eas submit --groups` cannot add it).
 - [ ] **Export compliance** matches the repo. `app.json` → `expo.ios.infoPlist.ITSAppUsesNonExemptEncryption` is already `false`. Do not file a new encryption claim. If App Store Connect still asks for this build, answer in line with that existing `false` value.
 - [ ] **Demo account / review notes.** This app has no account and no login (local SQLite only; the Watch has no account). Leave sign-in required off. Do not invent a username or password. If the form has review notes, say the app opens without signing in.
 - [ ] **EAS production URLs** are still set: `EXPO_PUBLIC_SHARE_SYNC_URL` and `EXPO_PUBLIC_COURSE_PAINT_CACHE_URL` (plain URLs, not secrets). Read-only check: `eas env:list --environment production`. Do not paste values into git.

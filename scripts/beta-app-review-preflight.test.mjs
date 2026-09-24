@@ -15,7 +15,7 @@ test('production iOS workflow takes What to Test from the git tip', () => {
   assert.match(workflow, /bash scripts\/testflight-what-to-test\.sh/);
   assert.match(workflow, /git log -1 --pretty=format:'%h %s'/);
   assert.match(workflow, /changelog: \$\{\{ needs\.what_to_test\.outputs\.changelog \}\}/);
-  assert.match(workflow, /external_groups: \["friends"\]/);
+  assert.match(workflow, /external_groups: \["Friends"\]/);
   assert.match(workflow, /submit_beta_review: true/);
   assert.match(workflow, /platform: ios/);
   assert.match(workflow, /profile: production/);
@@ -57,7 +57,7 @@ test('preflight script only prints the checklist', () => {
     'Brian (via CoS)',
     'beta app description',
     'feedback email',
-    'External group `friends`',
+    'External group `Friends`',
     'ITSAppUsesNonExemptEncryption',
     'Demo account',
     'EXPO_PUBLIC_SHARE_SYNC_URL',
