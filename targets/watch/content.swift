@@ -386,6 +386,25 @@ struct ContentView: View {
     .disabled(!session.putt.canAdd)
   }
 
+  /// Back / Home / Putt row pill — same 44pt height, 10pt radius, 16pt font as
+  /// the club strip. Fill and hit area are clipped to the rounded shape.
+  @ViewBuilder
+  private func actionPill(_ title: String) -> some View {
+    Text(title)
+      .font(.system(size: 16, weight: .heavy))
+      .foregroundStyle(Color("cream"))
+      .lineLimit(1)
+      .minimumScaleFactor(0.65)
+      .frame(maxWidth: .infinity, minHeight: 44)
+      .background(Color("bg"))
+      .clipShape(RoundedRectangle(cornerRadius: 10))
+      .contentShape(RoundedRectangle(cornerRadius: 10))
+      .overlay(
+        RoundedRectangle(cornerRadius: 10)
+          .stroke(Color("cream"), lineWidth: 1)
+      )
+  }
+
   @ViewBuilder
   private var clubPick: some View {
     GeometryReader { geo in
@@ -411,41 +430,16 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 6) {
           HStack(spacing: 8) {
             Button(action: { session.leave("back") }) {
-              Text("Back")
-                .font(.system(size: 16, weight: .heavy))
-                .foregroundStyle(Color("cream"))
-                .frame(maxWidth: .infinity, minHeight: 44)
-                .overlay(
-                  RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color("cream"), lineWidth: 1)
-                )
+              actionPill("Back")
             }
             .buttonStyle(.plain)
             Button(action: { session.leave("home") }) {
-              Text("Home")
-                .font(.system(size: 16, weight: .heavy))
-                .foregroundStyle(Color("cream"))
-                .frame(maxWidth: .infinity, minHeight: 44)
-                .overlay(
-                  RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color("cream"), lineWidth: 1)
-                )
+              actionPill("Home")
             }
             .buttonStyle(.plain)
-            // TF 59: compact Putt pill on the Back/Home row. A tall full-width
-            // Putt shoved the top-3 club strip off-screen on Ultra.
+            // Putt matches Back / Home: same width share, height, radius, font.
             Button(action: { session.openPuttSheet() }) {
-              Text("Putt")
-                .font(.system(size: 13, weight: .heavy))
-                .foregroundStyle(Color("cream"))
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .padding(.horizontal, 10)
-                .frame(minHeight: 32)
-                .overlay(
-                  Capsule()
-                    .stroke(Color("cream"), lineWidth: 1)
-                )
+              actionPill("Putt")
             }
             .buttonStyle(.plain)
           }
