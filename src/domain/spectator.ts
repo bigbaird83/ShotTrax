@@ -40,6 +40,8 @@ export type SpectatorPayload = {
 export type SpectatorShotInput = {
   clubShortName: string | null;
   distanceYards: number | null;
+  /** First swing of the hole backs up a missing hole start stamp. */
+  startedAt?: string | null;
   endedAt: string | null;
   source: Shot['source'];
   fixQuality: ShotFixQuality | null;
@@ -249,9 +251,43 @@ export function planSpectatorHoleRow(hole: SpectatorHoleInput): SpectatorHoleRow
     approximate: holeRowIsApproximate(hole.shots),
     par: hole.par ?? null,
     putts: hole.putts ?? null,
-    startedAt: asIsoTime(hole.startedAt),
-    completedAt: asIsoTime(hole.completedAt),
+    ...planSpectatorHoleTimes(hole),
   };
+}
+
+function earliestIso(values: (string | null | undefined)[]): string | null {
+  let best: string | null = null;
+  for (const value of values) {
+    const iso = asIsoTime(value);
+    if (iso && (best == null || Date.parse(iso) < Date.parse(best))) best = iso;
+  }
+  return best;
+}
+
+function latestIso(values: (string | null | undefined)[]): string | null {
+  let best: string | null = null;
+  for (const value of values) {
+    const iso = asIsoTime(value);
+    if (iso && (best == null || Date.parse(iso) > Date.parse(best))) best = iso;
+  }
+  return best;
+}
+
+/**
+ * Start / finish for the spectator card. The hole's own stamps win; a hole
+ * without one falls back to its first shot start, and a scored hole without
+ * a finish stamp to its last shot end. An unscored hole never gets a finish.
+ */
+export function planSpectatorHoleTimes(hole: SpectatorHoleInput): {
+  startedAt: string | null;
+  completedAt: string | null;
+} {
+  const startedAt =
+    asIsoTime(hole.startedAt) ?? earliestIso(hole.shots.map((shot) => shot.startedAt ?? shot.endedAt));
+  const completedAt =
+    asIsoTime(hole.completedAt) ??
+    (hole.score != null ? latestIso(hole.shots.map((shot) => shot.endedAt)) : null);
+  return { startedAt, completedAt };
 }
 
 export function planSpectatorPayload(args: {

@@ -111,8 +111,9 @@ test('finished share lists every hole with club · pin-to-pin yards · score', (
     approximate: false,
     par: null,
     putts: null,
-    startedAt: null,
-    completedAt: null,
+    // No hole stamps — shot times back them up on a scored hole.
+    startedAt: '2026-09-19T18:00:00.000Z',
+    completedAt: '2026-09-19T18:00:00.000Z',
   });
   assert.deepEqual(payload.holes[1], {
     hole: 2,
@@ -122,8 +123,9 @@ test('finished share lists every hole with club · pin-to-pin yards · score', (
     approximate: true,
     par: null,
     putts: null,
-    startedAt: null,
-    completedAt: null,
+    // No hole stamps — shot times back them up on a scored hole.
+    startedAt: '2026-09-19T18:00:00.000Z',
+    completedAt: '2026-09-19T18:00:00.000Z',
   });
   assert.deepEqual(payload.holes[2], {
     hole: 3,
@@ -358,4 +360,45 @@ test('TF 62: Menu Share waits for fullScreen Modal dismiss before Share.share', 
   assert.doesNotMatch(share, /encodeSpectatorPayload/);
   assert.doesNotMatch(open, /getCurrentFix/);
   assert.doesNotMatch(share, /lat|lng/);
+});
+
+test('hole start / finish ride the PUT, falling back to shot times', () => {
+  const shot = (startedAt: string, endedAt: string | null) => ({
+    clubShortName: '7i',
+    distanceYards: 150,
+    startedAt,
+    endedAt,
+    source: 'gps' as const,
+    fixQuality: 'good' as const,
+  });
+  const stamped = planSpectatorHoleRow({
+    number: 1,
+    score: 4,
+    startedAt: '2026-09-24T14:00:00.000Z',
+    completedAt: '2026-09-24T14:12:00.000Z',
+    shots: [shot('2026-09-24T14:01:00.000Z', '2026-09-24T14:02:00.000Z')],
+  });
+  assert.equal(stamped.startedAt, '2026-09-24T14:00:00.000Z');
+  assert.equal(stamped.completedAt, '2026-09-24T14:12:00.000Z');
+
+  const unstamped = planSpectatorHoleRow({
+    number: 2,
+    score: 5,
+    startedAt: null,
+    completedAt: null,
+    shots: [
+      shot('2026-09-24T14:15:00.000Z', '2026-09-24T14:16:00.000Z'),
+      shot('2026-09-24T14:18:00.000Z', '2026-09-24T14:20:00.000Z'),
+    ],
+  });
+  assert.equal(unstamped.startedAt, '2026-09-24T14:15:00.000Z');
+  assert.equal(unstamped.completedAt, '2026-09-24T14:20:00.000Z');
+
+  const open = planSpectatorHoleRow({
+    number: 3,
+    score: null,
+    shots: [shot('2026-09-24T14:25:00.000Z', '2026-09-24T14:26:00.000Z')],
+  });
+  assert.equal(open.startedAt, '2026-09-24T14:25:00.000Z');
+  assert.equal(open.completedAt, null);
 });

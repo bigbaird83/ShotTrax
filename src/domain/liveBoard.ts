@@ -14,11 +14,27 @@ export function newShareBoardCode(): string {
   return out;
 }
 
+/**
+ * One lookup key for the typed code, the `/s/{code}` deep link, the local
+ * share_boards row, and the share-host PUT/GET. Short codes are trimmed,
+ * de-spaced, and uppercased ("bk3 mcq" → "BK3MCQ"). A pasted share link
+ * yields its `/s/{code}`. Long legacy tokens stay as-is.
+ */
 export function normalizeShareBoardCode(raw: string | null | undefined): string | null {
   const trimmed = raw?.trim() ?? '';
   if (!trimmed) return null;
-  if (trimmed.length <= 8) return trimmed.toUpperCase();
-  return trimmed;
+  const fromLink = /\/s\/([^/?#\s]+)/.exec(trimmed);
+  let core = fromLink ? fromLink[1] : trimmed;
+  try {
+    core = decodeURIComponent(core);
+  } catch {
+    // Keep the raw segment.
+  }
+  core = core.trim();
+  const compact = core.replace(/[\s-]+/g, '');
+  if (!compact) return null;
+  if (compact.length <= 8) return compact.toUpperCase();
+  return core;
 }
 
 export function liveBoardShowsMap(): false {

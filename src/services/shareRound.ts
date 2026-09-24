@@ -73,6 +73,7 @@ function planRoundShare(
     shots: listShotsForHole(db, hole.id).map((shot) => ({
       clubShortName: shot.clubId ? clubs[shot.clubId]?.shortName ?? null : null,
       distanceYards: shot.distanceYards,
+      startedAt: shot.startedAt,
       endedAt: shot.endedAt,
       source: shot.source,
       fixQuality: shot.fixQuality,
