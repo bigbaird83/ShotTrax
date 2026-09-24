@@ -31,7 +31,7 @@ import {
   startRound,
   type CourseLayoutSeed,
 } from '@/src/db/repo';
-import { formatLastPlayedChip } from '@/src/domain/courseCard';
+import { formatLastPlayedChip, formatPaintSourceChip } from '@/src/domain/courseCard';
 import { canFinishBagCarrySetup, countTypedCarries } from '@/src/domain/bagCustomize';
 import { canStartRound } from '@/src/domain/coursePick';
 import { COPY, formatTeeMeta, SHOTTRAXX_BRAND } from '@/src/domain/playerCopy';
@@ -278,6 +278,7 @@ export default function HomeScreen() {
       if (pending) void commitRef.current(pending);
     }, []),
   );
+  const paintSourceLabel = formatPaintSourceChip(pickedDetail?.paintResult);
   const teeLabel = pickedTee
     ? formatTeeMeta({
         name: pickedTee.name,
@@ -334,6 +335,11 @@ export default function HomeScreen() {
       {picked ? (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>{picked.name}</Text>
+          {paintSourceLabel ? (
+            <Text testID="paint-source-chip" style={styles.paintSource}>
+              {paintSourceLabel}
+            </Text>
+          ) : null}
           {teeLabel || needsTee ? (
             <Text style={styles.cardMeta}>{teeLabel ? teeLabel : COPY.pickTee}</Text>
           ) : null}
@@ -551,6 +557,7 @@ function makeStyles(colors: ColorPalette) {
       borderColor: colors.line,
     },
     cardTitle: { color: colors.cream, fontSize: 20, fontWeight: '800' },
+    paintSource: { color: colors.muted, fontSize: type.tiny, fontWeight: '600' },
     cardMeta: { color: colors.muted, fontSize: type.meta },
     section: { color: colors.cream, fontSize: 18, fontWeight: '800', marginTop: 8 },
     muted: { color: colors.muted, fontSize: type.body },

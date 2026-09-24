@@ -1,3 +1,4 @@
+import type { CoursePaintSource } from '../course/paintCache';
 import { formatCourseDistance, type CourseDistanceUnit } from './courseDistance';
 import { formatHistoryRelativeDay } from './roundHistory';
 
@@ -55,7 +56,31 @@ export type CourseCardPlan = {
   name: string;
   distance: string | null;
   lastPlayed: string | null;
+  /** Quiet waterfall label. Null until paint has recorded a winner. */
+  paintSource: string | null;
 };
+
+/** Existing `CoursePaintResult` winner. No coordinates. */
+export type PaintResultWinner = {
+  ok: boolean;
+  source: CoursePaintSource | null;
+  fromCache: boolean;
+};
+
+/**
+ * Quiet course-card labels. Order is locked:
+ * miss, then cache (`ok && fromCache`), then OSM / GCA / golfapi from `source`.
+ * Unset stays blank.
+ */
+export function formatPaintSourceChip(result: PaintResultWinner | null | undefined): string | null {
+  if (!result) return null;
+  if (!result.ok) return 'miss';
+  if (result.fromCache) return 'cache';
+  if (result.source === 'osm' || result.source === 'manual_verified') return 'OSM';
+  if (result.source === 'gca') return 'GCA';
+  if (result.source === 'golfapi') return 'golfapi';
+  return null;
+}
 
 export function planCourseCard(args: {
   name: string;
@@ -63,11 +88,13 @@ export function planCourseCard(args: {
   unit?: CourseDistanceUnit;
   lastPlayedAt?: string | null;
   nowMs?: number;
+  paintResult?: PaintResultWinner | null;
 }): CourseCardPlan {
   const name = args.name.trim() || 'Course';
   return {
     name,
     distance: formatCourseDistance(args.distanceMeters ?? null, args.unit ?? 'mi'),
     lastPlayed: formatLastPlayedChip(args.lastPlayedAt, args.nowMs),
+    paintSource: formatPaintSourceChip(args.paintResult),
   };
 }

@@ -224,6 +224,106 @@ const MISS: CoursePaintMiss = {
   holes: [],
 };
 
+type FreePaintMatch =
+  | {
+      kind: 'hit';
+      /** Shared-cache short-circuit. Bundled golfapi is not this, even when `fromCache` is true. */
+      cacheHit: boolean;
+      source: CoursePaintSource;
+      holes: CoursePaintHole[];
+      nineByTwo: boolean;
+      fromCache: boolean;
+      candidate: PaintCandidate;
+    }
+  | { kind: 'miss' }
+  | { kind: 'continue' };
+
+/**
+ * Cache, OSM / OpenGolf / manual-verified, and the bundled golfapi seed.
+ * Same order as `resolveCoursePaint`. Does not write the cache and does not
+ * call GCA or network golfapi.
+ */
+async function matchFreePaintSteps(
+  course: CourseHydrateMatch,
+  cache: CoursePaintCache,
+  loadOsm: () => Promise<PaintCandidate | null>,
+): Promise<FreePaintMatch> {
+  const locked = thunderbirdPaintLocked(course);
+  for (const key of coursePaintCacheKeys(course)) {
+    const cached = await cache.get(key);
+    if (!cached || !recordPasses(cached, course)) continue;
+    if (locked && cached.source !== 'osm' && cached.source !== 'manual_verified') continue;
+    const nine =
+      cached.nineByTwo ||
+      classifyNineByTwo({ numHoles: cached.numHoles, holes: cached.holes }).ok;
+    return {
+      kind: 'hit',
+      cacheHit: true,
+      source: cached.source,
+      holes: cached.holes,
+      nineByTwo: nine,
+      fromCache: true,
+      candidate: { source: cached.source, numHoles: cached.numHoles, holes: cached.holes },
+    };
+  }
+
+  const osm = await loadOsm();
+  if (osm && (osm.source === 'osm' || osm.source === 'manual_verified')) {
+    const verdict = candidatePasses(osm);
+    if (verdict.ok) {
+      return {
+        kind: 'hit',
+        cacheHit: false,
+        source: osm.source,
+        holes: osm.holes,
+        nineByTwo: verdict.nineByTwo,
+        fromCache: false,
+        candidate: osm,
+      };
+    }
+  }
+
+  if (!locked) {
+    const seeded = loadBundledGolfApiCandidate(course);
+    if (seeded) {
+      const verdict = candidatePasses(seeded);
+      if (verdict.ok) {
+        return {
+          kind: 'hit',
+          cacheHit: false,
+          source: 'golfapi',
+          holes: seeded.holes,
+          nineByTwo: verdict.nineByTwo,
+          fromCache: true,
+          candidate: seeded,
+        };
+      }
+    }
+  }
+
+  if (locked) return { kind: 'miss' };
+  return { kind: 'continue' };
+}
+
+/**
+ * Winner already recorded by the free steps (device/shared cache, OSM bundle,
+ * bundled golfapi seed, or a locked hard-miss). Null when GCA or network
+ * golfapi would still run — those are not guessed.
+ */
+export async function recordedPaintWaterfallStep(
+  course: CourseHydrateMatch,
+  cache?: CoursePaintCache,
+): Promise<Pick<CoursePaintResult, 'ok' | 'source' | 'fromCache'> | null> {
+  const free = await matchFreePaintSteps(
+    course,
+    cache ?? getSharedCoursePaintCache(),
+    async () => loadOsmOpenGolfCandidate(course),
+  );
+  if (free.kind === 'hit') return { ok: true, source: free.source, fromCache: free.fromCache };
+  if (free.kind === 'miss') return { ok: false, source: null, fromCache: false };
+  return null;
+}
+
 async function writePass(
   course: CourseHydrateMatch,
   candidate: PaintCandidate,
@@ -259,38 +359,12 @@ export async function resolveCoursePaint(
 ): Promise<CoursePaintResult> {
   const cache = deps.cache ?? getSharedCoursePaintCache();
   const now = deps.now ?? (() => new Date().toISOString());
-  const locked = thunderbirdPaintLocked(course);
-  for (const key of coursePaintCacheKeys(course)) {
-    const cached = await cache.get(key);
-    if (!cached || !recordPasses(cached, course)) continue;
-    if (locked && cached.source !== 'osm' && cached.source !== 'manual_verified') continue;
-    const nine =
-      cached.nineByTwo ||
-      classifyNineByTwo({ numHoles: cached.numHoles, holes: cached.holes }).ok;
-    return hitFrom(cached.source, cached.holes, nine, true);
+  const free = await matchFreePaintSteps(course, cache, deps.loadOsm);
+  if (free.kind === 'miss') return MISS;
+  if (free.kind === 'hit') {
+    if (!free.cacheHit) await writePass(course, free.candidate, free.nineByTwo, cache, now);
+    return hitFrom(free.source, free.holes, free.nineByTwo, free.fromCache);
   }
-
-  const osm = await deps.loadOsm();
-  if (osm && (osm.source === 'osm' || osm.source === 'manual_verified')) {
-    const verdict = candidatePasses(osm);
-    if (verdict.ok) {
-      await writePass(course, osm, verdict.nineByTwo, cache, now);
-      return hitFrom(osm.source, osm.holes, verdict.nineByTwo, false);
-    }
-  }
-
-  if (!locked) {
-    const seeded = loadBundledGolfApiCandidate(course);
-    if (seeded) {
-      const verdict = candidatePasses(seeded);
-      if (verdict.ok) {
-        await writePass(course, seeded, verdict.nineByTwo, cache, now);
-        return hitFrom('golfapi', seeded.holes, verdict.nineByTwo, true);
-      }
-    }
-  }
-
-  if (locked) return MISS;
 
   const gca = await deps.loadGca();
   if (gca && gca.source === 'gca') {

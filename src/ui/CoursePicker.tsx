@@ -7,7 +7,7 @@ import { formatTeeHoleYards, formatTeeMeta } from '@/src/course/layout';
 import type { CourseDetail, CourseSummary, TeeSet } from '@/src/course/types';
 import type { GpsFix } from '@/src/domain/types';
 import { COPY } from '@/src/domain/playerCopy';
-import { planCourseCard } from '@/src/domain/courseCard';
+import { formatPaintSourceChip, planCourseCard, type PaintResultWinner } from '@/src/domain/courseCard';
 import { deferCourseSearchLayout } from '@/src/domain/courseSearchLayout';
 import {
   planCourseList,
@@ -81,6 +81,7 @@ export function CoursePicker({
   const [listNowMs, setListNowMs] = useState<number | null>(null);
   const [tees, setTees] = useState<TeeSet[] | null>(null);
   const [detail, setDetail] = useState<CourseDetail | null>(null);
+  const [paintById, setPaintById] = useState<Record<string, PaintResultWinner>>({});
 
   const onFind = useCallback(async () => {
     setBusy(true);
@@ -184,6 +185,9 @@ export function CoursePicker({
     setDetail(null);
     try {
       const next = await getCourseDataClient().getCourse(course.id);
+      if (next?.paintResult) {
+        setPaintById((current) => ({ ...current, [course.id]: next.paintResult! }));
+      }
       const nextTees = next?.tees ?? [];
       deferCourseSearchLayout(() => {
         setDetail(next);
@@ -219,6 +223,7 @@ export function CoursePicker({
     paintKnown: selectedHoles != null,
   });
 
+  const selectedPaint = formatPaintSourceChip(detail?.paintResult);
   const zipMiss = error === COPY.zipGeocodeMiss;
   const emptyNearby = results != null && results.length === 0 && !busy && !zipMiss;
   const needsLocation = error === COPY.nearbyNeedsLocation;
@@ -269,6 +274,11 @@ export function CoursePicker({
       ) : selected ? (
         <View style={styles.selected}>
           <Text style={styles.selectedName}>{selected.name}</Text>
+          {selectedPaint ? (
+            <Text testID="paint-source-chip" style={styles.paintSource}>
+              {selectedPaint}
+            </Text>
+          ) : null}
           <Text style={styles.meta}>{placeLine(selected)}</Text>
           <View style={styles.actions}>
             <Pressable
@@ -330,6 +340,7 @@ export function CoursePicker({
                 distanceMeters: course.distanceMeters,
                 unit: courseDistanceUnit,
                 lastPlayedAt: lastPlayedAtByCourse?.[course.id] ?? lastPlayedAtByCourse?.[course.name],
+                paintResult: paintById[course.id] ?? null,
               });
               const starred = favorites.some((row) => row.id === course.id);
               const showRequest = requestThisCourseVisible({
@@ -348,6 +359,11 @@ export function CoursePicker({
                 <View key={course.id} style={styles.row}>
                   <Pressable onPress={() => void pickCourse(course)}>
                     <Text style={styles.rowTitle}>{card.name}</Text>
+                    {card.paintSource ? (
+                      <Text testID="paint-source-chip" style={styles.paintSource}>
+                        {card.paintSource}
+                      </Text>
+                    ) : null}
                     <View style={styles.chips}>
                       {card.distance ? <Text style={styles.chip}>{card.distance}</Text> : null}
                       {card.lastPlayed ? <Text style={styles.chip}>{card.lastPlayed}</Text> : null}
@@ -423,6 +439,7 @@ function makeStyles(colors: ColorPalette) {
   },
   label: { color: colors.muted, fontSize: type.meta, fontWeight: '700' },
   meta: { color: colors.muted, fontSize: type.meta, lineHeight: 20 },
+  paintSource: { color: colors.muted, fontSize: type.tiny, fontWeight: '600' },
   warn: { color: colors.orange, fontSize: type.meta, fontWeight: '700' },
   selected: { gap: 6 },
   selectedName: { color: colors.cream, fontSize: 18, fontWeight: '800' },

@@ -22,6 +22,7 @@ import {
   applyCoursePaintToDetail,
   loadGolfApiPaintCandidate,
   loadOsmOpenGolfCandidate,
+  recordedPaintWaterfallStep,
   resolveCoursePaint,
   type PaintCandidate,
 } from './waterfall';
@@ -189,9 +190,8 @@ export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataCli
 
     async getCourse(id: string): Promise<CourseDetail | null> {
       if (!id.trim()) return null;
-      if (isLocalCatalogId(id)) return catalogCourseDetail(id);
       const gcaBase = getBaseUrl();
-      if (!gcaBase) return catalogCourseDetail(id);
+      if (isLocalCatalogId(id) || !gcaBase) return stampRecordedPaintSource(catalogCourseDetail(id));
       const encoded = encodeURIComponent(id);
       const detailRes = await apiGet(`/courses/${encoded}`, gcaBase, fetchImpl);
       if (detailRes.status === 404) return null;
@@ -224,7 +224,9 @@ export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataCli
         loadGolfApi: () => loadGolfApiPaintCandidate(match, { fetchImpl }),
         cache: getSharedCoursePaintCache(),
       });
-      if (!paint.ok) return detail;
+      if (!paint.ok) {
+        return { ...detail, paintResult: { ok: false, source: null, fromCache: false } };
+      }
       const base =
         paint.source === 'gca' && !paint.fromCache && gcaRows
           ? {
@@ -236,13 +238,30 @@ export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataCli
               })),
             }
           : detail;
-      return applyCoursePaintToDetail(base, paint);
+      return {
+        ...applyCoursePaintToDetail(base, paint),
+        paintResult: { ok: true, source: paint.source, fromCache: paint.fromCache },
+      };
     },
 
     fetchOsmOverlay(query: OsmOverlayQuery) {
       return fetchOsmOverlay(query, { fetch: fetchImpl });
     },
   };
+}
+
+/** Local catalog cards never call GCA or network golfapi. Stamp only a free-step winner. */
+async function stampRecordedPaintSource(detail: CourseDetail | null): Promise<CourseDetail | null> {
+  if (!detail) return null;
+  const paintResult = await recordedPaintWaterfallStep({
+    name: detail.name,
+    city: detail.city ?? null,
+    state: detail.state ?? null,
+    location: detail.location,
+    courseKey: detail.id,
+  });
+  if (!paintResult) return detail;
+  return { ...detail, paintResult };
 }
 
 let singleton: CourseDataClient | null = null;

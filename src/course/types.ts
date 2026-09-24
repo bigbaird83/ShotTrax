@@ -1,4 +1,5 @@
 import type { LatLng } from '../domain/latLng';
+import type { CoursePaintSource } from './paintCache';
 
 export type CourseSummary = {
   id: string;
@@ -53,6 +54,15 @@ export type CourseDetail = {
   tees: TeeSet[];
   /** Pro/Max flag from course detail. Missing/false → no invented greens. */
   greenCentersAvailable: boolean | null;
+  /**
+   * `resolveCoursePaint` winner (`ok`, `source`, `fromCache` only).
+   * Absent until that resolve runs. Never inferred from coordinates.
+   */
+  paintResult?: {
+    ok: boolean;
+    source: CoursePaintSource | null;
+    fromCache: boolean;
+  } | null;
 };
 
 export type OsmGolfKind = 'green' | 'fairway' | 'tee' | 'hole';
