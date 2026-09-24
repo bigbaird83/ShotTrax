@@ -82,6 +82,7 @@ export default function SettingsScreen() {
         </Pressable>
       </View>
       <BigButton label={COPY.bag} variant="secondary" onPress={() => router.push('/bag')} />
+      <BigButton label={COPY.roundsTransfer} variant="ghost" onPress={() => router.push('/rounds-transfer')} />
       <Text style={styles.creditsTitle}>{COPY.credits}</Text>
       <Text style={styles.credits}>{COPY.courseDataCredits}</Text>
       <Text style={styles.contact}>{COPY.contactLine}</Text>

@@ -245,17 +245,17 @@ test('round history JSON restores real GPS marks and recomputes averages from th
     kind: ROUND_HISTORY_EXPORT_KIND,
     version: ROUND_HISTORY_EXPORT_VERSION,
     exportedAt: '2026-09-22T00:00:00.000Z',
+    clubs: [],
     rounds: plan.rounds,
   }).includes('"avgYards":9999'), false);
 
-  const home = readFileSync(new URL('../../app/(tabs)/index.tsx', import.meta.url), 'utf8');
-  assert.match(home, /presentRoundHistoryShare/);
-  assert.match(home, /\/restore-rounds/);
-  assert.match(home, /collectRoundHistoryExport/);
-  assert.doesNotMatch(home, /TextInput|onChangeText/);
-  const restoreScreen = readFileSync(new URL('../../app/restore-rounds.tsx', import.meta.url), 'utf8');
-  assert.match(restoreScreen, /restoreRoundHistory/);
-  assert.doesNotMatch(home, /signIn|createAccount|auth\(\)/);
+  // Export / Restore lives behind the menu (app/rounds-transfer.tsx), not on Home.
+  const transfer = readFileSync(new URL('../../app/rounds-transfer.tsx', import.meta.url), 'utf8');
+  assert.match(transfer, /presentRoundHistoryShare/);
+  assert.match(transfer, /collectRoundHistoryExport/);
+  assert.match(transfer, /restoreRoundHistory/);
+  assert.doesNotMatch(transfer, /TextInput|onChangeText/);
+  assert.doesNotMatch(transfer, /signIn|createAccount|auth\(\)/);
   const repo = readFileSync(new URL('../db/repo.ts', import.meta.url), 'utf8');
   const restore = repo.slice(repo.indexOf('export function restoreRoundHistory'), repo.indexOf('function insertTransferredRound'));
   assert.doesNotMatch(restore, /setSetting|clubAverageFromShots/);

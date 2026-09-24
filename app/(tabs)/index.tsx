@@ -18,7 +18,6 @@ import type { CourseDetail, CourseSummary, TeeSet } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
 import {
   attachCourseToRound,
-  collectRoundHistoryExport,
   deleteRound,
   finishRound,
   getActiveRound,
@@ -47,8 +46,6 @@ import {
 import { layoutForPlayedHoles, resolveCourseNumHoles } from '@/src/domain/nineByTwo';
 import { formatRoundPaceLine, planLivePace } from '@/src/domain/livePace';
 import { formatHistoryRow, historyDeletePrompt, pastRoundEditAnytime, pastRoundHoleHref } from '@/src/domain/roundHistory';
-import { serializeRoundHistory } from '@/src/domain/roundTransfer';
-import { presentRoundHistoryShare } from '@/src/services/roundHistoryShare';
 import { describeGpsSource } from '@/src/services/location';
 import { BagCarryList, BagCustomizeActions } from '@/src/ui/BagCarryList';
 import { BigButton } from '@/src/ui/BigButton';
@@ -261,16 +258,6 @@ export default function HomeScreen() {
     void downloadFavoriteForOffline(favorite, favoriteStore, { onStatus: () => bump() });
   };
 
-  const onExportRounds = async () => {
-    const doc = collectRoundHistoryExport(db, new Date().toISOString());
-    if (doc.rounds.length === 0) {
-      Alert.alert(COPY.exportRounds, COPY.exportRoundsEmpty);
-      return;
-    }
-    const ok = await presentRoundHistoryShare(serializeRoundHistory(doc));
-    if (!ok) Alert.alert(COPY.exportRounds, COPY.exportRoundsFailed);
-  };
-
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -426,8 +413,6 @@ export default function HomeScreen() {
       <BigButton label={COPY.liveBoardWatch} variant="ghost" onPress={() => router.push('/board')} />
 
       <Text style={styles.section}>{COPY.roundHistory}</Text>
-      <BigButton label={COPY.exportRounds} variant="secondary" onPress={() => void onExportRounds()} />
-      <BigButton label={COPY.restoreRounds} variant="ghost" onPress={() => router.push('/restore-rounds')} />
       {rounds.length === 0 ? (
         <EmptyPanel title={COPY.noRounds} hint={COPY.firstRoundHint} />
       ) : (
