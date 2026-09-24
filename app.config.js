@@ -16,6 +16,13 @@
  * Optional shared paint cache (not a secret): EXPO_PUBLIC_COURSE_PAINT_CACHE_URL
  * is copied into expo.extra.coursePaintCacheUrl. JSON GET/PUT. Unset → device only.
  *
+ * Settings build stamp (not secrets):
+ * - expo.extra.easBuildId ← EAS_BUILD_ID (set only while app.config.js runs on an EAS builder)
+ * - expo.extra.gitCommitHash ← EAS_BUILD_GIT_COMMIT_HASH, else `git rev-parse HEAD`
+ * The TestFlight number is not copied here. `cli.appVersionSource` is remote, so
+ * app.json `ios.buildNumber` is not the store build. The device reads
+ * Application.nativeBuildVersion (CFBundleVersion) at runtime.
+ *
  * Do not commit a key.
  * @param {{ config: Record<string, unknown> }} args
  */
@@ -23,6 +30,36 @@ function trimKey(value) {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+/** EAS build ids are UUIDs. Anything else is dropped, never rewritten. */
+function easBuildIdFromEnv(value) {
+  const trimmed = trimKey(value);
+  if (!trimmed || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)) {
+    return null;
+  }
+  return trimmed.toLowerCase();
+}
+
+/** Full or short hex commit. Rejects prose so a missing env cannot become a fake SHA. */
+function gitSha(value) {
+  const trimmed = trimKey(value);
+  if (!trimmed || !/^[0-9a-f]{7,40}$/i.test(trimmed)) return null;
+  return trimmed.toLowerCase();
+}
+
+function gitHeadSha() {
+  try {
+    const { execFileSync } = require('node:child_process');
+    return gitSha(
+      execFileSync('git', ['rev-parse', 'HEAD'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }),
+    );
+  } catch {
+    return null;
+  }
 }
 
 module.exports = ({ config }) => {
@@ -47,6 +84,8 @@ module.exports = ({ config }) => {
       ...extra,
       shareSyncUrl,
       coursePaintCacheUrl,
+      easBuildId: easBuildIdFromEnv(process.env.EAS_BUILD_ID),
+      gitCommitHash: gitSha(process.env.EAS_BUILD_GIT_COMMIT_HASH) ?? gitHeadSha(),
     },
   };
 };
