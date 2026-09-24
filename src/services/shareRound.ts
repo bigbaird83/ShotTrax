@@ -18,6 +18,7 @@ import { planScorecardImage, renderScorecardPng } from '../domain/scorecardImage
 import {
   formatShareScorecard,
   planSpectatorPayload,
+  scorecardImageShareContent,
   shareSheetContent,
   type SpectatorHoleInput,
   type SpectatorPayload,
@@ -154,7 +155,7 @@ export function publishRoundScoreboard(
 }
 
 async function presentShare(
-  content: { message: string; title: string; url?: string },
+  content: { message: string; title: string; url?: string } | { url: string },
   options?: { anchor?: number },
 ): Promise<boolean> {
   try {
@@ -190,8 +191,11 @@ export async function shareRoundSnapshot(
   } catch {
     imageUrl = null;
   }
+  // Image only — no message body, no hole list, no link. No image → fail, never a text dump.
+  const content = scorecardImageShareContent(imageUrl);
+  if (!content) return false;
   const options = args?.anchor != null ? { anchor: args.anchor } : undefined;
-  return presentShare(shareSheetContent({ message: planned.message, imageUrl }), options);
+  return presentShare(content, options);
 }
 
 export async function shareLiveBoard(

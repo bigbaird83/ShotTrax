@@ -86,8 +86,8 @@ export function shareFailToast(): typeof COPY.shareFail {
 }
 
 /** Toast copy after Share.share. Success / dismiss stays silent. */
-export function toastAfterShareAttempt(opened: boolean): string | null {
-  return opened ? null : shareFailToast();
+export function toastAfterShareAttempt(opened: boolean, fail: string = shareFailToast()): string | null {
+  return opened ? null : fail;
 }
 
 /**
@@ -112,11 +112,14 @@ export function shouldOpenShareSheet(args: {
 }
 
 /** Any throw / reject becomes the fail toast — never a silent no-op. */
-export async function toastFromShareAttempt(open: () => Promise<boolean>): Promise<string | null> {
+export async function toastFromShareAttempt(
+  open: () => Promise<boolean>,
+  fail: string = shareFailToast(),
+): Promise<string | null> {
   try {
-    return toastAfterShareAttempt(await open());
+    return toastAfterShareAttempt(await open(), fail);
   } catch {
-    return shareFailToast();
+    return fail;
   }
 }
 
@@ -139,6 +142,12 @@ export function shareSheetContent(args: {
   return localPng
     ? { message: args.message, title: SHOTTRAXX_BRAND, url }
     : { message: args.message, title: SHOTTRAXX_BRAND };
+}
+
+/** Scorecard Share: the local PNG alone. No message, no link. Anything else → null. */
+export function scorecardImageShareContent(imageUrl: string | null | undefined): { url: string } | null {
+  const url = shareSheetContent({ message: '', imageUrl }).url;
+  return url ? { url } : null;
 }
 
 /** Full `?p=` spectator body must never land in the share text. */
