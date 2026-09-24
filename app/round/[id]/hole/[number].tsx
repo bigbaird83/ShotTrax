@@ -971,6 +971,10 @@ export default function HoleScreen() {
       yardsQuality: target || teeToGreen.quality !== 'none' || toGreen.quality !== 'none' ? 'good' : 'none',
       lastClubId: sticky?.id ?? null,
       selectedClubId: wheelSelectedId,
+      complication: {
+        yards: liveGpsToPin.yards,
+        quality: liveGpsToPin.quality,
+      },
     },
   );
 
