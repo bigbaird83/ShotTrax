@@ -17,17 +17,27 @@ import {
   favoriteTogglePayload,
   parseFavoriteToggle,
   parseWatchHomeRequest,
+  forgetWatchHomeRequestAt,
   planWatchHomeSearchNearby,
   planWatchHomeTap,
   watchFixFromHomeRequest,
+  watchHomeBackgroundRefreshUsesSendMessage,
   watchHomeBodyIsFavoritesOnly,
   watchHomeHasDuplicateIds,
   watchHomePermanentlyShowsNearbyList,
+  watchHomeQueuedCopy,
+  watchHomeRefreshStatus,
+  watchHomeRequestDidApply,
+  watchHomeRequestShouldApply,
   watchHomeRowIds,
   watchHomeSearchPoint,
+  watchHomeSendMessageWhenUnreachable,
   watchHomeShowsExportRestore,
+  watchHomeSyncWhenUnreachable,
+  watchHomeUnavailableCopy,
   watchKeepsOwnFavoritesList,
 } from './watchHome';
+import { PHONE_UNAVAILABLE, QUEUED_WILL_SYNC } from './watchMessages';
 import {
   forgetWatchCourseStartAt,
   NEARBY_COURSE_LIST_MAX,
@@ -385,7 +395,7 @@ test('Search nearby refreshes when the phone is only background-reachable', () =
     session.indexOf('/// Ask the phone for a fresh Watch Home'),
     session.indexOf('func refreshHomeIfShowing'),
   );
-  assert.match(request, /func requestHome\(\)/);
+  assert.match(request, /func requestHome\(interactive: Bool = true\)/);
   assert.match(request, /transferUserInfo\(payload\)/);
   assert.match(request, /sendMessage\(payload/);
   assert.match(request, /"type": "homeRequest"/);
@@ -435,4 +445,101 @@ test('Search nearby refreshes when the phone is only background-reachable', () =
   forgetWatchCourseStartAt(at);
   assert.equal(watchCourseStartShouldApply(at), true);
   forgetWatchCourseStartAt(at);
+});
+
+test('Watch Home and Search nearby say Queued · will sync when the transfer is waiting', () => {
+  assert.equal(watchHomeSyncWhenUnreachable(), 'transferUserInfo');
+  assert.equal(watchHomeSendMessageWhenUnreachable(), false);
+  assert.equal(watchHomeBackgroundRefreshUsesSendMessage(), false);
+  assert.equal(watchHomeQueuedCopy(), QUEUED_WILL_SYNC);
+  assert.equal(watchHomeQueuedCopy(), 'Queued · will sync');
+  assert.equal(watchHomeUnavailableCopy(), PHONE_UNAVAILABLE);
+  assert.notEqual(watchHomeQueuedCopy(), watchHomeUnavailableCopy());
+
+  const queued = { phoneReachable: false, loading: true, nearbyEmpty: true } as const;
+  assert.equal(watchHomeRefreshStatus({ ...queued, face: 'home' }), 'Queued · will sync');
+  assert.equal(watchHomeRefreshStatus({ ...queued, face: 'nearby' }), 'Queued · will sync');
+  assert.notEqual(watchHomeRefreshStatus({ ...queued, face: 'nearby' }), 'Phone unavailable');
+  assert.notEqual(watchHomeRefreshStatus({ ...queued, face: 'home' }), 'Updating…');
+  assert.notEqual(watchHomeRefreshStatus({ ...queued, face: 'nearby' }), 'Finding courses…');
+
+  assert.equal(
+    watchHomeRefreshStatus({ phoneReachable: true, loading: true, nearbyEmpty: false, face: 'home' }),
+    'Updating…',
+  );
+  assert.equal(
+    watchHomeRefreshStatus({ phoneReachable: true, loading: true, nearbyEmpty: true, face: 'nearby' }),
+    'Finding courses…',
+  );
+  assert.equal(
+    watchHomeRefreshStatus({ phoneReachable: true, loading: false, nearbyEmpty: true, face: 'nearby', line: '' }),
+    'open the phone',
+  );
+  assert.equal(
+    watchHomeRefreshStatus({ phoneReachable: true, loading: false, nearbyEmpty: false, face: 'home' }),
+    'Refresh',
+  );
+
+  const session = read('../../targets/watch/WatchClubSession.swift');
+  const request = session.slice(
+    session.indexOf('/// Ask the phone for a fresh Watch Home'),
+    session.indexOf('func refreshHomeIfShowing'),
+  );
+  assert.match(request, /home\.queued = true/);
+  assert.match(request, /homeRequestCoalesce/);
+  assert.match(request, /transferUserInfo\(payload\)/);
+  assert.match(request, /if session\.isReachable/);
+  assert.match(request, /if interactive/);
+  assert.doesNotMatch(request, /failUnavailable|Phone unavailable/);
+  // Unreachable never takes the sendMessage branch.
+  const unreachable = request.slice(request.indexOf('} else {'));
+  assert.match(unreachable, /home\.queued = true/);
+  assert.doesNotMatch(unreachable, /sendMessage/);
+
+  const refresh = session.slice(
+    session.indexOf('func refreshHomeIfShowing'),
+    session.indexOf('private func attachHomeFix'),
+  );
+  assert.match(refresh, /requestHome\(interactive: false\)/);
+  assert.match(refresh, /home\.loading/);
+  assert.match(refresh, /automaticHomeInterval/);
+  assert.doesNotMatch(refresh, /sendMessage/);
+
+  const apply = session.slice(
+    session.indexOf('private func applyWatchHome'),
+    session.indexOf('private func saveHome'),
+  );
+  assert.match(apply, /next\.queued = false/);
+  assert.match(apply, /next\.loading = false/);
+
+  const ui = read('../../targets/watch/content.swift');
+  const home = ui.slice(ui.indexOf('private var watchHome'), ui.indexOf('private var nearbySearch'));
+  const search = ui.slice(ui.indexOf('private var nearbySearch'), ui.indexOf('private func homeSectionTitle'));
+  assert.match(home, /session\.home\.queued/);
+  assert.match(home, /Queued · will sync/);
+  assert.match(home, /session\.home\.refreshLabel/);
+  assert.match(search, /session\.home\.queued/);
+  assert.match(search, /Queued · will sync/);
+  assert.match(search, /session\.home\.refreshLabel/);
+  assert.match(search, /Finding courses…/);
+  assert.match(search, /open the phone/);
+  assert.doesNotMatch(home + search, /Phone unavailable/);
+  // Favorites stay the body. Search nearby stays a push. Back still pops.
+  assert.match(home, /homeSectionTitle\("Favorites"\)/);
+  assert.doesNotMatch(home, /homeSectionTitle\("Nearby"\)/);
+  assert.match(search, /homePath\.removeLast\(\)/);
+
+  const service = read('../services/watchHome.ts');
+  assert.match(service, /watchHomeRequestShouldApply\(req\.at\)/);
+  assert.match(service, /watchHomeRequestDidApply\(req\.at\)/);
+  assert.match(service, /forgetWatchHomeRequestAt\(req\.at\)/);
+
+  const at = '2026-09-24T16:00:00.000Z';
+  assert.equal(watchHomeRequestShouldApply(at), true);
+  assert.equal(watchHomeRequestShouldApply(at), false);
+  watchHomeRequestDidApply(at);
+  assert.equal(watchHomeRequestShouldApply(at), false);
+  forgetWatchHomeRequestAt(at);
+  assert.equal(watchHomeRequestShouldApply(at), true);
+  forgetWatchHomeRequestAt(at);
 });

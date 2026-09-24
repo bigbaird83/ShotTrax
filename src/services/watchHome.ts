@@ -11,9 +11,12 @@ import {
   WATCH_HOME_LAST_PHONE_FIX_KEY,
   applyFavoriteToggle,
   buildWatchHome,
+  forgetWatchHomeRequestAt,
   parseFavoriteToggle,
   parseWatchHomeRequest,
   watchFixFromHomeRequest,
+  watchHomeRequestDidApply,
+  watchHomeRequestShouldApply,
   watchHomeSearchPoint,
   type WatchHomeLocationSource,
   type WatchHomeMessage,
@@ -148,12 +151,22 @@ async function handleHomeRequest(raw: unknown): Promise<WatchHomeReply | null> {
   if (!req) return null;
   const ctx = context;
   if (!ctx) return { ok: false, feedback: PHONE_UNAVAILABLE };
+  // Live sendMessage and the queued transfer share `at`. One nearby search.
+  if (!watchHomeRequestShouldApply(req.at)) {
+    return { ok: true, feedback: '' };
+  }
   // Watch Home → course pick may replace a live round, same as Home → Select course.
   allowWatchCoursePickDuringRound();
-  await refreshNearby(ctx, watchFixFromHomeRequest(req));
-  const msg = buildFromCache(ctx);
-  await push(msg, true);
-  return { ok: true, feedback: '', home: msg };
+  try {
+    await refreshNearby(ctx, watchFixFromHomeRequest(req));
+    const msg = buildFromCache(ctx);
+    await push(msg, true);
+    watchHomeRequestDidApply(req.at);
+    return { ok: true, feedback: '', home: msg };
+  } catch {
+    forgetWatchHomeRequestAt(req.at);
+    return { ok: false, feedback: PHONE_UNAVAILABLE };
+  }
 }
 
 async function handleFavoriteToggle(raw: unknown): Promise<WatchHomeReply | null> {
