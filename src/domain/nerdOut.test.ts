@@ -154,11 +154,12 @@ test('club data screen carries the club table that left Nerd out', () => {
 test('shot review uses the tee-to-green lock without live GPS', () => {
   assert.equal(nerdOutTrailUsesHoleCamera(), true);
   const page = readFileSync(new URL('../../app/review/[id]/shots.tsx', import.meta.url), 'utf8');
-  assert.match(page, /lockHoleCamera/);
+  // Box-fitted tee → shots → green camera. It takes no phone input.
+  assert.match(page, /shotReviewCamera\(/);
   assert.match(page, /lockFrame/);
   assert.match(page, /shotPinsForHoleCamera/);
   assert.match(page, /resolveHoleTee/);
-  assert.match(page, /phone: null/);
+  assert.doesNotMatch(page, /phone:/);
   assert.match(page, /userFix=\{null\}/);
   assert.doesNotMatch(page, /useLiveFix/);
   assert.doesNotMatch(page, /lockFrame=\{false\}/);
