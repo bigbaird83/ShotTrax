@@ -385,19 +385,17 @@ test('Watch course pick shows one name and Holes/Tees — never Courses near you
   assert.equal((start.match(/Text\(name\)/g) ?? []).length, 1);
   assert.ok(start.indexOf('if let name = session.nearby.courseName') < start.indexOf('pickHoleCount(9)'));
   assert.ok(start.indexOf('Text(name)') < start.indexOf('ForEach(session.nearby.tees)'));
-  assert.ok(start.indexOf('ForEach(session.nearby.tees)') < start.indexOf('ForEach(session.nearby.courses)'));
   assert.match(start, /if session\.nearby\.courseId != nil \{/);
   assert.match(start, /Color\("cream"\)/);
   assert.doesNotMatch(start, /Color\.orange/);
+  // The course list moved to Watch Home; holes → tees never repeats it.
+  assert.doesNotMatch(start, /ForEach\(session\.nearby\.courses\)|session\.home\./);
   assert.match(header, /return "Holes"/);
   assert.match(header, /return "Tees"/);
-  assert.match(header, /return "Courses near you"/);
+  assert.doesNotMatch(header, /return "Courses near you"/);
   assert.match(header, /nearbyShowsFeedback/);
   assert.match(header, /session\.feedback != session\.nearby\.courseName/);
   assert.match(watchUi, /Text\(session\.showsNearby \? nearbyNavTitle/);
-  const list = start.slice(start.indexOf('} else {'));
-  assert.match(list, /ForEach\(session\.nearby\.courses\)/);
-  assert.doesNotMatch(list, /session\.nearby\.courseName/);
   assert.match(session, /nearby\.courseName = name/);
   const pickFn = session.slice(session.indexOf('func pickCourse'), session.indexOf('func pickTee'));
   assert.match(pickFn, /nearby\.courseName = name/);

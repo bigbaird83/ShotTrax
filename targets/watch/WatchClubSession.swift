@@ -41,11 +41,66 @@ struct NearbyTee: Identifiable, Equatable {
   var name: String
 }
 
+/// One Watch Home row. `favorite` mirrors the phone favorites list.
+struct HomeCourse: Identifiable, Equatable {
+  var id: String
+  var name: String
+  var favorite: Bool
+  var distanceMeters: Int?
+
+  var distanceLabel: String? {
+    guard let meters = distanceMeters else { return nil }
+    return String(format: "%.1f mi", Double(meters) / 1609.344)
+  }
+}
+
+/// Watch Home: phone favorites + phone nearby search. Watch never keeps its
+/// own favorites list — the star sends a toggle and the phone list wins.
+struct WatchHomeState {
+  var favorites: [HomeCourse] = []
+  var nearby: [HomeCourse] = []
+  var line: String = ""
+  var liveCourseName: String?
+  var liveCourseId: String?
+  var loading = false
+
+  /// Favorites, each id once.
+  var favoriteRows: [HomeCourse] {
+    var seen = Set<String>()
+    return favorites.filter { seen.insert($0.id).inserted }
+  }
+
+  /// Nearby minus anything already under Favorites — a course shows once.
+  var nearbyRows: [HomeCourse] {
+    var seen = Set(favorites.map { $0.id })
+    return nearby.filter { seen.insert($0.id).inserted }
+  }
+
+  func isFavorite(_ id: String) -> Bool {
+    favorites.contains { $0.id == id }
+  }
+
+  /// Move a row between sections right away; the phone confirms after.
+  func applyingStar(_ course: HomeCourse, starred: Bool) -> WatchHomeState {
+    var next = self
+    next.favorites.removeAll { $0.id == course.id }
+    next.nearby.removeAll { $0.id == course.id }
+    var row = course
+    row.favorite = starred
+    if starred {
+      next.favorites.insert(row, at: 0)
+    } else if row.distanceMeters != nil {
+      next.nearby.append(row)
+      next.nearby.sort { ($0.distanceMeters ?? Int.max) < ($1.distanceMeters ?? Int.max) }
+    }
+    return next
+  }
+}
+
 struct NearbyState {
   var active: Bool = false
+  /// True while Watch Home is up (no course tapped yet).
   var awaitingSelect: Bool = true
-  var openPhone: Bool = false
-  var line: String = "open the phone"
   var courses: [NearbyCourse] = []
   var tees: [NearbyTee] = []
   var courseId: String?
@@ -79,6 +134,11 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   @Published var feedback: String = ""
   @Published var sending = false
   @Published var nearbyFromHome = false
+  @Published var home = WatchHomeState()
+  /// Stars tapped on the Watch the phone has not echoed yet (id → starred, when).
+  private var pendingFavorites: [String: (starred: Bool, at: Date)] = [:]
+  private let homeKey = "watchHomeJSON"
+  private let pendingFavoriteTTL: TimeInterval = 30
   private var receivedClubList = false
   /// Watch Back/Cancel on the putt sheet. Blocks phone keep-alive from reopening.
   private var userClosedPutt = false
@@ -89,6 +149,11 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
 
   var showsNearby: Bool {
     nearby.active && (!hasLiveHole || nearbyFromHome)
+  }
+
+  /// Watch Home is the face: nearby is up and no course has been tapped.
+  var showsHome: Bool {
+    showsNearby && nearby.courseId == nil
   }
 
   private var pendingPick: [String: Any]?
@@ -114,18 +179,123 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       session.activate()
     }
     loadFromDefaults()
+    loadHome()
+    if !hasLiveHole {
+      // Open straight onto Watch Home from the cached rows.
+      nearby.active = true
+    }
     loadPending()
     syncRoundStay()
   }
 
-  func requestNearby() {
-    sending = true
-    feedback = ""
-    nearby.awaitingSelect = false
-    sendPick([
-      "type": "nearbyRequest",
+  /// Ask the phone for a fresh Watch Home. Cached rows stay up meanwhile.
+  func requestHome() {
+    guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
+    let session = WCSession.default
+    guard session.isReachable else {
+      home.loading = false
+      return
+    }
+    home.loading = true
+    var payload: [String: Any] = [
+      "type": "homeRequest",
       "at": isoNow(),
-    ], keepPending: false)
+    ]
+    attachHomeFix(&payload)
+    session.sendMessage(payload, replyHandler: { [weak self] reply in
+      DispatchQueue.main.async {
+        self?.home.loading = false
+        if let fresh = reply["home"] as? [String: Any] {
+          self?.applyWatchHome(fresh)
+        }
+      }
+    }, errorHandler: { [weak self] _ in
+      DispatchQueue.main.async {
+        self?.home.loading = false
+      }
+    })
+  }
+
+  func refreshHomeIfShowing() {
+    if showsHome { requestHome() }
+  }
+
+  /// Nearby search point. Watch GPS when fresh; otherwise the phone uses its own
+  /// fix or its last location. Never a mark and never an accuracy gate.
+  private func attachHomeFix(_ payload: inout [String: Any]) {
+    guard let loc = lastFix else { return }
+    let age = Date().timeIntervalSince(loc.timestamp)
+    guard age <= 30, loc.horizontalAccuracy > 0, CLLocationCoordinate2DIsValid(loc.coordinate) else { return }
+    payload["lat"] = loc.coordinate.latitude
+    payload["lng"] = loc.coordinate.longitude
+    payload["accuracyM"] = loc.horizontalAccuracy
+    let fmt = ISO8601DateFormatter()
+    fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    payload["fixAt"] = fmt.string(from: loc.timestamp)
+  }
+
+  func isLiveCourse(_ course: HomeCourse) -> Bool {
+    guard hasLiveHole else { return false }
+    if let id = home.liveCourseId, id == course.id { return true }
+    guard let name = home.liveCourseName else { return false }
+    return name.trimmingCharacters(in: .whitespaces).lowercased()
+      == course.name.trimmingCharacters(in: .whitespaces).lowercased()
+  }
+
+  /// Row tap: the live round's course continues it; anything else starts the
+  /// phone flow (course → 9/18 → tee → Start), same as the phone Home.
+  func openHomeCourse(_ course: HomeCourse) {
+    if isLiveCourse(course) {
+      dismissNearbyToHole()
+      return
+    }
+    pickCourse(courseId: course.id, name: course.name)
+  }
+
+  /// Star: update the phone favorites list. Never starts a round.
+  func toggleFavorite(_ course: HomeCourse) {
+    let starred = !home.isFavorite(course.id)
+    pendingFavorites[course.id] = (starred: starred, at: Date())
+    home = home.applyingStar(course, starred: starred)
+    saveHome()
+    haptic(.click)
+    let payload: [String: Any] = [
+      "type": "favoriteToggle",
+      "courseId": course.id,
+      "name": course.name,
+      "starred": starred,
+      "at": uniquePuttAt(),
+    ]
+    guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
+    let session = WCSession.default
+    // Queued transfer survives an asleep phone; the live message makes it
+    // instant when the phone is awake. The toggle is a target state and the
+    // phone drops an older `at`, so double delivery is harmless.
+    session.transferUserInfo(payload)
+    if session.isReachable {
+      session.sendMessage(payload, replyHandler: { [weak self] reply in
+        DispatchQueue.main.async {
+          guard let self else { return }
+          if reply["ok"] as? Bool == true {
+            self.pendingFavorites[course.id] = nil
+          }
+          if let fresh = reply["home"] as? [String: Any] {
+            self.applyWatchHome(fresh)
+          }
+        }
+      }, errorHandler: nil)
+    }
+  }
+
+  /// Course pick → back to Watch Home.
+  func backToHome() {
+    nearby.courseId = nil
+    nearby.courseName = nil
+    nearby.tees = []
+    nearby.holeCount = nil
+    nearby.awaitingSelect = true
+    feedback = ""
+    requestHome()
   }
 
   func pickHoleCount(_ count: Int) {
@@ -136,11 +306,14 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
   }
 
-  func pickCourse(courseId: String) {
+  func pickCourse(courseId: String, name rowName: String? = nil) {
     sending = true
     feedback = ""
+    nearby.awaitingSelect = false
     nearby.courseId = courseId
-    if let name = nearby.courses.first(where: { $0.id == courseId })?.name {
+    nearby.tees = []
+    nearby.holeCount = nil
+    if let name = rowName ?? nearby.courses.first(where: { $0.id == courseId })?.name {
       nearby.courseName = name
     }
     sendPick([
@@ -344,13 +517,15 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       nearby.tees = []
       nearby.courses = []
       nearby.holeCount = nil
-      nearby.openPhone = false
     }
     sendPick([
       "type": "clubNav",
       "action": action,
       "at": isoNow(),
     ], keepPending: false)
+    if action == "home" {
+      requestHome()
+    }
   }
 
   func dismissNearbyToHole() {
@@ -557,14 +732,17 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     WKInterfaceDevice.current().play(type)
   }
 
+  /// Phone list reply (e.g. a pick the phone could not open). Land back on
+  /// Watch Home with the phone's line instead of a dead end.
   private func applyNearbyCourses(_ message: [String: Any]) {
     if hasLiveHole && !nearbyFromHome { return }
-    var next = NearbyState()
+    var next = nearby
     next.active = true
-    next.awaitingSelect = false
-    let status = message["status"] as? String ?? "open_phone"
-    next.openPhone = status != "ok"
-    next.line = (message["line"] as? String) ?? "open the phone"
+    next.awaitingSelect = true
+    next.courseId = nil
+    next.courseName = nil
+    next.tees = []
+    next.holeCount = nil
     var courses: [NearbyCourse] = []
     if let rows = message["courses"] as? [[String: Any]] {
       for row in rows {
@@ -574,12 +752,89 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       }
     }
     next.courses = courses
-    if courses.isEmpty {
-      next.openPhone = true
-      next.line = "open the phone"
+    if (message["status"] as? String ?? "open_phone") != "ok" {
+      feedback = (message["line"] as? String) ?? "open the phone"
     }
     nearby = next
+    sending = false
     putt.open = false
+  }
+
+  private func parseHomeRows(_ value: Any?, favorite: Bool) -> [HomeCourse] {
+    guard let rows = value as? [[String: Any]] else { return [] }
+    var out: [HomeCourse] = []
+    var seen = Set<String>()
+    for row in rows {
+      guard let id = row["id"] as? String, !id.isEmpty,
+            let name = row["name"] as? String, !name.isEmpty,
+            seen.insert(id).inserted else { continue }
+      var distance: Int?
+      if let meters = row["distanceMeters"] as? Int {
+        distance = meters
+      } else if let meters = row["distanceMeters"] as? NSNumber {
+        distance = meters.intValue
+      }
+      out.append(HomeCourse(id: id, name: name, favorite: favorite, distanceMeters: distance))
+    }
+    return out
+  }
+
+  /// Phone → Watch Home. Phone favorites win, except a Watch star the phone
+  /// has not seen yet (kept for a short window so the row does not flicker).
+  private func applyWatchHome(_ message: [String: Any], save: Bool = true) {
+    var next = WatchHomeState()
+    next.favorites = parseHomeRows(message["favorites"], favorite: true)
+    next.nearby = parseHomeRows(message["nearby"], favorite: false)
+    next.line = message["line"] as? String ?? ""
+    if let live = message["live"] as? [String: Any] {
+      next.liveCourseName = live["courseName"] as? String
+      next.liveCourseId = live["courseId"] as? String
+    }
+    next.loading = home.loading
+    let now = Date()
+    for (id, pending) in pendingFavorites {
+      let phoneHas = next.isFavorite(id)
+      if phoneHas == pending.starred || now.timeIntervalSince(pending.at) > pendingFavoriteTTL {
+        pendingFavorites[id] = nil
+        continue
+      }
+      let known = home.favorites.first(where: { $0.id == id })
+        ?? home.nearby.first(where: { $0.id == id })
+        ?? next.nearby.first(where: { $0.id == id })
+      if let known {
+        next = next.applyingStar(known, starred: pending.starred)
+      }
+    }
+    home = next
+    if save {
+      saveHome(message)
+    }
+  }
+
+  private func saveHome(_ message: [String: Any]? = nil) {
+    let obj: [String: Any] = message ?? [
+      "type": "watchHome",
+      "favorites": home.favorites.map { homeRowDict($0) },
+      "nearby": home.nearby.map { homeRowDict($0) },
+      "line": home.line,
+    ]
+    if let data = try? JSONSerialization.data(withJSONObject: obj),
+       let text = String(data: data, encoding: .utf8) {
+      UserDefaults.standard.set(text, forKey: homeKey)
+    }
+  }
+
+  private func homeRowDict(_ course: HomeCourse) -> [String: Any] {
+    var row: [String: Any] = ["id": course.id, "name": course.name]
+    if let meters = course.distanceMeters { row["distanceMeters"] = meters }
+    return row
+  }
+
+  private func loadHome() {
+    guard let text = UserDefaults.standard.string(forKey: homeKey),
+          let data = text.data(using: .utf8),
+          let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+    applyWatchHome(obj, save: false)
   }
 
   private func applyNearbyTees(_ message: [String: Any]) {
@@ -587,7 +842,6 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     var next = nearby
     next.active = true
     next.awaitingSelect = false
-    next.openPhone = false
     if let id = message["courseId"] as? String {
       next.courseId = id
     }
@@ -607,6 +861,14 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
 
   private func applyClubList(_ message: [String: Any]) {
     let type = message["type"] as? String
+    // Application context carries the latest Watch Home next to clubList.
+    if let nested = message["watchHome"] as? [String: Any] {
+      applyWatchHome(nested)
+    }
+    if type == "watchHome" {
+      applyWatchHome(message)
+      return
+    }
     if type == "puttSheet" {
       applyPuttSheet(message)
       return
@@ -857,7 +1119,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
         }
         self.nearby.active = true
         self.nearby.awaitingSelect = true
-        self.nearby.openPhone = false
+        self.requestHome()
       }
     }
   }
@@ -884,6 +1146,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     if session.isReachable {
       DispatchQueue.main.async {
         self.flushPending()
+        self.refreshHomeIfShowing()
       }
     }
   }

@@ -33,6 +33,10 @@ public class WatchBridgeModule: Module {
       PhoneWatchSession.shared.pushWatchMessageJson(json)
     }
 
+    AsyncFunction("pushWatchHomeJson") { (json: String) in
+      PhoneWatchSession.shared.pushWatchHomeJson(json)
+    }
+
     AsyncFunction("replyClubPick") { (token: String, json: String) in
       PhoneWatchSession.shared.reply(token: token, json: json)
     }
@@ -45,6 +49,9 @@ final class PhoneWatchSession: NSObject, WCSessionDelegate {
   private weak var module: WatchBridgeModule?
   private var replies: [String: ([String: Any]) -> Void] = [:]
   private var pendingClubList: [String: Any]?
+  /// Latest Watch Home (favorites + nearby). Nested under "watchHome" in the
+  /// application context so it never overwrites the clubList a live hole needs.
+  private var lastWatchHome: [String: Any]?
   private let lock = NSLock()
 
   func attach(_ module: WatchBridgeModule) {
@@ -65,10 +72,36 @@ final class PhoneWatchSession: NSObject, WCSessionDelegate {
     persistStatus(obj)
     guard WCSession.isSupported() else { return }
     let session = WCSession.default
-    try? session.updateApplicationContext(safe)
+    try? session.updateApplicationContext(applicationContext())
     if session.isReachable {
       session.sendMessage(safe, replyHandler: nil, errorHandler: nil)
     }
+  }
+
+  /// Watch Home: live message when the Watch is awake, plus the application
+  /// context so a Watch that was asleep opens on the newest favorites.
+  func pushWatchHomeJson(_ json: String) {
+    guard let data = json.data(using: .utf8),
+          let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+      return
+    }
+    let safe = plistSafe(obj)
+    lastWatchHome = safe
+    guard WCSession.isSupported() else { return }
+    let session = WCSession.default
+    guard session.activationState == .activated else { return }
+    try? session.updateApplicationContext(applicationContext())
+    if session.isReachable {
+      session.sendMessage(safe, replyHandler: nil, errorHandler: nil)
+    }
+  }
+
+  private func applicationContext() -> [String: Any] {
+    var context = pendingClubList ?? [:]
+    if let lastWatchHome {
+      context["watchHome"] = lastWatchHome
+    }
+    return context
   }
 
   /// Putt sheet (and other live UI) — send only. Do not overwrite the clubList context.
@@ -90,7 +123,7 @@ final class PhoneWatchSession: NSObject, WCSessionDelegate {
     let payload: [String: Any]
     if let data = json.data(using: .utf8),
        let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-      payload = obj
+      payload = plistSafe(obj)
     } else {
       payload = ["ok": false, "feedback": "Check phone"]
     }
@@ -133,7 +166,7 @@ final class PhoneWatchSession: NSObject, WCSessionDelegate {
   private func emitWatchMessage(_ message: [String: Any], replyHandler: (([String: Any]) -> Void)?) {
     let type = message["type"] as? String
     let event: String
-    if type == "clubPick" || type == "clubNav" || type == "nearbyRequest" || type == "nearbyCoursePick" || type == "startRound" {
+    if type == "clubPick" || type == "clubNav" || type == "nearbyRequest" || type == "nearbyCoursePick" || type == "startRound" || type == "homeRequest" || type == "favoriteToggle" {
       event = "onClubPick"
     } else if type == "puttPick" {
       event = "onPuttPick"
@@ -165,6 +198,12 @@ final class PhoneWatchSession: NSObject, WCSessionDelegate {
       if value is NSNull { continue }
       if let nested = value as? [String: Any] {
         out[key] = plistSafe(nested)
+      } else if let rows = value as? [Any] {
+        out[key] = rows.compactMap { row -> Any? in
+          if row is NSNull { return nil }
+          if let nested = row as? [String: Any] { return plistSafe(nested) }
+          return row
+        }
       } else {
         out[key] = value
       }
@@ -173,8 +212,8 @@ final class PhoneWatchSession: NSObject, WCSessionDelegate {
   }
 
   func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
-    if let pendingClubList, activationState == .activated {
-      try? session.updateApplicationContext(pendingClubList)
+    if activationState == .activated, pendingClubList != nil || lastWatchHome != nil {
+      try? session.updateApplicationContext(applicationContext())
     }
     module?.sendEvent("onReachabilityChange", [
       "reachable": session.isReachable,

@@ -1,4 +1,8 @@
-/** Watch starts the round from a short nearby-course list.
+/** Legacy phone-built nearby list (`nearbyCourses`). The Watch default screen is
+ * now Watch Home (`./watchHome.ts`): phone favorites + nearby, searched from a
+ * fresh Watch fix, else the phone fix, else the last phone location.
+ *
+ * Watch starts the round from a short nearby-course list.
  * The list uses a fresh phone fix only. Wake the phone for that fix.
  * Watch GPS never chooses a course. Finding a course skips the 15 m / 25 m
  * mark gates. No search box. No fresh phone fix, or an empty list → open the phone.

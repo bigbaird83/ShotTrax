@@ -36,6 +36,7 @@ import {
 } from '../domain/watchPuttSync';
 import { hapticMark, hapticSelect, hapticWarn } from '../ui/haptics';
 import { markShotWithClub, promptForPlan } from './shotActions';
+import { handleWatchHomeJson, isWatchHomeJson } from './watchHome';
 import { handleWatchNearbyJson, isWatchNearbyJson } from './watchNearby';
 
 export type WatchClubContext = {
@@ -164,6 +165,12 @@ function enqueueClubPick(work: () => Promise<void>): Promise<void> {
 }
 
 async function handlePick(token: string, json: string): Promise<void> {
+  // Watch Home (nearby search, favorite star) may hit the network — never let
+  // it hold up a club mark in the serialized pick queue.
+  if (isWatchHomeJson(json)) {
+    await replyToken(token, await handleWatchHomeJson(json));
+    return;
+  }
   return enqueueClubPick(() => handlePickNow(token, json));
 }
 
