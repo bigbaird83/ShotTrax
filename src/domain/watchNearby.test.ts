@@ -316,7 +316,7 @@ test('a live round opens that hole; a different round lives under Home', () => {
   assert.doesNotMatch(watchUi, /Front nine|Back nine|front nine|back nine/);
   const pick = watchUi.slice(watchUi.indexOf('private var clubPick'), watchUi.indexOf('private var moreClubs'));
   assert.doesNotMatch(pick, /session\.nearby\.active/);
-  assert.equal((pick.match(/Text\("Home"\)/g) ?? []).length, 1);
+  assert.equal((pick.match(/actionPill\("Home"\)/g) ?? []).length, 1);
 
   const service = readFileSync(new URL('../services/watchNearby.ts', import.meta.url), 'utf8');
   assert.match(service, /allowDuringRound/);
