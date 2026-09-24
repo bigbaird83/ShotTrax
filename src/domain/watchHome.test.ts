@@ -339,6 +339,7 @@ test('Watch Home is Favorites plus a Search nearby push; Back pops without remou
   assert.match(searchAction, /homePath\.append\(WatchHomePush\.searchNearby\)/);
   assert.doesNotMatch(searchAction, /pickCourse|startRound|openHomeCourse|dismissNearbyToHole|requestHome/);
   assert.match(home, /Continue · Hole/);
+  assert.ok(home.indexOf('Text("Search nearby")') < home.indexOf('homeSectionTitle("Favorites")'));
   assert.ok(home.indexOf('Text("Search nearby")') < home.indexOf('Continue · Hole'));
   const row = ui.slice(ui.indexOf('private func homeRow'), ui.indexOf('private var coursesBack'));
   assert.match(row, /session\.toggleFavorite\(course\)/);

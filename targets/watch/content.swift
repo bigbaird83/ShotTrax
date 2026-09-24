@@ -427,7 +427,10 @@ struct ContentView: View {
           .lineLimit(1)
           .minimumScaleFactor(0.8)
           .frame(maxWidth: .infinity, minHeight: 48)
+          // Fill is clipped to the pill — no square lime behind the rounded stroke.
           .background(outdoorLime)
+          .clipShape(RoundedRectangle(cornerRadius: 12))
+          .contentShape(RoundedRectangle(cornerRadius: 12))
           .overlay(
             RoundedRectangle(cornerRadius: 12)
               .stroke(Color("cream"), lineWidth: 2)
