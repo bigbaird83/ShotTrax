@@ -12,6 +12,7 @@ import { COPY } from '@/src/domain/playerCopy';
 import {
   SHOT_REVIEW_MAP_MIN_HEIGHT,
   SHOT_REVIEW_SHOT_LIST_MAX_HEIGHT,
+  shotReviewFramePoints,
   shotReviewShotListWindow,
 } from '@/src/domain/shotReviewLayout';
 import type { Club, Shot } from '@/src/domain/types';
@@ -80,15 +81,19 @@ export default function ReviewShotsScreen() {
       : null;
   const storedTee =
     hole && hole.teeLat != null && hole.teeLng != null ? { lat: hole.teeLat, lng: hole.teeLng } : null;
+  const tee = hole
+    ? resolveHoleTee({
+        holeTee: storedTee ?? teePointFromHoleFeature(osmOverlay, hole.number, green),
+        osmTee: teePointForHole(osmOverlay, hole.number),
+        green,
+      })
+    : null;
+  const shotPins = shotPinsForHoleCamera(shots);
   const camera = hole
     ? lockHoleCamera({
-        tee: resolveHoleTee({
-          holeTee: storedTee ?? teePointFromHoleFeature(osmOverlay, hole.number, green),
-          osmTee: teePointForHole(osmOverlay, hole.number),
-          green,
-        }),
+        tee,
         green,
-        shotPins: shotPinsForHoleCamera(shots),
+        shotPins,
         phone: null,
       })
     : null;
@@ -134,7 +139,7 @@ export default function ReviewShotsScreen() {
               hideYardsOverlay
               frameEpoch={`review-${round.id}-${hole.number}`}
               heading={camera.heading}
-              framePoints={camera.points.map((point) => ({
+              framePoints={shotReviewFramePoints({ tee, green, shotPins }).map((point) => ({
                 latitude: point.lat,
                 longitude: point.lng,
               }))}
