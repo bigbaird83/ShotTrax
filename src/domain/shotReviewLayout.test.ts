@@ -116,6 +116,9 @@ test('shot review screen flexes the map and pins the bottom section', () => {
   assert.match(styles, /maxHeight:\s*SHOT_REVIEW_SHOT_LIST_MAX_HEIGHT/);
   assert.match(styles, /minHeight:\s*SHOT_REVIEW_MAP_MIN_HEIGHT/);
   assert.doesNotMatch(page, /height:\s*236/);
+  assert.match(page, /useColors\(\)/);
+  assert.match(page, /cardBorder\(colors\)/);
+  assert.doesNotMatch(page, /#[0-9A-Fa-f]{3,8}/);
   assert.doesNotMatch(page, /useLiveFix/);
   assert.match(page, /lockHoleCamera/);
   assert.match(page, /phone:\s*null/);

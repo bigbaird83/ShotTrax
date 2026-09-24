@@ -20,6 +20,7 @@ import { BigButton } from '@/src/ui/BigButton';
 import { HoleMap } from '@/src/ui/HoleMap';
 import { Screen } from '@/src/ui/Screen';
 import { useColors } from '@/src/ui/ColorThemeProvider';
+import { cardBorder } from '@/src/ui/surface';
 import { tapTarget, type ColorPalette } from '@/src/ui/theme';
 
 const REVIEW_TRAIL_TO_GREEN = { yards: null, quality: 'none' as const };
@@ -241,9 +242,8 @@ function makeStyles(colors: ColorPalette) {
       alignItems: 'center',
       justifyContent: 'center',
       borderRadius: 12,
-      borderWidth: 1,
-      borderColor: colors.line,
       backgroundColor: colors.bgElevated,
+      ...cardBorder(colors),
     },
     chipOn: { backgroundColor: colors.cream },
     chipText: { color: colors.cream, fontSize: 18, fontWeight: '800' },
