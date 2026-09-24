@@ -1,6 +1,7 @@
 import { isValidLatLng, type LatLng } from '../domain/latLng';
 import { diagnoseCourseCardFrame, planCourseCardCamera } from '../domain/holeCamera';
 import {
+  cachedOsmOverlay,
   cachedResolvedTee,
   fetchOsmOverlay,
   rememberOsmOverlay,
@@ -66,6 +67,26 @@ function overlayFetch(deps?: PrefetchDeps) {
   return deps?.fetchOverlay ?? fetchOsmOverlay;
 }
 
+/**
+ * Bunkers, water, and cart paths for a hole that already has a real green.
+ * Query is the green, ~1000 m. A failed or empty Overpass response stays null.
+ * Does not invent tee, green, or geometry.
+ */
+async function rememberOverlayAroundGreen(
+  args: { courseId?: string | null; holeNumber: number; green: LatLng },
+  deps?: PrefetchDeps,
+): Promise<void> {
+  if (!isValidLatLng(args.green)) return;
+  if (cachedOsmOverlay(args)) return;
+  const overlay = await overlayFetch(deps)({
+    courseId: args.courseId,
+    location: args.green,
+    holeNumber: args.holeNumber,
+    radiusM: 1000,
+  });
+  if (overlay) rememberOsmOverlay(args, overlay);
+}
+
 /** Cache API / OSM tees and greens so hole 1 can frame without waiting on the rest. */
 export function rememberLayoutHoles(layout: CourseLayoutSeed): void {
   for (const hole of layout.holes ?? []) {
@@ -114,7 +135,10 @@ export function cameraFrameFromCache(args: {
 
 /**
  * If this hole is not cached yet, fetch that hole only.
- * Never falls back to the phone for framing. Never bulk-warms satellite tiles.
+ * Tee + green already on the card still load the OSM overlay around the green
+ * before returning, so the hole screen can read bunkers, water, and cart paths
+ * from cache. Never falls back to the phone for framing. Never bulk-warms
+ * satellite tiles. Never invents a tee, green, or overlay geometry.
  */
 export async function ensureHoleTeeGreen(
   args: {
@@ -139,6 +163,12 @@ export async function ensureHoleTeeGreen(
     rememberResolvedTee(
       { courseId: args.courseId, holeNumber: args.holeNumber, green: diagnosis.green },
       diagnosis.tee,
+    );
+    // Await so hole/[number].tsx can read cachedOsmOverlay when this resolves.
+    // Tee and green stay the card values. Start Round does not await this.
+    await rememberOverlayAroundGreen(
+      { courseId: args.courseId, holeNumber: args.holeNumber, green: diagnosis.green },
+      deps,
     );
     return {
       holeNumber: args.holeNumber,
