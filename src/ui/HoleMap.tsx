@@ -51,6 +51,7 @@ import { appleBasemapTilesBestEffortOnly } from '@/src/course/startRoundEntry';
 import { isValidLatLng } from '@/src/domain/latLng';
 import { hasClosedGpsTrail, hasGpsStart } from '@/src/domain/shotSource';
 import { clubMarkGpsConfidence } from '@/src/domain/gpsConfidence';
+import { planDistanceRings } from '@/src/domain/distanceRings';
 import { planShotTrail, shotTrailDash } from '@/src/domain/shotTrail';
 import { QualityBadge } from './Badge';
 import { CLUB_MARK_CONFIDENCE_LIFT_PX, GpsConfidenceChip } from './GpsConfidenceChip';
@@ -142,6 +143,12 @@ const OSM_STYLE: Record<OsmGolfKind, { fill?: string; stroke: string; width: num
   lateral_water_hazard: { fill: 'rgba(58, 160, 216, 0.3)', stroke: '#3AA0D8', width: 2 },
   cartpath: { stroke: 'rgba(244, 241, 232, 0.8)', width: 2 },
 };
+
+function distanceRingStroke(yards: number): string {
+  if (yards <= 100) return 'rgba(244, 241, 232, 0.92)';
+  if (yards <= 150) return 'rgba(244, 241, 232, 0.64)';
+  return 'rgba(244, 241, 232, 0.42)';
+}
 
 function overlayFeatures(overlay: OsmOverlay | null | undefined, holeNumber: number): OsmFeature[] {
   if (!overlay) return [];
@@ -383,6 +390,15 @@ function NativeHoleMap({
     if (allowMapsChrome) setMapsChrome(true);
   };
 
+  const distanceRings = useMemo(
+    () =>
+      planDistanceRings({
+        center: userFix ? { lat: userFix.lat, lng: userFix.lng } : null,
+        green,
+        yardsToGreen,
+      }),
+    [userFix?.lat, userFix?.lng, green?.lat, green?.lng, yardsToGreen.yards, yardsToGreen.quality],
+  );
   const closed = useMemo(() => shots.filter(hasClosedGpsTrail), [shots]);
   const osmFeatures = useMemo(
     () => overlayFeatures(osmOverlay ?? null, holeNumber),
@@ -695,6 +711,27 @@ function NativeHoleMap({
             />
           );
         })}
+        {distanceRings.map((ring) => (
+          <Polyline
+            key={`distance-ring-${ring.yards}`}
+            coordinates={ring.points.map((point) => toCoord(point.lat, point.lng))}
+            strokeColor={distanceRingStroke(ring.yards)}
+            strokeWidth={2}
+            geodesic
+          />
+        ))}
+        {distanceRings.map((ring) => (
+          <Marker
+            key={`distance-ring-label-${ring.yards}`}
+            coordinate={toCoord(ring.labelAt.lat, ring.labelAt.lng)}
+            anchor={{ x: 0.5, y: 0.5 }}
+            tappable={false}
+            tracksViewChanges={false}>
+            <View pointerEvents="none" style={styles.ringLabel}>
+              <Text style={styles.ringLabelText}>{ring.yards}</Text>
+            </View>
+          </Marker>
+        ))}
         {closed.map((shot, index) => {
           const trail = planShotTrail({
             start: { lat: shot.startLat, lng: shot.startLng },
@@ -973,6 +1010,13 @@ const styles = StyleSheet.create({
   },
   lineChipGreen: { borderWidth: 1, borderColor: colors.cream },
   lineChipValue: { color: colors.cream, fontSize: 14, fontWeight: '900' },
+  ringLabel: {
+    backgroundColor: 'rgba(11,26,18,0.72)',
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  ringLabelText: { color: colors.cream, fontSize: 11, fontWeight: '800' },
   legalCover: {
     position: 'absolute',
     left: 0,
