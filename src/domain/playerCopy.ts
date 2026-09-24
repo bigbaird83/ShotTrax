@@ -49,6 +49,11 @@ export const COPY = {
   courseCardMissingFrame: 'Need the course tee and green for this hole.',
   hardMissNeedPins: 'HARD-MISS — need pins.',
   hardMissNeedPinsDetail: 'Tee and green are not on file.',
+  /** Quiet catalog card. Not a blank map. */
+  catalogOnlyHardMiss: 'Catalog only · HARD-MISS',
+  /** Worker down or no sane paint. Loud so it is not a GPS bug. */
+  paintMissLoud: 'Course map missed.',
+  paintMissLoudDetail: 'No saved tee and green. Not a GPS problem.',
   pinSheet: 'Pin sheet',
   approximate: 'Approximate',
   /** Club-mark confidence cue. Bands stay in code — not shown as meters. */

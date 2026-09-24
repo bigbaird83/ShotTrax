@@ -3,6 +3,8 @@ import type { GpsFix, Shot } from '@/src/domain/types';
 import type { YardsToGreenResult } from '@/src/sensing/yardsToGreen';
 import type { OsmOverlay } from '@/src/course/types';
 import { COPY, showWaitingOnLocationLine, yardsAreOnTheCard } from '@/src/domain/playerCopy';
+import type { PaintMissNotice } from '@/src/domain/paintMiss';
+import { PaintMissBanner } from './PaintMissBanner';
 import { YardsToGreenBadge } from './YardsToGreenBadge';
 import { colors, type } from './theme';
 
@@ -31,6 +33,8 @@ type Props = {
   onFrameReady?: (ready: boolean) => void;
   style?: object;
   missCopy?: { title: string; detail?: string | null };
+  paintNotice?: PaintMissNotice | null;
+  paintSourceChip?: string | null;
   requestCourse?: { name?: string | null; city?: string | null; courseId?: string | null } | null;
 };
 
@@ -41,10 +45,18 @@ export function HoleMap({
   yardsToGreen,
   placeHint,
   hideYardsOverlay,
+  paintNotice,
+  paintSourceChip,
 }: Props) {
   return (
     <View style={styles.fallback}>
       <Text style={styles.title}>Hole {holeNumber}</Text>
+      {paintSourceChip ? (
+        <Text testID="paint-source-chip" style={styles.chip}>
+          {paintSourceChip}
+        </Text>
+      ) : null}
+      <PaintMissBanner notice={paintNotice ?? null} />
       {!hideYardsOverlay ? (
         <YardsToGreenBadge
           result={yardsToGreen}
@@ -80,5 +92,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: { color: colors.cream, fontSize: type.hole, fontWeight: '900' },
+  chip: { color: colors.muted, fontSize: type.tiny, fontWeight: '600' },
   msg: { color: colors.muted, fontSize: type.meta, lineHeight: 20 },
 });

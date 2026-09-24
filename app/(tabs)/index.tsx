@@ -32,11 +32,13 @@ import {
   type CourseLayoutSeed,
 } from '@/src/db/repo';
 import { formatLastPlayedChip, formatPaintSourceChip } from '@/src/domain/courseCard';
+import { planPaintMissBanner } from '@/src/domain/paintMiss';
 import { canFinishBagCarrySetup, countTypedCarries } from '@/src/domain/bagCustomize';
 import { canStartRound } from '@/src/domain/coursePick';
 import { COPY, formatTeeMeta, SHOTTRAXX_BRAND } from '@/src/domain/playerCopy';
 import { playHrefAfterRoundStart } from '@/src/domain/playNav';
 import {
+  courseIsHardMiss,
   favoriteFromHistoryRound,
   historyStarInventsPaint,
   historyStarUsesFavoritesList,
@@ -54,6 +56,7 @@ import type { CoursePick } from '@/src/ui/CoursePicker';
 import { EmptyPanel } from '@/src/ui/EmptyPanel';
 import { HistorySwipeRow } from '@/src/ui/HistorySwipeRow';
 import { GpsBanner } from '@/src/ui/GpsBanner';
+import { PaintMissBanner } from '@/src/ui/PaintMissBanner';
 import { Screen } from '@/src/ui/Screen';
 import { FullSheet } from '@/src/ui/Sheet';
 import { useColors } from '@/src/ui/ColorThemeProvider';
@@ -278,7 +281,26 @@ export default function HomeScreen() {
       if (pending) void commitRef.current(pending);
     }, []),
   );
-  const paintSourceLabel = formatPaintSourceChip(pickedDetail?.paintResult);
+  const pickedHardMiss = picked
+    ? courseIsHardMiss({
+        courseKey: picked.id,
+        courseApiId: picked.id,
+        name: picked.name,
+        city: picked.city,
+        state: picked.state,
+        location: picked.location,
+      })
+    : false;
+  const paintBanner = picked
+    ? planPaintMissBanner({
+        paintResult: pickedDetail?.paintResult,
+        hardMiss: pickedHardMiss,
+        unresolved: pickedDetail == null,
+      })
+    : null;
+  const paintSourceLabel =
+    formatPaintSourceChip(pickedDetail?.paintResult) ??
+    (paintBanner ? formatPaintSourceChip({ ok: false, source: null, fromCache: false }) : null);
   const teeLabel = pickedTee
     ? formatTeeMeta({
         name: pickedTee.name,
@@ -340,6 +362,7 @@ export default function HomeScreen() {
               {paintSourceLabel}
             </Text>
           ) : null}
+          <PaintMissBanner notice={paintBanner} />
           {teeLabel || needsTee ? (
             <Text style={styles.cardMeta}>{teeLabel ? teeLabel : COPY.pickTee}</Text>
           ) : null}
