@@ -105,6 +105,26 @@ struct WatchHomeState {
     return nearby.filter { seen.insert($0.id).inserted }
   }
 
+  /// Search nearby screen: nearby favorites (they carry a distance) plus the
+  /// rest of nearby, closest first. No nearby rows at all → the favorites, so
+  /// the screen never dead-ends while there is a course to tap.
+  /// Mirrors `watchNearbyScreenRows` in src/domain/watchHome.ts.
+  var nearbyScreenRows: [HomeCourse] {
+    var seen = Set<String>()
+    var rows = (favorites.filter { $0.distanceMeters != nil } + nearby)
+      .filter { seen.insert($0.id).inserted }
+    rows.sort { ($0.distanceMeters ?? Int.max) < ($1.distanceMeters ?? Int.max) }
+    return rows.isEmpty ? favoriteRows : rows
+  }
+
+  /// Empty-state copy for Search nearby. The phone sends it; an older cached
+  /// Home with no line falls back to the no-location copy.
+  var nearbyEmptyLine: String {
+    line.isEmpty ? WatchHomeState.noLocationLine : line
+  }
+
+  static let noLocationLine = "No location on Watch or phone. Open ShotTraxx on your phone."
+
   func isFavorite(_ id: String) -> Bool {
     favorites.contains { $0.id == id }
   }

@@ -12,9 +12,12 @@ import {
 import type { GpsFix } from './types';
 import {
   WATCH_HOME_FAVORITES_MAX,
+  WATCH_NEARBY_NONE_IN_RADIUS,
+  WATCH_NEARBY_NO_LOCATION,
   applyFavoriteToggle,
   buildWatchHome,
   favoriteTogglePayload,
+  parseCachedNearby,
   parseFavoriteToggle,
   parseWatchHomeRequest,
   forgetWatchHomeRequestAt,
@@ -36,12 +39,13 @@ import {
   watchHomeSyncWhenUnreachable,
   watchHomeUnavailableCopy,
   watchKeepsOwnFavoritesList,
+  watchNearbyEmptyLine,
+  watchNearbyScreenRows,
 } from './watchHome';
 import { PHONE_UNAVAILABLE, QUEUED_WILL_SYNC } from './watchMessages';
 import {
   forgetWatchCourseStartAt,
   NEARBY_COURSE_LIST_MAX,
-  OPEN_PHONE,
   watchCourseStartDidApply,
   watchCourseStartShouldApply,
 } from './watchNearby';
@@ -124,9 +128,11 @@ test('Watch Home: favorites cap, blank rows dropped, plist-safe (no null anywher
   assert.doesNotMatch(JSON.stringify(home), /null/);
 });
 
-test('Watch Home: nothing at all → open the phone; live round rides along for Continue', () => {
+test('Watch Home: nothing at all → clear no-location line; live round rides along for Continue', () => {
   const empty = buildWatchHome({ favorites: [], nearby: [], locationSource: 'none' });
-  assert.equal(empty.line, OPEN_PHONE);
+  assert.equal(empty.line, WATCH_NEARBY_NO_LOCATION);
+  assert.match(empty.line, /No location on Watch or phone/);
+  assert.match(empty.line, /Open ShotTraxx on your phone/);
   assert.deepEqual(watchHomeRowIds(empty), []);
 
   const live = buildWatchHome({
@@ -194,6 +200,102 @@ test('Watch Home location: fresh Watch fix → fresh phone fix → last phone lo
 });
 
 // ─── Favorite toggle sync ────────────────────────────────────────────────────
+
+test('Watch Search nearby: no Watch GPS falls back to the phone location, not open the phone', () => {
+  const now = 1_000_000;
+  // Watch has no GPS; the phone is pocketed (stale fix) but knows where it last was.
+  const point = watchHomeSearchPoint({
+    watchFix: null,
+    phoneFix: null,
+    lastPhoneFix: { lat: 36.1, lng: -94.1 },
+    nowMs: now,
+  });
+  assert.deepEqual(point, { point: { lat: 36.1, lng: -94.1 }, source: 'last_phone' });
+  const home = buildWatchHome({
+    favorites: [],
+    nearby: [{ id: 'n1', name: 'Near CC', distanceMeters: 3_000 }],
+    locationSource: point!.source,
+  });
+  assert.equal(home.line, '');
+  assert.deepEqual(watchNearbyScreenRows(home).map((c) => c.id), ['n1']);
+  assert.doesNotMatch(JSON.stringify(home), /open the phone/);
+
+  // Location known, nothing within 40 mi → says so. Never “open the phone”.
+  const none = buildWatchHome({ favorites: [], nearby: [], locationSource: 'last_phone' });
+  assert.equal(none.line, WATCH_NEARBY_NONE_IN_RADIUS);
+  assert.equal(none.line, 'No courses within 40 mi');
+
+  // No location anywhere but a cached nearby list → the cached rows, no line.
+  const cached = buildWatchHome({
+    favorites: [],
+    nearby: parseCachedNearby(JSON.stringify([{ id: 'c1', name: 'Cached GC', distanceMeters: 900 }])),
+    locationSource: 'last_phone',
+  });
+  assert.equal(cached.line, '');
+  assert.deepEqual(watchNearbyScreenRows(cached).map((c) => c.id), ['c1']);
+
+  // Truly nothing: no location on Watch or phone, no cache → the clear line.
+  const nothing = buildWatchHome({ favorites: [], nearby: [], locationSource: 'none' });
+  assert.equal(nothing.line, WATCH_NEARBY_NO_LOCATION);
+  assert.equal(watchNearbyEmptyLine({ favorites: [], nearby: [], locationSource: 'phone' }), WATCH_NEARBY_NONE_IN_RADIUS);
+});
+
+test('Watch Search nearby includes nearby favorites; favorites are the fallback list', () => {
+  // Every nearby course is starred → payload nearby is empty, screen is not.
+  const home = buildWatchHome({
+    favorites: [fav('c2', 'Cypress Creek'), fav('c9', 'Far Away GC')],
+    nearby: [
+      { id: 'c2', name: 'Cypress Creek', distanceMeters: 4_000 },
+      { id: 'c3', name: 'Oak Hills', distanceMeters: 1_000 },
+    ],
+    locationSource: 'phone',
+  });
+  assert.equal(watchHomeHasDuplicateIds(home), false);
+  assert.equal(home.line, '');
+  assert.deepEqual(watchNearbyScreenRows(home).map((c) => c.id), ['c3', 'c2']);
+  assert.equal(watchNearbyScreenRows(home)[1].favorite, true);
+
+  const allStarred = buildWatchHome({
+    favorites: [fav('c2', 'Cypress Creek')],
+    nearby: [{ id: 'c2', name: 'Cypress Creek', distanceMeters: 4_000 }],
+    locationSource: 'watch',
+  });
+  assert.deepEqual(allStarred.nearby, []);
+  assert.equal(allStarred.line, '');
+  assert.deepEqual(watchNearbyScreenRows(allStarred).map((c) => c.id), ['c2']);
+
+  // No location, no nearby: favorites still tappable under the line.
+  const favOnly = buildWatchHome({ favorites: [fav('c9', 'Far Away GC')], nearby: [], locationSource: 'none' });
+  assert.equal(favOnly.line, WATCH_NEARBY_NO_LOCATION);
+  assert.deepEqual(watchNearbyScreenRows(favOnly).map((c) => c.id), ['c9']);
+
+  assert.deepEqual(parseCachedNearby('nope'), []);
+  assert.deepEqual(parseCachedNearby(JSON.stringify([{ id: '', name: 'x' }, { id: 'a', name: 'A' }])), [
+    { id: 'a', name: 'A' },
+  ]);
+});
+
+test('Phone answers Watch Search nearby from its last known location and cached list', () => {
+  const service = read('../services/watchHome.ts');
+  const refresh = service.slice(service.indexOf('async function refreshNearby'), service.indexOf('async function handleHomeRequest'));
+  // GPS wake is bounded, then live fix, then the OS / stored last known location.
+  assert.match(refresh, /wakePhoneFix\(\)/);
+  assert.match(refresh, /ctx\.phoneFix\(\)/);
+  assert.match(refresh, /readLastPhoneFix\(ctx\.db\)/);
+  assert.match(service, /getLastKnownFix\(\)/);
+  assert.match(service, /PHONE_FIX_WAKE_TIMEOUT_MS/);
+  // Last nearby list survives a relaunch and a failed search.
+  assert.match(service, /WATCH_HOME_LAST_NEARBY_KEY/);
+  assert.match(refresh, /saveNearbyCache/);
+  assert.match(refresh, /lastNearby\.length > 0 \? 'last_phone' : 'none'/);
+  assert.doesNotMatch(service, /open the phone/);
+  // The phone keeps its location stored for the Watch as it moves.
+  const start = read('../services/useWatchNearbyStart.ts');
+  assert.match(start, /rememberPhoneFix\(db, fix\)/);
+  // Swift mirrors the screen rows and the no-location copy.
+  const session = read('../../targets/watch/WatchClubSession.swift');
+  assert.match(session, new RegExp(WATCH_NEARBY_NO_LOCATION.replace(/\./g, '\\.')));
+});
 
 test('Watch star writes the phone favorites list (one list, same key the phone reads)', () => {
   const store = memoryStore();
@@ -331,6 +433,7 @@ test('Watch Home is Favorites plus a Search nearby push; Back pops without remou
   const state = session.slice(session.indexOf('struct WatchHomeState'), session.indexOf('struct NearbyState'));
   assert.match(state, /var favoriteRows: \[HomeCourse\]/);
   assert.match(state, /var nearbyRows: \[HomeCourse\]/);
+  assert.match(state, /var nearbyScreenRows: \[HomeCourse\]/);
   assert.match(state, /var seen = Set\(favorites\.map \{ \$0\.id \}\)/);
   assert.match(state, /seen\.insert\(\$0\.id\)\.inserted/);
   assert.match(session, /var showsHome: Bool/);
@@ -348,7 +451,7 @@ test('Watch Home is Favorites plus a Search nearby push; Back pops without remou
   assert.match(home, /homeSectionTitle\("Favorites"\)/);
   assert.match(home, /ForEach\(favorites\)/);
   assert.match(home, /homeRow\(course\)/);
-  assert.doesNotMatch(home, /nearbyRows|homeSectionTitle\("Nearby"\)|ForEach\(nearby\)/);
+  assert.doesNotMatch(home, /nearbyRows|nearbyScreenRows|homeSectionTitle\("Nearby"\)|ForEach\(nearby\)/);
   assert.doesNotMatch(home, /ForEach\(session\.home\.(favorites|nearby)\)/);
   const searchAt = home.indexOf('Text("Search nearby")');
   const searchAction = home.slice(Math.max(0, searchAt - 180), searchAt);
@@ -363,7 +466,7 @@ test('Watch Home is Favorites plus a Search nearby push; Back pops without remou
   assert.match(row, /"star\.fill" : "star"/);
 
   const search = ui.slice(ui.indexOf('private var nearbySearch'), ui.indexOf('private func homeSectionTitle'));
-  assert.match(search, /let nearby = session\.home\.nearbyRows/);
+  assert.match(search, /let nearby = session\.home\.nearbyScreenRows/);
   assert.match(search, /homeSectionTitle\("Nearby"\)/);
   assert.match(search, /ForEach\(nearby\)/);
   assert.doesNotMatch(search, /homeSectionTitle\("Favorites"\)/);
@@ -371,7 +474,9 @@ test('Watch Home is Favorites plus a Search nearby push; Back pops without remou
   const backAction = search.slice(Math.max(0, backAt - 160), backAt);
   assert.match(backAction, /homePath\.removeLast\(\)/);
   assert.doesNotMatch(backAction, /backToHome|pickCourse|startRound|openHomeCourse|dismissNearbyToHole|requestHome/);
-  assert.match(search, /Finding courses…|open the phone/);
+  assert.match(search, /Finding courses…/);
+  assert.match(search, /session\.home\.nearbyEmptyLine/);
+  assert.doesNotMatch(search, /open the phone/);
 });
 
 test('Watch keeps club pick + hole scoring; no Export / Restore, no cloud account', () => {
@@ -473,7 +578,7 @@ test('Watch Home and Search nearby say Queued · will sync when the transfer is 
   );
   assert.equal(
     watchHomeRefreshStatus({ phoneReachable: true, loading: false, nearbyEmpty: true, face: 'nearby', line: '' }),
-    'open the phone',
+    WATCH_NEARBY_NO_LOCATION,
   );
   assert.equal(
     watchHomeRefreshStatus({ phoneReachable: true, loading: false, nearbyEmpty: false, face: 'home' }),
@@ -522,7 +627,8 @@ test('Watch Home and Search nearby say Queued · will sync when the transfer is 
   assert.match(search, /Queued · will sync/);
   assert.match(search, /session\.home\.refreshLabel/);
   assert.match(search, /Finding courses…/);
-  assert.match(search, /open the phone/);
+  assert.match(search, /nearbyEmptyLine/);
+  assert.doesNotMatch(search, /open the phone/);
   assert.doesNotMatch(home + search, /Phone unavailable/);
   // Favorites stay the body. Search nearby stays a push. Back still pops.
   assert.match(home, /homeSectionTitle\("Favorites"\)/);
