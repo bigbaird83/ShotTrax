@@ -48,6 +48,7 @@ import {
 import { newShareBoardCode, normalizeShareBoardCode } from '../domain/liveBoard';
 import { planHoleStartStamp } from '../domain/livePace';
 import { parseSpectatorPayload, type SpectatorPayload } from '../domain/spectator';
+import { planHoleOutCloseToPin } from '../domain/holeOutClose';
 import { planFinishHoleScore, planRecomputeFinishedHoleScore } from '../domain/holeScore';
 import { clampPenaltyStrokes, scoreAfterPenalty, totalPenaltyStrokes } from '../domain/penalty';
 import {
@@ -1030,6 +1031,53 @@ export function sealOpenShotWithoutGps(db: SQLiteDatabase, shotId: string): void
     new Date().toISOString(),
     shotId,
   ]);
+}
+
+/**
+ * Hole Out: seal the open club-pick shot from its stored start to a pin this
+ * hole already has. Caller pin wins (the green the play map already uses);
+ * otherwise the hole's stored green. Does not insert a shot, change the club,
+ * or read a new GPS fix. No pin → false, and the start is left alone.
+ */
+export function closeOpenShotToExistingPin(
+  db: SQLiteDatabase,
+  holeId: string,
+  pin?: { lat: number; lng: number } | null,
+): boolean {
+  const open = getOpenShotForHole(db, holeId);
+  if (!open) return false;
+  const stored = db.getFirstSync<{ green_lat: number | null; green_lng: number | null }>(
+    'SELECT green_lat, green_lng FROM holes WHERE id = ?',
+    [holeId],
+  );
+  const storedPin =
+    stored?.green_lat != null && stored.green_lng != null
+      ? { lat: stored.green_lat, lng: stored.green_lng }
+      : null;
+  const target = isValidLatLng(pin) ? pin : isValidLatLng(storedPin) ? storedPin : null;
+  const planned = planHoleOutCloseToPin({
+    shotId: open.id,
+    start: { lat: open.startLat, lng: open.startLng },
+    startFixQuality: open.startFixQuality,
+    pin: target,
+  });
+  if (!planned) return false;
+  db.runSync(
+    `UPDATE shots SET
+      end_lat = ?, end_lng = ?, end_accuracy_m = NULL, end_fix_quality = ?,
+      distance_yards = ?, fix_quality = ?, impossible_jump = 0, ended_at = ?
+     WHERE id = ? AND ended_at IS NULL`,
+    [
+      planned.endLat,
+      planned.endLng,
+      planned.endFixQuality,
+      planned.distanceYards,
+      planned.fixQuality,
+      new Date().toISOString(),
+      planned.shotId,
+    ],
+  );
+  return true;
 }
 
 /**
