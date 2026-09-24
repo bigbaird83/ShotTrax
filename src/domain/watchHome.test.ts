@@ -17,9 +17,12 @@ import {
   favoriteTogglePayload,
   parseFavoriteToggle,
   parseWatchHomeRequest,
+  planWatchHomeSearchNearby,
   planWatchHomeTap,
   watchFixFromHomeRequest,
+  watchHomeBodyIsFavoritesOnly,
   watchHomeHasDuplicateIds,
+  watchHomePermanentlyShowsNearbyList,
   watchHomeRowIds,
   watchHomeSearchPoint,
   watchHomeShowsExportRestore,
@@ -303,7 +306,11 @@ test('Watch session: star sends favoriteToggle reliably and applies phone pushes
   assert.match(session, /didReceiveApplicationContext/);
 });
 
-test('Watch Home renders Favorites then Nearby from de-duplicated rows', () => {
+test('Watch Home is Favorites plus a Search nearby push; Back pops without remounting', () => {
+  assert.equal(watchHomeBodyIsFavoritesOnly(), true);
+  assert.equal(watchHomePermanentlyShowsNearbyList(), false);
+  assert.equal(planWatchHomeSearchNearby(), 'push_nearby');
+
   const session = read('../../targets/watch/WatchClubSession.swift');
   const state = session.slice(session.indexOf('struct WatchHomeState'), session.indexOf('struct NearbyState'));
   assert.match(state, /var favoriteRows: \[HomeCourse\]/);
@@ -313,18 +320,41 @@ test('Watch Home renders Favorites then Nearby from de-duplicated rows', () => {
   assert.match(session, /var showsHome: Bool/);
 
   const ui = read('../../targets/watch/content.swift');
-  assert.match(ui, /if session\.showsHome \{\s*watchHome/);
-  const home = ui.slice(ui.indexOf('private var watchHome'), ui.indexOf('private var coursesBack'));
+  assert.match(ui, /NavigationStack\(path: \$homePath\) \{\s*watchHome/);
+  assert.match(ui, /navigationDestination\(for: WatchHomePush\.self\)/);
+  assert.match(ui, /case \.searchNearby:\s*nearbySearch/);
+  // Leaving Home clears a push. Search → Back only pops, so Home stays mounted.
+  assert.match(ui, /if !showing \{ homePath = NavigationPath\(\) \}/);
+  assert.doesNotMatch(ui, /watchHome\s*\.id\(/);
+
+  const home = ui.slice(ui.indexOf('private var watchHome'), ui.indexOf('private var nearbySearch'));
   assert.match(home, /let favorites = session\.home\.favoriteRows/);
-  assert.match(home, /let nearby = session\.home\.nearbyRows/);
   assert.match(home, /homeSectionTitle\("Favorites"\)/);
-  assert.match(home, /homeSectionTitle\("Nearby"\)/);
-  assert.ok(home.indexOf('ForEach(favorites)') < home.indexOf('ForEach(nearby)'));
+  assert.match(home, /ForEach\(favorites\)/);
+  assert.match(home, /homeRow\(course\)/);
+  assert.doesNotMatch(home, /nearbyRows|homeSectionTitle\("Nearby"\)|ForEach\(nearby\)/);
   assert.doesNotMatch(home, /ForEach\(session\.home\.(favorites|nearby)\)/);
-  assert.match(home, /session\.toggleFavorite\(course\)/);
-  assert.match(home, /session\.openHomeCourse\(course\)/);
-  assert.match(home, /"star\.fill" : "star"/);
+  const searchAt = home.indexOf('Text("Search nearby")');
+  const searchAction = home.slice(Math.max(0, searchAt - 180), searchAt);
+  assert.match(searchAction, /homePath\.append\(WatchHomePush\.searchNearby\)/);
+  assert.doesNotMatch(searchAction, /pickCourse|startRound|openHomeCourse|dismissNearbyToHole|requestHome/);
   assert.match(home, /Continue · Hole/);
+  assert.ok(home.indexOf('Text("Search nearby")') < home.indexOf('Continue · Hole'));
+  const row = ui.slice(ui.indexOf('private func homeRow'), ui.indexOf('private var coursesBack'));
+  assert.match(row, /session\.toggleFavorite\(course\)/);
+  assert.match(row, /session\.openHomeCourse\(course\)/);
+  assert.match(row, /"star\.fill" : "star"/);
+
+  const search = ui.slice(ui.indexOf('private var nearbySearch'), ui.indexOf('private func homeSectionTitle'));
+  assert.match(search, /let nearby = session\.home\.nearbyRows/);
+  assert.match(search, /homeSectionTitle\("Nearby"\)/);
+  assert.match(search, /ForEach\(nearby\)/);
+  assert.doesNotMatch(search, /homeSectionTitle\("Favorites"\)/);
+  const backAt = search.indexOf('Text("Back")');
+  const backAction = search.slice(Math.max(0, backAt - 160), backAt);
+  assert.match(backAction, /homePath\.removeLast\(\)/);
+  assert.doesNotMatch(backAction, /backToHome|pickCourse|startRound|openHomeCourse|dismissNearbyToHole|requestHome/);
+  assert.match(search, /Finding courses…|open the phone/);
 });
 
 test('Watch keeps club pick + hole scoring; no Export / Restore, no cloud account', () => {

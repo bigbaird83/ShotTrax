@@ -1,15 +1,30 @@
 import SwiftUI
 
+/// Pushed off Watch Home. Appending this never starts or continues a round.
+private enum WatchHomePush: Hashable {
+  case searchNearby
+}
+
 struct ContentView: View {
   @EnvironmentObject private var session: WatchClubSession
   @Environment(\.scenePhase) private var scenePhase
   @State private var showAllClubs = false
+  /// Search nearby is a push on this stack so Back pops and Home stays mounted.
+  @State private var homePath = NavigationPath()
 
   var body: some View {
     Group {
-      if session.showsHome {
+    if session.showsHome {
+      NavigationStack(path: $homePath) {
         watchHome
-      } else if session.showsNearby {
+          .navigationDestination(for: WatchHomePush.self) { destination in
+            switch destination {
+            case .searchNearby:
+              nearbySearch
+            }
+          }
+      }
+    } else if session.showsNearby {
         ScrollView {
           VStack(alignment: .leading, spacing: 8) {
             coursesBack
@@ -66,46 +81,112 @@ struct ContentView: View {
       if phase == .inactive { session.noteScenePhase("inactive") }
       if phase == .background { session.noteScenePhase("background") }
     }
+    .onChange(of: session.showsHome) { showing in
+      // Leaving Home (hole, or holes/tees) drops the push. Search → Back does not.
+      if !showing { homePath = NavigationPath() }
+    }
   }
 
-  // MARK: Watch Home — Favorites + Nearby from the phone. One row per course.
+  // MARK: Watch Home — Favorites stay the body. Nearby is a push.
 
   @ViewBuilder
   private var watchHome: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 6) {
-        if session.hasLiveHole {
-          Button(action: { session.dismissNearbyToHole() }) {
-            Text("Continue · Hole \(session.list.holeNumber)")
-              .font(.system(size: 15, weight: .heavy))
-              .foregroundStyle(Color("bg"))
-              .lineLimit(1)
-              .minimumScaleFactor(0.7)
-              .frame(maxWidth: .infinity, minHeight: 40)
-              .background(outdoorLime)
-              .clipShape(RoundedRectangle(cornerRadius: 10))
+    VStack(alignment: .leading, spacing: 6) {
+      Button(action: { homePath.append(WatchHomePush.searchNearby) }) {
+        Text("Search nearby")
+          .font(.system(size: 15, weight: .heavy))
+          .foregroundStyle(Color("cream"))
+          .lineLimit(1)
+          .minimumScaleFactor(0.7)
+          .frame(maxWidth: .infinity, minHeight: 40)
+          .overlay(
+            RoundedRectangle(cornerRadius: 10)
+              .stroke(Color("cream"), lineWidth: 1)
+          )
+      }
+      .buttonStyle(.plain)
+
+      if session.hasLiveHole {
+        Button(action: { session.dismissNearbyToHole() }) {
+          Text("Continue · Hole \(session.list.holeNumber)")
+            .font(.system(size: 15, weight: .heavy))
+            .foregroundStyle(Color("bg"))
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .frame(maxWidth: .infinity, minHeight: 40)
+            .background(outdoorLime)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+      }
+
+      ScrollView {
+        VStack(alignment: .leading, spacing: 6) {
+          Text("Select course")
+            .font(.system(size: 16, weight: .heavy))
+            .foregroundStyle(Color("cream"))
+          if !session.feedback.isEmpty {
+            Text(session.feedback)
+              .font(.system(size: 11, weight: .bold))
+              .foregroundStyle(session.feedback.contains("✓") || session.feedback.contains("★") ? Color("accent") : Color.orange)
+              .lineLimit(2)
+          }
+
+          let favorites = session.home.favoriteRows
+          if !favorites.isEmpty {
+            homeSectionTitle("Favorites")
+            ForEach(favorites) { course in
+              homeRow(course)
+            }
+          } else if !session.home.line.isEmpty {
+            Text(session.home.line)
+              .font(.system(size: 12, weight: .bold))
+              .foregroundStyle(Color("cream"))
+          }
+
+          Button(action: { session.requestHome() }) {
+            Text(session.home.loading ? "Updating…" : "Refresh")
+              .font(.system(size: 13, weight: .heavy))
+              .foregroundStyle(Color("cream"))
+              .frame(maxWidth: .infinity, minHeight: 32)
+              .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                  .stroke(Color("muted"), lineWidth: 1)
+              )
           }
           .buttonStyle(.plain)
+          .disabled(session.home.loading)
+          .padding(.top, 4)
         }
-        Text("Select course")
-          .font(.system(size: 16, weight: .heavy))
-          .foregroundStyle(Color("cream"))
-        if !session.feedback.isEmpty {
-          Text(session.feedback)
-            .font(.system(size: 11, weight: .bold))
-            .foregroundStyle(session.feedback.contains("✓") || session.feedback.contains("★") ? Color("accent") : Color.orange)
-            .lineLimit(2)
-        }
+      }
+    }
+    .padding(.horizontal, 4)
+    .navigationBarBackButtonHidden(true)
+    .toolbar(.hidden, for: .navigationBar)
+  }
 
-        let favorites = session.home.favoriteRows
-        let nearby = session.home.nearbyRows
-        if !favorites.isEmpty {
-          homeSectionTitle("Favorites")
-          ForEach(favorites) { course in
-            homeRow(course)
-          }
+  /// Nearby courses from the phone / Worker. Same rows as before — never invented.
+  /// Back pops this push; Home (and its favorites) stay on the stack.
+  @ViewBuilder
+  private var nearbySearch: some View {
+    ScrollView {
+      VStack(alignment: .leading, spacing: 6) {
+        Button(action: {
+          if !homePath.isEmpty { homePath.removeLast() }
+        }) {
+          Text("Back")
+            .font(.system(size: 13, weight: .heavy))
+            .foregroundStyle(Color("cream"))
+            .frame(maxWidth: .infinity, minHeight: 32)
+            .overlay(
+              RoundedRectangle(cornerRadius: 8)
+                .stroke(Color("cream"), lineWidth: 1)
+            )
         }
+        .buttonStyle(.plain)
+
         homeSectionTitle("Nearby")
+        let nearby = session.home.nearbyRows
         if !nearby.isEmpty {
           ForEach(nearby) { course in
             homeRow(course)
@@ -136,6 +217,10 @@ struct ContentView: View {
       }
       .padding(.horizontal, 4)
     }
+    .background(Color("bg").ignoresSafeArea())
+    .navigationBarBackButtonHidden(true)
+    .toolbar(.hidden, for: .navigationBar)
+    .onAppear { session.requestHome() }
   }
 
   @ViewBuilder
