@@ -1,3 +1,4 @@
+import { SOFT_GPS_MAX_M } from '../config/sensing';
 import { isPutterClubId } from './defaultBag';
 import { isCourseCardLatLng, type LatLng } from './latLng';
 import { planLiveGpsToPin, type LiveGpsToPin } from './yardsToGreen';
@@ -35,6 +36,40 @@ export const WATCH_LIVE_DISTANCE_FILTER_M = 3;
 
 export const WATCH_LOCATION_WHEN_IN_USE =
   'ShotTraxx™ uses Watch location during a round to show yards to the green and mark where you hit from.';
+
+/** Caption under the dash in the Watch app. The complication stays "—" with no caption. */
+export const WATCH_LIVE_YARDS_NO_GREEN = 'No green';
+export const WATCH_LIVE_YARDS_WEAK_GPS = 'Weak GPS';
+export const WATCH_LIVE_YARDS_LOCATION_OFF = 'Location off';
+export const WATCH_LIVE_YARDS_FINDING_GPS = 'Finding GPS';
+
+export type WatchLiveYardsAuth = 'notDetermined' | 'restricted' | 'denied' | 'authorized';
+
+/**
+ * Why the Watch app is showing a dash. Null when a trusted yardage is showing,
+ * or when none of the four honest states apply (still notDetermined, or a fix
+ * that was rejected for a reason other than accuracy). Never a yardage.
+ */
+export function watchLiveYardsReason(args: {
+  hasTrustedYards: boolean;
+  hasGreen: boolean;
+  authorization: WatchLiveYardsAuth;
+  accuracyM: number | null;
+}): string | null {
+  if (args.hasTrustedYards) return null;
+  if (!args.hasGreen) return WATCH_LIVE_YARDS_NO_GREEN;
+  if (args.authorization === 'denied' || args.authorization === 'restricted') {
+    return WATCH_LIVE_YARDS_LOCATION_OFF;
+  }
+  const accuracy = args.accuracyM;
+  if (accuracy != null && Number.isFinite(accuracy) && accuracy > SOFT_GPS_MAX_M) {
+    return WATCH_LIVE_YARDS_WEAK_GPS;
+  }
+  const usableFix =
+    accuracy != null && Number.isFinite(accuracy) && accuracy >= 0 && accuracy <= SOFT_GPS_MAX_M;
+  if (!usableFix && args.authorization === 'authorized') return WATCH_LIVE_YARDS_FINDING_GPS;
+  return null;
+}
 
 export type WatchGreenFields = {
   greenLat: number;

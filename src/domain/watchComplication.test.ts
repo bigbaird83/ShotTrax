@@ -185,10 +185,13 @@ test('complication uses the watch widget families and the phone hole-map number'
   assert.match(clubPick, /session\.list\.statusLine/);
   assert.match(clubPick, /session\.list\.liveYardsLabel/);
   assert.match(clubPick, /Text\("to hole"\)/);
+  assert.match(clubPick, /session\.liveYardsReason/);
+  assert.match(clubPick, /!reason\.isEmpty/);
   assert.match(clubPick, /size: 28/);
   assert.match(clubPick, /size: 11/);
   assert.ok(clubPick.indexOf('size: 28') < clubPick.indexOf('Text("to hole")'));
   assert.ok(clubPick.indexOf('Text("to hole")') < clubPick.indexOf('size: 11'));
+  assert.ok(clubPick.indexOf('session.list.liveYardsLabel') < clubPick.indexOf('session.liveYardsReason'));
   assert.ok(clubPick.indexOf('session.list.statusLine') < clubPick.indexOf('session.list.liveYardsLabel'));
   assert.ok(clubPick.indexOf('session.list.liveYardsLabel') < clubPick.indexOf('session.madeIt()'));
   assert.match(clubPick, /fixedSize\(horizontal: true, vertical: true\)/);
@@ -198,6 +201,7 @@ test('complication uses the watch widget families and the phone hole-map number'
   assert.match(widget, /func faceText/);
   assert.match(widget, /isEmpty \? "—" : text/);
   assert.doesNotMatch(widget, /value:\s*""|inline:\s*""/);
+  assert.doesNotMatch(widget, /No green|Weak GPS|Location off|Finding GPS|liveYardsReason/);
   const widgetTarget = readFileSync(new URL('../../targets/watch-widget/expo-target.config.js', import.meta.url), 'utf8');
   assert.match(widgetTarget, /bundleIdentifier: `\$\{config\.ios\.bundleIdentifier\}\.watch\.widget`/);
   assert.match(widget, /complicationYards/);
