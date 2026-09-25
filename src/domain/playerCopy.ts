@@ -35,10 +35,20 @@ export const COPY = {
   exportCsv: 'Export CSV',
   exportCsvDone: 'CSV exported.',
   exportCsvFailed: 'Couldn’t export CSV.',
+  /** iOS share sheet shows the file name. `Share.share` title is not shown there. */
+  exportCsvSheetRounds: '1 of 2 · rounds.csv',
+  exportCsvSheetShots: '2 of 2 · shots.csv',
+  exportCsvSavedRoundsOnly: 'Saved rounds.csv. Couldn’t open shots.csv.',
   restoreRounds: 'Restore rounds',
   restoreRoundsConfirm:
     'Restore rounds from this file? Existing rounds with the same id will be replaced. Favorites are added. The bag changes only after you confirm the list.',
   restoreRoundsFailed: 'Couldn’t restore rounds.',
+  restoreRoundsNotFile:
+    'That isn’t a shottracker rounds file. Pick the .json from Export rounds. CSV can’t be restored.',
+  restoreRoundsCsv: 'CSV can’t be restored. Pick the .json from Export rounds.',
+  restoreRoundsEmpty: 'Nothing to restore in that file.',
+  restoreRoundsUnreadable: 'Couldn’t read that file.',
+  restoreRoundsSaveFailed: 'Couldn’t save the restored rounds.',
   bagRestoreTitle: 'Update bag?',
   bagRestoreHint: 'These are the only bag changes. Cancel leaves the bag as it is.',
   bagRestoreConfirm: 'Update bag',
@@ -233,7 +243,8 @@ export const COPY = {
   trends: 'Trends',
   dispersion: 'Dispersion',
   dispersionLede: 'Where each club finishes, measured from where you hit it toward that hole’s green.',
-  dispersionLimits: 'Only shots with a start, a finish, and a saved green count. Doglegs off the tee can read as misses toward the corner.',
+  dispersionLimits:
+    'GPS and placed shots with a start, a finish, and a saved green count. Placed shots may be less accurate. Doglegs off the tee can read as misses toward the corner.',
   dispersionEmpty: 'No measured shots yet. Mark shots on holes with a green pin and they land here.',
   dispersionAvg: 'Average',
   dispersionOffLine: 'Off line',
@@ -294,10 +305,37 @@ export const COPY = {
   summaryHome: 'Home',
 } as const;
 
+/**
+ * Dispersion summary when some included shots were placed by hand.
+ * Null when none were — the screen shows nothing in that case.
+ */
+export function formatDispersionPlacedNote(count: number): string | null {
+  const n = Math.round(count);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const shots = n === 1 ? '1 placed shot' : `${n} placed shots`;
+  return `Includes ${shots}. Placed shots are set by hand and may be less accurate than GPS-marked ones.`;
+}
+
+/** Sheet label for one CSV file. The two export sheets use the COPY lines above. */
+export function csvExportSheetTitle(position: number, total: number, filename: string): string {
+  if (position === 1 && total === 2 && filename === 'rounds.csv') return COPY.exportCsvSheetRounds;
+  if (position === 2 && total === 2 && filename === 'shots.csv') return COPY.exportCsvSheetShots;
+  return `${position} of ${total} · ${filename}`;
+}
+
+/** Toast for a restore that did not save. CSV is decided by the caller before this. */
+export function restoreFailureCopy(reason: string): string {
+  if (reason === 'not_shottrax') return COPY.restoreRoundsNotFile;
+  if (reason === 'empty') return COPY.restoreRoundsEmpty;
+  if (reason === 'unreadable') return COPY.restoreRoundsUnreadable;
+  if (reason === 'save_failed') return COPY.restoreRoundsSaveFailed;
+  return COPY.restoreRoundsFailed;
+}
+
 /** Bag row when the last five dropped shots agree and the typed number does not. */
 export function formatBagCarrySuggestion(clubLabel: string, yards: number): string {
   const n = Math.round(yards);
-  return `Your last 5 ${clubLabel} shots averaged ${n}. Update your ${clubLabel} to ${n}?`;
+  return `Your last five ${clubLabel} shots averaged ${n}. Update your ${clubLabel} to ${n}?`;
 }
 
 /** Suggested chip: that club's carry, not yards-to-green. */

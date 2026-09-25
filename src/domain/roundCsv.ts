@@ -40,6 +40,27 @@ export const SHOTS_CSV_HEADERS = [
   'typed_yards',
 ] as const;
 
+function quotedHeader(headers: readonly string[]): string {
+  return headers.map((header) => `"${header}"`).join(',');
+}
+
+/**
+ * Restore only accepts the Export rounds .json. A .csv name, or the header
+ * row from rounds.csv / shots.csv, is the file the picker should turn away.
+ */
+export function looksLikeRoundCsvRestore(name: string | null | undefined, text: string): boolean {
+  const fileName = (name ?? '').trim().toLowerCase();
+  if (fileName.endsWith('.csv')) return true;
+  const first = text.replace(/^\uFEFF/, '').split(/\r?\n/, 1)[0]?.trim() ?? '';
+  if (!first) return false;
+  return (
+    first === quotedHeader(ROUNDS_CSV_HEADERS) ||
+    first === quotedHeader(SHOTS_CSV_HEADERS) ||
+    first === ROUNDS_CSV_HEADERS.join(',') ||
+    first === SHOTS_CSV_HEADERS.join(',')
+  );
+}
+
 export type CsvRoundHole = {
   number: number;
   par: number | null;

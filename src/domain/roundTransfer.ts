@@ -6,7 +6,8 @@ import { isCourseCardLatLng, isValidLatLng, type LatLng } from './latLng';
 import { normalizeCourseDataSource } from './courseDataSource';
 import { SHOTTRAXX_BRAND } from './playerCopy';
 import { parseFairwayResult, type FairwayResult } from './fairwayGir';
-import type { ShotFixQuality, ShotSource } from './types';
+import { MAX_PENALTY_STROKES, MIN_PENALTY_STROKES } from './penalty';
+import type { PenaltyKind, ShotFixQuality, ShotSource } from './types';
 
 /**
  * Round history leaves the phone as JSON through the share sheet and comes
@@ -16,7 +17,13 @@ import type { ShotFixQuality, ShotSource } from './types';
  */
 
 export const ROUND_HISTORY_EXPORT_KIND = 'shottrax.round-history';
-/** v2 adds favorites and the bag. v1 files still restore. */
+/**
+ * v2 adds favorites and the bag. Penalties and drops are an optional `penalties`
+ * array on each hole, so this stays v2. A missing field means the file does not
+ * know the list (v1 and build 92). `[]` means the file says there are none.
+ * Build 92's parser ignores unknown hole fields, so a newer file that includes
+ * `penalties` still opens there.
+ */
 export const ROUND_HISTORY_EXPORT_VERSION = 2;
 
 export function isRoundHistoryExportVersion(version: unknown): version is 1 | 2 {
@@ -64,6 +71,19 @@ export type RoundTransferShot = {
   averageEligibleAt: string | null;
 };
 
+/** One penalty or drop. lat/lng are omitted unless they are a real point. */
+export type RoundTransferPenalty = {
+  /** Present when the file recorded the row id. Older files omit it. */
+  id?: string;
+  kind: PenaltyKind;
+  strokes: number;
+  reason: string;
+  note: string | null;
+  createdAt: string;
+  lat?: number;
+  lng?: number;
+};
+
 export type RoundTransferHole = {
   number: number;
   par: number | null;
@@ -86,6 +106,11 @@ export type RoundTransferHole = {
   /** Tee shot on par 4+. Null in older files or when never tapped. */
   fairway: FairwayResult | null;
   shots: RoundTransferShot[];
+  /**
+   * Undefined when the file has no `penalties` field (the list is unknown).
+   * `[]` means the file says this hole has none. New files always write the array.
+   */
+  penalties: RoundTransferPenalty[] | undefined;
 };
 
 export type RoundTransferRound = {
@@ -157,6 +182,8 @@ export type RoundHistoryImport =
       ignoredAverages: true;
       favorites: RoundTransferFavorite[];
       bag: RoundTransferBagClub[];
+      /** Document exportedAt, or null when it is missing or not a time. */
+      exportedAt: string | null;
     }
   | { ok: false; reason: 'not_shottrax' | 'empty' };
 
@@ -207,6 +234,7 @@ type ExportHoleInput = {
   completedAt?: string | null;
   fairway?: FairwayResult | null;
   shots: ExportShotInput[];
+  penalties?: readonly RoundTransferPenalty[];
 };
 
 type ExportRoundInput = {
@@ -340,9 +368,100 @@ export function acceptTransferShot(raw: unknown): RoundTransferShot | null {
   };
 }
 
+function penaltyKind(value: unknown): PenaltyKind | null {
+  return value === 'penalty' || value === 'drop' ? value : null;
+}
+
+function penaltyStrokes(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isInteger(value)) return null;
+  if (value < MIN_PENALTY_STROKES || value > MAX_PENALTY_STROKES) return null;
+  return value;
+}
+
+/**
+ * A penalty row imports only with a known kind, an integer stroke count in the
+ * app's range, a text reason, and a real timestamp. Anything else is skipped.
+ * Coordinates are kept only as a valid point — never invented, never 0,0.
+ */
+export function acceptTransferPenalty(raw: unknown): RoundTransferPenalty | null {
+  const record = asRecord(raw);
+  if (!record) return null;
+  const kind = penaltyKind(record.kind);
+  const strokes = penaltyStrokes(record.strokes);
+  const reason = text(record.reason);
+  const createdAt = isoTime(record.createdAt);
+  if (!kind || strokes == null || !reason || !createdAt) return null;
+  const point = pair(finite(record.lat), finite(record.lng));
+  const penalty: RoundTransferPenalty = {
+    kind,
+    strokes,
+    reason,
+    note: text(record.note),
+    createdAt,
+  };
+  const id = text(record.id);
+  if (id) penalty.id = id;
+  if (point) {
+    penalty.lat = point.lat;
+    penalty.lng = point.lng;
+  }
+  return penalty;
+}
+
+/**
+ * Phone rows kept beside an explicit file list. A row is kept when it is not
+ * already in the file (same id) and its createdAt is later than exportedAt.
+ * Missing or unparseable exportedAt treats every phone row as newer.
+ * Created at exactly exportedAt follows the file.
+ *
+ * A penalty deleted on the phone after the export has no deleted-at, so a file
+ * that still lists it puts that penalty back.
+ */
+export function penaltiesNewerThanExport<T extends { id?: string | null; createdAt: string }>(
+  file: readonly { id?: string | null }[],
+  phone: readonly T[],
+  exportedAt: string | null,
+): T[] {
+  const fileIds = new Set<string>();
+  for (const penalty of file) {
+    const id = penalty.id?.trim();
+    if (id) fileIds.add(id);
+  }
+  const exportedMs = exportTimeMs(exportedAt);
+  return phone.filter((penalty) => {
+    const id = penalty.id?.trim();
+    if (id && fileIds.has(id)) return false;
+    if (exportedMs == null) return true;
+    const createdMs = Date.parse(penalty.createdAt);
+    if (!Number.isFinite(createdMs)) return true;
+    return createdMs > exportedMs;
+  });
+}
+
+function exportTimeMs(value: string | null | undefined): number | null {
+  const stamp = isoTime(value);
+  if (!stamp) return null;
+  return Date.parse(stamp);
+}
+
+/**
+ * An array is a known list, possibly empty after bad rows are skipped.
+ * No field, null, or any non-array is unknown — not "none".
+ */
+function acceptPenalties(raw: unknown): RoundTransferPenalty[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const penalties: RoundTransferPenalty[] = [];
+  for (const item of raw) {
+    const accepted = acceptTransferPenalty(item);
+    if (accepted) penalties.push(accepted);
+  }
+  return penalties;
+}
+
 function acceptHole(raw: unknown): { hole: RoundTransferHole; rejectedShots: number } | null {
   const record = asRecord(raw);
   if (!record) return null;
+  // Unknown hole fields are ignored, same as build 92. A missing penalties field stays unknown.
   const number = finite(record.number);
   if (number == null || !Number.isInteger(number) || number < 1 || number > 18) return null;
   const shotsRaw = Array.isArray(record.shots) ? record.shots : [];
@@ -384,6 +503,7 @@ function acceptHole(raw: unknown): { hole: RoundTransferHole; rejectedShots: num
       completedAt: isoTime(record.completedAt),
       fairway: parseFairwayResult(record.fairway),
       shots,
+      penalties: acceptPenalties(record.penalties),
     },
   };
 }
@@ -474,6 +594,8 @@ export function buildRoundHistoryExport(args: {
         completedAt: isoTime(hole.completedAt),
         fairway: parseFairwayResult(hole.fairway ?? null),
         shots,
+        // New files always write the array, including [] when the hole has none.
+        penalties: acceptPenalties(hole.penalties) ?? [],
       });
     }
     rounds.push({
@@ -589,7 +711,16 @@ export function planRoundHistoryImport(raw: unknown): RoundHistoryImport {
   if (rounds.length === 0 && favorites.length === 0 && bag.length === 0) {
     return { ok: false, reason: 'empty' };
   }
-  return { ok: true, rounds, shots, rejectedShots, ignoredAverages: true, favorites, bag };
+  return {
+    ok: true,
+    rounds,
+    shots,
+    rejectedShots,
+    ignoredAverages: true,
+    favorites,
+    bag,
+    exportedAt: isoTime(record.exportedAt),
+  };
 }
 
 function acceptFavorites(raw: unknown): RoundTransferFavorite[] {
@@ -723,12 +854,75 @@ function canonicalPoint(point: LatLng | null | undefined): { lat: number; lng: n
   return { lat: point.lat, lng: point.lng };
 }
 
-/** Identity of a transferred round, ignoring row ids that restore regenerates. */
-export function sameRoundTransferContent(a: RoundTransferRound, b: RoundTransferRound): boolean {
-  return JSON.stringify(canonicalTransferRound(a)) === JSON.stringify(canonicalTransferRound(b));
+function canonicalPenalties(penalties: readonly RoundTransferPenalty[] | undefined) {
+  return [...(penalties ?? [])]
+    .map((penalty) => {
+      const point = pair(penalty.lat ?? null, penalty.lng ?? null);
+      return {
+        kind: penalty.kind,
+        strokes: penalty.strokes,
+        reason: penalty.reason,
+        note: text(penalty.note),
+        createdAt: penalty.createdAt,
+        lat: point?.lat ?? null,
+        lng: point?.lng ?? null,
+      };
+    })
+    .sort(
+      (a, b) =>
+        a.createdAt.localeCompare(b.createdAt) ||
+        a.kind.localeCompare(b.kind) ||
+        a.strokes - b.strokes ||
+        a.reason.localeCompare(b.reason) ||
+        (a.note ?? '').localeCompare(b.note ?? '') ||
+        (a.lat ?? 0) - (b.lat ?? 0) ||
+        (a.lng ?? 0) - (b.lng ?? 0),
+    );
 }
 
-function canonicalTransferRound(round: RoundTransferRound) {
+/**
+ * Identity of a transferred round, ignoring row ids that restore regenerates.
+ * Pass exportedAt (null if the file's stamp is missing or not a time) when `phone`
+ * is the round on the device and `file` is the backup. An explicit penalties list
+ * then matches if the phone already has that list plus any newer phone rows.
+ * Omit exportedAt to compare two explicit lists as written.
+ */
+export function sameRoundTransferContent(
+  phone: RoundTransferRound,
+  file: RoundTransferRound,
+  exportedAt?: string | null,
+): boolean {
+  if (exportedAt === undefined) {
+    return JSON.stringify(canonicalTransferRound(phone, file)) === JSON.stringify(canonicalTransferRound(file, phone));
+  }
+  const phonePenalties = (hole: RoundTransferHole, counterpart: RoundTransferHole | undefined) => {
+    if (hole.penalties == null || counterpart?.penalties == null) return undefined;
+    return hole.penalties;
+  };
+  const filePenalties = (hole: RoundTransferHole, counterpart: RoundTransferHole | undefined) => {
+    if (hole.penalties == null || counterpart?.penalties == null) return undefined;
+    return [...hole.penalties, ...penaltiesNewerThanExport(hole.penalties, counterpart.penalties, exportedAt)];
+  };
+  return (
+    JSON.stringify(canonicalTransferRound(phone, file, phonePenalties)) ===
+    JSON.stringify(canonicalTransferRound(file, phone, filePenalties))
+  );
+}
+
+function penaltiesKnownForComparison(hole: RoundTransferHole, other: RoundTransferRound): boolean {
+  if (hole.penalties == null) return false;
+  const counterpart = other.holes.find((row) => row.number === hole.number);
+  return counterpart?.penalties != null;
+}
+
+function canonicalTransferRound(
+  round: RoundTransferRound,
+  other: RoundTransferRound,
+  penaltiesOf?: (
+    hole: RoundTransferHole,
+    counterpart: RoundTransferHole | undefined,
+  ) => RoundTransferPenalty[] | undefined,
+) {
   return {
     id: round.id,
     startedAt: round.startedAt,
@@ -748,7 +942,14 @@ function canonicalTransferRound(round: RoundTransferRound) {
     teeTotalYards: round.teeTotalYards,
     holes: [...round.holes]
       .sort((left, right) => left.number - right.number)
-      .map((hole) => ({
+      .map((hole) => {
+        const counterpart = other.holes.find((row) => row.number === hole.number);
+        const listed = penaltiesOf
+          ? penaltiesOf(hole, counterpart)
+          : penaltiesKnownForComparison(hole, other)
+            ? hole.penalties
+            : undefined;
+        return {
         number: hole.number,
         par: hole.par,
         parSource: hole.parSource,
@@ -792,7 +993,9 @@ function canonicalTransferRound(round: RoundTransferRound) {
             holeOut: shot.holeOut,
             averageEligibleAt: shot.averageEligibleAt,
           })),
-      })),
+        ...(listed ? { penalties: canonicalPenalties(listed) } : {}),
+        };
+      }),
   };
 }
 

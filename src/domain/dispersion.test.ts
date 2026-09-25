@@ -69,6 +69,8 @@ test('plan: averages, middle-80% ranges, and left / on line / right shares', () 
     'club_7i',
   );
   assert.equal(plan.count, 6);
+  assert.equal(plan.placed, 0);
+  assert.equal(plan.points.every((point) => point.placed === false), true);
   assert.equal(plan.avgAlong, 151);
   assert.equal(plan.avgLateral, 5);
   // On-line band at ~150 yd is 7.5 yd: -2 and 3 are on line.
@@ -85,6 +87,7 @@ test('fewer than 5 shots: range is min–max', () => {
   assert.deepEqual(plan.lateralRange, { low: -4, high: 6 });
   const none = planDispersion([], 'club_7i');
   assert.equal(none.count, 0);
+  assert.equal(none.placed, 0);
   assert.equal(none.avgAlong, null);
   assert.equal(none.alongRange, null);
   assert.equal(formatMissShares(none), null);
@@ -118,12 +121,49 @@ test('labels', () => {
   assert.equal(onLineBand(200), 10);
 });
 
+test('placed shots are counted without changing which shots set the total or the averages', () => {
+  // Inclusive mean of every sample that already counts (GPS good / soft / forced and placed).
+  // Dropping the placed shots would leave count 3, avg along 120, avg lateral 0.
+  const plan = planDispersion(
+    [
+      shot({ shotId: 'good', end: at(-8, 100), source: 'gps', fixQuality: 'good' }),
+      shot({ shotId: 'soft', end: at(2, 120), source: 'gps', fixQuality: 'soft' }),
+      shot({ shotId: 'forced', end: at(6, 140), source: 'gps', fixQuality: 'forced' }),
+      shot({ shotId: 'placed-a', end: at(20, 160), source: 'placed', fixQuality: null }),
+      shot({ shotId: 'placed-b', end: at(10, 180), source: 'placed', fixQuality: null }),
+      shot({ shotId: 'none', end: at(0, 200), source: 'gps', fixQuality: 'none' }),
+      shot({ shotId: 'nogps', end: at(0, 200), source: 'no_gps', fixQuality: 'none', distanceYards: null }),
+      shot({ shotId: 'no-yards', end: at(0, 200), source: 'placed', fixQuality: null, distanceYards: null }),
+      shot({ shotId: 'other-club', end: at(0, 200), clubId: 'club_dr', source: 'placed', fixQuality: null, green: at(0, 400) }),
+      shot({ shotId: 'no-green', end: at(0, 150), source: 'placed', fixQuality: null, green: null }),
+    ],
+    'club_7i',
+  );
+  assert.equal(plan.placed, 2);
+  assert.equal(plan.count, 5);
+  assert.equal(plan.avgAlong, 140);
+  assert.equal(plan.avgLateral, 6);
+  assert.deepEqual(
+    plan.points.map((point) => [point.shotId, point.placed]),
+    [
+      ['good', false],
+      ['soft', false],
+      ['forced', false],
+      ['placed-a', true],
+      ['placed-b', true],
+    ],
+  );
+});
+
 test('dispersion screen reads saved shots only — no live GPS', async () => {
   const { readFileSync } = await import('node:fs');
   const page = readFileSync(new URL('../../app/dispersion.tsx', import.meta.url), 'utf8');
   assert.match(page, /listDispersionShots/);
   assert.match(page, /planDispersion/);
+  assert.match(page, /formatDispersionPlacedNote/);
   assert.doesNotMatch(page, /useLiveFix|getActiveRound|HoleMap/);
+  const plot = readFileSync(new URL('../../src/ui/DispersionPlot.tsx', import.meta.url), 'utf8');
+  assert.match(plot, /point\.placed \? ` · \$\{COPY\.placed\}`/);
   const repo = readFileSync(new URL('../db/repo.ts', import.meta.url), 'utf8');
   const helper = repo.slice(
     repo.indexOf('export function listDispersionShots'),

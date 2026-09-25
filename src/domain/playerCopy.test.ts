@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   COPY,
+  csvExportSheetTitle,
+  restoreFailureCopy,
   finishPuttsChip,
   formatPuttN,
   finishShotChip,
@@ -19,6 +21,7 @@ import {
   formatSiLabel,
   formatSuggestedClubChip,
   formatTeeMeta,
+  formatDispersionPlacedNote,
   markedSuggestedMessage,
   yardsToGreenPlayerLabel,
   showWaitingOnLocationLine,
@@ -26,6 +29,30 @@ import {
   lockFrameEmptyStateWaitsForPhone,
   yardsAreOnTheCard,
 } from './playerCopy';
+
+test('restore failure copy names each reason', () => {
+  assert.equal(
+    restoreFailureCopy('not_shottrax'),
+    'That isn’t a shottracker rounds file. Pick the .json from Export rounds. CSV can’t be restored.',
+  );
+  assert.equal(restoreFailureCopy('not_shottrax'), COPY.restoreRoundsNotFile);
+  assert.equal(COPY.restoreRoundsCsv, 'CSV can’t be restored. Pick the .json from Export rounds.');
+  assert.equal(restoreFailureCopy('empty'), 'Nothing to restore in that file.');
+  assert.equal(restoreFailureCopy('empty'), COPY.restoreRoundsEmpty);
+  assert.equal(restoreFailureCopy('unreadable'), 'Couldn’t read that file.');
+  assert.equal(restoreFailureCopy('unreadable'), COPY.restoreRoundsUnreadable);
+  assert.equal(restoreFailureCopy('save_failed'), 'Couldn’t save the restored rounds.');
+  assert.equal(restoreFailureCopy('save_failed'), COPY.restoreRoundsSaveFailed);
+  assert.equal(restoreFailureCopy('other'), COPY.restoreRoundsFailed);
+});
+
+test('csv export sheet titles name each file', () => {
+  assert.equal(COPY.exportCsvSheetRounds, '1 of 2 · rounds.csv');
+  assert.equal(COPY.exportCsvSheetShots, '2 of 2 · shots.csv');
+  assert.equal(COPY.exportCsvSavedRoundsOnly, 'Saved rounds.csv. Couldn’t open shots.csv.');
+  assert.equal(csvExportSheetTitle(1, 2, 'rounds.csv'), COPY.exportCsvSheetRounds);
+  assert.equal(csvExportSheetTitle(2, 2, 'shots.csv'), COPY.exportCsvSheetShots);
+});
 
 test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(formatParLabel(null), 'Par unknown');
@@ -223,6 +250,20 @@ test('picker remaining yards are 148 left only when quality is good or soft', ()
   assert.equal(formatPickerLeftYards({ yards: 401, quality: 'good' }), '401 left');
   assert.equal(yardsToGreenPlayerLabel({ yards: 282, quality: 'good' }).value, '282');
   assert.equal(yardsToGreenPlayerLabel({ yards: 401, quality: 'good' }).value, '401');
+});
+
+test('dispersion placed note is singular or plural, and blank at zero', () => {
+  assert.equal(
+    formatDispersionPlacedNote(1),
+    'Includes 1 placed shot. Placed shots are set by hand and may be less accurate than GPS-marked ones.',
+  );
+  assert.equal(
+    formatDispersionPlacedNote(3),
+    'Includes 3 placed shots. Placed shots are set by hand and may be less accurate than GPS-marked ones.',
+  );
+  assert.equal(formatDispersionPlacedNote(0), null);
+  assert.match(COPY.dispersionLimits, /placed shots/i);
+  assert.match(COPY.dispersionLimits, /less accurate/);
 });
 
 test('tee meta shows rating and slope in player voice when present', () => {

@@ -8,6 +8,7 @@ import { courseDataSourceLabel } from './courseDataSource';
 import {
   buildRoundsCsv,
   buildShotsCsv,
+  looksLikeRoundCsvRestore,
   ROUNDS_CSV_HEADERS,
   SHOTS_CSV_HEADERS,
   type CsvRound,
@@ -344,4 +345,17 @@ test('stored round export leaves missing par, score, putts, and source blank', n
   assert.equal(shots[2][11], '140');
   assert.equal(shots[3][10], 'Penalty');
   assert.equal(shots[3][2], '');
+});
+
+test('csv restore detection', () => {
+  assert.equal(looksLikeRoundCsvRestore('rounds.csv', 'hello'), true);
+  assert.equal(looksLikeRoundCsvRestore('Shots.CSV', ''), true);
+  assert.equal(looksLikeRoundCsvRestore('export/rounds.csv', 'x'), true);
+  assert.equal(looksLikeRoundCsvRestore('ShotTraxx-rounds-2026-09-25.json', buildRoundsCsv([])), true);
+  assert.equal(looksLikeRoundCsvRestore(null, buildShotsCsv([])), true);
+  assert.equal(looksLikeRoundCsvRestore('notes.txt', ROUNDS_CSV_HEADERS.join(',')), true);
+  assert.equal(looksLikeRoundCsvRestore('notes.txt', SHOTS_CSV_HEADERS.join(',')), true);
+  assert.equal(looksLikeRoundCsvRestore('backup.json', '{"kind":"shottrax.round-history","version":2}'), false);
+  assert.equal(looksLikeRoundCsvRestore('notes.txt', 'round_id,started_at'), false);
+  assert.equal(looksLikeRoundCsvRestore(null, ''), false);
 });
