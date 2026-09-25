@@ -15,6 +15,7 @@ import {
   listDispersionShots,
   listHandicapRounds,
   listHoles,
+  insertPenalty,
   listPenaltiesForHole,
   listRounds,
   listShotsForHole,
@@ -33,9 +34,10 @@ import { planDispersion } from './dispersion';
 import { planFairwayGir, sumFairwayGir } from './fairwayGir';
 import { planHandicap } from './handicap';
 import { planNerdOutLifetime } from './nerdOut';
-import { COPY } from './playerCopy';
+import { COPY, csvExportSheetTitle } from './playerCopy';
 import { formatHistoryRow } from './roundHistory';
 import { planReviewRounds, planRoundStats } from './roundReview';
+import { looksLikeRoundCsvRestore } from './roundCsv';
 import { serializeRoundHistory } from './roundTransfer';
 import { haversineYards } from './haversine';
 import { planTrend } from './trends';
@@ -289,6 +291,25 @@ test('a yard-test round leaves every stat unchanged and stays in history', needs
     null,
   );
 
+  insertPenalty(db, {
+    holeId: testHole.id,
+    par: 4,
+    currentScore: 8,
+    strokes: 1,
+    reason: 'water',
+    note: null,
+    kind: 'penalty',
+  });
+  insertPenalty(db, {
+    holeId: testHole.id,
+    par: 4,
+    currentScore: 9,
+    strokes: 1,
+    reason: 'unplayable',
+    note: null,
+    kind: 'drop',
+  });
+
   const csv = collectRoundCsv(db).roundsCsv;
   assert.match(csv, /round_label/);
   const lines = csv.split(/\r\n/).filter((line) => line.includes(testRound.id) || line.includes(real.id));
@@ -298,10 +319,22 @@ test('a yard-test round leaves every stat unchanged and stays in history', needs
   assert.ok(realLine);
   assert.match(testLine, /"Test"/);
   assert.doesNotMatch(realLine, /"Test"/);
+  assert.equal(csvExportSheetTitle(1, 2, 'rounds.csv'), '1 of 2 · rounds.csv');
+  assert.equal(csvExportSheetTitle(2, 2, 'shots.csv'), '2 of 2 · shots.csv');
+  assert.equal(csvExportSheetTitle(1, 2, 'rounds.csv'), COPY.exportCsvSheetRounds);
+  assert.equal(looksLikeRoundCsvRestore('rounds.csv', csv), true);
 
   const exported = collectRoundHistoryExport(db, '2026-09-25T00:00:00.000Z');
   assert.equal(exported.rounds.find((round) => round.id === testRound.id)?.test, true);
   assert.equal(exported.rounds.find((round) => round.id === real.id)?.test, false);
+  assert.deepEqual(
+    exported.rounds
+      .find((round) => round.id === testRound.id)
+      ?.holes.flatMap((hole) => (hole.penalties ?? []).map((row) => row.kind))
+      .sort(),
+    ['drop', 'penalty'],
+  );
+  assert.equal(looksLikeRoundCsvRestore('ShotTraxx-rounds.json', serializeRoundHistory(exported)), false);
   const raw = JSON.parse(serializeRoundHistory(exported)) as {
     favorites: { id: string; name: string; city: null; state: null; location: null }[];
   };
@@ -318,6 +351,13 @@ test('a yard-test round leaves every stat unchanged and stays in history', needs
   const restored = restoreRoundHistory(fresh, raw);
   assert.equal(restored.ok, true);
   assert.equal(getRound(fresh, testRound.id)?.isTest, true);
+  assert.equal(getRound(fresh, real.id)?.isTest, false);
+  assert.deepEqual(
+    listHoles(fresh, testRound.id)
+      .flatMap((hole) => listPenaltiesForHole(fresh, hole.id).map((row) => row.kind))
+      .sort(),
+    ['drop', 'penalty'],
+  );
   assert.equal(listFavorites(readSettingStore(fresh)).some((favorite) => favorite.id === YARD_TEST_COURSE_ID), false);
   assert.equal(
     listStatRounds(fresh).some((round) => round.id === testRound.id),
