@@ -1,0 +1,81 @@
+# Compiles the Apple Watch app and complication. The Ubuntu jobs in ci.yml
+# (Tests, Typecheck, Round flow) never compile Swift, so a broken Watch file
+# only used to fail inside a long EAS build.
+name: Watch compile
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'targets/**'
+      - 'app.json'
+      - 'app.config.*'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'ios/**'
+      - '.github/workflows/watch-compile.yml'
+      - '.github/scripts/compile-watch-targets.mjs'
+  push:
+    branches: [main]
+    paths:
+      - 'targets/**'
+      - 'app.json'
+      - 'app.config.*'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'ios/**'
+      - '.github/workflows/watch-compile.yml'
+      - '.github/scripts/compile-watch-targets.mjs'
+
+concurrency:
+  group: watch-compile-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  watch-compile:
+    name: Watch compile
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Restore Xcode DerivedData
+        id: watch-derived
+        uses: actions/cache/restore@v4
+        with:
+          path: .deriveddata
+          key: watch-derived-${{ runner.os }}-${{ hashFiles('package-lock.json', 'targets/**', 'app.json', 'app.config.js') }}
+          restore-keys: |
+            watch-derived-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Watch targets are plain Swift (no CocoaPods). Skipping pod install keeps
+      # this off the React Native build that EAS runs.
+      - name: Prebuild iOS project
+        run: npx expo prebuild -p ios --no-install
+        env:
+          CI: '1'
+          EXPO_NO_TELEMETRY: '1'
+
+      - name: Compile Watch targets
+        run: node .github/scripts/compile-watch-targets.mjs
+        env:
+          DERIVED_DATA_PATH: ${{ github.workspace }}/.deriveddata
+
+      - name: Save Xcode DerivedData
+        if: success() && steps.watch-derived.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .deriveddata
+          key: watch-derived-${{ runner.os }}-${{ hashFiles('package-lock.json', 'targets/**', 'app.json', 'app.config.js') }}
