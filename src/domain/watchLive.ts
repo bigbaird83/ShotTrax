@@ -13,12 +13,28 @@ import { planLiveGpsToPin, type LiveGpsToPin } from './yardsToGreen';
  *
  * `targets/watch/WatchClubSession.swift` `liveYards` / `phoneLiveShouldReplace`
  * / `reloadWidgetIfNeeded` mirror the helpers below. Do not drift the
- * thresholds (15 m / 25 m / 600 yd / 5 yd / 5 s).
+ * accuracy thresholds (15 m / 25 m / 600 yd). Complication reloads are a
+ * separate budget: ≥1 yd and at least 45 s, or an immediate hole change.
  */
 
-/** WidgetKit reload: a ≥5 yd step, or any change that has waited 5 s. */
-export const WATCH_WIDGET_RELOAD_MIN_YD = 5;
-export const WATCH_WIDGET_RELOAD_MIN_MS = 5_000;
+/**
+ * Complication reload budget. WidgetKit allows roughly 40–70 refreshes a day.
+ * Hole changes reload immediately. Any other displayed-yard change must be at
+ * least 1 yard and must wait out 45 seconds. The in-app number is not gated.
+ */
+export const WATCH_WIDGET_RELOAD_MIN_YD = 1;
+export const WATCH_WIDGET_RELOAD_MIN_MS = 45_000;
+
+/** Background GPS during the golf workout. Must ship with allowsBackgroundLocationUpdates. */
+export function watchLiveLocationBackgroundMode(): 'location' {
+  return 'location';
+}
+
+/** Wrist-down walking filter. Wrist-up stays unfiltered so a club mark stays under 3 s. */
+export const WATCH_LIVE_DISTANCE_FILTER_M = 3;
+
+export const WATCH_LOCATION_WHEN_IN_USE =
+  'ShotTraxx™ uses your Apple Watch location during a round to show yards to the green as you walk, and when you pick a club to mark where you hit from.';
 
 export type WatchGreenFields = {
   greenLat: number;
@@ -121,15 +137,10 @@ export function watchWidgetShouldReload(args: {
 }): boolean {
   const prev = args.previous;
   if (!prev) return true;
-  if (prev.hole !== args.hole || prev.quality !== args.quality) return true;
-  if ((prev.yards == null) !== (args.yards == null)) return true;
-  if (
-    prev.yards != null &&
-    args.yards != null &&
-    Math.abs(args.yards - prev.yards) >= WATCH_WIDGET_RELOAD_MIN_YD
-  ) {
-    return true;
-  }
-  if (prev.yards !== args.yards && args.nowMs - prev.atMs >= WATCH_WIDGET_RELOAD_MIN_MS) return true;
-  return false;
+  // Quality alone does not reload. good/soft show the same yards; none is a
+  // number↔dash change, which still waits out the interval unless the hole changed.
+  if (prev.hole !== args.hole) return true;
+  if (args.nowMs - prev.atMs < WATCH_WIDGET_RELOAD_MIN_MS) return false;
+  if (prev.yards == null || args.yards == null) return prev.yards !== args.yards;
+  return Math.abs(args.yards - prev.yards) >= WATCH_WIDGET_RELOAD_MIN_YD;
 }

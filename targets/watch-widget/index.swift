@@ -30,9 +30,10 @@ struct HoleYardsProvider: TimelineProvider {
   }
 
   func getTimeline(in context: Context, completion: @escaping (Timeline<HoleYardsEntry>) -> Void) {
-    // The Watch app reloads this timeline when the app-group yards change.
+    // The Watch app reloads this timeline when the displayed yards change.
     // .after re-reads the app group if a reload was dropped while the face was covered.
-    completion(Timeline(entries: [current()], policy: .after(Date().addingTimeInterval(15))))
+    // 60s matches the Watch reload ceiling so a 15s policy cannot spend the budget.
+    completion(Timeline(entries: [current()], policy: .after(Date().addingTimeInterval(60))))
   }
 
   private func current() -> HoleYardsEntry {
