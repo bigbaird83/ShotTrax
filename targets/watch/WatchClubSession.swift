@@ -315,10 +315,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     location.desiredAccuracy = kCLLocationAccuracyBest
     location.activityType = .fitness
     location.distanceFilter = Self.liveDistanceFilterM
-    // A pause at the ball cannot be resumed until the scene is active.
-    // watchOS marks locationManagerDidPauseLocationUpdates unavailable, so
-    // the stream is kept from pausing instead of restarting from that callback.
-    location.pausesLocationUpdatesAutomatically = false
+    // watchOS has no automatic-pause switch and no pause callback.
+    // A stop at the ball keeps delivering fixes.
     location.allowsBackgroundLocationUpdates = false
     let launchStatus = location.authorizationStatus
     let launchLabel = locationAuthLabel(launchStatus)
