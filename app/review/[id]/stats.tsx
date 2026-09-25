@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
 import { getClubMap, getRound, listHoles, listPenaltiesForHole, listShotsForHole } from '@/src/db/repo';
+import { formatFairwayMisses, formatHitRate } from '@/src/domain/fairwayGir';
 import { totalPenaltyStrokes } from '@/src/domain/penalty';
 import { COPY } from '@/src/domain/playerCopy';
 import { planRoundStats, type ReviewShotPick } from '@/src/domain/roundReview';
@@ -35,6 +36,8 @@ export default function ReviewStatsScreen() {
         completedAt: hole.completedAt,
         shots: listShotsForHole(db, hole.id),
         penaltyStrokes: totalPenaltyStrokes(listPenaltiesForHole(db, hole.id)),
+        puttsDone: hole.puttsDone,
+        fairway: hole.fairway,
       })),
       clubs: getClubMap(db),
     });
@@ -49,6 +52,7 @@ export default function ReviewStatsScreen() {
   }
 
   const longest = formatPick(stats.longest);
+  const fairwayMisses = formatFairwayMisses(stats.fairwayGir);
   const shortest = formatPick(stats.shortestFullSwing);
 
   return (
@@ -68,6 +72,21 @@ export default function ReviewStatsScreen() {
         <Row styles={styles} label={COPY.putts} value={stats.putts} />
         <Row styles={styles} label={COPY.nerdOutPuttsPerHole} value={stats.puttsPerHole ?? '—'} />
         <Row styles={styles} label={COPY.statsPenaltyStrokes} value={stats.penaltyStrokes} />
+      </View>
+
+      <View style={styles.block}>
+        <Text style={styles.section}>{COPY.statsFairwayGir}</Text>
+        <Row
+          styles={styles}
+          label={COPY.fairways}
+          value={formatHitRate(stats.fairwayGir.fairwaysHit, stats.fairwayGir.fairwayHoles)}
+        />
+        {fairwayMisses ? <Row styles={styles} label={COPY.fairwayMisses} value={fairwayMisses} /> : null}
+        <Row
+          styles={styles}
+          label={COPY.gir}
+          value={formatHitRate(stats.fairwayGir.greensHit, stats.fairwayGir.greenHoles)}
+        />
       </View>
 
       {stats.parAverages.length > 0 ? (

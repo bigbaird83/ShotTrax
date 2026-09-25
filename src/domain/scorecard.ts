@@ -1,3 +1,4 @@
+import { holeGir, type FairwayResult } from './fairwayGir';
 import { finishedHoleDisplayScore } from './holeScore';
 
 export type ScorecardMark = 'eagle' | 'birdie' | 'par' | 'bogey' | 'double' | null;
@@ -10,6 +11,10 @@ export type ScorecardHole = {
   mark: ScorecardMark;
   /** Close-state only. True when Made it / Hole Out never ran. */
   incomplete: boolean;
+  /** Player tap on par 4+. Null when unanswered or par 3. */
+  fairway: FairwayResult | null;
+  /** Null until the hole is closed with a real par. */
+  gir: boolean | null;
 };
 
 export type ScorecardDismiss = {
@@ -79,7 +84,7 @@ export function scorecardRowOpensHole(): true {
   return true;
 }
 
-/** In-round card: stored holes, par, score, putts. Missing par stays blank. No GIR / SG. */
+/** In-round card: stored holes, par, score, putts, FW, GIR. Missing par stays blank. No SG. */
 export function planScorecard(
   holes: {
     number: number;
@@ -89,6 +94,7 @@ export function planScorecard(
     puttsDone?: boolean;
     shotCount?: number;
     penaltyStrokes?: number;
+    fairway?: FairwayResult | null;
   }[],
   opts?: { currentHoleNumber?: number },
 ): ScorecardHole[] {
@@ -114,6 +120,15 @@ export function planScorecard(
           number: hole.number,
           currentHoleNumber: opts?.currentHoleNumber,
         }),
+        fairway: hole.fairway ?? null,
+        gir: holeGir({
+          par: hole.par,
+          score: hole.score,
+          putts: hole.putts,
+          puttsDone: hole.puttsDone === true,
+          shotCount: hole.shotCount,
+          penaltyStrokes: hole.penaltyStrokes,
+        }),
       };
     });
 }
@@ -135,8 +150,9 @@ export function scorecardClosesShot(): false {
   return false;
 }
 
-export function scorecardShowsGir(): false {
-  return false;
+/** FW / GIR columns. Blank when unknown — never invented. */
+export function scorecardShowsGir(): true {
+  return true;
 }
 
 export function scorecardShowsStrokesGained(): false {

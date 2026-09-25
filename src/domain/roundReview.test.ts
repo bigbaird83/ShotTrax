@@ -129,9 +129,37 @@ test('round stats come from the saved holes and shots passed in', () => {
   ]);
   assert.equal(stats.penaltyStrokes, 1);
   assert.deepEqual(stats.holeTimes, []);
-  assert.equal('gir' in stats, false);
-  assert.equal('fir' in stats, false);
-  assert.equal(roundStatsShowsFirGir(), false);
+  // No hole was closed with Made it / Hole Out and none tapped a fairway → nothing counted.
+  assert.deepEqual(stats.fairwayGir, {
+    fairwaysHit: 0,
+    fairwayHoles: 0,
+    missLeft: 0,
+    missRight: 0,
+    missShort: 0,
+    greensHit: 0,
+    greenHoles: 0,
+  });
+  assert.equal(roundStatsShowsFirGir(), true);
+});
+
+test('round stats count tapped fairways on par 4+ and GIR on closed holes', () => {
+  const stats = planRoundStats({
+    clubs,
+    holes: [
+      hole({ number: 1, par: 4, score: 4, putts: 2, puttsDone: true, fairway: 'hit' }),
+      hole({ number: 2, par: 3, score: 4, putts: 2, puttsDone: true, fairway: 'left' }),
+      hole({ number: 3, par: 5, score: 6, putts: 2, puttsDone: true, fairway: 'right' }),
+      hole({ number: 4, par: 4, score: 5, putts: 1, puttsDone: false, fairway: null }),
+    ],
+  });
+  // Par 3 fairway tap is ignored; unanswered hole 4 is not a miss.
+  assert.equal(stats.fairwayGir.fairwayHoles, 2);
+  assert.equal(stats.fairwayGir.fairwaysHit, 1);
+  assert.equal(stats.fairwayGir.missRight, 1);
+  assert.equal(stats.fairwayGir.missLeft, 0);
+  // H1 2 to green on par 4 (GIR), H2 2 to green on par 3 (miss), H3 4 on par 5 (miss), H4 not closed.
+  assert.equal(stats.fairwayGir.greenHoles, 3);
+  assert.equal(stats.fairwayGir.greensHit, 1);
 });
 
 test('round stats leave rows blank when nothing is stored', () => {
@@ -175,7 +203,7 @@ test('review screens read saved rounds only — no live GPS, no club book', () =
   assert.match(stats, /getRound/);
   assert.match(stats, /planRoundStats/);
   assert.doesNotMatch(stats, /useLiveFix|listClubAverages|HoleMap/);
-  assert.doesNotMatch(stats, /\bGIR\b|\bFIR\b|fairway|greens? in reg/i);
+  assert.match(stats, /formatHitRate/);
   const card = readFileSync(new URL('../../app/review/[id]/scorecard.tsx', import.meta.url), 'utf8');
   assert.match(card, /ScorecardBody/);
   assert.match(card, /shareRoundSnapshot/);

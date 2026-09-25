@@ -1,4 +1,5 @@
 import { isPutterClubId } from './defaultBag';
+import { planFairwayGir, type FairwayGirTotals, type FairwayResult } from './fairwayGir';
 import { formatHoleTimeSpan } from './livePace';
 import { planNerdOut, type NerdOutMarks } from './nerdOut';
 import { formatHistoryCourse, formatHistoryDate } from './roundHistory';
@@ -8,7 +9,7 @@ import type { ShotFixQuality, ShotSource } from './types';
 /**
  * Review previous rounds — list and one-round stats.
  * Everything here comes from saved rows (rounds / holes / shots / penalties).
- * No live GPS, no club book seeds, no GIR / FIR, nothing invented.
+ * No live GPS, no club book seeds, nothing invented. Fairways are player taps; GIR is from closed holes.
  */
 
 export type ReviewRoundIn = {
@@ -71,6 +72,9 @@ export type ReviewHoleIn = {
   completedAt: string | null;
   shots: ReviewShotIn[];
   penaltyStrokes: number;
+  /** Made it / Hole Out ran. GIR needs it. Older callers omit → no GIR. */
+  puttsDone?: boolean;
+  fairway?: FairwayResult | null;
 };
 
 export type ReviewClub = { id: string; name: string; sortOrder: number };
@@ -90,6 +94,7 @@ export type ReviewRoundStats = {
   parAverages: { par: 3 | 4 | 5; holes: number; avg: number }[];
   holeTimes: { number: number; span: string }[];
   penaltyStrokes: number;
+  fairwayGir: FairwayGirTotals;
 };
 
 /** One saved round's stats. Shot yards use the same samples as club averages; putter is never a full swing. */
@@ -179,10 +184,21 @@ export function planRoundStats(args: {
     parAverages,
     holeTimes,
     penaltyStrokes: args.holes.reduce((sum, hole) => sum + hole.penaltyStrokes, 0),
+    fairwayGir: planFairwayGir(
+      args.holes.map((hole) => ({
+        par: hole.par,
+        score: hole.score,
+        putts: hole.putts,
+        puttsDone: hole.puttsDone === true,
+        fairway: hole.fairway ?? null,
+        shotCount: hole.shots.length,
+        penaltyStrokes: hole.penaltyStrokes,
+      })),
+    ),
   };
 }
 
-/** Round stats never show fairways or greens in regulation — the app does not track them. */
-export function roundStatsShowsFirGir(): false {
-  return false;
+/** Round stats show fairways (player taps) and greens in regulation (closed holes). */
+export function roundStatsShowsFirGir(): true {
+  return true;
 }

@@ -50,6 +50,7 @@ import { planHoleStartStamp } from '../domain/livePace';
 import { parseSpectatorPayload, type SpectatorPayload } from '../domain/spectator';
 import { planHoleOutCloseToPin } from '../domain/holeOutClose';
 import { planFinishHoleScore, planRecomputeFinishedHoleScore } from '../domain/holeScore';
+import { parseFairwayResult, type FairwayResult } from '../domain/fairwayGir';
 import { clampPenaltyStrokes, scoreAfterPenalty, totalPenaltyStrokes } from '../domain/penalty';
 import {
   clampPutts,
@@ -141,6 +142,7 @@ type HoleRow = {
   putts_done: number | null;
   started_at?: string | null;
   completed_at?: string | null;
+  fairway?: string | null;
 };
 
 type ShotRow = {
@@ -247,6 +249,7 @@ function mapHole(row: HoleRow): Hole {
     puttsDone: (row.putts_done ?? 0) === 1,
     startedAt: row.started_at ?? null,
     completedAt: row.completed_at ?? null,
+    fairway: parseFairwayResult(row.fairway ?? null),
   };
 }
 
@@ -632,6 +635,7 @@ export function collectRoundHistoryExport(db: SQLiteDatabase, exportedAt: string
       puttsDone: hole.puttsDone,
       startedAt: hole.startedAt,
       completedAt: hole.completedAt,
+      fairway: hole.fairway,
       shots: listShotsForHole(db, hole.id).map((shot) => ({
         clubId: shot.clubId,
         seq: shot.seq,
@@ -736,7 +740,7 @@ function insertTransferredRound(
   for (const hole of round.holes) {
     const holeId = newId();
     db.runSync(
-      'INSERT INTO holes (id, round_id, number, par, par_source, score, yards, handicap, green_lat, green_lng, green_source, green_front_lat, green_front_lng, green_back_lat, green_back_lng, green_depth_yards, tee_lat, tee_lng, putts, putt_lengths, putts_done, started_at, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO holes (id, round_id, number, par, par_source, score, yards, handicap, green_lat, green_lng, green_source, green_front_lat, green_front_lng, green_back_lat, green_back_lng, green_depth_yards, tee_lat, tee_lng, putts, putt_lengths, putts_done, started_at, completed_at, fairway) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         holeId,
         roundId,
@@ -761,6 +765,7 @@ function insertTransferredRound(
         hole.puttsDone ? 1 : 0,
         hole.startedAt,
         hole.completedAt,
+        hole.fairway,
       ],
     );
     for (const shot of hole.shots) {
@@ -965,6 +970,11 @@ function stampHoleCompleted(db: SQLiteDatabase, holeId: string): void {
     new Date().toISOString(),
     holeId,
   ]);
+}
+
+/** One-tap fairway result. Null clears it. Stats only — never a mark or GPS write. */
+export function updateHoleFairway(db: SQLiteDatabase, holeId: string, fairway: FairwayResult | null): void {
+  db.runSync('UPDATE holes SET fairway = ? WHERE id = ?', [parseFairwayResult(fairway), holeId]);
 }
 
 export function updateHoleScore(db: SQLiteDatabase, holeId: string, score: number | null): void {

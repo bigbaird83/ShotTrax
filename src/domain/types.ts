@@ -1,3 +1,5 @@
+import type { FairwayResult } from './fairwayGir';
+
 export type FixQuality = 'good' | 'soft' | 'forced';
 
 /** Missed-mark / no GPS. Not a GPS quality; never a distance or top-3 sample. */
@@ -86,6 +88,8 @@ export type Hole = {
   startedAt: string | null;
   /** ISO time Made it / Hole Out first closed the hole. Null until then. */
   completedAt: string | null;
+  /** Tee shot on par 4+: one player tap. Null until answered — never GPS guessed. */
+  fairway: FairwayResult | null;
 };
 
 export type Shot = {

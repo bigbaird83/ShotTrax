@@ -64,7 +64,8 @@ function emptyMarks(): NerdOutMarks {
 
 /**
  * High-level round numbers from stored hole scores / putts only.
- * No club table, no hole maps. No GIR. No strokes gained. Vs par only when both exist.
+ * No club table, no hole maps. No strokes gained. Vs par only when both exist.
+ * Fairways / GIR live in `planFairwayGir` so this shape stays score + putts.
  */
 export function planNerdOut(args: {
   holeScores: (number | null)[];
@@ -136,8 +137,9 @@ export function planNerdOutLifetime(
   };
 }
 
-export function nerdOutShowsGir(): false {
-  return false;
+/** Fairways hit and greens in regulation — from player taps and closed holes. */
+export function nerdOutShowsGir(): true {
+  return true;
 }
 
 export function nerdOutShowsStrokesGained(): false {
