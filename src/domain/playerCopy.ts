@@ -112,6 +112,7 @@ export const COPY = {
   markWithoutClub: 'Mark without club',
   drop: 'Drop',
   penalty: 'Penalty',
+  penaltySaveFailed: 'Couldn’t save the penalty. Try again.',
   sayClub: 'Say a club',
   bag: 'Bag',
   fullBag: 'Full bag',

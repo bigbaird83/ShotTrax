@@ -6,7 +6,7 @@ import {
   getOpenShotForHole,
   insertNoGpsShot,
   insertOpenShot,
-  insertPenalty,
+  insertPenaltyInTransaction,
   applyShotPlacement,
   getShot,
   insertPlacedShot,
@@ -411,7 +411,8 @@ export async function takeDrop(
     if (plan.status === 'commit' && plan.closePrior) {
       applyClosedShot(db, plan.closePrior);
     }
-    insertPenalty(db, {
+    // Already inside BEGIN. insertPenalty would open a second transaction.
+    insertPenaltyInTransaction(db, {
       holeId: hole.id,
       par: hole.par,
       currentScore: hole.score,
