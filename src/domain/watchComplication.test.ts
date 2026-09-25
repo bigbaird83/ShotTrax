@@ -192,6 +192,16 @@ test('complication uses the watch widget families and the phone hole-map number'
   assert.ok(clubPick.indexOf('size: 28') < clubPick.indexOf('Text("to hole")'));
   assert.ok(clubPick.indexOf('Text("to hole")') < clubPick.indexOf('size: 11'));
   assert.ok(clubPick.indexOf('session.list.liveYardsLabel') < clubPick.indexOf('session.liveYardsReason'));
+  assert.match(clubPick, /if session\.list\.liveYardsTrusted/);
+  assert.match(clubPick, /foregroundStyle\(outdoorLime\)/);
+  assert.doesNotMatch(clubPick, /Color\("accent"\) : Color\("muted"\)/);
+  const emptyMark = clubPick.slice(clubPick.indexOf('} else {'), clubPick.indexOf('Group {'));
+  assert.match(emptyMark, /Capsule\(\)/);
+  assert.match(emptyMark, /\.fill\(outdoorCream\)/);
+  assert.match(emptyMark, /frame\(width: 26, height: 5\)/);
+  assert.match(emptyMark, /frame\(minHeight: 28, alignment: \.center\)/);
+  assert.match(emptyMark, /accessibilityLabel\(session\.list\.liveYardsLabel\)/);
+  assert.doesNotMatch(emptyMark, /minimumScaleFactor|Color\("muted"\)|Color\("accent"\)/);
   assert.ok(clubPick.indexOf('session.list.statusLine') < clubPick.indexOf('session.list.liveYardsLabel'));
   assert.ok(clubPick.indexOf('session.list.liveYardsLabel') < clubPick.indexOf('session.madeIt()'));
   assert.match(clubPick, /fixedSize\(horizontal: true, vertical: true\)/);
