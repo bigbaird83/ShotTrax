@@ -51,6 +51,7 @@ import { parseSpectatorPayload, type SpectatorPayload } from '../domain/spectato
 import { planHoleOutCloseToPin } from '../domain/holeOutClose';
 import { planFinishHoleScore, planRecomputeFinishedHoleScore } from '../domain/holeScore';
 import { parseFairwayResult, type FairwayResult } from '../domain/fairwayGir';
+import type { HandicapRoundIn } from '../domain/handicap';
 import { clampPenaltyStrokes, scoreAfterPenalty, totalPenaltyStrokes } from '../domain/penalty';
 import {
   clampPutts,
@@ -897,6 +898,25 @@ export function getShareBoard(db: SQLiteDatabase, token: string): SpectatorPaylo
   } catch {
     return null;
   }
+}
+
+/** Saved rounds shaped for `planHandicap`. Holes and tee only — never shots or GPS. */
+export function listHandicapRounds(db: SQLiteDatabase): HandicapRoundIn[] {
+  return listRounds(db).map((round) => ({
+    id: round.id,
+    courseName: round.courseName,
+    startedAt: round.startedAt,
+    finishedAt: round.finishedAt,
+    holeCount: round.holeCount,
+    teeRating: round.teeRating,
+    teeSlope: round.teeSlope,
+    holes: listHoles(db, round.id).map((hole) => ({
+      number: hole.number,
+      par: hole.par,
+      score: hole.score,
+      strokeIndex: hole.handicap,
+    })),
+  }));
 }
 
 export function listHoles(db: SQLiteDatabase, roundId: string): Hole[] {

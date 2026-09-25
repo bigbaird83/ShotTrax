@@ -2,7 +2,8 @@ import { useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
-import { getClubMap, getRound, listHoles, listPenaltiesForHole, listShotsForHole } from '@/src/db/repo';
+import { getClubMap, getRound, listHandicapRounds, listHoles, listPenaltiesForHole, listShotsForHole } from '@/src/db/repo';
+import { formatDifferential, planHandicap, roundDifferential } from '@/src/domain/handicap';
 import { formatFairwayMisses, formatHitRate } from '@/src/domain/fairwayGir';
 import { totalPenaltyStrokes } from '@/src/domain/penalty';
 import { COPY } from '@/src/domain/playerCopy';
@@ -43,6 +44,11 @@ export default function ReviewStatsScreen() {
     });
   }, [db, round, revision]);
 
+  const differential = useMemo(
+    () => (round ? roundDifferential(planHandicap(listHandicapRounds(db)), round.id) : null),
+    [db, round, revision],
+  );
+
   if (!round || !stats) {
     return (
       <Screen>
@@ -63,6 +69,13 @@ export default function ReviewStatsScreen() {
         <Row styles={styles} label={COPY.score} value={stats.score ?? '—'} />
         <Row styles={styles} label={COPY.nerdOutVsPar} value={scorecardDiffLabel(stats.toPar) ?? '—'} />
         <Row styles={styles} label={COPY.statsHolesPlayed} value={stats.holesPlayed} />
+        {differential ? (
+          <Row
+            styles={styles}
+            label={differential.nine ? `${COPY.statsDifferential} (9 + 9)` : COPY.statsDifferential}
+            value={formatDifferential(differential.differential)}
+          />
+        ) : null}
         <Text style={styles.muted}>
           {stats.marks.eagle} eagle · {stats.marks.birdie} birdie · {stats.marks.par} par · {stats.marks.bogey} bogey · {stats.marks.double} double+
         </Text>
