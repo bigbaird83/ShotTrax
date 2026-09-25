@@ -1,8 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
-import { getRound, listHoles, listRounds } from '@/src/db/repo';
+import { getRound, listHandicapRounds, listHoles, listRounds } from '@/src/db/repo';
 import type { Hole } from '@/src/domain/types';
 import {
   formatFairwayMisses,
@@ -11,6 +11,7 @@ import {
   sumFairwayGir,
   type FairwayGirTotals,
 } from '@/src/domain/fairwayGir';
+import { formatHandicapIndex, handicapSummaryLine, planHandicap } from '@/src/domain/handicap';
 import { planNerdOut, planNerdOutLifetime } from '@/src/domain/nerdOut';
 import { COPY } from '@/src/domain/playerCopy';
 import { scorecardDiffLabel } from '@/src/domain/scorecard';
@@ -58,6 +59,7 @@ export default function NerdOutScreen() {
       }),
     [holes],
   );
+  const handicap = useMemo(() => planHandicap(listHandicapRounds(db)), [db, rounds]);
   const roundFairwayGir = useMemo(() => fairwayGirForHoles(holes), [holes]);
   const lifetimeFairwayGir = useMemo(
     () =>
@@ -126,6 +128,18 @@ export default function NerdOutScreen() {
 
       <View style={styles.block} testID="nerd-out-lifetime">
         <Text style={styles.section}>{COPY.nerdOutLifetime}</Text>
+        <Pressable
+          testID="nerd-out-handicap"
+          accessibilityRole="button"
+          accessibilityLabel={`${COPY.hcpIndex} ${formatHandicapIndex(handicap.index)}`}
+          onPress={() => router.push('/handicap')}
+          style={styles.handicap}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.label}>{COPY.hcpIndex}</Text>
+            <Text style={styles.hint}>{handicapSummaryLine(handicap)}</Text>
+          </View>
+          <Text style={styles.value}>{formatHandicapIndex(handicap.index)}</Text>
+        </Pressable>
         <View style={styles.grid}>
           <Stat styles={styles} label={COPY.nerdOutFinishedRounds} value={lifetime.finishedRounds} />
           <Stat styles={styles} label={COPY.nerdOutPuttsPerRound} value={lifetime.puttsPerRound ?? '—'} />
@@ -156,6 +170,7 @@ export default function NerdOutScreen() {
         onPress={() => router.push('/review-rounds')}
       />
       <BigButton label={COPY.clubData} variant="secondary" onPress={() => router.push('/club-data')} />
+      <BigButton label={COPY.handicap} variant="secondary" onPress={() => router.push('/handicap')} />
     </Screen>
   );
 }
@@ -195,5 +210,16 @@ function makeStyles(colors: ColorPalette) {
     block: { gap: 8, backgroundColor: colors.bgElevated, padding: 14, borderRadius: 16 },
     grid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 },
     stat: { width: '50%', gap: 2 },
+    handicap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      minHeight: 64,
+      padding: 10,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.line,
+      backgroundColor: colors.bg,
+    },
   });
 }
