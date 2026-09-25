@@ -51,6 +51,7 @@ import {
 } from '../domain/favorites';
 import { buildRoundsCsv, buildShotsCsv, type CsvShot } from '../domain/roundCsv';
 import {
+  acceptTransferPenalty,
   buildRoundHistoryExport,
   planFavoriteRestoreMerge,
   planRoundHistoryImport,
@@ -59,6 +60,7 @@ import {
   type RoundHistoryDocument,
   type RoundTransferBagClub,
   type RoundTransferFavorite,
+  type RoundTransferPenalty,
   type RoundTransferRound,
   type RoundTransferShot,
 } from '../domain/roundTransfer';
@@ -633,6 +635,26 @@ export function attachCourseToRound(
   });
 }
 
+function transferredPenalties(db: SQLiteDatabase, holeId: string): RoundTransferPenalty[] {
+  return db
+    .getAllSync<PenaltyRow>(
+      'SELECT * FROM hole_penalties WHERE hole_id = ? ORDER BY created_at ASC',
+      [holeId],
+    )
+    .flatMap((row) => {
+      const penalty = acceptTransferPenalty({
+        kind: row.kind,
+        strokes: row.strokes,
+        reason: row.reason,
+        note: row.note,
+        createdAt: row.created_at,
+        lat: row.lat,
+        lng: row.lng,
+      });
+      return penalty ? [penalty] : [];
+    });
+}
+
 export function collectRoundHistoryExport(db: SQLiteDatabase, exportedAt: string): RoundHistoryDocument {
   const store = readSettingStore(db);
   const rounds = listRounds(db).map((round) => ({
@@ -674,6 +696,7 @@ export function collectRoundHistoryExport(db: SQLiteDatabase, exportedAt: string
       startedAt: hole.startedAt,
       completedAt: hole.completedAt,
       fairway: hole.fairway,
+      penalties: transferredPenalties(db, hole.id),
       shots: listShotsForHole(db, hole.id).map((shot) => ({
         clubId: shot.clubId,
         seq: shot.seq,
@@ -874,6 +897,26 @@ function insertTransferredRound(
         ],
       );
     }
+    for (const penalty of hole.penalties ?? []) {
+      const point =
+        penalty.lat != null && penalty.lng != null && isValidLatLng({ lat: penalty.lat, lng: penalty.lng })
+          ? { lat: penalty.lat, lng: penalty.lng }
+          : null;
+      db.runSync(
+        'INSERT INTO hole_penalties (id, hole_id, strokes, reason, note, created_at, kind, lat, lng) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          newId(),
+          holeId,
+          penalty.strokes,
+          penalty.reason,
+          penalty.note,
+          penalty.createdAt,
+          penalty.kind,
+          point?.lat ?? null,
+          point?.lng ?? null,
+        ],
+      );
+    }
   }
 }
 
@@ -936,6 +979,7 @@ function storedRoundAsTransfer(db: SQLiteDatabase, id: string): RoundTransferRou
       completedAt: hole.completedAt,
       fairway: hole.fairway,
       shots,
+      penalties: transferredPenalties(db, hole.id),
     };
   });
   return {
