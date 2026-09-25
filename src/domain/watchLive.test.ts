@@ -8,6 +8,10 @@ import { SOFT_GPS_MAX_M, SOFT_GPS_MIN_M } from '../config/sensing';
 import { clubListPayload, parseClubList } from './watchMessages';
 import {
   WATCH_LIVE_DISTANCE_FILTER_M,
+  WATCH_LIVE_YARDS_FINDING_GPS,
+  WATCH_LIVE_YARDS_LOCATION_OFF,
+  WATCH_LIVE_YARDS_NO_GREEN,
+  WATCH_LIVE_YARDS_WEAK_GPS,
   WATCH_LOCATION_WHEN_IN_USE,
   WATCH_WIDGET_RELOAD_MIN_MS,
   WATCH_WIDGET_RELOAD_MIN_YD,
@@ -16,6 +20,7 @@ import {
   watchClubCarry,
   watchGreenFields,
   watchLiveLocationBackgroundMode,
+  watchLiveYardsReason,
   watchWidgetShouldReload,
 } from './watchLive';
 
@@ -66,6 +71,48 @@ test('Watch live yards use the phone good/soft/none bands and the 600 yard cap',
     assert.equal(far.quality, 'none');
     assert.equal(far.yards, null);
   }
+});
+
+test('a dash names why there are no live yards and never invents a number', () => {
+  const base = {
+    hasTrustedYards: false,
+    hasGreen: true,
+    authorization: 'authorized' as const,
+    accuracyM: null as number | null,
+  };
+  assert.equal(
+    watchLiveYardsReason({ ...base, hasTrustedYards: true, hasGreen: false, authorization: 'denied', accuracyM: 80 }),
+    null,
+  );
+  assert.equal(watchLiveYardsReason({ ...base, hasGreen: false }), WATCH_LIVE_YARDS_NO_GREEN);
+  assert.equal(
+    watchLiveYardsReason({ ...base, hasGreen: false, authorization: 'denied', accuracyM: 80 }),
+    WATCH_LIVE_YARDS_NO_GREEN,
+  );
+  assert.equal(watchLiveYardsReason({ ...base, authorization: 'denied' }), WATCH_LIVE_YARDS_LOCATION_OFF);
+  assert.equal(
+    watchLiveYardsReason({ ...base, authorization: 'restricted', accuracyM: 40 }),
+    WATCH_LIVE_YARDS_LOCATION_OFF,
+  );
+  assert.equal(watchLiveYardsReason({ ...base, accuracyM: SOFT_GPS_MAX_M + 0.1 }), WATCH_LIVE_YARDS_WEAK_GPS);
+  assert.equal(watchLiveYardsReason({ ...base, accuracyM: 80 }), WATCH_LIVE_YARDS_WEAK_GPS);
+  assert.equal(watchLiveYardsReason({ ...base, authorization: 'notDetermined', accuracyM: 40 }), WATCH_LIVE_YARDS_WEAK_GPS);
+  assert.equal(watchLiveYardsReason({ ...base, accuracyM: SOFT_GPS_MAX_M }), null);
+  assert.equal(watchLiveYardsReason({ ...base, accuracyM: 0 }), null);
+  assert.equal(watchLiveYardsReason({ ...base, accuracyM: null }), WATCH_LIVE_YARDS_FINDING_GPS);
+  assert.equal(watchLiveYardsReason({ ...base, accuracyM: -1 }), WATCH_LIVE_YARDS_FINDING_GPS);
+  assert.equal(watchLiveYardsReason({ ...base, accuracyM: Number.POSITIVE_INFINITY }), WATCH_LIVE_YARDS_FINDING_GPS);
+  assert.equal(watchLiveYardsReason({ ...base, authorization: 'notDetermined', accuracyM: null }), null);
+  for (const reason of [
+    WATCH_LIVE_YARDS_NO_GREEN,
+    WATCH_LIVE_YARDS_WEAK_GPS,
+    WATCH_LIVE_YARDS_LOCATION_OFF,
+    WATCH_LIVE_YARDS_FINDING_GPS,
+  ]) {
+    assert.equal(reason.trim().length > 0, true);
+    assert.doesNotMatch(reason, /\d/);
+  }
+  assert.equal(watchLiveYardsReason(base), WATCH_LIVE_YARDS_FINDING_GPS);
 });
 
 test('a stale phone push cannot overwrite fresher Watch yards on the same hole', () => {
@@ -213,6 +260,24 @@ test('Watch live location stays up wrist-down and stops when the round ends', ()
   assert.match(session, /launch authorization=/);
   assert.match(session, /scene active authorization=/);
   assert.match(session, /clubList missing green/);
+  assert.match(session, /@Published private\(set\) var liveYardsReason: String\?/);
+  const reason = session.slice(
+    session.indexOf('private static func liveYardsReason'),
+    session.indexOf('private func liveAuthBucket'),
+  );
+  assert.ok(reason.indexOf('if hasTrustedYards { return nil }') < reason.indexOf('return "No green"'));
+  assert.ok(reason.indexOf('return "No green"') < reason.indexOf('return "Location off"'));
+  assert.ok(reason.indexOf('return "Location off"') < reason.indexOf('return "Weak GPS"'));
+  assert.ok(reason.indexOf('return "Weak GPS"') < reason.indexOf('return "Finding GPS"'));
+  assert.match(reason, /accuracyM > 25/);
+  assert.match(reason, /authorization == "authorized"/);
+  assert.match(reason, /return nil/);
+  const authChange = session.slice(
+    session.indexOf('func locationManagerDidChangeAuthorization'),
+    session.indexOf('func locationManager(_: CLLocationManager, didFailWithError'),
+  );
+  assert.ok(authChange.indexOf('@unknown default') < authChange.indexOf('syncLiveYardsReason()'));
+  assert.match(authChange, /case \.notDetermined:\s*break/);
   const ask = session.slice(
     session.indexOf('private func requestLiveLocationAuthorizationIfNeeded'),
     session.indexOf('private func syncLiveLocation'),

@@ -547,10 +547,17 @@ struct ContentView: View {
                 .foregroundStyle(session.list.liveYardsTrusted ? Color("accent") : Color("muted"))
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
-              Text("to hole")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Color("muted"))
-                .lineLimit(1)
+              Group {
+                if let reason = session.liveYardsReason, !reason.isEmpty {
+                  Text(reason)
+                } else {
+                  Text("to hole")
+                }
+              }
+              .font(.system(size: 11, weight: .semibold))
+              .foregroundStyle(Color("muted"))
+              .lineLimit(1)
+              .minimumScaleFactor(0.7)
             }
             .fixedSize(horizontal: true, vertical: true)
           }

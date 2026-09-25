@@ -227,6 +227,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   @Published var putt = PuttSheetState()
   @Published var nearby = NearbyState()
   @Published var feedback: String = ""
+  /// Caption under the dash. Nil when a yardage is showing. Never an empty string.
+  @Published private(set) var liveYardsReason: String? = nil
   /// Shown on the club list when Health already denied workout share. Empty when hidden.
   @Published var workoutDeniedHint = ""
   static let workoutDeniedHintText = "Watch may sleep wrist-down. Turn on Workouts for ShotTraxx in the Health app on your iPhone."
@@ -334,6 +336,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
     loadPending()
     syncRoundStay()
+    syncLiveYardsReason()
   }
 
   /// Ask the phone for a fresh Watch Home. Cached rows stay up meanwhile.
@@ -1231,6 +1234,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
     list = next
     persist(next)
+    syncLiveYardsReason()
     if holeChanged {
       dropStaleClubPicks(liveHole: next.holeNumber)
     }
@@ -1948,6 +1952,42 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     liveYardsLog.info("location updates stopped")
   }
 
+  /// Mirrors `watchLiveYardsReason`. Dash stays the number. Nil keeps "to hole".
+  private static func liveYardsReason(hasTrustedYards: Bool, hasGreen: Bool, authorization: String, accuracyM: Double?) -> String? {
+    if hasTrustedYards { return nil }
+    if !hasGreen { return "No green" }
+    if authorization == "denied" || authorization == "restricted" { return "Location off" }
+    if let accuracyM, accuracyM.isFinite, accuracyM > 25 { return "Weak GPS" }
+    let usable = accuracyM.map { $0.isFinite && $0 >= 0 && $0 <= 25 } ?? false
+    if !usable && authorization == "authorized" { return "Finding GPS" }
+    return nil
+  }
+
+  private func liveAuthBucket(_ status: CLAuthorizationStatus) -> String {
+    switch status {
+    case .denied:
+      return "denied"
+    case .restricted:
+      return "restricted"
+    case .authorizedWhenInUse, .authorizedAlways:
+      return "authorized"
+    default:
+      return "notDetermined"
+    }
+  }
+
+  private func syncLiveYardsReason() {
+    let next = Self.liveYardsReason(
+      hasTrustedYards: list.liveYardsTrusted,
+      hasGreen: list.greenLat != nil && list.greenLng != nil,
+      authorization: liveAuthBucket(location.authorizationStatus),
+      accuracyM: lastFix?.horizontalAccuracy
+    )
+    if next != liveYardsReason {
+      liveYardsReason = next
+    }
+  }
+
   /// The init request can run before the scene is active, and watchOS then never
   /// shows the sheet. Ask again once a live round is on screen.
   private func requestLiveLocationAuthorizationIfNeeded() {
@@ -1993,6 +2033,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       @unknown default:
         break
       }
+      self.syncLiveYardsReason()
     }
   }
 
@@ -2007,6 +2048,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
         self.disableWorkoutBackgroundLocation()
         self.endLiveLocation()
       }
+      self.syncLiveYardsReason()
     }
   }
 
@@ -2025,6 +2067,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       guard let self else { return }
       self.lastFix = fix
       self.adoptWatchFix(fix)
+      self.syncLiveYardsReason()
     }
   }
 
