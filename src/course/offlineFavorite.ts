@@ -1,3 +1,4 @@
+import { isYardTestCourseId } from './yardTestCourse';
 import { loadGcaPaintCandidate } from './client';
 import type { CourseHydrateMatch } from './hydrate';
 import { getSharedCoursePaintCache, type CoursePaintCache } from './paintCache';
@@ -63,6 +64,7 @@ export async function downloadFavoriteForOffline(
   store: JsonStore,
   deps: OfflineDownloadDeps = {},
 ): Promise<OfflinePackStatus> {
+  if (isYardTestCourseId(course.id)) return 'miss';
   const now = deps.now ?? (() => new Date().toISOString());
   const identity = matchOf(course);
   if (courseIsHardMiss(identity)) {

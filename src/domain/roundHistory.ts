@@ -8,6 +8,8 @@ export type HistoryRow = {
   tees: string;
   score: string;
   relative: string;
+  /** 'Test' on a yard-test round. Null on every other round. */
+  testLabel: string | null;
 };
 
 export function formatHistoryDate(iso: string): string {
@@ -62,6 +64,7 @@ export function formatHistoryRow(args: {
   teeName: string | null;
   score: number | null;
   nowMs?: number;
+  test?: boolean;
 }): HistoryRow {
   return {
     date: formatHistoryDate(args.startedAt),
@@ -69,6 +72,7 @@ export function formatHistoryRow(args: {
     tees: formatHistoryTees(args.teeName),
     score: formatHistoryScoreLabel(args.score),
     relative: formatHistoryRelativeDay(args.startedAt, args.nowMs),
+    testLabel: args.test ? COPY.testRound : null,
   };
 }
 

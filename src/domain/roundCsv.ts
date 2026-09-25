@@ -1,5 +1,6 @@
 import { buildCsv, csvNumber, csvText } from './csv';
 import { courseDataSourceLabel } from './courseDataSource';
+import { COPY } from './playerCopy';
 
 export const ROUNDS_CSV_FILENAME = 'rounds.csv';
 export const SHOTS_CSV_FILENAME = 'shots.csv';
@@ -21,6 +22,7 @@ export const ROUNDS_CSV_HEADERS = [
     const n = index + 1;
     return [`hole_${n}_par`, `hole_${n}_score`];
   }).flat(),
+  'round_label',
 ] as const;
 
 export const SHOTS_CSV_HEADERS = [
@@ -77,6 +79,8 @@ export type CsvRound = {
   holesPlayed: number | null;
   /** Stored token (cache / osm / gca / golfapi). Blank in the file when unknown. */
   courseDataSource: string | null;
+  /** Yard-test rounds are labeled Test. Every other round leaves the cell blank. */
+  test?: boolean;
   holes: readonly CsvRoundHole[];
 };
 
@@ -150,6 +154,7 @@ export function buildRoundsCsv(rounds: readonly CsvRound[]): string {
       cells.push(csvNumber(hole?.par ?? null));
       cells.push(csvNumber(hole?.score ?? null));
     }
+    cells.push(csvText(round.test ? COPY.testRound : null));
     return cells;
   });
   return buildCsv(ROUNDS_CSV_HEADERS, rows);

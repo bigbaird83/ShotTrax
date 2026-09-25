@@ -11,11 +11,15 @@ import {
   setCourseDistanceUnit,
   setSetting,
   setThunderbirdPinSheet,
+  purgeYardTestCourseSaved,
 } from '@/src/db/repo';
 import {
+  advanceYardTestUnlockTap,
   setYardTestCourseSwitch,
-  yardTestCourseBuildAllowed,
+  setYardTestCourseUnlocked,
   yardTestCourseEnabled,
+  yardTestCourseSettingsRowVisible,
+  type YardTestUnlockTapState,
 } from '@/src/course/yardTestCourse';
 import { formatBuildStamp, readBuildStamp } from '@/src/domain/buildStamp';
 import { advanceVersionRowTap, type VersionRowTapState } from '@/src/domain/diagnostics';
@@ -39,10 +43,11 @@ export default function SettingsScreen() {
   const unit = getCourseDistanceUnit(db);
   const themeId = getColorTheme(db);
   const pinSheet = getThunderbirdPinSheet(db);
-  const showYardTestCourse = yardTestCourseBuildAllowed();
+  const showYardTestCourse = yardTestCourseSettingsRowVisible();
   const yardTestCourseOn = yardTestCourseEnabled();
   const buildStamp = useMemo(() => formatBuildStamp(readBuildStamp()), []);
   const versionTaps = useRef<VersionRowTapState>({ count: 0, firstAtMs: null });
+  const yardUnlockTaps = useRef<YardTestUnlockTapState>({ count: 0, firstAtMs: null });
   const diagnosticsOpen = useRef(false);
 
   const openDiagnostics = useCallback(() => {
@@ -76,6 +81,15 @@ export default function SettingsScreen() {
 
   const setYardTestCourse = (on: boolean) => {
     setYardTestCourseSwitch(on, (key, value) => setSetting(db, key, value));
+    purgeYardTestCourseSaved(db);
+    bump();
+  };
+
+  const onCreditsTap = () => {
+    const next = advanceYardTestUnlockTap(yardUnlockTaps.current, Date.now());
+    yardUnlockTaps.current = { count: next.count, firstAtMs: next.firstAtMs };
+    if (!next.unlocked) return;
+    setYardTestCourseUnlocked((key, value) => setSetting(db, key, value));
     bump();
   };
 
@@ -162,7 +176,9 @@ export default function SettingsScreen() {
       ) : null}
 
       <Text style={styles.groupLabel}>{COPY.credits}</Text>
-      <Text style={styles.credits}>{COPY.courseDataCredits}</Text>
+      <Pressable accessibilityRole="text" onPress={onCreditsTap}>
+        <Text style={styles.credits}>{COPY.courseDataCredits}</Text>
+      </Pressable>
       <Text style={styles.contact}>{COPY.contactLine}</Text>
       <Pressable
         accessibilityRole="text"

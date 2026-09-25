@@ -1,6 +1,7 @@
+import { isThunderbirdHeberSpringsIdentity } from '../course/thunderbirdLock';
+import { isYardTestCourseId } from '../course/yardTestCourse';
 import { courseNeedsPinSheets } from './missCard';
 import { isValidLatLng, type LatLng } from './latLng';
-import { isThunderbirdHeberSpringsIdentity } from '../course/thunderbirdLock';
 
 export const FAVORITES_SETTING_KEY = 'course.favorites';
 export const OFFLINE_PACKS_SETTING_KEY = 'course.offline.packs';
@@ -256,7 +257,9 @@ export function parseFavorites(raw: string | null | undefined): FavoriteCourse[]
 }
 
 export function listFavorites(store: JsonStore): FavoriteCourse[] {
-  return parseFavorites(store.get(FAVORITES_SETTING_KEY));
+  return parseFavorites(store.get(FAVORITES_SETTING_KEY)).filter(
+    (course) => !isYardTestCourseId(course.id),
+  );
 }
 
 export function isFavorite(store: JsonStore, courseId: string | null | undefined): boolean {
@@ -266,6 +269,7 @@ export function isFavorite(store: JsonStore, courseId: string | null | undefined
 }
 
 export function setFavorite(store: JsonStore, course: FavoriteCourse, starred: boolean): FavoriteCourse[] {
+  if (starred && isYardTestCourseId(course.id)) return listFavorites(store);
   const current = listFavorites(store).filter((row) => row.id !== course.id);
   const next = starred ? [course, ...current] : current;
   store.set(FAVORITES_SETTING_KEY, JSON.stringify(next));

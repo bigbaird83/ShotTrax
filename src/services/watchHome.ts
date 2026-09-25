@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getWatchBridgeNative } from '@/modules/watch-bridge';
 import { getCourseDataClient } from '@/src/course/client';
+import { coursesForWatchNearby } from '@/src/course/yardTestCourse';
 import type { CourseSummary } from '@/src/course/types';
 import { downloadFavoriteForOffline } from '@/src/course/offlineFavorite';
 import { getActiveRound, readSettingStore } from '@/src/db/repo';
@@ -93,7 +94,9 @@ function loadNearbyCache(db: SQLiteDatabase): void {
   nearbyCacheLoaded = true;
   if (lastNearby.length > 0) return;
   try {
-    lastNearby = parseCachedNearby(readSettingStore(db).get(WATCH_HOME_LAST_NEARBY_KEY)).map(
+    lastNearby = coursesForWatchNearby(
+      parseCachedNearby(readSettingStore(db).get(WATCH_HOME_LAST_NEARBY_KEY)),
+    ).map(
       (row): CourseSummary => ({
         id: row.id,
         name: row.name,
@@ -112,10 +115,11 @@ function loadNearbyCache(db: SQLiteDatabase): void {
 
 function saveNearbyCache(db: SQLiteDatabase, rows: CourseSummary[]): void {
   try {
+    const kept = coursesForWatchNearby(rows);
     readSettingStore(db).set(
       WATCH_HOME_LAST_NEARBY_KEY,
       JSON.stringify(
-        rows.map((row) =>
+        kept.map((row) =>
           row.distanceMeters != null
             ? { id: row.id, name: row.name, distanceMeters: row.distanceMeters }
             : { id: row.id, name: row.name },
@@ -148,7 +152,7 @@ function buildFromCache(ctx: WatchHomeContext): WatchHomeMessage {
   const active = getActiveRound(ctx.db);
   return buildWatchHome({
     favorites: listFavorites(readSettingStore(ctx.db)),
-    nearby: lastNearby,
+    nearby: coursesForWatchNearby(lastNearby),
     locationSource: lastSource,
     live: active ? { courseName: active.courseName, courseId: active.courseApiId } : null,
   });

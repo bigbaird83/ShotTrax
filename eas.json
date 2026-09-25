@@ -13,7 +13,10 @@
     },
     "production": {
       "autoIncrement": true,
-      "credentialsSource": "remote"
+      "credentialsSource": "remote",
+      "env": {
+        "EXPO_PUBLIC_DEBUG_YARD_COURSE": "1"
+      }
     }
   },
   "submit": {

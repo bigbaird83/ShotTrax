@@ -24,8 +24,8 @@ import {
 } from './opengolf';
 import type { CourseDetail, CourseSummary, HoleCourseData } from './types';
 import {
-  YARD_TEST_CATALOG_ENTRY,
   isYardTestCourseId,
+  yardTestCatalogEntry,
   yardTestCourseBuildAllowed,
   yardTestCourseDetail,
   yardTestCourseNearby,
@@ -260,8 +260,8 @@ export function isLocalCatalogId(id: string | null | undefined): boolean {
 export function catalogEntryById(id: string | null | undefined): LocalCourseCatalogEntry | null {
   const value = id?.trim() ?? '';
   if (!value) return null;
-  // TEMP yard test course: dev / debugYardCourse builds only. Never in production.
-  if (isYardTestCourseId(value)) return yardTestCourseBuildAllowed() ? YARD_TEST_CATALOG_ENTRY : null;
+  // TEMP yard test course: only when the build gate and geometry both pass.
+  if (isYardTestCourseId(value)) return yardTestCourseBuildAllowed() ? yardTestCatalogEntry() : null;
   return (
     LOCAL_COURSE_CATALOG.find((entry) => entry.id === value || entry.courseKey === value) ??
     openGolfCatalogEntryById(value)
@@ -291,8 +291,9 @@ export function searchLocalCatalog(query: string): CourseSummary[] {
     const bag = catalogBag(entry);
     return tokens.every((token) => bag.includes(token));
   }).map((entry) => catalogEntryToSummary(entry));
+  const yardEntry = yardTestCatalogEntry();
   const yard = yardTestCourseSearchRow();
-  if (yard && tokens.every((token) => catalogBag(YARD_TEST_CATALOG_ENTRY).includes(token))) {
+  if (yard && yardEntry && tokens.every((token) => catalogBag(yardEntry).includes(token))) {
     reserved.unshift(yard);
   }
   return mergeCatalogSummaries(reserved, searchOpenGolfCatalog(query));
