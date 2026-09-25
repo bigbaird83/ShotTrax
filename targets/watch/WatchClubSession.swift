@@ -249,6 +249,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   private var golfWorkout: HKWorkoutSession?
   private var endingGolfWorkout = false
   private var golfAuthInFlight = false
+  /// Bumped when a stuck request is discarded so its callback cannot clear a newer sheet.
+  private var golfAuthTicket = 0
   private var suppressGolfStart = false
   private var loggedGolfDenial = false
   private var loggedHealthUnavailable = false
@@ -256,6 +258,15 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   private let workoutLog = Logger(subsystem: "com.shottrax.app.watch", category: "round-workout")
   private var wantsStay = false
   private var userLeftApp = false
+  /// Frontmost. `requestAuthorization` only presents the sheet while this is true.
+  private var sceneIsActive = false
+  /// Share sheet from a request issued while `sceneIsActive`, until its callback.
+  private var golfAuthSheetUp = false
+  /// Course picked from Watch Home after Home/Back. The next fresh live club list
+  /// is that round, not a yardage update of the round they left.
+  private var watchRoundStartPending = false
+  private var hadLiveRoundAtHomePick = false
+  private var holeAtHomePick = 0
   private let location = CLLocationManager()
   private var lastFix: CLLocation?
 
@@ -407,6 +418,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
 
   /// Course pick → back to Watch Home.
   func backToHome() {
+    clearWatchRoundStartPending()
     nearby.courseId = nil
     nearby.courseName = nil
     nearby.tees = []
@@ -434,6 +446,10 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     if let name = rowName ?? nearby.courses.first(where: { $0.id == courseId })?.name {
       nearby.courseName = name
     }
+    // A later live club list is the round they just picked, once it is actually new.
+    watchRoundStartPending = true
+    hadLiveRoundAtHomePick = hasLiveHole && list.roundLive && !list.roundComplete
+    holeAtHomePick = list.holeNumber
     sendPick([
       "type": "nearbyCoursePick",
       "courseId": courseId,
@@ -464,6 +480,9 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       payload["teeName"] = teeName
     }
     sendPick(payload, keepPending: false)
+    // Home-course start. Do not wait for the reply — Home/Back left userLeftApp
+    // set, and that blocks the golf-workout prompt until the next scene change.
+    resumeRoundStayAfterWatchStart()
   }
 
   private var lastClubTapAt = Date.distantPast
@@ -626,6 +645,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     sending = true
     feedback = ""
     userLeftApp = true
+    clearWatchRoundStartPending()
     putt.open = false
     stopRoundStay()
     if action == "home", hasLiveHole {
@@ -651,6 +671,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   /// Round complete → Watch Home. Local only: no clubNav, nothing sent to the phone.
   func homeAfterRound() {
     feedback = ""
+    clearWatchRoundStartPending()
     putt.open = false
     nearbyFromHome = true
     nearby.active = true
@@ -667,6 +688,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   func dismissNearbyToHole() {
     nearbyFromHome = false
     nearby.active = false
+    clearWatchRoundStartPending()
     userLeftApp = false
     feedback = ""
     syncRoundStay()
@@ -818,6 +840,9 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     if ok, type == "startRound" || text.hasPrefix("Started") {
       nearbyFromHome = false
       nearby.active = false
+      // startRound, and a favorite that replies "Started…", are a new round
+      // from Watch Home. nearbyFromHome alone still left userLeftApp set.
+      resumeRoundStayAfterWatchStart()
     }
     if ok, let clubId = fallbackClubId, clubId != "club_putter" {
       list.lastClubId = clubId
@@ -1103,7 +1128,12 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     if holeChanged {
       dropStaleClubPicks(liveHole: next.holeNumber)
     }
-    syncRoundStay()
+    if freshLiveListAfterHomeCoursePick(next) {
+      workoutLog.info("fresh live club list after Watch Home course pick; resuming round stay")
+      resumeRoundStayAfterWatchStart()
+    } else {
+      syncRoundStay()
+    }
   }
 
   private func applyPuttSheet(_ message: [String: Any]) {
@@ -1310,6 +1340,31 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
   }
 
+  /// Home/Back sets `userLeftApp`, which keeps the golf sheet from being asked
+  /// until the next scene change. A round started on the Watch asks now.
+  private func resumeRoundStayAfterWatchStart() {
+    clearWatchRoundStartPending()
+    userLeftApp = false
+    workoutLog.info("round started from Watch; userLeftApp cleared")
+    syncRoundStay()
+  }
+
+  private func clearWatchRoundStartPending() {
+    watchRoundStartPending = false
+    hadLiveRoundAtHomePick = false
+    holeAtHomePick = 0
+  }
+
+  /// Live club list for a round that was not already on the wrist when the
+  /// course was picked. Yardage updates and the next hole of that round are not fresh.
+  private func freshLiveListAfterHomeCoursePick(_ next: ClubListState) -> Bool {
+    guard watchRoundStartPending else { return false }
+    guard next.roundLive && !next.roundComplete else { return false }
+    guard !next.bag.isEmpty || !next.top3.isEmpty else { return false }
+    if !hadLiveRoundAtHomePick { return true }
+    return next.holeNumber == 1 && holeAtHomePick != 1
+  }
+
   /// True while a golf workout exists and has not ended, or while end() is in flight.
   /// A second start is ignored so two sessions are never created.
   private var golfWorkoutOccupied: Bool {
@@ -1333,47 +1388,93 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     guard HKHealthStore.isHealthDataAvailable() else {
       if !loggedHealthUnavailable {
         loggedHealthUnavailable = true
-        workoutLog.info("HealthKit unavailable; round continues in the foreground")
+        workoutLog.info("HealthKit unavailable; status=unavailable; round continues in the foreground")
       }
       return
     }
-    let workoutType = HKObjectType.workoutType()
-    switch healthStore.authorizationStatus(for: workoutType) {
+    let status = healthStore.authorizationStatus(for: HKObjectType.workoutType())
+    let statusLabel = workoutShareStatusLabel(status)
+    let sceneLabel = sceneIsActive ? "true" : "false"
+    workoutLog.info("authorization status=\(statusLabel, privacy: .public) sceneActive=\(sceneLabel, privacy: .public)")
+    switch status {
     case .sharingDenied:
       if !loggedGolfDenial {
         loggedGolfDenial = true
-        workoutLog.info("workout share not authorized; round continues in the foreground")
+        workoutLog.info("workout share not authorized; status=sharingDenied; round continues in the foreground")
       }
       return
     case .notDetermined:
+      // The sheet cannot appear unless we are frontmost. Wait for the next active.
       requestGolfWorkoutAuthorization()
     case .sharingAuthorized:
+      // Already allowed: starting from inactive or background keeps the wrist up.
+      workoutLog.info("authorization status=sharingAuthorized; starting golf workout session")
       beginGolfWorkoutSession()
     @unknown default:
-      workoutLog.info("unknown HealthKit authorization; round continues in the foreground")
+      workoutLog.info("unknown HealthKit authorization status=\(statusLabel, privacy: .public); round continues in the foreground")
     }
   }
 
   /// Share workout only. Read nothing — no heart rate, energy, or other types.
+  /// Called only while the scene is active; a background request never shows and
+  /// can leave `golfAuthInFlight` stuck for the rest of the launch.
   private func requestGolfWorkoutAuthorization() {
-    if golfAuthInFlight { return }
+    let status = healthStore.authorizationStatus(for: HKObjectType.workoutType())
+    let statusLabel = workoutShareStatusLabel(status)
+    guard sceneIsActive else {
+      workoutLog.info("requestAuthorization not sent; status=\(statusLabel, privacy: .public) sceneActive=false")
+      return
+    }
+    if golfAuthInFlight || golfAuthSheetUp {
+      let sheetLabel = golfAuthSheetUp ? "true" : "false"
+      workoutLog.info("requestAuthorization not sent; already in flight status=\(statusLabel, privacy: .public) sheetUp=\(sheetLabel, privacy: .public)")
+      return
+    }
+    golfAuthTicket += 1
+    let ticket = golfAuthTicket
     golfAuthInFlight = true
+    golfAuthSheetUp = true
     let typesToShare: Set<HKSampleType> = [HKObjectType.workoutType()]
     let typesToRead: Set<HKObjectType> = []
-    healthStore.requestAuthorization(toShare: typesToShare, read: typesToRead) { [weak self] _, error in
+    workoutLog.info("requestAuthorization sent; status=\(statusLabel, privacy: .public) share=workoutType read=none")
+    healthStore.requestAuthorization(toShare: typesToShare, read: typesToRead) { [weak self] success, error in
       DispatchQueue.main.async {
         guard let self else { return }
-        self.golfAuthInFlight = false
-        if let error {
-          self.workoutLog.info("Health authorization failed: \(error.localizedDescription, privacy: .public)")
+        guard self.golfAuthTicket == ticket else {
+          self.workoutLog.info("requestAuthorization callback ignored; superseded by a later request")
+          return
         }
+        self.golfAuthInFlight = false
+        self.golfAuthSheetUp = false
+        let successLabel = success ? "true" : "false"
+        if let error {
+          self.workoutLog.info("requestAuthorization callback error: \(error.localizedDescription, privacy: .public) success=\(successLabel, privacy: .public)")
+        } else {
+          self.workoutLog.info("requestAuthorization callback success=\(successLabel, privacy: .public)")
+        }
+        let after = self.workoutShareStatusLabel(self.healthStore.authorizationStatus(for: HKObjectType.workoutType()))
+        self.workoutLog.info("authorization status after callback=\(after, privacy: .public)")
         guard self.wantsStay else { return }
         // Do not ask again in this callback if the sheet is still unresolved.
         if self.healthStore.authorizationStatus(for: HKObjectType.workoutType()) == .notDetermined {
+          self.workoutLog.info("requestAuthorization callback left status=notDetermined; not asking again in this callback")
           return
         }
         self.startRoundStay()
       }
+    }
+  }
+
+  private func workoutShareStatusLabel(_ status: HKAuthorizationStatus) -> String {
+    switch status {
+    case .notDetermined:
+      return "notDetermined"
+    case .sharingDenied:
+      return "sharingDenied"
+    case .sharingAuthorized:
+      return "sharingAuthorized"
+    @unknown default:
+      return "unknown"
     }
   }
 
@@ -1493,15 +1594,43 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
 
   /// Wrist-down is inactive, then background. The golf workout keeps the round
   /// up through both, so neither one is a leave and neither ends the session.
+  /// The Health sheet is requested only from active. An already-authorized
+  /// workout may still start from inactive or background.
   func noteScenePhase(_ phase: String) {
     if phase == "active" {
+      sceneIsActive = true
       userLeftApp = false
       // A start that failed while the app was not in front can run now.
       suppressGolfStart = false
+      let status = HKHealthStore.isHealthDataAvailable()
+        ? healthStore.authorizationStatus(for: HKObjectType.workoutType())
+        : HKAuthorizationStatus.notDetermined
+      let statusLabel = workoutShareStatusLabel(status)
+      if status == .notDetermined && !golfAuthSheetUp {
+        let wasInFlight = golfAuthInFlight
+        if wasInFlight {
+          golfAuthTicket += 1
+          golfAuthInFlight = false
+          workoutLog.info("scene active; status=\(statusLabel, privacy: .public); no authorization sheet up; resetting golfAuthInFlight")
+        } else {
+          workoutLog.info("scene active; status=\(statusLabel, privacy: .public); no authorization sheet up")
+        }
+      } else {
+        let sheetLabel = golfAuthSheetUp ? "true" : "false"
+        workoutLog.info("scene active; status=\(statusLabel, privacy: .public) sheetUp=\(sheetLabel, privacy: .public)")
+      }
       syncRoundStay()
       return
     }
     if phase == "inactive" || phase == "background" {
+      sceneIsActive = false
+      // Wrist-down finishes in background. The system sheet is gone, and a
+      // request whose callback never arrives must not block the next active.
+      if phase == "background" {
+        golfAuthSheetUp = false
+      }
+      let phaseLabel = phase
+      workoutLog.info("scene \(phaseLabel, privacy: .public); requestAuthorization waits until active")
       if !userLeftApp && list.roundLive && ((hasLiveHole && !list.roundComplete) || putt.open) {
         startRoundStay()
       }
