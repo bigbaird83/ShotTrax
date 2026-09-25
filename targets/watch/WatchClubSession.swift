@@ -316,6 +316,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     location.activityType = .fitness
     location.distanceFilter = Self.liveDistanceFilterM
     // A pause at the ball cannot be resumed until the scene is active.
+    // watchOS marks locationManagerDidPauseLocationUpdates unavailable, so
+    // the stream is kept from pausing instead of restarting from that callback.
     location.pausesLocationUpdatesAutomatically = false
     location.allowsBackgroundLocationUpdates = false
     let launchStatus = location.authorizationStatus
@@ -2057,15 +2059,6 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
         self.endLiveLocation()
       }
       self.syncLiveYardsReason()
-    }
-  }
-
-  func locationManagerDidPauseLocationUpdates(_: CLLocationManager) {
-    DispatchQueue.main.async { [weak self] in
-      guard let self else { return }
-      self.liveYardsLog.info("location paused")
-      guard self.liveHoleInProgress, self.sceneIsActive else { return }
-      self.location.startUpdatingLocation()
     }
   }
 
