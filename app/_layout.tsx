@@ -59,6 +59,7 @@ function ThemedNavigation() {
           <Stack.Screen name="review/[id]/stats" options={{ title: 'Stats' }} />
           <Stack.Screen name="club-data" options={{ title: 'Club data' }} />
           <Stack.Screen name="handicap" options={{ title: 'Handicap' }} />
+          <Stack.Screen name="trends" options={{ title: 'Trends' }} />
           <Stack.Screen name="board" options={{ title: 'Live board' }} />
           <Stack.Screen name="request-course" options={{ title: 'Request this course' }} />
           <Stack.Screen name="rounds-transfer" options={{ title: 'Export / Restore' }} />
