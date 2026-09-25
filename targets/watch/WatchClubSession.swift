@@ -2,6 +2,7 @@ import CoreLocation
 import Foundation
 import HealthKit
 import os
+import WatchKit
 import WatchConnectivity
 #if canImport(WidgetKit)
 import WidgetKit
