@@ -331,8 +331,11 @@ test('Watch live location stays up wrist-down and stops when the round ends', ()
   assert.match(session, /activityType = \.fitness/);
   assert.match(session, /kCLLocationAccuracyBest/);
   assert.match(session, /liveDistanceFilterM: CLLocationDistance = 3/);
-  assert.match(session, /pausesLocationUpdatesAutomatically = false/);
+  assert.doesNotMatch(session, /pausesLocationUpdatesAutomatically/);
   assert.doesNotMatch(session, /func locationManagerDidPauseLocationUpdates/);
+  assert.doesNotMatch(session, /locationManagerDidResumeLocationUpdates/);
+  assert.doesNotMatch(session, /showsBackgroundLocationIndicator/);
+  assert.doesNotMatch(session, /WKExtension/);
   assert.match(session, /func locationManagerDidChangeAuthorization/);
   assert.match(session, /didFailWithError/);
   assert.match(session, /category: "liveYards"/);
