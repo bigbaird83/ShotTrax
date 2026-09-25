@@ -383,8 +383,12 @@ test('Watch live location stays up wrist-down and stops when the round ends', ()
   assert.match(target, /NSLocationWhenInUseUsageDescription/);
   assert.match(plist, /<key>NSLocationWhenInUseUsageDescription<\/key>/);
   assert.match(plist, /<string>workout-processing<\/string>/);
-  assert.match(plist, /<string>location<\/string>/);
-  assert.match(target, /WKBackgroundModes: \['workout-processing', 'location'\]/);
+  // Core Location reads UIBackgroundModes; WKBackgroundModes takes session types only.
+  assert.match(plist, /<key>UIBackgroundModes<\/key>\s*<array>\s*<string>location<\/string>\s*<\/array>/);
+  assert.match(plist, /<key>WKBackgroundModes<\/key>\s*<array>\s*<string>workout-processing<\/string>\s*<\/array>/);
+  assert.match(target, /UIBackgroundModes: \['location'\]/);
+  assert.match(target, /WKBackgroundModes: \['workout-processing'\]/);
+  assert.match(session, /forInfoDictionaryKey: "UIBackgroundModes"/);
   assert.match(session, /activityType = \.fitness/);
   assert.match(session, /kCLLocationAccuracyBest/);
   assert.match(session, /liveDistanceFilterM: CLLocationDistance = 3/);
@@ -467,7 +471,8 @@ test('watch target infoPlist is copied into the Info.plist Xcode compiles', () =
   const projectRoot = fileURLToPath(new URL('../..', import.meta.url));
   const info = watchTargetInfoPlist(projectRoot, { ios: { bundleIdentifier: 'com.shottrax.app' } });
   assert.equal(info.NSLocationWhenInUseUsageDescription, WATCH_LOCATION_WHEN_IN_USE);
-  assert.deepEqual(info.WKBackgroundModes, ['workout-processing', 'location']);
+  assert.deepEqual(info.UIBackgroundModes, ['location']);
+  assert.deepEqual(info.WKBackgroundModes, ['workout-processing']);
   const plistText = readFileSync(new URL('../../targets/watch/Info.plist', import.meta.url), 'utf8');
   assert.equal(mergeInfoPlist(plistText, info).changed, false);
   const app = readFileSync(new URL('../../app.json', import.meta.url), 'utf8');
