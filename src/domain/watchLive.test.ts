@@ -13,6 +13,8 @@ import {
   WATCH_LIVE_YARDS_NO_GREEN,
   WATCH_LIVE_YARDS_WEAK_GPS,
   WATCH_LOCATION_WHEN_IN_USE,
+  WATCH_SHOT_HOLD_MIN_MOVE_YD,
+  WATCH_SHOT_HOLD_MS,
   WATCH_WIDGET_RELOAD_MIN_MS,
   WATCH_WIDGET_RELOAD_MIN_YD,
   phoneLiveShouldReplaceWatch,
@@ -21,6 +23,7 @@ import {
   watchGreenFields,
   watchLiveLocationBackgroundMode,
   watchLiveYardsReason,
+  watchShotHoldDecision,
   watchShouldRequestLocationAuthorization,
   watchWidgetShouldReload,
   type WatchLiveYardsAuth,
@@ -214,6 +217,36 @@ test('a stale phone push cannot overwrite fresher Watch yards on the same hole',
     phoneLiveShouldReplaceWatch({ phoneHole: 4, phoneAtMs: 1_000, watchHole: null, watchAtMs: null }),
     true,
   );
+});
+
+test('after a Watch shot mark, live yards hold 30 s and then until the Watch moves 10 yd', () => {
+  assert.equal(WATCH_SHOT_HOLD_MS, 30_000);
+  assert.equal(WATCH_SHOT_HOLD_MIN_MOVE_YD, 10);
+  // Goode Circle Test tee.
+  const mark = { lat: 33.31183, lng: -93.22676 };
+  // ~0.00001° lat ≈ 1.2 yd.
+  const near = { lat: 33.31189, lng: -93.22676 }; // ~7 yd
+  const far = { lat: 33.31194, lng: -93.22676 }; // ~13 yd
+  const hold = { hole: 1, atMs: 1_000, anchor: mark };
+  const at = (nowMs: number, fix = far, accuracyM = 5, h: typeof hold | { hole: number; atMs: number; anchor: null } = hold) =>
+    watchShotHoldDecision({ hold: h, hole: 1, nowMs, fix, accuracyM });
+
+  assert.equal(watchShotHoldDecision({ hold: null, hole: 1, nowMs: 5_000, fix: far, accuracyM: 5 }), 'update');
+  // Walking fast in the first 30 s still does not move the number.
+  assert.equal(at(1_000 + WATCH_SHOT_HOLD_MS - 1), 'hold');
+  // After 30 s, under 10 yd from the mark stays held.
+  assert.equal(at(1_000 + WATCH_SHOT_HOLD_MS, near), 'hold');
+  assert.equal(at(1_000 + WATCH_SHOT_HOLD_MS, far), 'release');
+  // A weak fix cannot release the hold by GPS scatter.
+  assert.equal(at(1_000 + WATCH_SHOT_HOLD_MS, far, 40), 'hold');
+  assert.equal(at(1_000 + WATCH_SHOT_HOLD_MS, far, Number.NaN), 'hold');
+  // No fresh fix at the mark: the first usable fix after 30 s becomes the anchor.
+  const unanchored = { hole: 1, atMs: 1_000, anchor: null };
+  assert.equal(at(1_000 + WATCH_SHOT_HOLD_MS - 1, far, 5, unanchored), 'hold');
+  assert.equal(at(1_000 + WATCH_SHOT_HOLD_MS, far, 40, unanchored), 'hold');
+  assert.equal(at(1_000 + WATCH_SHOT_HOLD_MS, far, 5, unanchored), 'anchor');
+  // A new hole ends the hold at once.
+  assert.equal(watchShotHoldDecision({ hold, hole: 2, nowMs: 2_000, fix: mark, accuracyM: 5 }), 'update');
 });
 
 test('widget reload waits out yard drift and still fires on a hole change', () => {
