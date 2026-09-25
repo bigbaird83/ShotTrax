@@ -211,7 +211,8 @@ test('after a shot lands the middle pill is closest to yards left, and the strip
   assert.match(stripClubs, /"club_putter"/);
   assert.doesNotMatch(stripClubs, /top3|localeCompare|name/);
   assert.doesNotMatch(stripClubs, /10_000/);
-  assert.match(watch, /session\.list\.yardsToGreen/);
+  assert.match(watch, /session\.list\.rankYards/);
+  assert.match(watch, /clubCarry/);
   assert.match(watch, /Text\("All clubs"\)/);
   const more = watch.slice(watch.indexOf('private var moreClubs'), watch.indexOf('private var stripScrollKey'));
   assert.match(more, /session\.list\.bag/);

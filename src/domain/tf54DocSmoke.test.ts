@@ -57,7 +57,7 @@ test('TF 54 A/E: Watch Made it is reserved on the putt sheet — always enabled,
   const madeBtn = watchSheet.slice(watchSheet.indexOf('session.madeIt()'), watchSheet.indexOf('if !session.putt.lengths'));
   assert.doesNotMatch(madeBtn, /\.disabled/);
   assert.doesNotMatch(watchSheet, /Text\("Hole Out"\)/);
-  assert.match(clubPick, /Text\("Hole Out"\)/);
+  assert.match(clubPick, /actionPill\("Hole Out"\)/);
   assert.doesNotMatch(clubPick, /Text\("Made(?: it)?"\)/);
 
   const applySheet = session.slice(session.indexOf('private func applyPuttSheet'), session.indexOf('private func persist'));

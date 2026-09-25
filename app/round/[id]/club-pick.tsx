@@ -11,6 +11,7 @@ import { courseNeedsPinSheets } from '@/src/domain/missCard';
 import { thunderbirdCupOnGreen, thunderbirdDailyPin } from '@/src/domain/thunderbirdPins';
 import { courseTeeFromHole, resolvePlayHoleTee } from '@/src/domain/holeCamera';
 import { planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
+import { watchClubCarry, watchGreenFields } from '@/src/domain/watchLive';
 import { COPY, formatPickerLeftYards, formatSuggestedClubChip } from '@/src/domain/playerCopy';
 import { clubPickLeaveHref, clubPickLeaveRunsAcceptFix, planClubPickLeave } from '@/src/domain/clubPickNav';
 import { putterOpensPuttSheet } from '@/src/domain/putts';
@@ -19,7 +20,7 @@ import { parseTypedYards } from '@/src/domain/shotSource';
 import { selectClubForMark } from '@/src/domain/stickyClub';
 import { emptyWalkAway, stepWalkAway, walkAwayEligible } from '@/src/domain/walkAway';
 import type { Club, GpsFix } from '@/src/domain/types';
-import { lastLandingMark, markToGreen, planLiveGpsToPin, toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
+import { courseTeeYards, lastLandingMark, markToGreen, planLiveGpsToPin, toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
 import { addNoGpsShot, changeShotClub, markShotWithClub, promptForPlan } from '@/src/services/shotActions';
 import { useLiveFix } from '@/src/services/useLiveFix';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
@@ -269,8 +270,12 @@ export default function ClubPickScreen() {
       complication: {
         yards: liveGpsToPin.yards,
         quality: liveGpsToPin.quality,
+        atMs: fix?.timestamp ?? null,
       },
       roundLive: round?.finishedAt == null,
+      teeLengthYards: courseTeeYards(holeRow?.yards),
+      green: watchGreenFields({ green }),
+      clubCarry: watchClubCarry(stripPlan.carries),
     },
   );
 

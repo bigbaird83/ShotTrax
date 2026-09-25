@@ -30,10 +30,9 @@ struct HoleYardsProvider: TimelineProvider {
   }
 
   func getTimeline(in context: Context, completion: @escaping (Timeline<HoleYardsEntry>) -> Void) {
-    // The Watch app reloads this timeline (reloadTimelines ofKind ShotTraxxHoleYards)
-    // whenever the app-group hole / yards / quality it writes change.
-    // .never avoids a GPS-free poll that would still wake the extension.
-    completion(Timeline(entries: [current()], policy: .never))
+    // The Watch app reloads this timeline when the app-group yards change.
+    // .after re-reads the app group if a reload was dropped while the face was covered.
+    completion(Timeline(entries: [current()], policy: .after(Date().addingTimeInterval(15))))
   }
 
   private func current() -> HoleYardsEntry {
@@ -119,7 +118,7 @@ struct HoleYardsWidget: Widget {
     StaticConfiguration(kind: "ShotTraxxHoleYards", provider: HoleYardsProvider()) { entry in
       HoleYardsView(entry: entry)
         .containerBackground(for: .widget) {
-          Color("widgetBackground")
+          AccessoryWidgetBackground()
         }
     }
     .configurationDisplayName("Yards to green")

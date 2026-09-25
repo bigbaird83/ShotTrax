@@ -391,7 +391,7 @@ test('Finish hole / putts live on the play dock — not buried in Scorecard', ()
   assert.match(hole, /finishHoleOut/);
 
   const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
-  assert.match(watch, /Text\("Hole Out"\)/);
+  assert.match(watch, /actionPill\("Hole Out"\)/);
   assert.match(watch, /session\.madeIt\(\)/);
   assert.match(watch, /showPuttChips|puttSheet/);
   const watchSheet = watch.slice(watch.indexOf('private var puttSheet'), watch.indexOf('private var clubPick'));
@@ -632,7 +632,7 @@ test('TF 54: dock Putt + shrunken Hole Out; Watch Made it always on putt sheet',
   assert.doesNotMatch(madeAlways, /\.disabled\(session\.sending\)/);
   assert.doesNotMatch(watchSheet, /Text\("Hole Out"\)/);
   assert.doesNotMatch(watchSheet, /ScrollView/);
-  assert.match(clubPick, /Text\("Hole Out"\)/);
+  assert.match(clubPick, /actionPill\("Hole Out"\)/);
   assert.doesNotMatch(clubPick, /Text\("Made(?: it)?"\)/);
   const pickFn = session.slice(session.indexOf('func pick(clubId: String)'), session.indexOf('func addPutt'));
   assert.match(pickFn, /clubId == "club_putter"/);

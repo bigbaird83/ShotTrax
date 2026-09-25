@@ -290,6 +290,121 @@ async function buildTarget(projectPath, target) {
   }
 }
 
+function buildSettingsBlocks(pbx, target) {
+  const listId = target.body.match(/buildConfigurationList = ([A-F0-9X]{24})/);
+  if (!listId) throw new Error(`Target ${target.name} has no build configuration list`);
+  const list = pbx.match(
+    new RegExp(`${listId[1]} /\\* [^*]+ \\*/ = \\{[\\s\\S]*?buildConfigurations = \\(([\\s\\S]*?)\\);`),
+  );
+  if (!list) throw new Error(`Target ${target.name} configuration list was not found`);
+  const configIds = [...list[1].matchAll(/([A-F0-9X]{24})/g)].map((match) => match[1]);
+  return configIds.map((id) => {
+    const block = pbx.match(
+      new RegExp(`${id} /\\* [^*]+ \\*/ = \\{\\n\\t+isa = XCBuildConfiguration;([\\s\\S]*?)\\n\\t\\t\\};`),
+    );
+    if (!block) throw new Error(`Missing XCBuildConfiguration ${id} for ${target.name}`);
+    return block[1];
+  });
+}
+
+function copyPhaseOwner(pbx, phaseUuid) {
+  const targets = [
+    ...pbx.matchAll(
+      /([A-F0-9X]{24}) \/\* ([^*]+) \*\/ = \{\n\t+isa = PBXNativeTarget;([\s\S]*?)\n\t\t\};/g,
+    ),
+  ];
+  return targets
+    .filter((match) => match[3].includes(phaseUuid))
+    .map((match) => match[2].trim());
+}
+
+/**
+ * The watch widget must be inside the Watch app. apple-targets embeds it in the
+ * iPhone app when watch-widget is configured before the watch target exists.
+ */
+function assertWatchWidgetEmbedded(pbx) {
+  const plist = fs.readFileSync(path.join(root, 'targets', 'watch-widget', 'Info.plist'), 'utf8');
+  if (!plist.includes('com.apple.widgetkit-extension')) {
+    throw new Error('targets/watch-widget/Info.plist is missing NSExtensionPointIdentifier com.apple.widgetkit-extension');
+  }
+  if (/WKApplication/.test(plist)) {
+    throw new Error('targets/watch-widget/Info.plist must not set WKApplication');
+  }
+
+  const watchFound = findNativeTarget(pbx, 'ShotTraxxWatch');
+  const widgetFound = findNativeTarget(pbx, 'ShotTraxxHole');
+  if (!watchFound || !widgetFound) throw new Error('Prebuild did not create ShotTraxxWatch and ShotTraxxHole');
+  const watch = { ...watchFound, name: 'ShotTraxxWatch' };
+  const widget = { ...widgetFound, name: 'ShotTraxxHole' };
+  if (!widget.productName.endsWith('.appex')) {
+    throw new Error(`ShotTraxxHole product should be an appex, found ${widget.productName}`);
+  }
+
+  const widgetSettings = buildSettingsBlocks(pbx, widget);
+  for (const settings of widgetSettings) {
+    if (!settings.includes('PRODUCT_BUNDLE_IDENTIFIER = com.shottrax.app.watch.widget;')) {
+      throw new Error('ShotTraxxHole bundle id must be com.shottrax.app.watch.widget');
+    }
+    if (!settings.includes('SDKROOT = watchos;')) {
+      throw new Error('ShotTraxxHole SDKROOT must be watchos');
+    }
+    if (!/WATCHOS_DEPLOYMENT_TARGET = [^;]+;/.test(settings)) {
+      throw new Error('ShotTraxxHole is missing WATCHOS_DEPLOYMENT_TARGET');
+    }
+  }
+  const watchSettings = buildSettingsBlocks(pbx, watch);
+  for (const settings of watchSettings) {
+    if (!settings.includes('PRODUCT_BUNDLE_IDENTIFIER = com.shottrax.app.watch;')) {
+      throw new Error('ShotTraxxWatch bundle id must be com.shottrax.app.watch so the widget id is prefixed by it');
+    }
+  }
+
+  const buildFileRe = new RegExp(
+    `([A-F0-9X]{24}) /\\* ${widget.productName} in ([^*]+) \\*/ = \\{[^}]*isa = PBXBuildFile;`,
+    'g',
+  );
+  const buildFiles = [...pbx.matchAll(buildFileRe)];
+  if (buildFiles.length === 0) {
+    throw new Error(`${widget.productName} is not in any Copy Files build phase`);
+  }
+  const phaseRe =
+    /([A-F0-9X]{24}) \/\* ([^*]+) \*\/ = \{\n\t+isa = PBXCopyFilesBuildPhase;([\s\S]*?)\n\t\t\};/g;
+  const phases = [...pbx.matchAll(phaseRe)];
+  const owners = [];
+  for (const file of buildFiles) {
+    const phase = phases.find((item) => item[3].includes(file[1]));
+    if (!phase) throw new Error(`No copy phase contains build file ${file[1]} for ${widget.productName}`);
+    const ownerNames = copyPhaseOwner(pbx, phase[1]);
+    owners.push({ phase: phase[2], owners: ownerNames, body: phase[3] });
+  }
+  const inWatch = owners.filter((item) => item.owners.includes('ShotTraxxWatch'));
+  if (inWatch.length !== 1) {
+    throw new Error(
+      `${widget.productName} must be embedded by ShotTraxxWatch exactly once, found ${inWatch.length} (${owners
+        .map((item) => item.owners.join('+') || 'unowned')
+        .join(', ')})`,
+    );
+  }
+  if (!inWatch[0].body.includes('dstSubfolderSpec = 13;')) {
+    throw new Error('Watch widget embed phase must use dstSubfolderSpec 13 (PlugIns)');
+  }
+  if (!/name = "Embed Foundation Extensions";/.test(inWatch[0].body) && !inWatch[0].phase.includes('Embed Foundation Extensions')) {
+    throw new Error('Watch widget must sit in Embed Foundation Extensions on the watch app');
+  }
+  const inPhone = owners.filter((item) => item.owners.some((name) => name !== 'ShotTraxxWatch' && name !== 'ShotTraxxHole'));
+  if (inPhone.length) {
+    throw new Error(
+      `${widget.productName} is still embedded in ${inPhone.map((item) => item.owners.join('+')).join(', ')} — it must only be in the Watch app`,
+    );
+  }
+
+  const entitlements = path.join(root, 'ios', '.targets', 'ShotTraxxHole', 'generated.entitlements');
+  if (!fs.existsSync(entitlements) || !fs.readFileSync(entitlements, 'utf8').includes('group.com.shottrax.app')) {
+    throw new Error('ShotTraxxHole is missing the group.com.shottrax.app entitlement');
+  }
+  console.log('ShotTraxxHole.appex is embedded in ShotTraxxWatch (Embed Foundation Extensions).');
+}
+
 async function main() {
   fs.mkdirSync(derived, { recursive: true });
   const configs = watchTargetConfigs();
@@ -307,6 +422,7 @@ async function main() {
     return { ...config, ...native };
   });
   assertSwiftFilesAreMembers(pbx, targets);
+  assertWatchWidgetEmbedded(pbx);
   for (const target of targets) writeScheme(projectPath, target);
   for (const target of targets) await buildTarget(projectPath, target);
   console.log('\nWatch compile succeeded.');

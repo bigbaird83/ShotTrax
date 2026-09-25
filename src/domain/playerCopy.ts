@@ -114,6 +114,7 @@ export const COPY = {
   dismissFirstLaunchTip: 'Got it',
   stickyClub: 'Same club',
   undoLast: 'Undo last',
+  undoLastShot: 'Undo last shot',
   endShot: 'End last shot',
   prevHole: 'Prev hole',
   nextHole: 'Next hole',
@@ -384,6 +385,26 @@ export function formatPlayHeader(
   const yardsBit =
     yards != null && Number.isFinite(yards) ? `${Math.round(yards)} yd` : '—';
   return `${formatHoleHeader(holeNumber, par)} · ${yardsBit}`;
+}
+
+/**
+ * Visible play header. Tee length from course data (`holes.yards`) only.
+ * Missing yardage adds nothing — no dash, no live GPS number.
+ */
+export function formatPlayHeaderCourseLength(
+  holeNumber: number,
+  par: number | null,
+  teeName: string | null | undefined,
+  courseYards: number | null | undefined,
+): { primary: string; secondary: string; label: string } {
+  const primary = formatPlayHeaderPrimary(holeNumber);
+  const parBit = formatPlayHeaderSecondary(par, teeName);
+  const yards =
+    courseYards != null && Number.isFinite(courseYards) && courseYards > 0
+      ? Math.round(courseYards)
+      : null;
+  const secondary = yards == null ? parBit : `${parBit} · ${yards} yd`;
+  return { primary, secondary, label: `${primary} · ${secondary}` };
 }
 
 export function formatTeeMeta(tee: {

@@ -24,6 +24,18 @@ struct ClubListState {
   var complicationHole: Int = 0
   var complicationYards: Int? = nil
   var complicationQuality: String = "none"
+  /// Epoch ms of the live yards now shown (Watch fix or an accepted phone fix).
+  var liveAtMs: Double = 0
+  /// Fixed tee-to-green length from course data. Not the walking number.
+  var teeLengthYards: Int? = nil
+  /// Course cup the phone uses for planLiveGpsToPin. Nil → Watch does not invent yards.
+  var greenLat: Double? = nil
+  var greenLng: Double? = nil
+  /// Play-wheel carry by club id. The strip ranks with these, not a stock guess.
+  var clubCarry: [String: Int] = [:]
+  /// Last good/soft live D on this hole so a poor fix does not reshuffle clubs.
+  var rankHoldYards: Int? = nil
+  var rankHoldHole: Int = 0
   /// Phone finished the last hole (Made it / Hole Out). Round complete, not the putt sheet.
   var roundComplete: Bool = false
   /// False when the phone is showing a finished round. Missing on the wire means live.
@@ -34,13 +46,22 @@ struct ClubListState {
     (complicationQuality == "good" || complicationQuality == "soft") && (complicationYards ?? 0) > 0
   }
 
-  /// Hole N · live GPS yards, or Hole N · — . Same gate as the top-right number
-  /// and the complication. Club-rank `yardsToGreen` (tee / landing fallback) stays off this line.
+  /// Hole N · fixed tee length, or Hole N when course data has no length.
+  /// Live GPS stays on `liveYardsLabel` and the complication.
   var statusLine: String {
-    if liveYardsTrusted, let yards = complicationYards {
+    if let yards = teeLengthYards, yards > 0 {
       return "Hole \(holeNumber) · \(yards) yd"
     }
-    return "Hole \(holeNumber) · —"
+    return "Hole \(holeNumber)"
+  }
+
+  /// Yards the three club buttons rank against. Last good/soft live distance on this hole,
+  /// else the phone's complication yards until the Watch has its own fix.
+  var rankYards: Int? {
+    if rankHoldHole == holeNumber, let yards = rankHoldYards, yards > 0 { return yards }
+    if liveYardsTrusted, let yards = complicationYards { return yards }
+    if let yards = yardsToGreen, yards > 0 { return yards }
+    return nil
   }
 
   /// Approximate only beside a live soft yardage. Never SOFT. Never on a dash.
@@ -1087,21 +1108,81 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       next.yardsToGreen = nil
     }
     next.yardsQuality = message["yardsQuality"] as? String ?? "none"
-    if message["complicationQuality"] != nil {
-      let quality = message["complicationQuality"] as? String ?? "none"
-      next.complicationHole = next.holeNumber >= 1 ? next.holeNumber : 0
-      let yards = Self.complicationInt(message["complicationYards"])
-      if (quality == "good" || quality == "soft"), let yards, yards > 0 {
-        next.complicationYards = yards
-        next.complicationQuality = quality
-      } else {
+    let tee = Self.complicationInt(message["teeLengthYards"])
+    next.teeLengthYards = (tee ?? 0) > 0 ? tee : nil
+    if let lat = Self.complicationDouble(message["greenLat"]),
+       let lng = Self.complicationDouble(message["greenLng"]),
+       Self.isCourseCoord(lat: lat, lng: lng) {
+      next.greenLat = lat
+      next.greenLng = lng
+    } else {
+      next.greenLat = nil
+      next.greenLng = nil
+    }
+    if let rawCarry = message["clubCarry"] as? [String: Any] {
+      var carry: [String: Int] = [:]
+      for (id, value) in rawCarry {
+        if let yards = Self.complicationInt(value), yards > 0 { carry[id] = yards }
+      }
+      next.clubCarry = carry
+    } else {
+      next.clubCarry = [:]
+    }
+    let phoneAt = Self.complicationDouble(message["complicationAt"])
+    let replaceLive = Self.phoneLiveShouldReplace(
+      phoneHole: next.holeNumber,
+      phoneAtMs: phoneAt,
+      watchHole: list.liveAtMs > 0 ? list.holeNumber : nil,
+      watchAtMs: list.liveAtMs
+    )
+    if replaceLive {
+      if message["complicationQuality"] != nil {
+        let quality = message["complicationQuality"] as? String ?? "none"
+        next.complicationHole = next.holeNumber >= 1 ? next.holeNumber : 0
+        let yards = Self.complicationInt(message["complicationYards"])
+        if (quality == "good" || quality == "soft"), let yards, yards > 0 {
+          next.complicationYards = yards
+          next.complicationQuality = quality
+          next.rankHoldHole = next.holeNumber
+          next.rankHoldYards = yards
+        } else {
+          next.complicationYards = nil
+          next.complicationQuality = "none"
+          if next.holeNumber == list.rankHoldHole {
+            next.rankHoldYards = list.rankHoldYards
+            next.rankHoldHole = list.rankHoldHole
+          } else {
+            next.rankHoldYards = nil
+            next.rankHoldHole = 0
+          }
+        }
+        next.liveAtMs = phoneAt ?? 0
+      } else if next.holeNumber != list.holeNumber {
         next.complicationYards = nil
         next.complicationQuality = "none"
+        next.complicationHole = 0
+        next.liveAtMs = 0
+        next.rankHoldYards = nil
+        next.rankHoldHole = 0
+      } else {
+        next.complicationHole = list.complicationHole
+        next.complicationYards = list.complicationYards
+        next.complicationQuality = list.complicationQuality
+        next.liveAtMs = list.liveAtMs
+        next.rankHoldYards = list.rankHoldYards
+        next.rankHoldHole = list.rankHoldHole
       }
     } else {
       next.complicationHole = list.complicationHole
       next.complicationYards = list.complicationYards
       next.complicationQuality = list.complicationQuality
+      next.liveAtMs = list.liveAtMs
+      next.rankHoldYards = list.rankHoldYards
+      next.rankHoldHole = list.rankHoldHole
+    }
+    if next.greenLat == nil {
+      next.rankHoldYards = nil
+      next.rankHoldHole = 0
     }
     if let last = message["lastClubId"] as? String, !last.isEmpty {
       next.lastClubId = last
@@ -1182,10 +1263,95 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     syncRoundStay()
   }
 
+  private static let widgetReloadMinYd = 5
+  private static let widgetReloadMinSec = 5.0
+  private var widgetReload: (hole: Int, quality: String, yards: Int?, at: Date)?
+
   private static func complicationInt(_ value: Any?) -> Int? {
     if let yards = value as? Int { return yards }
     if let yards = value as? NSNumber { return yards.intValue }
+    if let yards = value as? Double { return Int(yards.rounded()) }
     return nil
+  }
+
+  private static func complicationDouble(_ value: Any?) -> Double? {
+    if let number = value as? Double { return number }
+    if let number = value as? NSNumber { return number.doubleValue }
+    if let number = value as? Int { return Double(number) }
+    return nil
+  }
+
+  /// Course-card coordinate. Rejects missing and 0,0. Mirrors `isCourseCardLatLng`.
+  private static func isCourseCoord(lat: Double, lng: Double) -> Bool {
+    if !lat.isFinite || !lng.isFinite { return false }
+    if lat < -90 || lat > 90 || lng < -180 || lng > 180 { return false }
+    if abs(lat) < 0.01 && abs(lng) < 0.01 { return false }
+    return true
+  }
+
+  /// Phone fix wins only when it is newer than the Watch's own yards for this hole.
+  /// Mirrors `phoneLiveShouldReplaceWatch` in src/domain/watchLive.ts.
+  private static func phoneLiveShouldReplace(phoneHole: Int, phoneAtMs: Double?, watchHole: Int?, watchAtMs: Double) -> Bool {
+    if watchHole == nil || watchAtMs <= 0 || phoneHole != watchHole { return true }
+    guard let phoneAtMs, phoneAtMs > 0 else { return false }
+    return phoneAtMs > watchAtMs
+  }
+
+  /// `planLiveGpsToPin`: good < 15 m, soft ≤ 25 m, else none. Over 600 yd → none.
+  private static func liveYards(lat: Double, lng: Double, accuracyM: Double, greenLat: Double, greenLng: Double) -> (yards: Int?, quality: String) {
+    if !accuracyM.isFinite || accuracyM < 0 { return (nil, "none") }
+    let quality: String
+    if accuracyM < 15 { quality = "good" }
+    else if accuracyM <= 25 { quality = "soft" }
+    else { return (nil, "none") }
+    let yards = Int(haversineYards(lat1: lat, lng1: lng, lat2: greenLat, lng2: greenLng).rounded())
+    if yards <= 0 || yards > 600 { return (nil, "none") }
+    return (yards, quality)
+  }
+
+  /// Same earth radius and meters-per-yard as src/domain/haversine.ts.
+  private static func haversineYards(lat1: Double, lng1: Double, lat2: Double, lng2: Double) -> Double {
+    let earth = 6_371_000.0
+    let metersPerYard = 0.9144
+    let dLat = (lat2 - lat1) * .pi / 180
+    let dLng = (lng2 - lng1) * .pi / 180
+    let lat1r = lat1 * .pi / 180
+    let lat2r = lat2 * .pi / 180
+    let h = sin(dLat / 2) * sin(dLat / 2) + cos(lat1r) * cos(lat2r) * sin(dLng / 2) * sin(dLng / 2)
+    let meters = 2 * earth * asin(min(1, sqrt(h)))
+    return meters / metersPerYard
+  }
+
+  /// Walking update. A locked phone sends nothing; this is the live number.
+  private func adoptWatchFix(_ fix: CLLocation) {
+    guard let greenLat = list.greenLat, let greenLng = list.greenLng else { return }
+    let atMs = fix.timestamp.timeIntervalSince1970 * 1000
+    if list.liveAtMs > 0, atMs <= list.liveAtMs, list.complicationHole == list.holeNumber { return }
+    let live = Self.liveYards(
+      lat: fix.coordinate.latitude,
+      lng: fix.coordinate.longitude,
+      accuracyM: fix.horizontalAccuracy,
+      greenLat: greenLat,
+      greenLng: greenLng
+    )
+    var next = list
+    next.liveAtMs = atMs
+    next.complicationHole = next.holeNumber >= 1 ? next.holeNumber : 0
+    if let yards = live.yards {
+      next.complicationYards = yards
+      next.complicationQuality = live.quality
+      next.rankHoldHole = next.holeNumber
+      next.rankHoldYards = yards
+    } else {
+      next.complicationYards = nil
+      next.complicationQuality = "none"
+      if next.rankHoldHole != next.holeNumber {
+        next.rankHoldYards = nil
+        next.rankHoldHole = 0
+      }
+    }
+    list = next
+    persist(next)
   }
 
   private func persist(_ state: ClubListState) {
@@ -1237,6 +1403,13 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     if let yards = state.complicationYards, (state.complicationQuality == "good" || state.complicationQuality == "soft"), yards > 0 {
       obj["complicationYards"] = yards
     }
+    if state.liveAtMs > 0 { obj["complicationAt"] = state.liveAtMs }
+    if let tee = state.teeLengthYards, tee > 0 { obj["teeLengthYards"] = tee }
+    if let lat = state.greenLat, let lng = state.greenLng {
+      obj["greenLat"] = lat
+      obj["greenLng"] = lng
+    }
+    if !state.clubCarry.isEmpty { obj["clubCarry"] = state.clubCarry }
     if let last = state.lastClubId { obj["lastClubId"] = last }
     if let selected = state.selectedClubId { obj["selectedClubId"] = selected }
     if state.roundComplete { obj["roundComplete"] = true }
@@ -1246,11 +1419,27 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       defaults?.set(text, forKey: "clubListJSON")
     }
     defaults?.synchronize()
-    let stamp = "\(state.complicationHole)|\(state.complicationYards ?? -1)|\(state.complicationQuality)"
-    if stamp != complicationStamp {
-      complicationStamp = stamp
-      ComplicationReloader.reload()
+    reloadWidgetIfNeeded(state)
+  }
+
+  /// WidgetKit budget: hole / quality / dash flips always, otherwise a ≥5 yd
+  /// step or any change that has waited 5 s. Mirrors `watchWidgetShouldReload`.
+  private func reloadWidgetIfNeeded(_ state: ClubListState) {
+    let shown: Int? = state.liveYardsTrusted ? state.complicationYards : nil
+    let now = Date()
+    let previous = widgetReload
+    let holeFlip = previous == nil || previous?.hole != state.complicationHole
+    let qualityFlip = previous == nil || previous?.quality != state.complicationQuality
+    let dashFlip = previous == nil || ((previous?.yards == nil) != (shown == nil))
+    var yardStep = false
+    if let shown, let prev = previous?.yards {
+      yardStep = abs(shown - prev) >= Self.widgetReloadMinYd
     }
+    let elapsed = previous == nil ? Self.widgetReloadMinSec : now.timeIntervalSince(previous?.at ?? now)
+    let drifted = previous != nil && shown != previous?.yards && elapsed >= Self.widgetReloadMinSec
+    guard holeFlip || qualityFlip || dashFlip || yardStep || drifted else { return }
+    widgetReload = (hole: state.complicationHole, quality: state.complicationQuality, yards: shown, at: now)
+    ComplicationReloader.reload()
   }
 
   private func loadFromDefaults() {
@@ -1641,7 +1830,12 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-    lastFix = locations.last
+    guard let fix = locations.last else { return }
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.lastFix = fix
+      self.adoptWatchFix(fix)
+    }
   }
 
   /// Wrist-down is inactive, then background. The golf workout keeps the round
