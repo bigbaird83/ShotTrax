@@ -134,7 +134,9 @@ import {
   isHoleOutShot,
   isPuttLengthId,
   madeItAdvancesHole,
+  madeItWritesPutts,
   planMadeIt,
+  puttDraftAfterHoleOut,
   planPlayDockFinish,
   putterOpensPuttSheet,
   undoLastPutt,
@@ -788,19 +790,36 @@ export default function HoleScreen() {
     setToast(COPY.holeOut);
   }, []);
 
+  const clearPuttDraft = useCallback(() => {
+    const cleared = puttDraftAfterHoleOut();
+    puttDraftRef.current = cleared;
+    setPuttDraft(cleared);
+    puttOpenRef.current = false;
+    setPuttOpen(false);
+  }, []);
+
   const applyMadeIt = useCallback(
     (targetHole: number, draft: PuttDraft, pending: PuttLengthId | null = null) => {
-      const planned = planMadeIt(draft, pending);
-      if (readOnly || !planned.ok || !round) return false;
-      saveDraft(targetHole, planned, true);
-      setPuttOpen(false);
-      celebrateHoleOut();
+      if (readOnly || !round) return false;
+      const existing = getHole(db, id, targetHole);
+      let lengths: PuttLengthId[];
+      if (madeItWritesPutts(Boolean(existing?.puttsDone))) {
+        const planned = planMadeIt(draft, pending);
+        if (!planned.ok) return false;
+        saveDraft(targetHole, planned, true);
+        celebrateHoleOut();
+        lengths = planned.lengths;
+      } else {
+        // Already holed out. Keep the stored putts — do not count the draft again.
+        lengths = existing?.puttLengths.filter(isPuttLengthId) ?? [];
+      }
+      clearPuttDraft();
       if (!madeItAdvancesHole({ sheetHoleNumber: targetHole, currentHoleNumber: holeNumber })) {
-        void pushWatchPuttSheet({ open: false, holeNumber: targetHole, lengths: planned.lengths, done: true });
+        void pushWatchPuttSheet({ open: false, holeNumber: targetHole, lengths, done: true });
         return true;
       }
       // Watch leaves the putt sheet now and shows Hole N+1 (or Round complete).
-      void pushWatchMadeItAdvance({ holeNumber: targetHole, holeCount: round.holeCount, lengths: planned.lengths });
+      void pushWatchMadeItAdvance({ holeNumber: targetHole, holeCount: round.holeCount, lengths });
       const dest = holeAfterDone(targetHole, round.holeCount);
       if (dest.kind === 'summary') {
         router.replace(`/round/${id}/summary`);
@@ -809,7 +828,7 @@ export default function HoleScreen() {
       router.replace(`/round/${id}/hole/${dest.holeNumber}`);
       return true;
     },
-    [readOnly, round, saveDraft, holeNumber, id, celebrateHoleOut],
+    [readOnly, round, saveDraft, holeNumber, id, celebrateHoleOut, db, clearPuttDraft],
   );
 
   const onAttachFinishedPuttLength = (index: number, lengthId: PuttLengthId) => {
@@ -914,19 +933,20 @@ export default function HoleScreen() {
       if (msg.action === 'made') {
         const draft = puttDraftRef.current;
         const pending = msg.lengthId ?? null;
-        if (puttOpenRef.current || pending || draft.lengths.length > 0 || draft.putts > 0) {
+        const row = getHole(db, id, target);
+        if (row?.puttsDone || puttOpenRef.current || pending || draft.lengths.length > 0 || draft.putts > 0) {
           const ok = applyMadeIt(target, draft, pending);
           return ok ? { ok: true, feedback: MADE_IT_FEEDBACK } : { ok: false, feedback: COPY.puttSheetLede };
         }
-        const row = getHole(db, id, target);
         const rnd = getRound(db, id);
-        if (!row || !rnd || row.puttsDone) {
+        if (!row || !rnd) {
           return { ok: false, feedback: COPY.puttSheetLede };
         }
         closeOpenShotToExistingPin(db, row.id, target === holeNumber ? green : null);
         await closeApproachBeforePutts(db, { roundId: id, holeNumber: target });
         finishHoleOut(db, row.id);
         bump();
+        clearPuttDraft();
         celebrateHoleOut();
         void pushWatchMadeItAdvance({ holeNumber: target, holeCount: rnd.holeCount, lengths: row.puttLengths.filter(isPuttLengthId) });
         const dest = holeAfterDone(target, rnd.holeCount);
@@ -936,7 +956,7 @@ export default function HoleScreen() {
       }
       return { ok: false, feedback: PHONE_UNAVAILABLE };
     },
-    [readOnly, holeNumber, saveDraft, applyMadeIt, db, id, bump, celebrateHoleOut, green],
+    [readOnly, holeNumber, saveDraft, applyMadeIt, db, id, bump, celebrateHoleOut, green, clearPuttDraft],
   );
 
   useWatchClubList(
@@ -1183,6 +1203,7 @@ export default function HoleScreen() {
       await closeApproachBeforePutts(db, { roundId: id, holeNumber });
       finishHoleOut(db, hole.id);
       bump();
+      clearPuttDraft();
       celebrateHoleOut();
       const dest = holeAfterDone(holeNumber, round.holeCount);
       if (dest.kind === 'summary') {

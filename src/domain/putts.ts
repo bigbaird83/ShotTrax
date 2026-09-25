@@ -386,6 +386,16 @@ export function planMadeIt(
   return { ok: true, putts: clampPutts(putts), lengths };
 }
 
+/** A hole that is already holed out must not take another putt from Made it. */
+export function madeItWritesPutts(puttsDone: boolean): boolean {
+  return !puttsDone;
+}
+
+/** Hole Out and Made it drop the in-hand draft so the next Made it starts clean. */
+export function puttDraftAfterHoleOut(): PuttDraft {
+  return emptyPuttDraft();
+}
+
 /**
  * Persist a planned Made it. Counts already include the current putt —
  * do not add another empty slot (that is sheet planMadeIt).

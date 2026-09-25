@@ -52,7 +52,9 @@ import {
   addPuttLength,
   emptyPuttDraft,
   holeAfterDone,
+  madeItWritesPutts,
   planMadeIt,
+  puttDraftAfterHoleOut,
   PUTT_LENGTHS,
   type PuttDraft,
   type PuttLengthId,
@@ -396,7 +398,7 @@ function nextAt(): string {
   return new Date(atTick).toISOString();
 }
 
-test('round flow', { skip: DatabaseSync ? false : 'node:sqlite needs Node 22.5+' }, async (t) => {
+test('round flow', { skip: DatabaseSync ? false : 'node:sqlite needs Node 22.5+' }, async () => {
   gpsQueue.length = 0;
   pushedClubLists.length = 0;
   listeners.clear();
@@ -418,6 +420,8 @@ test('round flow', { skip: DatabaseSync ? false : 'node:sqlite needs Node 22.5+'
   assert.match(madeItFn, /finishHoleOut/);
   assert.match(madeItFn, /pushWatchMadeItAdvance/);
   assert.match(madeItFn, /holeAfterDone/);
+  assert.match(madeItFn, /madeItWritesPutts\(/);
+  assert.match(madeItFn, /clearPuttDraft\(\)/);
   const homeScreen = readFileSync(new URL('../../app/(tabs)/index.tsx', import.meta.url), 'utf8');
   assert.match(homeScreen, /historyDeletePrompt/);
   assert.match(homeScreen, /deleteRound\(db, round\.id\)/);
@@ -468,11 +472,20 @@ test('round flow', { skip: DatabaseSync ? false : 'node:sqlite needs Node 22.5+'
     if (msg.action === 'made') {
       const pending = msg.lengthId ?? null;
       const draft = session.puttDraft;
+      const rowNow = getHole(db, round.id, target);
+      if (!madeItWritesPutts(Boolean(rowNow?.puttsDone))) {
+        session.puttOpen = false;
+        session.puttDraft = puttDraftAfterHoleOut();
+        const lengths = (rowNow?.puttLengths ?? []).filter((id): id is PuttLengthId =>
+          PUTT_LENGTHS.some((length) => length.id === id),
+        );
+        return advanceAfterMade(target, lengths);
+      }
       if (session.puttOpen || pending || draft.lengths.length > 0 || draft.putts > 0) {
         const planned = planMadeIt(draft, pending);
         finishHolePutts(db, mustHole(db, round.id, target).id, planned.putts, planned.lengths);
         session.puttOpen = false;
-        session.puttDraft = { putts: planned.putts, lengths: [...planned.lengths] };
+        session.puttDraft = puttDraftAfterHoleOut();
         return advanceAfterMade(target, planned.lengths);
       }
       const row = getHole(db, round.id, target);
@@ -609,7 +622,7 @@ test('round flow', { skip: DatabaseSync ? false : 'node:sqlite needs Node 22.5+'
     closeOpenShotToExistingPin(db, hole.id, greenOf(hole));
     await shotsApi.closeApproachBeforePutts(db, { roundId: round.id, holeNumber: 1 });
     finishHolePutts(db, hole.id, planned.putts, planned.lengths);
-    session.puttDraft = { putts: planned.putts, lengths: [...planned.lengths] };
+    session.puttDraft = puttDraftAfterHoleOut();
     session.puttOpen = false;
     const shots = listShotsForHole(db, hole.id);
     const closed = getHole(db, round.id, 1);
@@ -652,7 +665,8 @@ test('round flow', { skip: DatabaseSync ? false : 'node:sqlite needs Node 22.5+'
     check(step, endpoints, pins.length);
   }
 
-  // Step 5 — Watch Made it. Phone handler should land on hole 2 with the dock up.
+  // Step 5 — Watch Made it after Hole Out. Hole 1 stays 4 strokes / 2 putts,
+  // and the phone lands on hole 2 with the dock up.
   await sendMadeIt();
   {
     const step = 5;
@@ -662,22 +676,8 @@ test('round flow', { skip: DatabaseSync ? false : 'node:sqlite needs Node 22.5+'
     const live = getRound(db, round.id);
     check(step, true, live ? playDockVisible(db, live, session.holeNumber) : false);
     const hole1 = getHole(db, round.id, 1);
-    // Known bug. Hole Out leaves the 2-putt draft in hand (the hole screen's
-    // puttDraftRef is not cleared). The next Watch made message takes the
-    // planMadeIt branch and counts another putt, so hole 1 goes 4 → 5.
-    // Node 22's test runner has no test.failing; todo still runs this check
-    // and prints the mismatch without failing CI. App code is unchanged.
-    await t.test(
-      'Step 5 hole 1 score stays 4 after Watch Made it',
-      { todo: 'Watch Made it on the Hole Out draft adds a putt (score 4 → 5). App code unchanged.' },
-      () => {
-        const score = hole1?.score ?? null;
-        const putts = hole1?.putts ?? null;
-        if (score !== 4 || putts !== 2) {
-          throw new Error(`Step 5: expected hole 1 score 4 (2 putts), actual score ${show(score)} (${show(putts)} putts)`);
-        }
-      },
-    );
+    check(step, 4, hole1?.score ?? null);
+    check(step, 2, hole1?.putts ?? null);
   }
 
   // Step 6 — fewest steps through the rest of the round. Hole 2 is closed with
@@ -699,8 +699,8 @@ test('round flow', { skip: DatabaseSync ? false : 'node:sqlite needs Node 22.5+'
     const holes = listHoles(db, round.id);
     const hole1 = holes.find((hole) => hole.number === 1);
     const hole1Shots = hole1 ? listShotsForHole(db, hole1.id).length : 0;
-    // Later holes: one Watch Made it, no shots → 1 stroke each. Hole 1 is
-    // shots + the putts actually stored (step 5 may have changed that count).
+    // Later holes: one Watch Made it, no shots → 1 stroke each.
+    // Hole 1 stays at the step 4 total (shots + the 2 putts).
     let later = 0;
     for (const hole of holes) {
       if (hole.number === 1) continue;
