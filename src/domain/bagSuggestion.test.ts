@@ -39,12 +39,15 @@ function shots(
   opts: {
     fromGreenYards?: number | null;
     green?: { lat: number; lng: number } | null;
+    front?: { lat: number; lng: number } | null;
+    back?: { lat: number; lng: number } | null;
+    start?: { lat: number; lng: number } | null;
     idPrefix?: string;
   } = {},
 ): BagSuggestionShot[] {
   const fromGreenYards = opts.fromGreenYards === undefined ? 160 : opts.fromGreenYards;
   const green = opts.green === undefined ? GREEN : opts.green;
-  const start = fromGreenYards == null ? null : northOfGreen(fromGreenYards);
+  const start = opts.start !== undefined ? opts.start : fromGreenYards == null ? null : northOfGreen(fromGreenYards);
   const prefix = opts.idPrefix ?? 's';
   return yards.map((n, index) => ({
     id: `${prefix}${index + 1}`,
@@ -52,8 +55,12 @@ function shots(
     fixQuality: 'good' as const,
     startLat: start?.lat ?? null,
     startLng: start?.lng ?? null,
+    greenFrontLat: opts.front?.lat ?? null,
+    greenFrontLng: opts.front?.lng ?? null,
     greenLat: green?.lat ?? null,
     greenLng: green?.lng ?? null,
+    greenBackLat: opts.back?.lat ?? null,
+    greenBackLng: opts.back?.lng ?? null,
   }));
 }
 
@@ -154,6 +161,32 @@ test('sand wedge 50–55 inside 30 yards of the green does not suggest; no green
   assert.equal(suggest('club_sw', shots(pitches, { fromGreenYards: null }), 90)?.yards, 52);
 });
 
+test('30 yards is to the nearest saved green point, not only the center', () => {
+  const pitches = [50, 51, 52, 53, 55];
+  const front = northOfGreen(-15);
+  const back = northOfGreen(20);
+  const shortOfFront = northOfGreen(-40);
+  const pastBack = northOfGreen(40);
+  assert.ok(haversineYards(shortOfFront, front) < 30);
+  assert.ok(haversineYards(shortOfFront, GREEN) > 30);
+  assert.ok(haversineYards(pastBack, back) < 30);
+  assert.ok(haversineYards(pastBack, GREEN) > 30);
+
+  // 25 yards short of the front, 40 from center: a chip off the front edge.
+  assert.equal(
+    suggest('club_sw', shots(pitches, { start: shortOfFront, front, back }), 90),
+    null,
+  );
+  // 20 yards past the back point: a chip behind the green.
+  assert.equal(
+    suggest('club_sw', shots(pitches, { start: pastBack, front, back }), 90),
+    null,
+  );
+  // Only a center point: 25 yards from center is inside the line, 40 is not.
+  assert.equal(suggest('club_sw', shots(pitches, { fromGreenYards: 25 }), 90), null);
+  assert.equal(suggest('club_sw', shots(pitches, { fromGreenYards: 40 }), 90)?.yards, 52);
+});
+
 test('a mix of chips and full swings on a wedge does not suggest', () => {
   assert.equal(suggest('club_sw', shots([24, 26, 55, 70, 110]), 90), null);
   const chipsAndSwings = [
@@ -248,6 +281,11 @@ test('bag copy and club data disclaimer', () => {
 
   const suggestionSrc = readFileSync(new URL('./bagSuggestion.ts', import.meta.url), 'utf8');
   assert.doesNotMatch(suggestionSrc, /stockAvgCarry|STOCK_AVG/);
+  assert.match(suggestionSrc, /yardsToNearestGreenPoint/);
+  assert.doesNotMatch(suggestionSrc, /paintCache|osmOverlay|COURSE_PAINT/);
+  const repoSrc = readFileSync(new URL('../db/repo.ts', import.meta.url), 'utf8');
+  assert.match(repoSrc, /holes\.green_front_lat, holes\.green_front_lng/);
+  assert.match(repoSrc, /holes\.green_back_lat, holes\.green_back_lng/);
   const averagesSrc = readFileSync(new URL('./averages.ts', import.meta.url), 'utf8');
   assert.match(averagesSrc, /AVERAGE_OUTLIER_RATIO = 0\.2/);
   assert.doesNotMatch(averagesSrc, /suggestBagCarry/);
@@ -351,4 +389,73 @@ test('saved 7-iron shots suggest 150, then the typed update makes the club live'
   assert.equal(after?.bag.kind, 'live');
   assert.equal(after?.bag.yards, 150);
   assert.equal(after?.suggestion, null);
+});
+
+test('listClubAverages measures 30 yards to the nearest saved green point', needsSqlite, () => {
+  const db = memoryDb();
+  const round = startRound(db, 9, 'Fixture');
+  const holes = listHoles(db, round.id);
+  const front = northOfGreen(-15);
+  const back = northOfGreen(20);
+  const pitches = [50, 51, 52, 53, 55];
+
+  function closeFive(
+    holeId: string,
+    clubId: string,
+    start: { lat: number; lng: number },
+    greens: {
+      front: { lat: number; lng: number } | null;
+      center: { lat: number; lng: number } | null;
+      back: { lat: number; lng: number } | null;
+    },
+  ) {
+    updateClubCarry(db, clubId, 90);
+    db.runSync(
+      `UPDATE holes SET green_front_lat = ?, green_front_lng = ?, green_lat = ?, green_lng = ?,
+        green_back_lat = ?, green_back_lng = ? WHERE id = ?`,
+      [
+        greens.front?.lat ?? null,
+        greens.front?.lng ?? null,
+        greens.center?.lat ?? null,
+        greens.center?.lng ?? null,
+        greens.back?.lat ?? null,
+        greens.back?.lng ?? null,
+        holeId,
+      ],
+    );
+    pitches.forEach((yards, index) => {
+      const id = insertOpenShot(db, {
+        holeId,
+        clubId,
+        seq: index + 1,
+        lat: start.lat,
+        lng: start.lng,
+        accuracyM: 5,
+        startFixQuality: 'good',
+      });
+      applyClosedShot(db, {
+        shotId: id,
+        endLat: GREEN.lat,
+        endLng: GREEN.lng,
+        endAccuracyM: 5,
+        endFixQuality: 'good',
+        distanceYards: yards,
+        impossibleJump: false,
+        fixQuality: 'good',
+      });
+    });
+  }
+
+  const hole0 = holes[0];
+  const hole1 = holes[1];
+  const hole2 = holes[2];
+  assert.ok(hole0 && hole1 && hole2);
+  closeFive(hole0.id, 'club_sw', northOfGreen(-40), { front, center: GREEN, back });
+  closeFive(hole1.id, 'club_lw', northOfGreen(40), { front, center: GREEN, back });
+  closeFive(hole2.id, 'club_gw', northOfGreen(25), { front: null, center: GREEN, back: null });
+
+  const rows = listClubAverages(db);
+  assert.equal(rows.find((row) => row.club.id === 'club_sw')?.suggestion, null);
+  assert.equal(rows.find((row) => row.club.id === 'club_lw')?.suggestion, null);
+  assert.equal(rows.find((row) => row.club.id === 'club_gw')?.suggestion, null);
 });

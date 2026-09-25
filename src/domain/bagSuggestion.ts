@@ -1,8 +1,7 @@
 import { shotsForClubAverage, type AverageShot } from './averages';
 import { resolveBagCarry } from './bagDistance';
 import { isPutterClubId } from './defaultBag';
-import { haversineYards } from './haversine';
-import { isValidLatLng } from './latLng';
+import { yardsToNearestGreenPoint } from './yardsToNearestGreenPoint';
 
 /**
  * How many of the most recent dropped shots must agree before the bag offers
@@ -17,8 +16,9 @@ const SUGGESTION_TIGHT_RATIO = 0.1;
 const SUGGESTION_MIN_OF_BASELINE = 0.5;
 
 /**
- * A start this close to that hole's green is a chip. Skipped when the shot
- * has no start, or the hole has no green — never estimate either point.
+ * A start this close to the nearest saved green point (front, center, or back)
+ * is a chip. Skipped when the shot has no start, or the hole has none of those
+ * points — never estimate a green, never read an OSM outline.
  */
 const GREEN_CHIP_YARDS = 30;
 
@@ -28,14 +28,18 @@ export const BAG_CARRY_SUGGESTION_DISMISS_KEY = 'bag_carry_suggestion_dismiss';
 /**
  * One eligible shot, oldest first — the same list `listClubAverages` builds
  * (`includeInDistanceAverages` + `confirmUndoShotEntersAverage`).
- * Green is `holes.green_lat` / `green_lng`, the point To green uses.
+ * Green points are the hole's saved front, center (`green_lat`/`green_lng`), and back.
  */
 export type BagSuggestionShot = AverageShot & {
   id: string;
   startLat: number | null;
   startLng: number | null;
+  greenFrontLat: number | null;
+  greenFrontLng: number | null;
   greenLat: number | null;
   greenLng: number | null;
+  greenBackLat: number | null;
+  greenBackLng: number | null;
 };
 
 export type BagCarrySuggestion = {
@@ -59,13 +63,19 @@ function suggestionBaseline(
   return null;
 }
 
+function pair(lat: number | null, lng: number | null): { lat: number; lng: number } | null {
+  if (lat == null || lng == null) return null;
+  return { lat, lng };
+}
+
 function startsInsideGreenChip(shot: BagSuggestionShot): boolean {
-  if (shot.startLat == null || shot.startLng == null) return false;
-  if (shot.greenLat == null || shot.greenLng == null) return false;
-  const start = { lat: shot.startLat, lng: shot.startLng };
-  const green = { lat: shot.greenLat, lng: shot.greenLng };
-  if (!isValidLatLng(start) || !isValidLatLng(green)) return false;
-  return haversineYards(start, green) < GREEN_CHIP_YARDS;
+  const yards = yardsToNearestGreenPoint(pair(shot.startLat, shot.startLng), {
+    front: pair(shot.greenFrontLat, shot.greenFrontLng),
+    center: pair(shot.greenLat, shot.greenLng),
+    back: pair(shot.greenBackLat, shot.greenBackLng),
+  });
+  if (yards == null) return false;
+  return yards < GREEN_CHIP_YARDS;
 }
 
 /**

@@ -1707,12 +1707,18 @@ export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
     average_eligible_at: string | null;
     start_lat: number | null;
     start_lng: number | null;
+    green_front_lat: number | null;
+    green_front_lng: number | null;
     green_lat: number | null;
     green_lng: number | null;
+    green_back_lat: number | null;
+    green_back_lng: number | null;
   }>(
     `SELECT shots.id, shots.club_id, shots.distance_yards, shots.fix_quality, shots.source,
             shots.average_eligible_at, shots.start_lat, shots.start_lng,
-            holes.green_lat, holes.green_lng
+            holes.green_front_lat, holes.green_front_lng,
+            holes.green_lat, holes.green_lng,
+            holes.green_back_lat, holes.green_back_lng
      FROM shots
      LEFT JOIN holes ON holes.id = shots.hole_id
      WHERE shots.distance_yards IS NOT NULL AND shots.club_id IS NOT NULL
@@ -1756,8 +1762,12 @@ export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
           fixQuality: quality,
           startLat: s.start_lat,
           startLng: s.start_lng,
+          greenFrontLat: s.green_front_lat,
+          greenFrontLng: s.green_front_lng,
           greenLat: s.green_lat,
           greenLng: s.green_lng,
+          greenBackLat: s.green_back_lat,
+          greenBackLng: s.green_back_lng,
         };
       });
     const fill = filled.get(club.id);
