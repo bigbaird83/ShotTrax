@@ -387,6 +387,10 @@ export function resolveWheelCarries(clubs: ClubStripClub[]): Record<string, numb
  * Shared opening three for the play wheel AND the Add-shot sheet.
  * After fill and a carry sort, lowest |carry − D| — never shortest-3,
  * never longest-3, never a name/iron/hybrid sort. Putter out.
+ *
+ * The Watch strip (`targets/watch/content.swift` `stripWindowStart`) uses this
+ * same rule on `clubCarry` and the Watch's live yards. Keep the sort in sync:
+ * closest |carry − D|, then short-to-long, putter excluded.
  */
 export function clubStripThreeClosestIds(
   ordered: { id: string; carry: number }[],

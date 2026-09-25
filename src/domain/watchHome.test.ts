@@ -488,7 +488,7 @@ test('Watch keeps club pick + hole scoring; no Export / Restore, no cloud accoun
   assert.match(ui, /private var clubPick: some View/);
   assert.match(ui, /session\.pick\(clubId: club\.id\)/);
   assert.match(ui, /session\.openPuttSheet\(\)/);
-  assert.match(ui, /Text\("Hole Out"\)/);
+  assert.match(ui, /actionPill\("Hole Out"\)/);
   // Highlight is the pill only: fill clipped to the same rounded shape.
   const wheel = ui.slice(ui.indexOf('ForEach(wheelClubs'), ui.indexOf('private var moreClubs'));
   assert.match(wheel, /\.background\(selected \? outdoorLime : Color\("bg"\)\)\s*(\/\/[^\n]*\s*)?\.clipShape\(RoundedRectangle\(cornerRadius: 10\)\)/);

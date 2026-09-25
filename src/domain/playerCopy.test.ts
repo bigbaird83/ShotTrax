@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   COPY,
+  csvExportSheetTitle,
+  restoreFailureCopy,
   finishPuttsChip,
   formatPuttN,
   finishShotChip,
@@ -10,6 +12,7 @@ import {
   formatShotCount,
   formatHoleHeader,
   formatPlayHeader,
+  formatPlayHeaderCourseLength,
   formatPlayHeaderPrimary,
   formatPlayHeaderSecondary,
   formatRunningParBadge,
@@ -27,6 +30,30 @@ import {
   yardsAreOnTheCard,
 } from './playerCopy';
 
+test('restore failure copy names each reason', () => {
+  assert.equal(
+    restoreFailureCopy('not_shottrax'),
+    'That isn’t a shottracker rounds file. Pick the .json from Export rounds. CSV can’t be restored.',
+  );
+  assert.equal(restoreFailureCopy('not_shottrax'), COPY.restoreRoundsNotFile);
+  assert.equal(COPY.restoreRoundsCsv, 'CSV can’t be restored. Pick the .json from Export rounds.');
+  assert.equal(restoreFailureCopy('empty'), 'Nothing to restore in that file.');
+  assert.equal(restoreFailureCopy('empty'), COPY.restoreRoundsEmpty);
+  assert.equal(restoreFailureCopy('unreadable'), 'Couldn’t read that file.');
+  assert.equal(restoreFailureCopy('unreadable'), COPY.restoreRoundsUnreadable);
+  assert.equal(restoreFailureCopy('save_failed'), 'Couldn’t save the restored rounds.');
+  assert.equal(restoreFailureCopy('save_failed'), COPY.restoreRoundsSaveFailed);
+  assert.equal(restoreFailureCopy('other'), COPY.restoreRoundsFailed);
+});
+
+test('csv export sheet titles name each file', () => {
+  assert.equal(COPY.exportCsvSheetRounds, '1 of 2 · rounds.csv');
+  assert.equal(COPY.exportCsvSheetShots, '2 of 2 · shots.csv');
+  assert.equal(COPY.exportCsvSavedRoundsOnly, 'Saved rounds.csv. Couldn’t open shots.csv.');
+  assert.equal(csvExportSheetTitle(1, 2, 'rounds.csv'), COPY.exportCsvSheetRounds);
+  assert.equal(csvExportSheetTitle(2, 2, 'shots.csv'), COPY.exportCsvSheetShots);
+});
+
 test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(formatParLabel(null), 'Par unknown');
   assert.equal(formatParLabel(4), 'Par 4');
@@ -36,6 +63,18 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(formatHoleHeader(1, 4), 'Hole 1 · Par 4');
   assert.equal(formatPlayHeader(1, 4, 371), 'Hole 1 · Par 4 · 371 yd');
   assert.equal(formatPlayHeader(1, 4, null), 'Hole 1 · Par 4 · —');
+  assert.deepEqual(formatPlayHeaderCourseLength(1, 4, null, 385), {
+    primary: 'Hole 1',
+    secondary: 'Par 4 · 385 yd',
+    label: 'Hole 1 · Par 4 · 385 yd',
+  });
+  assert.deepEqual(formatPlayHeaderCourseLength(1, 4, 'Gold', 385), {
+    primary: 'Hole 1',
+    secondary: 'Par 4 · Gold · 385 yd',
+    label: 'Hole 1 · Par 4 · Gold · 385 yd',
+  });
+  assert.equal(formatPlayHeaderCourseLength(1, 4, null, null).secondary, 'Par 4');
+  assert.doesNotMatch(formatPlayHeaderCourseLength(1, 4, null, null).label, /—|yd/);
   assert.doesNotMatch(formatPlayHeader(1, 4, 371), /SI |Rating |Slope /);
   assert.equal(COPY.homeLede, 'Find a course, pick your tee, start the round.');
   assert.equal(COPY.nearbyHint, 'Courses near you — pull to refresh.');
@@ -55,6 +94,7 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.top3Unlock, 'Top clubs unlock after a few shots');
   assert.equal(COPY.stickyClub, 'Same club');
   assert.equal(COPY.undoLast, 'Undo last');
+  assert.equal(COPY.undoLastShot, 'Undo last shot');
   assert.equal(COPY.markWithoutClub, 'Mark without club');
   assert.equal(COPY.approximate, 'Approximate');
   assert.equal(COPY.gpsConfidenceGood, 'good');

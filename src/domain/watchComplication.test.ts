@@ -190,7 +190,7 @@ test('complication uses the watch widget families and the phone hole-map number'
   assert.ok(clubPick.indexOf('size: 28') < clubPick.indexOf('Text("to hole")'));
   assert.ok(clubPick.indexOf('Text("to hole")') < clubPick.indexOf('size: 11'));
   assert.ok(clubPick.indexOf('session.list.statusLine') < clubPick.indexOf('session.list.liveYardsLabel'));
-  assert.ok(clubPick.indexOf('session.list.liveYardsLabel') < clubPick.indexOf('session.leave("back")'));
+  assert.ok(clubPick.indexOf('session.list.liveYardsLabel') < clubPick.indexOf('session.madeIt()'));
   assert.match(clubPick, /fixedSize\(horizontal: true, vertical: true\)/);
 
   const widget = readFileSync(new URL('../../targets/watch-widget/index.swift', import.meta.url), 'utf8');
@@ -198,14 +198,18 @@ test('complication uses the watch widget families and the phone hole-map number'
   assert.match(widget, /complicationYards/);
   assert.match(widget, /complicationQuality/);
   assert.match(widget, /complicationHole/);
-  assert.match(widget, /policy: \.never/);
+  assert.match(widget, /policy: \.after/);
+  assert.match(widget, /addingTimeInterval\(15\)/);
+  assert.match(widget, /AccessoryWidgetBackground\(\)/);
+  assert.doesNotMatch(widget, /Color\("widgetBackground"\)/);
+  assert.doesNotMatch(widget, /policy: \.never/);
   assert.match(widget, /"Unavailable"/);
   assert.match(widget, /\.accessoryCircular/);
   assert.match(widget, /\.accessoryCorner/);
   assert.match(widget, /\.accessoryInline/);
   assert.match(widget, /\.accessoryRectangular/);
   assert.doesNotMatch(widget, /CoreLocation|CLLocation|WCSession|WatchConnectivity/);
-  assert.doesNotMatch(widget, /addingTimeInterval/);
+  assert.match(widget, /addingTimeInterval\(15\)/);
   assert.doesNotMatch(widget, /Hole 1/);
   assert.doesNotMatch(widget, /yardsToGreen/);
 

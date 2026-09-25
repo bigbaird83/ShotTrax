@@ -29,21 +29,24 @@ const listBase = {
   labels: { club_7i: '7i' },
 };
 
-test('Watch status is Hole N · live yards when the fix is good or soft', () => {
-  assert.deepEqual(formatWatchStatusLine({ holeNumber: 3, live: { yards: 164, quality: 'good' } }), {
-    line: 'Hole 3 · 164 yd',
-    soft: false,
-    chip: null,
-  });
-  assert.deepEqual(formatWatchStatusLine({ holeNumber: 3, live: { yards: 150, quality: 'soft' } }), {
-    line: 'Hole 3 · 150 yd',
-    soft: true,
-    chip: 'Approximate',
-  });
+test('Watch status is the fixed tee length, not the live yards', () => {
+  assert.deepEqual(
+    formatWatchStatusLine({ holeNumber: 3, teeLengthYards: 385, live: { yards: 164, quality: 'good' } }),
+    { line: 'Hole 3 · 385 yd', soft: false, chip: null },
+  );
+  assert.doesNotMatch(
+    formatWatchStatusLine({ holeNumber: 3, teeLengthYards: 385, live: { yards: 164, quality: 'good' } }).line,
+    /164/,
+  );
+  assert.deepEqual(
+    formatWatchStatusLine({ holeNumber: 3, teeLengthYards: 385, live: { yards: 150, quality: 'soft' } }),
+    { line: 'Hole 3 · 385 yd', soft: true, chip: 'Approximate' },
+  );
 });
 
 test('Watch soft quality uses Approximate, never SOFT', () => {
-  const row = formatWatchStatusLine({ holeNumber: 7, live: { yards: 142, quality: 'soft' } });
+  const row = formatWatchStatusLine({ holeNumber: 7, teeLengthYards: null, live: { yards: 142, quality: 'soft' } });
+  assert.equal(row.line, 'Hole 7');
   assert.equal(row.chip, 'Approximate');
   assert.doesNotMatch(row.chip ?? '', /SOFT/i);
   assert.doesNotMatch(row.line, /SOFT/i);
@@ -56,9 +59,10 @@ test('live fix and a loaded green show yards equal to the live distance', () => 
   });
   assert.equal(good.quality, 'good');
   assert.equal(good.yards, liveYards);
-  const row = formatWatchStatusLine({ holeNumber: 3, live: good });
-  assert.equal(row.line, `Hole 3 · ${liveYards} yd`);
+  const row = formatWatchStatusLine({ holeNumber: 3, teeLengthYards: 385, live: good });
+  assert.equal(row.line, 'Hole 3 · 385 yd');
   assert.equal(row.chip, null);
+  assert.doesNotMatch(row.line, new RegExp(String(liveYards)));
   assert.doesNotMatch(row.line, /410/);
 
   const soft = planLiveGpsToPin({
@@ -67,9 +71,10 @@ test('live fix and a loaded green show yards equal to the live distance', () => 
   });
   assert.equal(soft.quality, 'soft');
   assert.equal(soft.yards, liveYards);
-  const softRow = formatWatchStatusLine({ holeNumber: 3, live: soft });
-  assert.equal(softRow.line, `Hole 3 · ${liveYards} yd`);
+  const softRow = formatWatchStatusLine({ holeNumber: 3, teeLengthYards: 385, live: soft });
+  assert.equal(softRow.line, 'Hole 3 · 385 yd');
   assert.equal(softRow.chip, 'Approximate');
+  assert.doesNotMatch(softRow.line, new RegExp(String(liveYards)));
 
   const msg = clubListPayload({
     ...listBase,
@@ -77,12 +82,15 @@ test('live fix and a loaded green show yards equal to the live distance', () => 
     yardsToGreen: 410,
     yardsQuality: 'good',
     complication: good,
+    teeLengthYards: 385,
   });
   assert.equal(msg.yardsToGreen, 410);
   assert.equal(msg.complicationYards, liveYards);
+  assert.equal(msg.teeLengthYards, 385);
   const fromList = watchStatusLineFromClubList(msg);
-  assert.equal(fromList.line, `Hole 3 · ${liveYards} yd`);
+  assert.equal(fromList.line, 'Hole 3 · 385 yd');
   assert.doesNotMatch(fromList.line, /410/);
+  assert.doesNotMatch(fromList.line, new RegExp(String(liveYards)));
 });
 
 test('no fix shows a dash even when club-suggest has fallback yards', () => {
@@ -97,7 +105,7 @@ test('no fix shows a dash even when club-suggest has fallback yards', () => {
 
   for (const live of [missing, weak]) {
     const row = formatWatchStatusLine({ holeNumber: 4, live });
-    assert.equal(row.line, 'Hole 4 · —');
+    assert.equal(row.line, 'Hole 4');
     assert.equal(row.soft, false);
     assert.equal(row.chip, null);
     assert.doesNotMatch(row.line, /yd/);
@@ -114,7 +122,7 @@ test('no fix shows a dash even when club-suggest has fallback yards', () => {
     assert.equal(msg.complicationYards, null);
     assert.equal(msg.complicationQuality, 'none');
     const shown = watchStatusLineFromClubList(msg);
-    assert.equal(shown.line, 'Hole 4 · —');
+    assert.equal(shown.line, 'Hole 4');
     assert.equal(shown.chip, null);
     assert.doesNotMatch(shown.line, /410/);
     assert.doesNotMatch(JSON.stringify(shown), /410/);
@@ -136,29 +144,25 @@ test('no green loaded (Catalog only / HARD-MISS) shows a dash', () => {
     });
     assert.equal(msg.yardsToGreen, 385);
     const shown = watchStatusLineFromClubList(msg);
-    assert.equal(shown.line, 'Hole 8 · —');
+    assert.equal(shown.line, 'Hole 8');
     assert.equal(shown.chip, null);
     assert.doesNotMatch(shown.line, /385/);
     assert.doesNotMatch(JSON.stringify(shown), /385/);
   }
 });
 
-test('Watch status uses an em dash when live yards are missing or not positive', () => {
+test('Watch status omits the length when course yards are missing', () => {
   assert.deepEqual(formatWatchStatusLine({ holeNumber: 1, live: { yards: null, quality: 'none' } }), {
-    line: 'Hole 1 · —',
+    line: 'Hole 1',
     soft: false,
     chip: null,
   });
-  assert.deepEqual(formatWatchStatusLine({ holeNumber: 1, live: { yards: 90, quality: 'none' } }), {
-    line: 'Hole 1 · —',
+  assert.deepEqual(formatWatchStatusLine({ holeNumber: 1, teeLengthYards: 0, live: { yards: 90, quality: 'none' } }), {
+    line: 'Hole 1',
     soft: false,
     chip: null,
   });
-  assert.deepEqual(formatWatchStatusLine({ holeNumber: 1, live: { yards: 0, quality: 'good' } }), {
-    line: 'Hole 1 · —',
-    soft: false,
-    chip: null,
-  });
+  assert.doesNotMatch(formatWatchStatusLine({ holeNumber: 1, live: { yards: 90, quality: 'good' } }).line, /—|yd/);
   const forced = watchStatusLineFromClubList({
     holeNumber: 2,
     yardsToGreen: 140,
@@ -166,26 +170,25 @@ test('Watch status uses an em dash when live yards are missing or not positive',
     complicationYards: 140,
     complicationQuality: 'forced',
   });
-  assert.equal(forced.line, 'Hole 2 · —');
+  assert.equal(forced.line, 'Hole 2');
   assert.doesNotMatch(forced.line, /140/);
 });
 
-test('Watch status line renders complication yards, not club-rank yardsToGreen', () => {
+test('Watch status line renders the tee length, not live or club-rank yards', () => {
   const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
-  const status = session.slice(session.indexOf('var statusLine'), session.indexOf('var showSoft'));
-  assert.match(status, /liveYardsTrusted/);
-  assert.match(status, /complicationYards/);
+  const status = session.slice(session.indexOf('var statusLine'), session.indexOf('var rankYards'));
+  assert.match(status, /teeLengthYards/);
   assert.match(status, /Hole \\\(holeNumber\) · \\\(yards\) yd/);
-  assert.match(status, /Hole \\\(holeNumber\) · —/);
-  assert.doesNotMatch(status, /yardsToGreen/);
-  assert.doesNotMatch(status, /yardsQuality/);
+  assert.match(status, /return "Hole \\\(holeNumber\)"/);
+  assert.doesNotMatch(status, /complicationYards|yardsToGreen|· —/);
   const soft = session.slice(session.indexOf('var showSoft'), session.indexOf('var liveYardsLabel'));
   assert.match(soft, /complicationQuality == "soft"/);
   assert.match(soft, /liveYardsTrusted/);
   assert.doesNotMatch(soft, /yardsQuality/);
 
   const content = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
-  assert.match(content, /session\.list\.yardsToGreen/);
+  assert.match(content, /session\.list\.rankYards/);
   const rank = content.slice(content.indexOf('private var stripPickId'), content.indexOf('private var stripWindowToken'));
-  assert.match(rank, /yardsToGreen/);
+  assert.match(rank, /rankYards/);
+  assert.doesNotMatch(rank, /yardsToGreen/);
 });

@@ -533,7 +533,7 @@ struct ContentView: View {
       let controlHeight = geo.size.height * 0.4
       VStack(alignment: .leading, spacing: 0) {
         VStack(alignment: .leading, spacing: 6) {
-          // Left is Hole N · live yards, or a dash. Top-right is the same live number.
+          // Left is Hole N · fixed tee length. Top-right is live yards to the green.
           HStack(alignment: .top, spacing: 6) {
             Text(session.list.statusLine)
               .font(.system(size: 16, weight: .bold))
@@ -578,8 +578,8 @@ struct ContentView: View {
 
         VStack(alignment: .leading, spacing: 6) {
           HStack(spacing: 8) {
-            Button(action: { session.leave("back") }) {
-              actionPill("Back")
+            Button(action: { session.madeIt() }) {
+              actionPill("Hole Out")
             }
             .buttonStyle(.plain)
             Button(action: { session.leave("home") }) {
@@ -625,6 +625,7 @@ struct ContentView: View {
                 }
                 .padding(.horizontal, 0)
               }
+              .id(stripWindowToken ?? "strip")
               .onAppear { proxy.scrollTo(stripWindowToken, anchor: .leading) }
               .onChange(of: stripScrollKey) { _ in
                 proxy.scrollTo(stripWindowToken, anchor: .leading)
@@ -633,20 +634,6 @@ struct ContentView: View {
           }
           .frame(height: 52)
           .layoutPriority(1)
-
-          Button(action: { session.madeIt() }) {
-            Text("Hole Out")
-              .font(.system(size: 15, weight: .heavy))
-              .foregroundStyle(Color("cream"))
-              .lineLimit(1)
-              .minimumScaleFactor(0.7)
-              .frame(maxWidth: .infinity, minHeight: 40)
-              .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                  .stroke(Color("cream"), lineWidth: 1)
-              )
-          }
-          .buttonStyle(.plain)
 
           Button(action: { showAllClubs.toggle() }) {
             Text("All clubs")
@@ -690,13 +677,13 @@ struct ContentView: View {
 
   private var stripScrollKey: String {
     let clubs = stripClubs.map { "\($0.id):\($0.carry)" }.joined(separator: ",")
-    return "\(clubs)|\(stripWindowStart)|\(session.list.yardsToGreen ?? -1)|\(session.list.selectedClubId ?? "")"
+    return "\(clubs)|\(stripWindowStart)|\(session.list.rankYards ?? -1)|\(session.list.selectedClubId ?? "")"
   }
 
   private var stripPickId: String? {
     let clubs = stripClubs.filter { $0.id != "club_putter" }
     guard !clubs.isEmpty else { return nil }
-    guard let hole = session.list.yardsToGreen else { return clubs.first?.id }
+    guard let hole = session.list.rankYards else { return clubs.first?.id }
     return clubs.min { abs($0.carry - hole) < abs($1.carry - hole) }?.id
   }
 
@@ -710,7 +697,7 @@ struct ContentView: View {
     guard n > 3 else { return 0 }
     let ranked = clubs.filter { $0.id != "club_putter" }
     let closestThree: [(id: String, carry: Int)] = {
-      guard let hole = session.list.yardsToGreen else { return Array(ranked.prefix(3)) }
+      guard let hole = session.list.rankYards else { return Array(ranked.prefix(3)) }
       return Array(
         ranked.sorted { a, b in
           let da = abs(a.carry - hole)
@@ -765,6 +752,9 @@ struct ContentView: View {
     var rows = session.list.bag
       .filter { $0 != "club_putter" }
       .compactMap { id -> (id: String, carry: Int)? in
+        if let sent = session.list.clubCarry[id], sent > 0 {
+          return (id: id, carry: sent)
+        }
         if let carry = carryFromLabel(session.list.label(for: id)) {
           return (id: id, carry: carry)
         }

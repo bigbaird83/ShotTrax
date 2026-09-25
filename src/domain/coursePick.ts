@@ -1,4 +1,5 @@
 import type { CourseSummary } from '../course/types';
+import { pinYardTestCourseFirst } from '../course/yardTestCourse';
 import { haversineYards } from './haversine';
 import { isValidLatLng, type LatLng } from './latLng';
 import type { GpsFix } from './types';
@@ -126,7 +127,7 @@ export function planCourseList<T extends {
 }): T[] {
   const from = isValidLatLng(args.from) ? args.from : phoneFixForCourseList(args);
   const sort = from ? 'distance' : 'name';
-  return args.courses
+  const sorted = args.courses
     .map((course, index) => ({
       course,
       index,
@@ -152,6 +153,8 @@ export function planCourseList<T extends {
       return a.index - b.index;
     })
     .map((row) => row.course);
+  // TEMP yard test course is only ever listed when its flag is on; then it sits on top.
+  return pinYardTestCourseFirst(sorted);
 }
 
 export type NearbyCourseSearchPlan =

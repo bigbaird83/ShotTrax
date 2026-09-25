@@ -1,0 +1,171 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { test } from 'node:test';
+import { clubStripThreeClosestIds } from './clubStrip';
+import { SOFT_GPS_MAX_M, SOFT_GPS_MIN_M } from '../config/sensing';
+import { clubListPayload, parseClubList } from './watchMessages';
+import {
+  WATCH_WIDGET_RELOAD_MIN_MS,
+  WATCH_WIDGET_RELOAD_MIN_YD,
+  phoneLiveShouldReplaceWatch,
+  planWatchLiveYards,
+  watchClubCarry,
+  watchGreenFields,
+  watchWidgetShouldReload,
+} from './watchLive';
+
+const listBase = {
+  top3: ['club_7i'],
+  bag: ['club_7i', 'club_8i', 'club_pw', 'club_putter'],
+  labels: { club_7i: '7i', club_8i: '8i', club_pw: 'PW', club_putter: 'Pt' },
+};
+
+test('course green is sent only when the phone has a real course point', () => {
+  assert.equal(watchGreenFields({ green: null }), null);
+  assert.equal(watchGreenFields({ green: { lat: 0, lng: 0 } }), null);
+  const fields = watchGreenFields({
+    green: { lat: 33.5, lng: -111.9 },
+    front: { lat: 33.5001, lng: -111.9001 },
+    back: { lat: 0, lng: 0 },
+  });
+  assert.equal(fields?.greenLat, 33.5);
+  assert.equal(fields?.greenLng, -111.9);
+  assert.equal(fields?.greenFrontLat, 33.5001);
+  assert.equal(fields?.greenBackLat, undefined);
+});
+
+test('club carry is the play-wheel number, putter and empty carries dropped', () => {
+  assert.deepEqual(watchClubCarry({ club_7i: 150.4, club_putter: 8, club_lw: 0, club_sw: null }), {
+    club_7i: 150,
+  });
+});
+
+test('Watch live yards use the phone good/soft/none bands and the 600 yard cap', () => {
+  const green = { lat: 33.5, lng: -111.9 };
+  const here = { lat: 33.501, lng: -111.9 };
+  const good = planWatchLiveYards({ fix: { ...here, accuracyM: SOFT_GPS_MIN_M - 0.1 }, green });
+  assert.equal(good.quality, 'good');
+  assert.ok(good.yards != null && good.yards > 0);
+  const soft = planWatchLiveYards({ fix: { ...here, accuracyM: SOFT_GPS_MAX_M }, green });
+  assert.equal(soft.quality, 'soft');
+  assert.equal(soft.yards, good.yards);
+  const poor = planWatchLiveYards({ fix: { ...here, accuracyM: SOFT_GPS_MAX_M + 0.1 }, green });
+  assert.equal(poor.quality, 'none');
+  assert.equal(poor.yards, null);
+  assert.equal(planWatchLiveYards({ fix: { ...here, accuracyM: 5 }, green: null }).yards, null);
+  const far = planWatchLiveYards({
+    fix: { lat: 33.5 + 0.02, lng: -111.9, accuracyM: 5 },
+    green,
+  });
+  if ((far.yards ?? 0) > 600) {
+    assert.equal(far.quality, 'none');
+    assert.equal(far.yards, null);
+  }
+});
+
+test('a stale phone push cannot overwrite fresher Watch yards on the same hole', () => {
+  assert.equal(
+    phoneLiveShouldReplaceWatch({ phoneHole: 4, phoneAtMs: 2_000, watchHole: 4, watchAtMs: 3_000 }),
+    false,
+  );
+  assert.equal(
+    phoneLiveShouldReplaceWatch({ phoneHole: 4, phoneAtMs: 4_000, watchHole: 4, watchAtMs: 3_000 }),
+    true,
+  );
+  assert.equal(
+    phoneLiveShouldReplaceWatch({ phoneHole: 5, phoneAtMs: 1_000, watchHole: 4, watchAtMs: 9_000 }),
+    true,
+  );
+  assert.equal(
+    phoneLiveShouldReplaceWatch({ phoneHole: 4, phoneAtMs: null, watchHole: 4, watchAtMs: 3_000 }),
+    false,
+  );
+  assert.equal(
+    phoneLiveShouldReplaceWatch({ phoneHole: 4, phoneAtMs: 1_000, watchHole: null, watchAtMs: null }),
+    true,
+  );
+});
+
+test('widget reload waits out one-yard drift and still fires on a 5 yard step', () => {
+  assert.equal(WATCH_WIDGET_RELOAD_MIN_YD, 5);
+  assert.equal(WATCH_WIDGET_RELOAD_MIN_MS, 5_000);
+  const previous = { hole: 1, quality: 'good', yards: 180, atMs: 1_000 };
+  assert.equal(
+    watchWidgetShouldReload({ hole: 1, quality: 'good', yards: 179, previous, nowMs: 2_000 }),
+    false,
+  );
+  assert.equal(
+    watchWidgetShouldReload({ hole: 1, quality: 'good', yards: 175, previous, nowMs: 2_000 }),
+    true,
+  );
+  assert.equal(
+    watchWidgetShouldReload({ hole: 1, quality: 'good', yards: 179, previous, nowMs: 1_000 + WATCH_WIDGET_RELOAD_MIN_MS }),
+    true,
+  );
+  assert.equal(
+    watchWidgetShouldReload({ hole: 1, quality: 'none', yards: null, previous, nowMs: 1_100 }),
+    true,
+  );
+});
+
+test('clubList carries the green, carries, tee length, and fix time without becoming required keys', () => {
+  const msg = clubListPayload({
+    ...listBase,
+    holeNumber: 4,
+    yardsToGreen: 160,
+    yardsQuality: 'good',
+    complication: { yards: 142, quality: 'good', atMs: 1_700_000_000_000 },
+    teeLengthYards: 385,
+    green: { lat: 33.5, lng: -111.9, front: { lat: 33.5002, lng: -111.9002 } },
+    clubCarry: { club_7i: 150, club_8i: 140, club_pw: 120, club_putter: 3 },
+  });
+  assert.equal(msg.greenLat, 33.5);
+  assert.equal(msg.greenFrontLat, 33.5002);
+  assert.equal(msg.teeLengthYards, 385);
+  assert.equal(msg.complicationAt, 1_700_000_000_000);
+  assert.deepEqual(msg.clubCarry, { club_7i: 150, club_8i: 140, club_pw: 120 });
+  const parsed = parseClubList(JSON.parse(JSON.stringify(msg)));
+  assert.equal(parsed?.greenLng, -111.9);
+  assert.equal(parsed?.clubCarry?.club_8i, 140);
+  assert.equal(parsed?.teeLengthYards, 385);
+  const bare = clubListPayload({ ...listBase, holeNumber: 1, yardsToGreen: null, yardsQuality: 'none' });
+  assert.equal(bare.greenLat, undefined);
+  assert.equal(bare.clubCarry, undefined);
+  assert.equal(bare.teeLengthYards, undefined);
+  assert.equal(parseClubList({ ...bare, greenLat: 0, greenLng: 0 })?.greenLat, undefined);
+});
+
+test('Watch re-rank uses the same closest-carry window as the phone wheel', () => {
+  const clubs = [
+    { id: 'club_lw', carry: 75 },
+    { id: 'club_sw', carry: 90 },
+    { id: 'club_gw', carry: 105 },
+    { id: 'club_pw', carry: 120 },
+    { id: 'club_7i', carry: 150 },
+    { id: 'club_driver', carry: 230 },
+  ];
+  assert.deepEqual(clubStripThreeClosestIds(clubs, 100), ['club_sw', 'club_gw', 'club_pw']);
+  assert.deepEqual(clubStripThreeClosestIds(clubs, 220), ['club_pw', 'club_7i', 'club_driver']);
+  assert.ok(!clubStripThreeClosestIds(clubs, 100).includes('club_driver'));
+
+  const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  const windowFn = watch.slice(watch.indexOf('private var stripWindowStart'), watch.indexOf('private var stripWindowToken'));
+  assert.match(windowFn, /rankYards/);
+  assert.match(windowFn, /abs\(a\.carry - hole\)/);
+  const carries = watch.slice(watch.indexOf('private var stripClubs'), watch.indexOf('private var wheelClubs'));
+  assert.match(carries, /clubCarry/);
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+  assert.match(session, /func adoptWatchFix/);
+  assert.match(session, /phoneLiveShouldReplace/);
+  assert.match(session, /accuracyM < 15/);
+  assert.match(session, /accuracyM <= 25/);
+  assert.match(session, /yards > 600/);
+  assert.match(session, /widgetReloadMinYd = 5/);
+  assert.match(session, /widgetReloadMinSec = 5.0/);
+  assert.match(session, /greenLat/);
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  assert.match(hole, /watchGreenFields\(\{ green, front: pins\.front, back: pins\.back \}\)/);
+  assert.match(hole, /watchClubCarry\(stripPlan\.carries\)/);
+  assert.match(hole, /atMs: fix\?\.timestamp/);
+  assert.doesNotMatch(hole, /isIosBackgroundLocationEnabled:\s*true/);
+});

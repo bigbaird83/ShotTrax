@@ -3,6 +3,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { getWatchBridgeNative } from '@/modules/watch-bridge';
 import { COPY } from '../domain/playerCopy';
 import { watchBagLabelForPush, watchClubListTop3 } from '../domain/watchClubPick';
+import type { WatchGreenFields } from '../domain/watchLive';
 import { watchFixFromPick } from '../domain/preferWatchFix';
 import {
   MADE_IT_FEEDBACK,
@@ -192,6 +193,27 @@ export async function pushWatchMadeItAdvance(args: {
   ]);
 }
 
+/** Wire shape `clubListPayload` already parses. Front/back only when both coords exist. */
+function clubListGreen(fields: WatchGreenFields): {
+  lat: number;
+  lng: number;
+  front?: { lat: number; lng: number } | null;
+  back?: { lat: number; lng: number } | null;
+} {
+  return {
+    lat: fields.greenLat,
+    lng: fields.greenLng,
+    front:
+      fields.greenFrontLat != null && fields.greenFrontLng != null
+        ? { lat: fields.greenFrontLat, lng: fields.greenFrontLng }
+        : null,
+    back:
+      fields.greenBackLat != null && fields.greenBackLng != null
+        ? { lat: fields.greenBackLat, lng: fields.greenBackLng }
+        : null,
+  };
+}
+
 export function buildClubList(args: {
   top3: { id: string; shortName: string }[];
   bag: { id: string; shortName: string }[];
@@ -200,10 +222,14 @@ export function buildClubList(args: {
   yardsQuality: 'good' | 'soft' | 'forced' | 'none';
   lastClubId?: string | null;
   selectedClubId?: string | null;
-  /** Hole-map `planPlayHeaderYards`. Omit to leave the complication unchanged. */
-  complication?: { yards: number | null; quality: string } | null;
+  /** Hole-map `planLiveGpsToPin`. Omit to leave the complication unchanged. */
+  complication?: { yards: number | null; quality: string; atMs?: number | null } | null;
   /** False on a finished round so the Watch ends the golf workout and still shows the hole. */
   roundLive?: boolean;
+  teeLengthYards?: number | null;
+  /** Course cup from `watchGreenFields`. Null means the Watch must not invent yards. */
+  green?: WatchGreenFields | null;
+  clubCarry?: Record<string, number | null | undefined> | null;
 }): ClubListMessage {
   const labels: Record<string, string> = {};
   // Phone bag is source of truth. Full enabled bag — never a pre-trimmed top-3.
@@ -224,6 +250,9 @@ export function buildClubList(args: {
     lastClubId: args.lastClubId ?? null,
     selectedClubId: args.selectedClubId ?? null,
     ...(args.complication ? { complication: args.complication } : {}),
+    ...(args.teeLengthYards != null ? { teeLengthYards: args.teeLengthYards } : {}),
+    ...(args.green ? { green: clubListGreen(args.green) } : {}),
+    ...(args.clubCarry ? { clubCarry: args.clubCarry } : {}),
   });
   if (args.roundLive === false) msg.roundLive = false;
   return msg;

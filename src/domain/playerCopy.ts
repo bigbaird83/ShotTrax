@@ -35,10 +35,20 @@ export const COPY = {
   exportCsv: 'Export CSV',
   exportCsvDone: 'CSV exported.',
   exportCsvFailed: 'Couldn’t export CSV.',
+  /** iOS share sheet shows the file name. `Share.share` title is not shown there. */
+  exportCsvSheetRounds: '1 of 2 · rounds.csv',
+  exportCsvSheetShots: '2 of 2 · shots.csv',
+  exportCsvSavedRoundsOnly: 'Saved rounds.csv. Couldn’t open shots.csv.',
   restoreRounds: 'Restore rounds',
   restoreRoundsConfirm:
     'Restore rounds from this file? Existing rounds with the same id will be replaced. Favorites are added. The bag changes only after you confirm the list.',
   restoreRoundsFailed: 'Couldn’t restore rounds.',
+  restoreRoundsNotFile:
+    'That isn’t a shottracker rounds file. Pick the .json from Export rounds. CSV can’t be restored.',
+  restoreRoundsCsv: 'CSV can’t be restored. Pick the .json from Export rounds.',
+  restoreRoundsEmpty: 'Nothing to restore in that file.',
+  restoreRoundsUnreadable: 'Couldn’t read that file.',
+  restoreRoundsSaveFailed: 'Couldn’t save the restored rounds.',
   bagRestoreTitle: 'Update bag?',
   bagRestoreHint: 'These are the only bag changes. Cancel leaves the bag as it is.',
   bagRestoreConfirm: 'Update bag',
@@ -114,6 +124,7 @@ export const COPY = {
   dismissFirstLaunchTip: 'Got it',
   stickyClub: 'Same club',
   undoLast: 'Undo last',
+  undoLastShot: 'Undo last shot',
   endShot: 'End last shot',
   prevHole: 'Prev hole',
   nextHole: 'Next hole',
@@ -263,6 +274,8 @@ export const COPY = {
   requestThisCourse: 'Request this course',
   requestCourseTitle: 'Request this course',
   requestCourseLede: `Tell us the course. This opens your email app — ${SHOTTRAXX_BRAND} does not send it for you.`,
+  /** TEMP dev-only Settings switch for the Goode Circle backyard course. */
+  yardTestCourse: 'Yard test course',
   contributeCourse: 'Contribute a course',
   contributeCourseTitle: 'Add this course',
   contributeOnTee: 'I’m on this tee',
@@ -301,10 +314,26 @@ export function formatDispersionPlacedNote(count: number): string | null {
   return `Includes ${shots}. Placed shots are set by hand and may be less accurate than GPS-marked ones.`;
 }
 
+/** Sheet label for one CSV file. The two export sheets use the COPY lines above. */
+export function csvExportSheetTitle(position: number, total: number, filename: string): string {
+  if (position === 1 && total === 2 && filename === 'rounds.csv') return COPY.exportCsvSheetRounds;
+  if (position === 2 && total === 2 && filename === 'shots.csv') return COPY.exportCsvSheetShots;
+  return `${position} of ${total} · ${filename}`;
+}
+
+/** Toast for a restore that did not save. CSV is decided by the caller before this. */
+export function restoreFailureCopy(reason: string): string {
+  if (reason === 'not_shottrax') return COPY.restoreRoundsNotFile;
+  if (reason === 'empty') return COPY.restoreRoundsEmpty;
+  if (reason === 'unreadable') return COPY.restoreRoundsUnreadable;
+  if (reason === 'save_failed') return COPY.restoreRoundsSaveFailed;
+  return COPY.restoreRoundsFailed;
+}
+
 /** Bag row when the last five dropped shots agree and the typed number does not. */
 export function formatBagCarrySuggestion(clubLabel: string, yards: number): string {
   const n = Math.round(yards);
-  return `Your last 5 ${clubLabel} shots averaged ${n}. Update your ${clubLabel} to ${n}?`;
+  return `Your last five ${clubLabel} shots averaged ${n}. Update your ${clubLabel} to ${n}?`;
 }
 
 /** Suggested chip: that club's carry, not yards-to-green. */
@@ -396,6 +425,26 @@ export function formatPlayHeader(
   const yardsBit =
     yards != null && Number.isFinite(yards) ? `${Math.round(yards)} yd` : '—';
   return `${formatHoleHeader(holeNumber, par)} · ${yardsBit}`;
+}
+
+/**
+ * Visible play header. Tee length from course data (`holes.yards`) only.
+ * Missing yardage adds nothing — no dash, no live GPS number.
+ */
+export function formatPlayHeaderCourseLength(
+  holeNumber: number,
+  par: number | null,
+  teeName: string | null | undefined,
+  courseYards: number | null | undefined,
+): { primary: string; secondary: string; label: string } {
+  const primary = formatPlayHeaderPrimary(holeNumber);
+  const parBit = formatPlayHeaderSecondary(par, teeName);
+  const yards =
+    courseYards != null && Number.isFinite(courseYards) && courseYards > 0
+      ? Math.round(courseYards)
+      : null;
+  const secondary = yards == null ? parBit : `${parBit} · ${yards} yd`;
+  return { primary, secondary, label: `${primary} · ${secondary}` };
 }
 
 export function formatTeeMeta(tee: {

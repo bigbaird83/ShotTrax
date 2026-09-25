@@ -23,6 +23,14 @@ import {
   searchOpenGolfCatalog,
 } from './opengolf';
 import type { CourseDetail, CourseSummary, HoleCourseData } from './types';
+import {
+  YARD_TEST_CATALOG_ENTRY,
+  isYardTestCourseId,
+  yardTestCourseBuildAllowed,
+  yardTestCourseDetail,
+  yardTestCourseNearby,
+  yardTestCourseSearchRow,
+} from './yardTestCourse';
 
 export const LOCAL_CATALOG_ID_PREFIX = 'local:';
 
@@ -252,6 +260,8 @@ export function isLocalCatalogId(id: string | null | undefined): boolean {
 export function catalogEntryById(id: string | null | undefined): LocalCourseCatalogEntry | null {
   const value = id?.trim() ?? '';
   if (!value) return null;
+  // TEMP yard test course: dev / debugYardCourse builds only. Never in production.
+  if (isYardTestCourseId(value)) return yardTestCourseBuildAllowed() ? YARD_TEST_CATALOG_ENTRY : null;
   return (
     LOCAL_COURSE_CATALOG.find((entry) => entry.id === value || entry.courseKey === value) ??
     openGolfCatalogEntryById(value)
@@ -281,6 +291,10 @@ export function searchLocalCatalog(query: string): CourseSummary[] {
     const bag = catalogBag(entry);
     return tokens.every((token) => bag.includes(token));
   }).map((entry) => catalogEntryToSummary(entry));
+  const yard = yardTestCourseSearchRow();
+  if (yard && tokens.every((token) => catalogBag(YARD_TEST_CATALOG_ENTRY).includes(token))) {
+    reserved.unshift(yard);
+  }
   return mergeCatalogSummaries(reserved, searchOpenGolfCatalog(query));
 }
 
@@ -288,6 +302,8 @@ export function nearbyLocalCatalog(from: LatLng, radiusKm: number): CourseSummar
   if (!isValidLatLng(from)) return [];
   const radiusM = Math.max(1000, radiusKm * 1000);
   const reserved: CourseSummary[] = [];
+  const yard = yardTestCourseNearby(from);
+  if (yard) reserved.push(yard);
   for (const entry of LOCAL_COURSE_CATALOG) {
     const yards = haversineYards(from, entry.location);
     const meters = yards * METERS_PER_YARD;
@@ -314,6 +330,7 @@ function emptyHole(holeNumber: number): HoleCourseData {
 
 /** Catalog detail. Hydrate fills real tee/green only. Missing stays null — never invented. */
 export function catalogCourseDetail(id: string | null | undefined): CourseDetail | null {
+  if (isYardTestCourseId(id)) return yardTestCourseDetail();
   const entry = catalogEntryById(id);
   if (!entry) return null;
   const hydrate = loadCourseHydrate(entry.courseKey);

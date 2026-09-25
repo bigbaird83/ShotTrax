@@ -425,7 +425,7 @@ test('play header is one line; shot list is one overlay row with + and In play o
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const play = hole.slice(0, hole.indexOf('<FullSheet'));
-  assert.match(play, /formatPlayHeader\(hole\.number, hole\.par, playHeaderYards\.yards\)/);
+  assert.match(play, /formatPlayHeaderCourseLength\(hole\.number, hole\.par, round\.teeName, hole\.yards\)/);
   assert.match(play, /yardsToGreen: target\?\.dYards/);
   assert.match(hole, /planPlayHeaderYards\(\{[\s\S]*?shots,/);
   assert.match(play, /numberOfLines=\{1\}/);
@@ -639,7 +639,7 @@ test('build 33 cook-gate: play stays on hole, three themes, history row fields',
   assert.match(hole, /allClubsHref/);
   assert.match(hole, /hapticLight/);
   assert.match(hole, /styles\.holeMeta/);
-  assert.match(hole, /formatPlayHeader\(hole\.number, hole\.par, playHeaderYards\.yards\)/);
+  assert.match(hole, /formatPlayHeaderCourseLength\(hole\.number, hole\.par, round\.teeName, hole\.yards\)/);
   assert.match(home, /playHrefAfterRoundStart/);
   assert.match(home, /formatHistoryRow/);
   assert.match(home, /row\.date/);
@@ -687,8 +687,7 @@ test('build 35 cook-gate: glass dock, one accent, trails, type, cards, empty, ha
   assert.match(phone, /passMap \? 'none' : 'box-none'/);
   assert.match(hole, /position: 'absolute'/);
   assert.match(hole, /PLAY_GLASS_DOCK_LIFT/);
-  assert.match(hole, /formatPlayHeaderPrimary/);
-  assert.match(hole, /formatPlayHeaderSecondary/);
+  assert.match(hole, /formatPlayHeaderCourseLength/);
   assert.match(hole, /styles\.holeMeta/);
   assert.match(mark, /hapticMark/);
   assert.match(mark, /hapticLight/);

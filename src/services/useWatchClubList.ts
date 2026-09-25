@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { nextWatchLiveYtgSnapshot, type WatchLiveYtgSnapshot } from '../domain/watchComplication';
+import type { WatchGreenFields } from '../domain/watchLive';
 import { clubListPushKey, watchSuggestYardsToSend, type WatchSuggestSent } from '../domain/watchMessages';
 import {
   buildClubList,
@@ -33,9 +34,12 @@ export function useWatchClubList(
     lastClubId?: string | null;
     selectedClubId?: string | null;
     /** Live hole-map yards (`planLiveGpsToPin`). Omitted leaves the Watch header unchanged. */
-    complication?: { yards: number | null; quality: string } | null;
+    complication?: { yards: number | null; quality: string; atMs?: number | null } | null;
     /** False on a finished round. Omitted means the round is live. */
     roundLive?: boolean;
+    teeLengthYards?: number | null;
+    green?: WatchGreenFields | null;
+    clubCarry?: Record<string, number | null | undefined> | null;
   },
 ): void {
   const ctxRef = useRef(ctx);

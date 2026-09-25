@@ -50,14 +50,15 @@ test('TF 59: dedicated Putt shares the Back/Home row — clubs stay on-screen', 
     clubPick.indexOf('HStack(spacing: 8)'),
     clubPick.indexOf('GeometryReader { wheelGeo'),
   );
-  assert.match(navRow, /actionPill\("Back"\)/);
+  assert.match(navRow, /actionPill\("Hole Out"\)/);
   assert.match(navRow, /actionPill\("Home"\)/);
   assert.match(navRow, /actionPill\("Putt"\)/);
   assert.match(navRow, /session\.openPuttSheet\(\)/);
-  assert.match(navRow, /session\.leave\("back"\)/);
+  assert.match(navRow, /session\.madeIt\(\)/);
+  assert.doesNotMatch(navRow, /session\.leave\("back"\)/);
   assert.match(navRow, /session\.leave\("home"\)/);
   assert.doesNotMatch(navRow, /maxWidth: \.infinity, minHeight: 40/);
-  assert.ok(navRow.indexOf('actionPill("Back")') < navRow.indexOf('actionPill("Putt")'));
+  assert.ok(navRow.indexOf('actionPill("Hole Out")') < navRow.indexOf('actionPill("Putt")'));
   assert.ok(navRow.indexOf('actionPill("Home")') < navRow.indexOf('actionPill("Putt")'));
 
   // Back / Home / Putt share one 44pt pill; its fill and hit area are clipped to the shape.
@@ -78,7 +79,7 @@ test('TF 59: dedicated Putt shares the Back/Home row — clubs stay on-screen', 
   assert.ok(clubPick.indexOf('HStack(spacing: 8)') < clubPick.indexOf('actionPill("Putt")'));
   assert.ok(clubPick.indexOf('actionPill("Putt")') < clubPick.indexOf('ScrollView(.horizontal'));
   assert.ok(clubPick.indexOf('actionPill("Putt")') < clubPick.indexOf('GeometryReader { wheelGeo'));
-  assert.ok(clubPick.indexOf('GeometryReader { wheelGeo') < clubPick.indexOf('Text("Hole Out")'));
+  assert.ok(clubPick.indexOf('actionPill("Hole Out")') < clubPick.indexOf('GeometryReader { wheelGeo'));
   assert.match(clubPick, /layoutPriority\(1\)/);
   assert.doesNotMatch(clubPick, /Text\("Made(?: it)?"\)/);
 });
