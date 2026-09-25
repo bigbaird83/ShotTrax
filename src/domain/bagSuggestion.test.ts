@@ -259,7 +259,7 @@ test('Not now stays dismissed until a newer dropped shot changes the set', () =>
 test('bag copy and club data disclaimer', () => {
   assert.equal(
     formatBagCarrySuggestion('7 Iron', 150),
-    'Your last 5 7 Iron shots averaged 150. Update your 7 Iron to 150?',
+    'Your last five 7 Iron shots averaged 150. Update your 7 Iron to 150?',
   );
   assert.equal(COPY.bagCarrySuggestionUpdate, 'Update');
   assert.equal(COPY.bagCarrySuggestionNotNow, 'Not now');
