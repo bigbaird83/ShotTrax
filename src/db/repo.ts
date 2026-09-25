@@ -4,6 +4,7 @@ import {
   seedHoleFromCourse,
   type CourseLayoutSeed,
 } from '../course/layout';
+import { clubIsLive, resolveBagCarry, type BagCarry } from '../domain/bagDistance';
 import { fillEstimatedCarries, type CarrySource } from '../domain/carryFill';
 import { DEFAULT_BAG, isPutterClubId } from '../domain/defaultBag';
 import {
@@ -1677,8 +1678,13 @@ export function insertPenalty(
 
 export type ClubAverageRow = ClubAverage & {
   club: Club;
+  /** Pre-live seed (typed or carryFill). Kept for the outlier baseline / delete rollback. */
   typicalCarryYards: number | null;
   carrySource: CarrySource;
+  /** carryFill estimate, only while the club has neither live nor typed yards. */
+  estimatedCarryYards: number | null;
+  /** THE bag number — bag row, Club data and Suggested all read this. */
+  bag: BagCarry;
 };
 
 export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
@@ -1732,14 +1738,25 @@ export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
         return { yards: s.distance_yards, fixQuality: quality };
       });
     const fill = filled.get(club.id);
+    const average = clubAverageFromShots(forClub, {
+      typedCarryYards: fill?.source === 'typed' ? fill.yards : null,
+      estimatedCarryYards: fill?.source === 'estimated' ? fill.yards : null,
+    });
+    const live = clubIsLive(average);
+    const estimatedCarryYards = !live && fill?.source === 'estimated' ? fill.yards : null;
     return {
       club,
-      typicalCarryYards: filled.get(club.id)?.yards ?? null,
-      carrySource: filled.get(club.id)?.source ?? null,
-      ...clubAverageFromShots(forClub, {
-        typedCarryYards: fill?.source === 'typed' ? fill.yards : null,
-        estimatedCarryYards: fill?.source === 'estimated' ? fill.yards : null,
+      typicalCarryYards: fill?.yards ?? null,
+      carrySource: fill?.source ?? null,
+      estimatedCarryYards,
+      bag: resolveBagCarry({
+        id: club.id,
+        liveCount: average.count,
+        liveAvgYards: average.avgYards,
+        typedYards: fill?.source === 'typed' ? fill.yards : null,
+        estimatedYards: estimatedCarryYards,
       }),
+      ...average,
     };
   });
 }

@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
 import { listClubAverages } from '@/src/db/repo';
-import { clubBookCarry } from '@/src/domain/nerdOut';
+import { clubCarryMeta } from '@/src/domain/bagDistance';
 import { COPY } from '@/src/domain/playerCopy';
 import { EmptyPanel } from '@/src/ui/EmptyPanel';
 import { useColors } from '@/src/ui/ColorThemeProvider';
@@ -21,25 +21,12 @@ export default function AveragesScreen() {
       <Text style={styles.lede}>{COPY.averagesLede}</Text>
       {!hasLive ? <EmptyPanel title={COPY.noClosedShots} hint={COPY.firstRoundHint} /> : null}
       {rows.map((row) => {
-        const book = clubBookCarry({
-          count: row.count,
-          avgYards: row.avgYards,
-          typicalCarryYards: row.typicalCarryYards,
-          carrySource: row.carrySource,
-        });
+        const book = row.bag;
         return (
           <View key={row.club.id} style={styles.row}>
             <View style={{ flex: 1 }}>
               <Text style={styles.name}>{row.club.name}</Text>
-              <Text style={styles.meta}>
-                {book.kind === 'live'
-                  ? `${book.count} shot${book.count === 1 ? '' : 's'}`
-                  : book.kind === 'estimated'
-                    ? COPY.estimated
-                    : book.kind === 'typed'
-                      ? COPY.typicalCarry
-                      : COPY.noClosedShots}
-              </Text>
+              <Text style={styles.meta}>{clubCarryMeta(book)}</Text>
             </View>
             <Text style={styles.yards}>{book.yards != null ? `${book.yards} yd` : '—'}</Text>
           </View>

@@ -46,21 +46,28 @@ test('nerd out leaves score blank when no hole scores are stored', () => {
   assert.equal(out.putts, 0);
 });
 
-test('club book live average comes from real / Placed shots, not a seed', () => {
+test('club book live average needs five real / Placed shots; fewer keep the typed number', () => {
   const live = clubBookCarry({
-    count: 3,
+    count: 5,
     avgYards: 154.4,
     typicalCarryYards: 150,
     carrySource: 'typed',
   });
-  assert.deepEqual(live, { yards: 154, kind: 'live', count: 3 });
+  assert.deepEqual(live, { yards: 154, kind: 'live', count: 5 });
+  const four = clubBookCarry({
+    count: 4,
+    avgYards: 162,
+    typicalCarryYards: 150,
+    carrySource: 'typed',
+  });
+  assert.deepEqual(four, { yards: 150, kind: 'typed', count: 4 });
   const placed = clubBookCarry({
     count: 2,
     avgYards: 148,
     typicalCarryYards: 150,
     carrySource: 'typed',
   });
-  assert.deepEqual(placed, { yards: 148, kind: 'live', count: 2 });
+  assert.deepEqual(placed, { yards: 150, kind: 'typed', count: 2 });
   const seed = clubBookCarry({
     count: 0,
     avgYards: 0,
@@ -88,7 +95,7 @@ test('club data carries are the same club-book numbers', () => {
       id: 'club_7i',
       name: '7 Iron',
       shortName: '7i',
-      count: 2,
+      count: 6,
       avgYards: 148,
       typicalCarryYards: 155,
       carrySource: 'typed' as const,
@@ -146,8 +153,7 @@ test('club data screen carries the club table that left Nerd out', () => {
   const page = readFileSync(new URL('../../app/club-data.tsx', import.meta.url), 'utf8');
   assert.match(page, /listClubAverages/);
   assert.match(page, /planClubData/);
-  assert.match(page, /COPY\.estimated/);
-  assert.match(page, /COPY\.typicalCarry/);
+  assert.match(page, /clubCarryMeta\(row\)/);
   assert.doesNotMatch(page, /HoleMap/);
 });
 

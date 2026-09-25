@@ -240,7 +240,8 @@ export function carryAfterDelete(args: {
     loftRank: 0,
     avgYards: average.avgYards,
     count: average.count,
-    typicalCarryYards: typical,
+    typicalCarryYards: args.seed.typedCarryYards,
+    estimatedCarryYards: args.seed.estimatedCarryYards,
   });
   return { kept, average, rankYards, book };
 }

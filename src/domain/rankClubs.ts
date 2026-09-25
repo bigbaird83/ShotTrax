@@ -1,10 +1,11 @@
-import { isPutterClubId, stockAvgCarryForSuggestion, typicalCarrySeedForClub } from './defaultBag';
+import { MIN_LIVE_SAMPLES_FOR_BAG, resolveBagCarry } from './bagDistance';
+import { isPutterClubId, typicalCarrySeedForClub } from './defaultBag';
 import { isValidLatLng, type LatLng } from './latLng';
 import type { Club, ShotFixQuality } from './types';
 import { markToGreen } from './yardsToGreen';
 
 /** Live average replaces the typical-carry seed after this many closed shots. */
-export const MIN_CLOSED_SHOTS_FOR_RANK = 5;
+export const MIN_CLOSED_SHOTS_FOR_RANK = MIN_LIVE_SAMPLES_FOR_BAG;
 
 export type RankClubInput = {
   id: string;
@@ -15,6 +16,8 @@ export type RankClubInput = {
   count: number;
   /** Bag typical-carry seed (stock or edited). Putter and cleared clubs omit this. */
   typicalCarryYards?: number | null;
+  /** carryFill estimate from typed neighbors — the same number the bag row shows. */
+  estimatedCarryYards?: number | null;
 };
 
 export type DistanceTarget = {
@@ -142,7 +145,7 @@ export type RankedClub = RankClubInput & {
 
 export function clubToRankInput(
   club: Club,
-  avg: { avgYards: number; count: number },
+  avg: { avgYards: number; count: number; estimatedCarryYards?: number | null },
 ): RankClubInput {
   return {
     id: club.id,
@@ -152,25 +155,25 @@ export function clubToRankInput(
     avgYards: avg.avgYards,
     count: avg.count,
     typicalCarryYards: typicalCarrySeedForClub(club),
+    estimatedCarryYards: avg.estimatedCarryYards ?? null,
   };
 }
 
 /**
- * Yards used for Suggested top-3.
- * Live average after ≥5 kept closed shots (existing avg rules: soft counts
- * with badge, hard only if forced, 20% outliers out, putter never) fully
- * replaces the seed (no blend); else typed typical-carry; else STOCK_AVG_CARRY.
- * Estimated fills never enter ranking. Watch top-3 reads this same table.
+ * Yards used for Suggested top-3 — the same `resolveBagCarry` number the bag
+ * row and Club data show. Live average after ≥5 kept closed shots (existing
+ * avg rules, 20% outliers out, putter never) fully replaces the seed (no
+ * blend); else typed; else the carryFill estimate; else STOCK_AVG_CARRY.
+ * Watch top-3 reads this same table.
  */
 export function rankDistanceYards(club: RankClubInput): number | null {
-  if (isPutterClubId(club.id)) return null;
-  if (club.count >= MIN_CLOSED_SHOTS_FOR_RANK && Number.isFinite(club.avgYards)) {
-    return club.avgYards;
-  }
-  if (club.typicalCarryYards != null && Number.isFinite(club.typicalCarryYards)) {
-    return club.typicalCarryYards;
-  }
-  return stockAvgCarryForSuggestion(club.id);
+  return resolveBagCarry({
+    id: club.id,
+    liveCount: club.count,
+    liveAvgYards: club.avgYards,
+    typedYards: club.typicalCarryYards ?? null,
+    estimatedYards: club.estimatedCarryYards ?? null,
+  }).yards;
 }
 
 /**

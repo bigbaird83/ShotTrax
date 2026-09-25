@@ -225,7 +225,7 @@ export function toWheelFillClub(
     sortOrder?: number;
     typicalCarryYards?: number | null;
   },
-  live?: { count: number; avgYards: number } | null,
+  live?: { count: number; avgYards: number; bag?: { yards: number | null } | null } | null,
 ): ClubStripClub {
   const count = live?.count ?? 0;
   const avg = live?.avgYards;
@@ -236,6 +236,7 @@ export function toWheelFillClub(
     sortOrder: club.sortOrder,
     typicalCarryYards: typical,
     carry: typical,
+    bagCarry: isPutterClubId(club.id) ? null : (live?.bag?.yards ?? null),
     liveCarry:
       count >= MIN_CLOSED_SHOTS_FOR_RANK && avg != null && Number.isFinite(avg) && avg > 0 ? avg : null,
   };
@@ -248,6 +249,8 @@ export type ClubStripClub = {
   sortOrder?: number;
   typicalCarryYards?: number | null;
   liveCarry?: number | null;
+  /** Resolved bag number (`resolveBagCarry`) — wins so the wheel matches the bag row. */
+  bagCarry?: number | null;
 };
 
 export type ClubStripPlan = {
@@ -351,6 +354,10 @@ export function resolveWheelCarries(clubs: ClubStripClub[]): Record<string, numb
   for (const club of clubs) {
     // Putter has null carry — never invent yards. It still enters the wheel via planClubStrip.
     if (isPutterClubId(club.id)) continue;
+    if (clubHasWheelCarry(club.bagCarry)) {
+      carries[club.id] = club.bagCarry as number;
+      continue;
+    }
     if (clubHasWheelCarry(club.liveCarry)) {
       carries[club.id] = club.liveCarry as number;
       continue;

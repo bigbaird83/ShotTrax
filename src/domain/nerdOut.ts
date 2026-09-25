@@ -1,8 +1,9 @@
+import { resolveBagCarry, type BagCarryKind } from './bagDistance';
 import type { CarrySource } from './carryFill';
 import { isPutterClubId } from './defaultBag';
 import { scorecardMark, type ScorecardMark } from './scorecard';
 
-export type ClubBookKind = 'live' | 'typed' | 'estimated' | null;
+export type ClubBookKind = BagCarryKind | null;
 
 export type ClubBookCarry = {
   yards: number | null;
@@ -36,26 +37,26 @@ export type NerdOutLifetime = {
 };
 
 /**
- * Same number the club book / Averages tab shows.
- * Live average only after real GPS or Placed shots (`count > 0`).
- * A seed is never labeled live. Estimated fill keeps the estimated badge.
+ * Same number the bag row and Suggested top-3 use (`resolveBagCarry`).
+ * Live only after ≥5 kept GPS / Placed shots; fewer keep typed / estimated
+ * and still report the sample count. With an id, a stock club with nothing
+ * typed falls back to its seed. Putter never has a number.
  */
 export function clubBookCarry(args: {
+  id?: string;
   count: number;
   avgYards: number;
   typicalCarryYards: number | null;
   carrySource: CarrySource;
 }): ClubBookCarry {
-  if (args.count > 0 && Number.isFinite(args.avgYards)) {
-    return { yards: Math.round(args.avgYards), kind: 'live', count: args.count };
-  }
-  if (args.carrySource === 'estimated' && args.typicalCarryYards != null) {
-    return { yards: Math.round(args.typicalCarryYards), kind: 'estimated', count: 0 };
-  }
-  if (args.carrySource === 'typed' && args.typicalCarryYards != null) {
-    return { yards: Math.round(args.typicalCarryYards), kind: 'typed', count: 0 };
-  }
-  return { yards: null, kind: null, count: 0 };
+  const carry = resolveBagCarry({
+    id: args.id ?? '',
+    liveCount: args.count,
+    liveAvgYards: args.avgYards,
+    typedYards: args.carrySource === 'typed' ? args.typicalCarryYards : null,
+    estimatedYards: args.carrySource === 'estimated' ? args.typicalCarryYards : null,
+  });
+  return { yards: carry.yards, kind: carry.kind, count: carry.count };
 }
 
 function emptyMarks(): NerdOutMarks {
