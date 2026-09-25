@@ -1,5 +1,5 @@
-import { EARTH_RADIUS_M, METERS_PER_YARD } from '../config/sensing';
 import { isValidLatLng, type LatLng } from './latLng';
+import { lineFrame } from './lineFrame';
 import { includeInDistanceAverages } from './shotSource';
 import type { ShotFixQuality, ShotSource } from './types';
 
@@ -57,31 +57,14 @@ export type DispersionPlan = {
   right: number;
 };
 
-/** Local flat-earth yards from `origin` — fine at golf-shot scale. */
-function toYards(origin: LatLng, point: LatLng): { x: number; y: number } {
-  const rad = Math.PI / 180;
-  const metersPerDegLat = EARTH_RADIUS_M * rad;
-  const metersPerDegLng = metersPerDegLat * Math.cos(origin.lat * rad);
-  return {
-    x: ((point.lng - origin.lng) * metersPerDegLng) / METERS_PER_YARD,
-    y: ((point.lat - origin.lat) * metersPerDegLat) / METERS_PER_YARD,
-  };
-}
-
 /** Along / lateral yards for one shot, or null when it can't be measured honestly. */
 export function measureShot(shot: DispersionShotIn): { along: number; lateral: number } | null {
   if (shot.impossibleJump) return null;
   if (!includeInDistanceAverages(shot)) return null;
   if (!isValidLatLng(shot.start) || !isValidLatLng(shot.end) || !isValidLatLng(shot.green)) return null;
-  const aim = toYards(shot.start, shot.green);
-  const aimLength = Math.hypot(aim.x, aim.y);
-  if (aimLength < MIN_AIM_YARDS) return null;
-  const ux = aim.x / aimLength;
-  const uy = aim.y / aimLength;
-  const ball = toYards(shot.start, shot.end);
-  const along = ball.x * ux + ball.y * uy;
-  // Cross product sign: positive when the ball finished right of the aim line.
-  const lateral = ball.x * uy - ball.y * ux;
+  const frame = lineFrame(shot.start, shot.green);
+  if (!frame || frame.length < MIN_AIM_YARDS) return null;
+  const { along, lateral } = frame.measure(shot.end);
   return { along: Math.round(along), lateral: Math.round(lateral) };
 }
 
