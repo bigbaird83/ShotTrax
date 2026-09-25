@@ -106,7 +106,7 @@ test('live board payload carries hole start/finish, score, par, putts — no GPS
 });
 
 test('share round only sends putts after Made it / Hole Out and stamps come from the hole row', () => {
-  const share = readFileSync(new URL('../services/shareRound.ts', import.meta.url), 'utf8');
+  const share = readFileSync(new URL('../services/roundScoreboard.ts', import.meta.url), 'utf8');
   assert.match(share, /putts: hole\.puttsDone \? hole\.putts : null/);
   assert.match(share, /startedAt: hole\.startedAt/);
   assert.match(share, /completedAt: hole\.completedAt/);

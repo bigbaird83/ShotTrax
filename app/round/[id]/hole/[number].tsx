@@ -869,6 +869,7 @@ export default function HoleScreen() {
     markHoleStarted(db, id, holeNumber);
   }, [db, id, holeNumber, revision]);
 
+  // Worker upload stays inside publishRoundScoreboard and is off until Share.
   useEffect(() => {
     publishRoundScoreboard(db, id, { currentHoleNumber: holeNumber });
   }, [db, id, holeNumber, revision]);

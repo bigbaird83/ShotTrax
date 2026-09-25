@@ -1,30 +1,21 @@
 import * as Linking from 'expo-linking';
 import { InteractionManager, Platform, Share } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
-import {
-  ensureRoundShareToken,
-  getClubMap,
-  getHole,
-  getRound,
-  listHoles,
-  listPenaltiesForHole,
-  listShotsForHole,
-  putShareBoard,
-} from '../db/repo';
 import { encodeScoreSnapshot, formatLiveBoardShare, normalizeShareBoardCode } from '../domain/liveBoard';
-import { totalPenaltyStrokes } from '../domain/penalty';
-import { planScorecard, type ScorecardHole } from '../domain/scorecard';
 import { planScorecardImage, renderScorecardPng } from '../domain/scorecardImage';
 import {
   androidImageUrlShareBlock,
-  formatShareScorecard,
-  planSpectatorPayload,
   scorecardImageShareContent,
   shareSheetContent,
-  type SpectatorHoleInput,
   type SpectatorPayload,
 } from '../domain/spectator';
-import { putSharedPayload } from './shareSync';
+import { planRoundShare, publishExplicitRoundShare } from './roundScoreboard';
+
+export {
+  buildRoundSpectatorPayload,
+  formatRoundShareMessage,
+  publishRoundScoreboard,
+} from './roundScoreboard';
 
 /** Present only after the current Modal/nav transition has released the host screen. */
 export function waitForShareHost(run: () => void): void {
@@ -45,84 +36,6 @@ async function writeScorecardPngFile(png: Uint8Array): Promise<string | null> {
   }
 }
 
-function planRoundShare(
-  db: SQLiteDatabase,
-  roundId: string,
-  args?: { currentHoleNumber?: number },
-): {
-  payload: SpectatorPayload;
-  message: string;
-  holes: { hole: number; score: number | null }[];
-  scorecard: ScorecardHole[];
-} | null {
-  const round = getRound(db, roundId);
-  if (!round) return null;
-  const clubs = getClubMap(db);
-  const holes = listHoles(db, round.id);
-  const current =
-    args?.currentHoleNumber ??
-    holes.find((hole) => hole.score == null)?.number ??
-    holes[holes.length - 1]?.number ??
-    1;
-  const input: SpectatorHoleInput[] = holes.map((hole) => ({
-    number: hole.number,
-    score: hole.score,
-    cardYards: hole.yards,
-    par: hole.par,
-    putts: hole.puttsDone ? hole.putts : null,
-    startedAt: hole.startedAt,
-    completedAt: hole.completedAt,
-    shots: listShotsForHole(db, hole.id).map((shot) => ({
-      clubShortName: shot.clubId ? clubs[shot.clubId]?.shortName ?? null : null,
-      distanceYards: shot.distanceYards,
-      startedAt: shot.startedAt,
-      endedAt: shot.endedAt,
-      source: shot.source,
-      fixQuality: shot.fixQuality,
-    })),
-  }));
-  const payload = planSpectatorPayload({
-    token: ensureRoundShareToken(db, round.id),
-    courseName: round.courseName,
-    finished: round.finishedAt != null,
-    currentHoleNumber: getHole(db, round.id, current)?.number ?? current,
-    holes: input,
-    updatedAt: new Date().toISOString(),
-  });
-  const cardHoles = holes.map((hole) => ({ hole: hole.number, score: hole.score }));
-  // Same rows as the in-app scorecard. A finished round flags every unclosed hole.
-  const scorecard = planScorecard(
-    holes.map((hole) => ({
-      number: hole.number,
-      par: hole.par,
-      score: hole.score,
-      putts: hole.putts,
-      puttsDone: hole.puttsDone,
-      shotCount: listShotsForHole(db, hole.id).length,
-      penaltyStrokes: totalPenaltyStrokes(listPenaltiesForHole(db, hole.id)),
-    })),
-    { currentHoleNumber: round.finishedAt != null ? undefined : current },
-  );
-  return {
-    payload,
-    holes: cardHoles,
-    scorecard,
-    message: formatShareScorecard({
-      courseName: payload.courseName,
-      holes: cardHoles,
-      lastClubYards: payload.live?.lastClubYards ?? null,
-    }),
-  };
-}
-
-export function buildRoundSpectatorPayload(
-  db: SQLiteDatabase,
-  roundId: string,
-  args?: { currentHoleNumber?: number },
-): SpectatorPayload | null {
-  return planRoundShare(db, roundId, args)?.payload ?? null;
-}
-
 /** Token-only link. Never pasted into Messages as a `?p=` body. */
 export function spectatorShareUrl(payload: SpectatorPayload): string {
   return Linking.createURL(`/s/${payload.token}`);
@@ -133,26 +46,6 @@ export function liveBoardShareUrl(payload: SpectatorPayload): string {
     payload.holes.map((row) => ({ hole: row.hole, score: row.score })),
   );
   return Linking.createURL(`/s/${payload.token}`, snapshot ? { queryParams: { h: snapshot } } : undefined);
-}
-
-export function formatRoundShareMessage(
-  db: SQLiteDatabase,
-  roundId: string,
-  args?: { currentHoleNumber?: number },
-): string | null {
-  return planRoundShare(db, roundId, args)?.message ?? null;
-}
-
-export function publishRoundScoreboard(
-  db: SQLiteDatabase,
-  roundId: string,
-  args?: { currentHoleNumber?: number },
-): SpectatorPayload | null {
-  const planned = planRoundShare(db, roundId, args);
-  if (!planned) return null;
-  putShareBoard(db, planned.payload);
-  void putSharedPayload(planned.payload.token, planned.payload);
-  return planned.payload;
 }
 
 async function presentShare(
@@ -180,7 +73,7 @@ export async function shareRoundSnapshot(
 ): Promise<boolean | string> {
   const planned = planRoundShare(db, roundId, args);
   if (!planned) return false;
-  publishRoundScoreboard(db, roundId, args);
+  publishExplicitRoundShare(db, roundId, args);
   let imageUrl: string | null = null;
   try {
     const png = renderScorecardPng(
@@ -211,7 +104,7 @@ export async function shareLiveBoard(
 ): Promise<boolean> {
   const planned = planRoundShare(db, roundId, args);
   if (!planned) return false;
-  publishRoundScoreboard(db, roundId, args);
+  publishExplicitRoundShare(db, roundId, args);
   const code = normalizeShareBoardCode(planned.payload.token) ?? planned.payload.token;
   const message = formatLiveBoardShare({
     code,

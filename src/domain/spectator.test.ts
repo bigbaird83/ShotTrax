@@ -272,7 +272,7 @@ test('Signal Lab: share yards stay logged pin-to-pin with Approximate when soft/
   assert.equal(liveSoft, `52° · 105 · ${COPY.approximate}`);
   assert.equal(lastClosedClubYards(holes[0].shots), '7i · 155');
 
-  const share = readFileSync(new URL('../services/shareRound.ts', import.meta.url), 'utf8');
+  const share = readFileSync(new URL('../services/roundScoreboard.ts', import.meta.url), 'utf8');
   assert.match(share, /distanceYards: shot\.distanceYards/);
   assert.doesNotMatch(share, /pinToPinYards: hole\.yards/);
 });
@@ -322,7 +322,10 @@ test('Menu Share toasts Couldn’t open share when Share.share fails — never a
   assert.match(share, /shareSheetContent/);
   assert.match(share, /Share\.share\(content/);
   assert.match(share, /renderScorecardPng/);
-  assert.match(share, /formatShareScorecard/);
+  assert.match(
+    readFileSync(new URL('../services/roundScoreboard.ts', import.meta.url), 'utf8'),
+    /formatShareScorecard/,
+  );
   assert.match(share, /waitForShareHost/);
   assert.match(share, /catch \{/);
   assert.match(share, /return false/);
