@@ -45,11 +45,22 @@ import { rememberResolvedTee } from '../course/osmOverlay';
 import { COURSE_PAINT_CACHE_SETTING_KEY } from '../course/paintCache';
 import { isValidLatLng } from '../domain/latLng';
 import {
+  FAVORITES_SETTING_KEY,
+  listFavorites,
+  type FavoriteCourse,
+} from '../domain/favorites';
+import { buildRoundsCsv, buildShotsCsv, type CsvShot } from '../domain/roundCsv';
+import {
   buildRoundHistoryExport,
+  planFavoriteRestoreMerge,
   planRoundHistoryImport,
   planRoundRestoreMerge,
+  sameRoundTransferContent,
   type RoundHistoryDocument,
+  type RoundTransferBagClub,
+  type RoundTransferFavorite,
   type RoundTransferRound,
+  type RoundTransferShot,
 } from '../domain/roundTransfer';
 import { newShareBoardCode, normalizeShareBoardCode } from '../domain/liveBoard';
 import { planHoleStartStamp } from '../domain/livePace';
@@ -124,6 +135,9 @@ type RoundRow = {
   tee_total_yards: number | null;
   last_club_id: string | null;
   share_token?: string | null;
+  course_city?: string | null;
+  course_state?: string | null;
+  course_data_source?: string | null;
 };
 
 type HoleRow = {
@@ -227,6 +241,9 @@ function mapRound(row: RoundRow): Round {
     teeSlope: row.tee_slope ?? null,
     teeTotalYards: row.tee_total_yards ?? null,
     lastClubId: row.last_club_id ?? null,
+    courseCity: row.course_city ?? null,
+    courseState: row.course_state ?? null,
+    courseDataSource: row.course_data_source ?? null,
   };
 }
 
@@ -472,7 +489,7 @@ export function startRound(
   const lastClubId = previous?.last_club_id ?? null;
   db.withTransactionSync(() => {
     db.runSync(
-      'INSERT INTO rounds (id, started_at, finished_at, course_name, hole_count, course_api_id, course_lat, course_lng, tee_name, tee_rating, tee_slope, tee_total_yards, last_club_id) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO rounds (id, started_at, finished_at, course_name, hole_count, course_api_id, course_lat, course_lng, tee_name, tee_rating, tee_slope, tee_total_yards, last_club_id, course_city, course_state, course_data_source) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         id,
         startedAt,
@@ -486,6 +503,9 @@ export function startRound(
         layout?.teeSlope ?? null,
         layout?.teeTotalYards ?? null,
         lastClubId,
+        layout?.city ?? null,
+        layout?.state ?? null,
+        layout?.courseDataSource ?? null,
       ],
     );
     for (let n = 1; n <= holeCount; n += 1) {
@@ -534,6 +554,9 @@ export function startRound(
     teeSlope: layout?.teeSlope ?? null,
     teeTotalYards: layout?.teeTotalYards ?? null,
     lastClubId,
+    courseCity: layout?.city ?? null,
+    courseState: layout?.state ?? null,
+    courseDataSource: layout?.courseDataSource ?? null,
   };
 }
 
@@ -550,7 +573,7 @@ export function attachCourseToRound(
   const courseLoc = isValidLatLng(layout.location ?? null) ? layout.location ?? null : null;
   db.withTransactionSync(() => {
     db.runSync(
-      'UPDATE rounds SET course_name = COALESCE(?, course_name), course_api_id = ?, course_lat = ?, course_lng = ?, tee_name = ?, tee_rating = ?, tee_slope = ?, tee_total_yards = ? WHERE id = ?',
+      'UPDATE rounds SET course_name = COALESCE(?, course_name), course_api_id = ?, course_lat = ?, course_lng = ?, tee_name = ?, tee_rating = ?, tee_slope = ?, tee_total_yards = ?, course_city = COALESCE(?, course_city), course_state = COALESCE(?, course_state), course_data_source = COALESCE(?, course_data_source) WHERE id = ?',
       [
         courseName,
         layout.apiId,
@@ -560,6 +583,9 @@ export function attachCourseToRound(
         layout.teeRating ?? null,
         layout.teeSlope ?? null,
         layout.teeTotalYards ?? null,
+        layout.city ?? null,
+        layout.state ?? null,
+        layout.courseDataSource ?? null,
         roundId,
       ],
     );
@@ -608,6 +634,7 @@ export function attachCourseToRound(
 }
 
 export function collectRoundHistoryExport(db: SQLiteDatabase, exportedAt: string): RoundHistoryDocument {
+  const store = readSettingStore(db);
   const rounds = listRounds(db).map((round) => ({
     id: round.id,
     startedAt: round.startedAt,
@@ -617,6 +644,9 @@ export function collectRoundHistoryExport(db: SQLiteDatabase, exportedAt: string
     courseApiId: round.courseApiId,
     courseLat: round.courseLat,
     courseLng: round.courseLng,
+    courseCity: round.courseCity,
+    courseState: round.courseState,
+    courseDataSource: round.courseDataSource,
     teeName: round.teeName,
     teeRating: round.teeRating,
     teeSlope: round.teeSlope,
@@ -669,7 +699,20 @@ export function collectRoundHistoryExport(db: SQLiteDatabase, exportedAt: string
     })),
   }));
   const clubs = listClubs(db).map((club) => ({ id: club.id, name: club.name, shortName: club.shortName }));
-  return buildRoundHistoryExport({ rounds, clubs, exportedAt });
+  const favorites = listFavorites(store).map((favorite) => ({
+    id: favorite.id,
+    name: favorite.name,
+    city: favorite.city,
+    state: favorite.state,
+    location: favorite.location,
+  }));
+  const bag = listClubs(db).map((club) => ({
+    id: club.id,
+    enabled: club.enabled,
+    sortOrder: club.sortOrder,
+    typicalCarryYards: club.typicalCarryYards,
+  }));
+  return buildRoundHistoryExport({ rounds, clubs, favorites, bag, exportedAt });
 }
 
 /**
@@ -682,15 +725,28 @@ export function restoreRoundHistory(
   db: SQLiteDatabase,
   raw: unknown,
 ):
-  | { ok: true; added: number; updated: number; shots: number; rejectedShots: number }
+  | {
+      ok: true;
+      added: number;
+      updated: number;
+      shots: number;
+      rejectedShots: number;
+      favoritesAdded: number;
+      bag: RoundTransferBagClub[];
+    }
   | { ok: false; reason: string } {
   const plan = planRoundHistoryImport(raw);
   if (!plan.ok) return plan;
   const clubs = new Set(db.getAllSync<{ id: string }>('SELECT id FROM clubs').map((row) => row.id));
   const merge = planRoundRestoreMerge({ existing: listRounds(db), incoming: plan.rounds });
+  const replace = merge.replace.filter((round) => {
+    const stored = round.id ? storedRoundAsTransfer(db, round.id) : null;
+    return stored == null || !sameRoundTransferContent(stored, round);
+  });
   let shots = 0;
+  let favoritesAdded = 0;
   db.withTransactionSync(() => {
-    for (const round of merge.replace) {
+    for (const round of replace) {
       const id = round.id as string;
       const token = getRoundShareToken(db, id);
       const sharedAt = getRoundSharedAt(db, id);
@@ -702,16 +758,19 @@ export function restoreRoundHistory(
     for (const round of merge.add) {
       insertTransferredRound(db, round, clubs, round.id ?? newId());
     }
-    for (const round of [...merge.replace, ...merge.add]) {
+    for (const round of [...replace, ...merge.add]) {
       shots += round.holes.reduce((sum, hole) => sum + hole.shots.length, 0);
     }
+    favoritesAdded = addRestoredFavorites(db, plan.favorites);
   });
   return {
     ok: true,
     added: merge.add.length,
-    updated: merge.replace.length,
+    updated: replace.length,
     shots,
     rejectedShots: plan.rejectedShots,
+    favoritesAdded,
+    bag: plan.bag,
   };
 }
 
@@ -729,7 +788,7 @@ function insertTransferredRound(
     ? { lat: round.courseLat as number, lng: round.courseLng as number }
     : null;
   db.runSync(
-    'INSERT INTO rounds (id, started_at, finished_at, course_name, hole_count, course_api_id, course_lat, course_lng, tee_name, tee_rating, tee_slope, tee_total_yards, last_club_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)',
+    'INSERT INTO rounds (id, started_at, finished_at, course_name, hole_count, course_api_id, course_lat, course_lng, tee_name, tee_rating, tee_slope, tee_total_yards, last_club_id, course_city, course_state, course_data_source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)',
     [
       roundId,
       round.startedAt,
@@ -743,6 +802,9 @@ function insertTransferredRound(
       round.teeRating,
       round.teeSlope,
       round.teeTotalYards,
+      round.courseCity,
+      round.courseState,
+      round.courseDataSource,
     ],
   );
   for (const hole of round.holes) {
@@ -813,6 +875,209 @@ function insertTransferredRound(
       );
     }
   }
+}
+
+function pointOrNull(lat: number | null, lng: number | null): { lat: number; lng: number } | null {
+  if (lat == null || lng == null) return null;
+  const point = { lat, lng };
+  return isValidLatLng(point) ? point : null;
+}
+
+/** Stored round in transfer shape, for an identical-file no-op. no_gps shots are not in the file. */
+function storedRoundAsTransfer(db: SQLiteDatabase, id: string): RoundTransferRound | null {
+  const round = getRound(db, id);
+  if (!round || (round.holeCount !== 9 && round.holeCount !== 18)) return null;
+  const holes = listHoles(db, id).map((hole) => {
+    const shots: RoundTransferShot[] = [];
+    for (const shot of listShotsForHole(db, hole.id)) {
+      if (shot.source === 'no_gps') continue;
+      const start = pointOrNull(shot.startLat, shot.startLng);
+      const end = pointOrNull(shot.endLat, shot.endLng);
+      if (!start || !end || shot.distanceYards == null) continue;
+      shots.push({
+        clubId: shot.clubId,
+        seq: shot.seq,
+        start,
+        end,
+        startAccuracyM: shot.startAccuracyM,
+        endAccuracyM: shot.endAccuracyM,
+        startFixQuality: shot.source === 'placed' ? null : shot.startFixQuality,
+        endFixQuality: shot.source === 'placed' ? null : shot.endFixQuality,
+        distanceYards: shot.distanceYards,
+        typedYards: shot.typedYards,
+        fixQuality: shot.source === 'placed' ? null : shot.fixQuality,
+        impossibleJump: shot.impossibleJump,
+        startedAt: shot.startedAt,
+        endedAt: shot.endedAt,
+        source: shot.source === 'placed' ? 'placed' : 'gps',
+        suggested: shot.suggested,
+        holeOut: shot.holeOut,
+        averageEligibleAt: shot.averageEligibleAt ?? null,
+      });
+    }
+    const green = pointOrNull(hole.greenLat, hole.greenLng);
+    return {
+      number: hole.number,
+      par: hole.par,
+      parSource: hole.parSource,
+      score: hole.score,
+      yards: hole.yards,
+      handicap: hole.handicap,
+      tee: pointOrNull(hole.teeLat, hole.teeLng),
+      green,
+      greenSource: green ? hole.greenSource : null,
+      greenFront: pointOrNull(hole.greenFrontLat, hole.greenFrontLng),
+      greenBack: pointOrNull(hole.greenBackLat, hole.greenBackLng),
+      greenDepthYards: hole.greenDepthYards,
+      putts: hole.putts,
+      puttLengths: hole.puttLengths,
+      puttsDone: hole.puttsDone,
+      startedAt: hole.startedAt,
+      completedAt: hole.completedAt,
+      fairway: hole.fairway,
+      shots,
+    };
+  });
+  return {
+    id: round.id,
+    startedAt: round.startedAt,
+    finishedAt: round.finishedAt,
+    courseName: round.courseName,
+    holeCount: round.holeCount,
+    courseApiId: round.courseApiId,
+    courseLat: round.courseLat,
+    courseLng: round.courseLng,
+    courseCity: round.courseCity,
+    courseState: round.courseState,
+    courseCountry: null,
+    teeName: round.teeName,
+    teeRating: round.teeRating,
+    teeSlope: round.teeSlope,
+    teeTotalYards: round.teeTotalYards,
+    courseDataSource: round.courseDataSource,
+    holes,
+  };
+}
+
+/** Append favorites this phone does not already have. Does not write a download pack. */
+function addRestoredFavorites(db: SQLiteDatabase, incoming: readonly RoundTransferFavorite[]): number {
+  const store = readSettingStore(db);
+  const existing = listFavorites(store);
+  const add = planFavoriteRestoreMerge(
+    existing.map((favorite) => favorite.id),
+    incoming,
+  );
+  if (add.length === 0) return 0;
+  const next: FavoriteCourse[] = [
+    ...existing,
+    ...add.map((favorite) => ({
+      id: favorite.id,
+      name: favorite.name,
+      city: favorite.city,
+      state: favorite.state,
+      country: null,
+      location: favorite.location,
+    })),
+  ];
+  store.set(FAVORITES_SETTING_KEY, JSON.stringify(next));
+  return add.length;
+}
+
+/**
+ * Write bag on/off, order, and typed carry for clubs already on this phone.
+ * A blank carry stays null. Putter carry stays null. Unknown clubs are skipped.
+ */
+export function applyTransferredBag(db: SQLiteDatabase, bag: readonly RoundTransferBagClub[]): void {
+  const known = new Set(listClubs(db).map((club) => club.id));
+  db.withTransactionSync(() => {
+    for (const club of bag) {
+      if (!known.has(club.id)) continue;
+      const carry = isPutterClubId(club.id) ? null : club.typicalCarryYards;
+      db.runSync('UPDATE clubs SET enabled = ?, sort_order = ?, typical_carry_yards = ? WHERE id = ?', [
+        club.enabled ? 1 : 0,
+        club.sortOrder,
+        carry,
+        club.id,
+      ]);
+    }
+  });
+}
+
+function clubLabel(clubs: ReadonlyMap<string, { name: string; shortName: string }>, clubId: string | null): string | null {
+  if (!clubId) return null;
+  const club = clubs.get(clubId);
+  if (!club) return null;
+  const label = club.shortName.trim() || club.name.trim();
+  return label || null;
+}
+
+function enteredPutts(hole: { putts: number; puttsDone: boolean }): number | null {
+  if (hole.puttsDone || hole.putts > 0) return hole.putts;
+  return null;
+}
+
+/** rounds.csv and shots.csv from stored rows. Missing numbers stay blank. */
+export function collectRoundCsv(db: SQLiteDatabase): { roundsCsv: string; shotsCsv: string } {
+  const clubs = new Map(listClubs(db).map((club) => [club.id, club]));
+  const rounds = listRounds(db);
+  const shots: CsvShot[] = [];
+  const csvRounds = rounds.map((round) => {
+    const holes = listHoles(db, round.id);
+    for (const hole of holes) {
+      for (const shot of listShotsForHole(db, hole.id)) {
+        const noGps = shot.source === 'no_gps';
+        shots.push({
+          roundId: round.id,
+          holeNumber: hole.number,
+          shotNumber: shot.seq,
+          club: clubLabel(clubs, shot.clubId),
+          distanceYards: noGps ? null : shot.distanceYards,
+          startLat: noGps ? null : shot.startLat,
+          startLng: noGps ? null : shot.startLng,
+          endLat: noGps ? null : shot.endLat,
+          endLng: noGps ? null : shot.endLng,
+          fixQuality: shot.fixQuality,
+          source: shot.source,
+          typedYards: shot.typedYards,
+        });
+      }
+      for (const penalty of listPenaltiesForHole(db, hole.id)) {
+        if (penalty.kind !== 'penalty') continue;
+        const point = pointOrNull(penalty.lat, penalty.lng);
+        shots.push({
+          roundId: round.id,
+          holeNumber: hole.number,
+          shotNumber: null,
+          club: null,
+          distanceYards: null,
+          startLat: point?.lat ?? null,
+          startLng: point?.lng ?? null,
+          endLat: null,
+          endLng: null,
+          fixQuality: null,
+          source: 'penalty',
+          typedYards: null,
+        });
+      }
+    }
+    return {
+      id: round.id,
+      startedAt: round.startedAt,
+      courseId: round.courseApiId,
+      courseName: round.courseName,
+      city: round.courseCity,
+      state: round.courseState,
+      holesPlayed: round.holeCount,
+      courseDataSource: round.courseDataSource,
+      holes: holes.map((hole) => ({
+        number: hole.number,
+        par: hole.par,
+        score: hole.score,
+        putts: enteredPutts(hole),
+      })),
+    };
+  });
+  return { roundsCsv: buildRoundsCsv(csvRounds), shotsCsv: buildShotsCsv(shots) };
 }
 
 export function finishRound(db: SQLiteDatabase, id: string): void {

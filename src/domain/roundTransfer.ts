@@ -1,6 +1,8 @@
 import { isClubhousePin } from '../course/hydrate';
+import { isPutterClubId, parseTypicalCarryYards } from './defaultBag';
 import { haversineYards, roundYards } from './haversine';
 import { isCourseCardLatLng, isValidLatLng, type LatLng } from './latLng';
+import { normalizeCourseDataSource } from './courseDataSource';
 import { SHOTTRAXX_BRAND } from './playerCopy';
 import { parseFairwayResult, type FairwayResult } from './fairwayGir';
 import type { ShotFixQuality, ShotSource } from './types';
@@ -13,7 +15,12 @@ import type { ShotFixQuality, ShotSource } from './types';
  */
 
 export const ROUND_HISTORY_EXPORT_KIND = 'shottrax.round-history';
-export const ROUND_HISTORY_EXPORT_VERSION = 1;
+/** v2 adds favorites and the bag. v1 files still restore. */
+export const ROUND_HISTORY_EXPORT_VERSION = 2;
+
+export function isRoundHistoryExportVersion(version: unknown): version is 1 | 2 {
+  return version === 1 || version === ROUND_HISTORY_EXPORT_VERSION;
+}
 
 export function roundTransferNeedsAccount(): false {
   return false;
@@ -97,7 +104,28 @@ export type RoundTransferRound = {
   teeRating: number | null;
   teeSlope: number | null;
   teeTotalYards: number | null;
+  /** Stored paint/hydrate token. Null when this round never recorded one. */
+  courseDataSource: string | null;
   holes: RoundTransferHole[];
+};
+
+/**
+ * Favorite identity only. No offline/download status and no cached paint.
+ */
+export type RoundTransferFavorite = {
+  id: string;
+  name: string;
+  city: string | null;
+  state: string | null;
+  location: LatLng | null;
+};
+
+/** One bag: on/off, order, and typed carry. Null carry is blank, never an estimate. */
+export type RoundTransferBagClub = {
+  id: string;
+  enabled: boolean;
+  sortOrder: number;
+  typicalCarryYards: number | null;
 };
 
 /** Bag names so a shot's clubId reads on its own. Restore does not write clubs. */
@@ -113,6 +141,8 @@ export type RoundHistoryDocument = {
   exportedAt: string;
   clubs: RoundTransferClub[];
   rounds: RoundTransferRound[];
+  favorites: RoundTransferFavorite[];
+  bag: RoundTransferBagClub[];
 };
 
 export type RoundHistoryImport =
@@ -122,6 +152,8 @@ export type RoundHistoryImport =
       shots: number;
       rejectedShots: number;
       ignoredAverages: true;
+      favorites: RoundTransferFavorite[];
+      bag: RoundTransferBagClub[];
     }
   | { ok: false; reason: 'not_shottrax' | 'empty' };
 
@@ -190,7 +222,23 @@ type ExportRoundInput = {
   teeRating: number | null;
   teeSlope: number | null;
   teeTotalYards: number | null;
+  courseDataSource?: string | null;
   holes: ExportHoleInput[];
+};
+
+export type ExportFavoriteInput = {
+  id: string;
+  name: string;
+  city?: string | null;
+  state?: string | null;
+  location?: LatLng | null;
+};
+
+export type ExportBagClubInput = {
+  id: string;
+  enabled: boolean;
+  sortOrder: number;
+  typicalCarryYards?: number | null;
 };
 
 function text(value: unknown): string | null {
@@ -359,9 +407,36 @@ function shotFromExport(shot: ExportShotInput): RoundTransferShot | null {
   });
 }
 
+function carryFromExport(id: string, value: number | null | undefined): number | null {
+  if (isPutterClubId(id) || value == null) return null;
+  return parseTypicalCarryYards(String(value));
+}
+
+function favoriteFromExport(raw: ExportFavoriteInput): RoundTransferFavorite | null {
+  const id = text(raw.id);
+  const name = text(raw.name);
+  if (!id || !name) return null;
+  const location = isValidLatLng(raw.location) ? { lat: raw.location.lat, lng: raw.location.lng } : null;
+  return { id, name, city: text(raw.city), state: text(raw.state), location };
+}
+
+function bagFromExport(raw: ExportBagClubInput): RoundTransferBagClub | null {
+  const id = text(raw.id);
+  if (!id || typeof raw.enabled !== 'boolean') return null;
+  if (!Number.isInteger(raw.sortOrder)) return null;
+  return {
+    id,
+    enabled: raw.enabled,
+    sortOrder: raw.sortOrder,
+    typicalCarryYards: carryFromExport(id, raw.typicalCarryYards),
+  };
+}
+
 export function buildRoundHistoryExport(args: {
   rounds: readonly ExportRoundInput[];
   clubs?: readonly { id: string; name: string; shortName?: string | null }[];
+  favorites?: readonly ExportFavoriteInput[];
+  bag?: readonly ExportBagClubInput[];
   exportedAt: string;
 }): RoundHistoryDocument {
   const rounds: RoundTransferRound[] = [];
@@ -413,8 +488,25 @@ export function buildRoundHistoryExport(args: {
       teeRating: finite(round.teeRating),
       teeSlope: finite(round.teeSlope),
       teeTotalYards: finite(round.teeTotalYards),
+      courseDataSource: normalizeCourseDataSource(round.courseDataSource),
       holes,
     });
+  }
+  const favorites: RoundTransferFavorite[] = [];
+  const favoriteIds = new Set<string>();
+  for (const raw of args.favorites ?? []) {
+    const favorite = favoriteFromExport(raw);
+    if (!favorite || favoriteIds.has(favorite.id)) continue;
+    favoriteIds.add(favorite.id);
+    favorites.push(favorite);
+  }
+  const bag: RoundTransferBagClub[] = [];
+  const bagIds = new Set<string>();
+  for (const raw of args.bag ?? []) {
+    const club = bagFromExport(raw);
+    if (!club || bagIds.has(club.id)) continue;
+    bagIds.add(club.id);
+    bag.push(club);
   }
   return {
     kind: ROUND_HISTORY_EXPORT_KIND,
@@ -426,6 +518,8 @@ export function buildRoundHistoryExport(args: {
       return id && name ? [{ id, name, shortName: text(club.shortName) }] : [];
     }),
     rounds,
+    favorites,
+    bag,
   };
 }
 
@@ -436,7 +530,7 @@ export function serializeRoundHistory(doc: RoundHistoryDocument): string {
 export function planRoundHistoryImport(raw: unknown): RoundHistoryImport {
   const parsed = typeof raw === 'string' ? safeParse(raw) : raw;
   const record = asRecord(parsed);
-  if (!record || record.kind !== ROUND_HISTORY_EXPORT_KIND || record.version !== ROUND_HISTORY_EXPORT_VERSION) {
+  if (!record || record.kind !== ROUND_HISTORY_EXPORT_KIND || !isRoundHistoryExportVersion(record.version)) {
     return { ok: false, reason: 'not_shottrax' };
   }
   if (roundImportWritesStoredAverages()) {
@@ -480,11 +574,68 @@ export function planRoundHistoryImport(raw: unknown): RoundHistoryImport {
       teeRating: finite(row.teeRating),
       teeSlope: finite(row.teeSlope),
       teeTotalYards: finite(row.teeTotalYards),
+      courseDataSource: normalizeCourseDataSource(row.courseDataSource),
       holes,
     });
   }
-  if (rounds.length === 0) return { ok: false, reason: 'empty' };
-  return { ok: true, rounds, shots, rejectedShots, ignoredAverages: true };
+  const favorites = acceptFavorites(record.favorites);
+  const bag = acceptBag(record.bag);
+  if (rounds.length === 0 && favorites.length === 0 && bag.length === 0) {
+    return { ok: false, reason: 'empty' };
+  }
+  return { ok: true, rounds, shots, rejectedShots, ignoredAverages: true, favorites, bag };
+}
+
+function acceptFavorites(raw: unknown): RoundTransferFavorite[] {
+  if (!Array.isArray(raw)) return [];
+  const out: RoundTransferFavorite[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    const record = asRecord(item);
+    if (!record) continue;
+    const id = text(record.id);
+    const name = text(record.name);
+    if (!id || !name || seen.has(id)) continue;
+    seen.add(id);
+    const location = readPoint(record.location);
+    out.push({
+      id,
+      name,
+      city: text(record.city),
+      state: text(record.state),
+      location: location && isValidLatLng(location) ? { lat: location.lat, lng: location.lng } : null,
+    });
+  }
+  return out;
+}
+
+function acceptCarry(id: string, value: unknown): number | null {
+  if (isPutterClubId(id) || value == null || value === '') return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return parseTypicalCarryYards(String(value));
+  if (typeof value === 'string') return parseTypicalCarryYards(value);
+  return null;
+}
+
+function acceptBag(raw: unknown): RoundTransferBagClub[] {
+  if (!Array.isArray(raw)) return [];
+  const out: RoundTransferBagClub[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    const record = asRecord(item);
+    if (!record) continue;
+    const id = text(record.id);
+    const sortOrder = finite(record.sortOrder);
+    if (!id || seen.has(id) || typeof record.enabled !== 'boolean') continue;
+    if (sortOrder == null || !Number.isInteger(sortOrder)) continue;
+    seen.add(id);
+    out.push({
+      id,
+      enabled: record.enabled,
+      sortOrder,
+      typicalCarryYards: acceptCarry(id, record.typicalCarryYards),
+    });
+  }
+  return out;
 }
 
 function safeParse(raw: string): unknown {
@@ -554,11 +705,179 @@ export function roundTransferKey(round: { startedAt: string; courseName: string 
   return `${round.startedAt}|${round.courseName ?? ''}|${round.holeCount}`;
 }
 
-export function formatRestoreToast(args: { added: number; updated: number }): string {
-  if (args.added === 0 && args.updated === 0) return 'Those rounds are already on this phone.';
+function canonicalPuttLengths(lengths: readonly string[], putts: number): string[] {
+  const n = Math.min(5, Math.max(0, Math.round(Number.isFinite(putts) ? putts : 0)));
+  const out: string[] = [];
+  for (let i = 0; i < n; i += 1) out.push(lengths[i] ?? '');
+  return out;
+}
+
+function canonicalPoint(point: LatLng | null | undefined): { lat: number; lng: number } | null {
+  if (!point || !Number.isFinite(point.lat) || !Number.isFinite(point.lng)) return null;
+  return { lat: point.lat, lng: point.lng };
+}
+
+/** Identity of a transferred round, ignoring row ids that restore regenerates. */
+export function sameRoundTransferContent(a: RoundTransferRound, b: RoundTransferRound): boolean {
+  return JSON.stringify(canonicalTransferRound(a)) === JSON.stringify(canonicalTransferRound(b));
+}
+
+function canonicalTransferRound(round: RoundTransferRound) {
+  return {
+    id: round.id,
+    startedAt: round.startedAt,
+    finishedAt: round.finishedAt,
+    courseName: round.courseName,
+    holeCount: round.holeCount,
+    courseApiId: round.courseApiId,
+    courseLat: round.courseLat,
+    courseLng: round.courseLng,
+    courseCity: round.courseCity,
+    courseState: round.courseState,
+    courseDataSource: round.courseDataSource,
+    teeName: round.teeName,
+    teeRating: round.teeRating,
+    teeSlope: round.teeSlope,
+    teeTotalYards: round.teeTotalYards,
+    holes: [...round.holes]
+      .sort((left, right) => left.number - right.number)
+      .map((hole) => ({
+        number: hole.number,
+        par: hole.par,
+        parSource: hole.parSource,
+        score: hole.score,
+        yards: hole.yards,
+        handicap: hole.handicap,
+        putts: hole.putts,
+        puttsDone: hole.puttsDone,
+        puttLengths: canonicalPuttLengths(hole.puttLengths, hole.putts),
+        fairway: hole.fairway,
+        startedAt: hole.startedAt,
+        completedAt: hole.completedAt,
+        tee: canonicalPoint(hole.tee),
+        green: canonicalPoint(hole.green),
+        greenSource: hole.green ? hole.greenSource : null,
+        greenFront: canonicalPoint(hole.greenFront),
+        greenBack: canonicalPoint(hole.greenBack),
+        greenDepthYards: hole.greenDepthYards,
+        shots: [...hole.shots]
+          .filter((shot) => shot.source === 'gps' || shot.source === 'placed')
+          .sort((left, right) => left.seq - right.seq)
+          .map((shot) => ({
+            clubId: shot.clubId,
+            seq: shot.seq,
+            source: shot.source,
+            startLat: shot.start.lat,
+            startLng: shot.start.lng,
+            endLat: shot.end.lat,
+            endLng: shot.end.lng,
+            startAccuracyM: shot.startAccuracyM,
+            endAccuracyM: shot.endAccuracyM,
+            startFixQuality: shot.startFixQuality,
+            endFixQuality: shot.endFixQuality,
+            distanceYards: shot.distanceYards,
+            typedYards: shot.typedYards,
+            fixQuality: shot.fixQuality,
+            impossibleJump: shot.impossibleJump,
+            startedAt: shot.startedAt,
+            endedAt: shot.endedAt,
+            suggested: shot.suggested,
+            holeOut: shot.holeOut,
+            averageEligibleAt: shot.averageEligibleAt,
+          })),
+      })),
+  };
+}
+
+/** New favorites only. An id already on the phone is left as it is. */
+export function planFavoriteRestoreMerge(
+  existingIds: readonly string[],
+  incoming: readonly RoundTransferFavorite[],
+): RoundTransferFavorite[] {
+  const seen = new Set(existingIds);
+  const add: RoundTransferFavorite[] = [];
+  for (const favorite of incoming) {
+    if (seen.has(favorite.id)) continue;
+    seen.add(favorite.id);
+    add.push(favorite);
+  }
+  return add;
+}
+
+export type BagClubSnapshot = {
+  id: string;
+  name: string;
+  shortName: string;
+  enabled: boolean;
+  sortOrder: number;
+  typicalCarryYards: number | null;
+};
+
+export type BagChange =
+  | { kind: 'on'; clubId: string; label: string }
+  | { kind: 'off'; clubId: string; label: string }
+  | { kind: 'order'; clubId: string; label: string; from: number; to: number }
+  | { kind: 'carry'; clubId: string; label: string; from: number | null; to: number | null };
+
+/**
+ * What would change on clubs this phone already has. Missing file clubs are
+ * not removed. Clubs the phone does not have are not created.
+ */
+export function planBagRestore(
+  current: readonly BagClubSnapshot[],
+  incoming: readonly RoundTransferBagClub[],
+): BagChange[] {
+  const incomingById = new Map<string, RoundTransferBagClub>();
+  for (const row of incoming) {
+    if (!incomingById.has(row.id)) incomingById.set(row.id, row);
+  }
+  const changes: BagChange[] = [];
+  const ordered = [...current].sort(
+    (left, right) => left.sortOrder - right.sortOrder || left.name.localeCompare(right.name),
+  );
+  for (const club of ordered) {
+    const next = incomingById.get(club.id);
+    if (!next) continue;
+    const label = club.name.trim() || club.shortName.trim() || club.id;
+    if (next.enabled !== club.enabled) {
+      changes.push({ kind: next.enabled ? 'on' : 'off', clubId: club.id, label });
+    }
+    if (next.sortOrder !== club.sortOrder) {
+      changes.push({ kind: 'order', clubId: club.id, label, from: club.sortOrder, to: next.sortOrder });
+    }
+    const nextCarry = isPutterClubId(club.id) ? null : next.typicalCarryYards;
+    const currentCarry = isPutterClubId(club.id) ? null : club.typicalCarryYards;
+    if (nextCarry !== currentCarry) {
+      changes.push({ kind: 'carry', clubId: club.id, label, from: currentCarry ?? null, to: nextCarry });
+    }
+  }
+  return changes;
+}
+
+function carryWord(value: number | null): string {
+  return value == null ? 'blank' : String(value);
+}
+
+export function formatBagChange(change: BagChange): string {
+  if (change.kind === 'on') return `${change.label} turned on`;
+  if (change.kind === 'off') return `${change.label} turned off`;
+  if (change.kind === 'order') return `${change.label} moved from ${change.from} to ${change.to}`;
+  return `${change.label} carry ${carryWord(change.from)} → ${carryWord(change.to)}`;
+}
+
+export function formatRestoreToast(args: {
+  added: number;
+  updated: number;
+  favoritesAdded?: number;
+}): string {
+  const favoritesAdded = args.favoritesAdded ?? 0;
+  if (args.added === 0 && args.updated === 0 && favoritesAdded === 0) {
+    return 'Those rounds are already on this phone.';
+  }
   const parts: string[] = [];
   if (args.added > 0) parts.push(`${args.added} round${args.added === 1 ? '' : 's'} added`);
   if (args.updated > 0) parts.push(`${args.updated} round${args.updated === 1 ? '' : 's'} updated`);
+  if (favoritesAdded > 0) parts.push(`${favoritesAdded} favorite${favoritesAdded === 1 ? '' : 's'} added`);
   return `${parts.join(', ')}.`.replace(/^./, (c) => c.toUpperCase());
 }
 

@@ -14,6 +14,10 @@ export type CourseLayoutSeed = {
   apiId: string | null;
   name?: string | null;
   location?: LatLng | null;
+  city?: string | null;
+  state?: string | null;
+  /** Stored course-data token. Omitted when this start did not record one. */
+  courseDataSource?: string | null;
   teeName?: string | null;
   teeRating?: number | null;
   teeSlope?: number | null;

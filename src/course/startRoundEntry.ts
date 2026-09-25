@@ -1,7 +1,8 @@
 import { decideCourseCardPaint } from '../domain/courseCardPaint';
+import { normalizeCourseDataSource } from '../domain/courseDataSource';
 import type { FavoriteCourse } from '../domain/favorites';
 import { catalogEntryById } from './catalog';
-import { applyCourseHydrateToLayout } from './hydrate';
+import { applyCourseHydrateToLayout, loadHydrateForCourse } from './hydrate';
 import type { CourseLayoutSeed } from './layout';
 
 /**
@@ -69,21 +70,33 @@ export function favoriteStartHoleCount(course: { id: string }): 9 | 18 {
 
 /** Same hydrate fill Start Round uses. Missing tee/green stays missing. */
 export function layoutForFavoriteStart(course: FavoriteCourse): CourseLayoutSeed {
-  const base: CourseLayoutSeed = {
-    apiId: course.id,
-    name: course.name,
-    location: course.location,
-    teeName: null,
-    teeRating: null,
-    teeSlope: null,
-    teeTotalYards: null,
-    holes: [],
-  };
-  return applyCourseHydrateToLayout(base, {
+  const match = {
     name: course.name,
     city: course.city,
     state: course.state,
     location: course.location,
     courseKey: course.id,
-  });
+  };
+  const layout = applyCourseHydrateToLayout(
+    {
+      apiId: course.id,
+      name: course.name,
+      location: course.location,
+      city: course.city,
+      state: course.state,
+      teeName: null,
+      teeRating: null,
+      teeSlope: null,
+      teeTotalYards: null,
+      holes: [],
+    },
+    match,
+  );
+  const painted = (layout.holes ?? []).some((hole) => hole.teeCentroid != null || hole.greenCentroid != null);
+  return {
+    ...layout,
+    city: course.city,
+    state: course.state,
+    courseDataSource: painted ? normalizeCourseDataSource(loadHydrateForCourse(match)?.source) : null,
+  };
 }
