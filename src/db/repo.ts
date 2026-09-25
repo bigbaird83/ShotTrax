@@ -662,7 +662,7 @@ export function collectRoundHistoryExport(db: SQLiteDatabase, exportedAt: string
 
 /**
  * Merge a rounds file into this phone. Other rounds stay. A round whose id is
- * already here is replaced (its live-board token is kept). A round already
+ * already here is replaced (its live-board token and shared flag are kept). A round already
  * here without a matching id is skipped so a second restore does not
  * double-count. Does not write a stored average. Club averages recompute from shots.
  */
@@ -681,9 +681,11 @@ export function restoreRoundHistory(
     for (const round of merge.replace) {
       const id = round.id as string;
       const token = getRoundShareToken(db, id);
+      const sharedAt = getRoundSharedAt(db, id);
       deleteRoundRows(db, id);
       insertTransferredRound(db, round, clubs, id);
       if (token) db.runSync('UPDATE rounds SET share_token = ? WHERE id = ?', [token, id]);
+      if (sharedAt) db.runSync('UPDATE rounds SET shared_at = ? WHERE id = ?', [sharedAt, id]);
     }
     for (const round of merge.add) {
       insertTransferredRound(db, round, clubs, round.id ?? newId());
@@ -830,6 +832,28 @@ export function getRoundShareToken(db: SQLiteDatabase, roundId: string): string 
   );
   const token = row?.share_token?.trim();
   return token ? token : null;
+}
+
+/** ISO time of the first Share tap for this round. Null means never shared. */
+export function getRoundSharedAt(db: SQLiteDatabase, roundId: string): string | null {
+  const row = db.getFirstSync<{ shared_at: string | null }>(
+    'SELECT shared_at FROM rounds WHERE id = ?',
+    [roundId],
+  );
+  const value = row?.shared_at?.trim();
+  return value ? value : null;
+}
+
+export function isRoundShared(db: SQLiteDatabase, roundId: string): boolean {
+  return getRoundSharedAt(db, roundId) != null;
+}
+
+/** First explicit Share tap. A later tap keeps the original time. */
+export function markRoundShared(db: SQLiteDatabase, roundId: string, at?: string): void {
+  db.runSync('UPDATE rounds SET shared_at = ? WHERE id = ? AND shared_at IS NULL', [
+    at ?? new Date().toISOString(),
+    roundId,
+  ]);
 }
 
 /** Same token for live + finished so the share link stays up after the round. */

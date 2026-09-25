@@ -179,12 +179,13 @@ test('an 18-hole card fits one image', () => {
 
 test('every Share path renders the table from planScorecard; text message stays short', () => {
   const share = readFileSync(new URL('../services/shareRound.ts', import.meta.url), 'utf8');
-  assert.match(share, /planScorecard\(/);
+  const scoreboard = readFileSync(new URL('../services/roundScoreboard.ts', import.meta.url), 'utf8');
+  assert.match(scoreboard, /planScorecard\(/);
   assert.match(share, /planScorecardImage\(/);
   assert.match(share, /holes: planned\.scorecard/);
-  assert.match(share, /penaltyStrokes: totalPenaltyStrokes/);
-  assert.match(share, /formatShareScorecard/);
-  assert.doesNotMatch(share, /planScorecardImageLines/);
+  assert.match(scoreboard, /penaltyStrokes: totalPenaltyStrokes/);
+  assert.match(scoreboard, /formatShareScorecard/);
+  assert.doesNotMatch(share + scoreboard, /planScorecardImageLines/);
   const image = readFileSync(new URL('./scorecardImage.ts', import.meta.url), 'utf8');
   assert.doesNotMatch(image, /MapView|react-native-maps|expo-location|from '.\/spectator'/);
 });
