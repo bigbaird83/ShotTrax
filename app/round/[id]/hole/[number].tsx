@@ -125,6 +125,7 @@ import { planUndoPlacePins } from '@/src/domain/undoLastShot';
 import { planUndoLastSoftGpsClubMark } from '@/src/domain/undoSoftGpsClubMark';
 import type { LatLng } from '@/src/domain/latLng';
 import { formatPenaltyRow, PENALTY_REASONS, totalPenaltyStrokes } from '@/src/domain/penalty';
+import { formatShotStepChip, orderHoleSteps } from '@/src/domain/penaltySteps';
 import {
   addPuttLength,
   applyWatchPuttPickToDraft,
@@ -292,6 +293,7 @@ export default function HoleScreen() {
     markFirstLaunchTipSeen(db);
   }, [db, historyRoundCount]);
   const penaltyTotal = totalPenaltyStrokes(penalties);
+  const holeSteps = useMemo(() => orderHoleSteps(shots, penalties), [shots, penalties]);
   const reconcile = reconcileHoleScore({
     score: hole?.score ?? null,
     shotCount: shots.length,
@@ -1589,18 +1591,26 @@ export default function HoleScreen() {
                   style={styles.shotLine}
                   contentContainerStyle={styles.shotLineInner}
                   showsHorizontalScrollIndicator={false}>
-                  {shots.length === 0 ? (
+                  {holeSteps.length === 0 ? (
                     <Text style={styles.shotLineMuted}>{COPY.noShots}</Text>
                   ) : (
-                    shots.map((shot) => {
+                    holeSteps.map((step) => {
+                      if (step.kind === 'penalty') {
+                        return (
+                          <View
+                            key={`penalty-${step.sourceIndex}`}
+                            style={styles.shotLineItem}
+                            testID="penalty-shot-chip">
+                            <View style={styles.shotLineShot} accessibilityRole="text">
+                              <Text style={styles.shotLinePenalty}>{step.label}</Text>
+                            </View>
+                          </View>
+                        );
+                      }
+                      const shot = shots.find((row) => row.id === step.id);
+                      if (!shot) return null;
                       const club = shot.clubId ? clubMap[shot.clubId] : null;
                       const slot = insertSlots.find((row) => row.afterShotId === shot.id);
-                      const label =
-                        shot.source === 'no_gps' || shot.fixQuality === 'none'
-                          ? COPY.logged
-                          : shot.endedAt == null
-                            ? COPY.inPlay
-                            : `${shot.distanceYards ?? '—'} yd`;
                       return (
                         <View key={shot.id} style={styles.shotLineItem}>
                           <Pressable
@@ -1608,7 +1618,14 @@ export default function HoleScreen() {
                             onPress={() => openEdit(shot.id)}
                             style={styles.shotLineShot}>
                             <Text style={styles.shotLineText}>
-                              {shot.seq} {club?.shortName ?? 'Club'} · {label}
+                              {formatShotStepChip({
+                                seq: shot.seq,
+                                clubShortName: club?.shortName,
+                                source: shot.source,
+                                fixQuality: shot.fixQuality,
+                                endedAt: shot.endedAt,
+                                distanceYards: shot.distanceYards,
+                              })}
                               {isHoleOutShot(shot) ? (
                                 <Text testID="hole-out-shot-badge" style={styles.shotLineHoleOut}>
                                   {` · ${COPY.holeOut}`}
@@ -1660,7 +1677,7 @@ export default function HoleScreen() {
                           {finishedMini.score != null ? ` · ${finishedMini.vsPar}` : finishedMini.vsPar}
                         </Text>
                       ) : null}
-                      {`${finishedMini.score != null || finishedMini.vsPar ? ' · ' : ''}${finishedMini.shotsLabel} · ${finishedMini.puttsLabel}`}
+                      {`${finishedMini.score != null || finishedMini.vsPar ? ' · ' : ''}${finishedMini.shotsLabel}${finishedMini.penaltyLabel ? ` · ${finishedMini.penaltyLabel}` : ''} · ${finishedMini.puttsLabel}`}
                       {finishedMini.flag ? (
                         <Text testID="finished-hole-flag" style={styles.finishedHoleFlag}>
                           {` · ${finishedMini.flag}`}
@@ -2592,6 +2609,7 @@ function makeStyles(colors: ColorPalette) {
     justifyContent: 'center',
   },
   shotLineText: { color: colors.cream, fontSize: type.tiny, fontWeight: '800' },
+  shotLinePenalty: { color: colors.amber, fontSize: type.tiny, fontWeight: '800' },
   shotLineHoleOut: { color: colors.lime, fontSize: type.tiny, fontWeight: '900' },
   shotLineMuted: { color: colors.muted, fontSize: type.tiny, fontWeight: '700' },
   shotLinePlus: {

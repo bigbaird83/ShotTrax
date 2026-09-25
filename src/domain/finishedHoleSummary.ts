@@ -4,6 +4,7 @@
  */
 
 import { finishedHoleDisplayScore } from './holeScore';
+import { formatPenaltyCount } from './penaltySteps';
 import { COPY, formatPuttCount, formatShotCount, holeOutClosedOnShot } from './playerCopy';
 import {
   attachPuttLengthInventGps,
@@ -34,6 +35,8 @@ export type FinishedHoleMiniSummary = {
   shotCount: number;
   putts: number;
   shotsLabel: string;
+  /** Null when this hole has no penalty strokes. */
+  penaltyLabel: string | null;
   puttsLabel: string;
   flag: string | null;
   line: string;
@@ -62,10 +65,18 @@ export function formatFinishedHoleLine(args: {
   score: number | null;
   vsPar: string | null;
   shotsLabel: string;
+  penaltyLabel?: string | null;
   puttsLabel: string;
   flag: string | null;
 }): string {
-  return [args.score != null ? String(args.score) : null, args.vsPar, args.shotsLabel, args.puttsLabel, args.flag]
+  return [
+    args.score != null ? String(args.score) : null,
+    args.vsPar,
+    args.shotsLabel,
+    args.penaltyLabel,
+    args.puttsLabel,
+    args.flag,
+  ]
     .filter(Boolean)
     .join(' · ');
 }
@@ -85,6 +96,7 @@ export function planFinishedHoleMiniSummary(args: {
   const shotCount = Math.max(0, args.shotCount);
   const putts = Math.max(0, args.putts);
   const shotsLabel = formatShotCount(shotCount);
+  const penaltyLabel = formatPenaltyCount(args.penaltyStrokes ?? 0);
   const puttsLabel = formatPuttCount(putts);
   const hidden = (): FinishedHoleMiniSummary => ({
     visible: false,
@@ -97,6 +109,7 @@ export function planFinishedHoleMiniSummary(args: {
     shotCount,
     putts,
     shotsLabel,
+    penaltyLabel: null,
     puttsLabel,
     flag: null,
     line: '',
@@ -111,7 +124,7 @@ export function planFinishedHoleMiniSummary(args: {
   const vsPar = scorecardDiffLabel(scorecardDiff(score, par));
   const vsParTone = scorecardDiffTone(scorecardDiff(score, par));
   const flag = finishedHoleCloserFlag({ shots: args.shots, putts });
-  const line = formatFinishedHoleLine({ score, vsPar, shotsLabel, puttsLabel, flag });
+  const line = formatFinishedHoleLine({ score, vsPar, shotsLabel, penaltyLabel, puttsLabel, flag });
   return {
     visible: true,
     kind: 'chip',
@@ -123,6 +136,7 @@ export function planFinishedHoleMiniSummary(args: {
     shotCount,
     putts,
     shotsLabel,
+    penaltyLabel,
     puttsLabel,
     flag,
     line,
