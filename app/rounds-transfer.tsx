@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
 import {
@@ -33,6 +34,28 @@ export default function RoundsTransferScreen() {
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [bagPrompt, setBagPrompt] = useState<{ bag: RoundTransferBagClub[]; lines: string[] } | null>(null);
+  const session = useRef(0);
+  const mounted = useRef(true);
+
+  // Blur clears busy for every button. The unmount effect is declared after
+  // this one so its cleanup runs first and the focus cleanup does not setState
+  // on a screen that is already gone. A remount starts with busy false.
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        session.current += 1;
+        if (mounted.current) setBusy(false);
+      };
+    }, []),
+  );
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      session.current += 1;
+    };
+  }, []);
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -42,41 +65,54 @@ export default function RoundsTransferScreen() {
 
   const onExport = async () => {
     if (busy) return;
+    const id = session.current;
     setBusy(true);
     try {
       const now = new Date();
       const doc = collectRoundHistoryExport(db, now.toISOString());
       if (doc.rounds.length === 0 && doc.favorites.length === 0) {
-        setToast(COPY.exportRoundsEmpty);
+        if (session.current === id) setToast(COPY.exportRoundsEmpty);
         return;
       }
       const ok = await presentRoundHistoryShare(serializeRoundHistory(doc), roundExportFilename(now));
+      if (session.current !== id) return;
       setToast(ok ? COPY.exportRoundsDone : COPY.exportRoundsFailed);
     } catch {
-      setToast(COPY.exportRoundsFailed);
+      if (session.current === id) setToast(COPY.exportRoundsFailed);
     } finally {
-      setBusy(false);
+      if (session.current === id) setBusy(false);
     }
   };
 
   const onExportCsv = async () => {
     if (busy) return;
+    const id = session.current;
     setBusy(true);
     try {
       if (listRounds(db).length === 0) {
-        setToast(COPY.exportRoundsEmpty);
+        if (session.current === id) setToast(COPY.exportRoundsEmpty);
         return;
       }
       const csv = collectRoundCsv(db);
-      const ok = await presentRoundCsvShare([
-        { filename: ROUNDS_CSV_FILENAME, contents: csv.roundsCsv },
-        { filename: SHOTS_CSV_FILENAME, contents: csv.shotsCsv },
-      ]);
-      setToast(ok ? COPY.exportCsvDone : COPY.exportCsvFailed);
+      const outcome = await presentRoundCsvShare(
+        [
+          { filename: ROUNDS_CSV_FILENAME, contents: csv.roundsCsv },
+          { filename: SHOTS_CSV_FILENAME, contents: csv.shotsCsv },
+        ],
+        { isCancelled: () => session.current !== id },
+      );
+      if (session.current !== id) return;
+      setToast(
+        outcome === 'done'
+          ? COPY.exportCsvDone
+          : outcome === 'partial'
+            ? COPY.exportCsvSavedRoundsOnly
+            : COPY.exportCsvFailed,
+      );
     } catch {
-      setToast(COPY.exportCsvFailed);
+      if (session.current === id) setToast(COPY.exportCsvFailed);
     } finally {
-      setBusy(false);
+      if (session.current === id) setBusy(false);
     }
   };
 
@@ -123,16 +159,20 @@ export default function RoundsTransferScreen() {
 
   const onRestore = async () => {
     if (busy) return;
+    const id = session.current;
     setBusy(true);
     let picked: { name: string | null; text: string } | null;
     try {
       picked = await pickRoundHistoryFile();
     } catch (error) {
       console.warn(error instanceof Error ? error.message : String(error));
-      setToast(COPY.restoreRoundsUnreadable);
-      setBusy(false);
+      if (session.current === id) {
+        setToast(COPY.restoreRoundsUnreadable);
+        setBusy(false);
+      }
       return;
     }
+    if (session.current !== id) return;
     setBusy(false);
     if (picked == null) return;
     const file = picked;

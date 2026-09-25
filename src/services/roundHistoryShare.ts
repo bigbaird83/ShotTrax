@@ -1,5 +1,12 @@
 import { InteractionManager, Share } from 'react-native';
-import { csvShareSheetLabel } from '../domain/roundCsv';
+import {
+  CSV_SHARE_CLOSE_DELAY_MS,
+  CSV_SHARE_TIMEOUT_MS,
+  shareCsvSheets,
+  waitForShareSheetToClose,
+  type CsvShareOutcome,
+} from '../domain/csvShareSequence';
+import { csvExportSheetTitle } from '../domain/playerCopy';
 import { roundHistoryShareTitle } from '../domain/roundTransfer';
 
 function waitForShareHost(run: () => void): void {
@@ -45,21 +52,45 @@ export async function presentRoundHistoryShare(json: string, filename: string): 
   return shareCacheFile(filename, json);
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 /**
  * rounds.csv and shots.csv, one after the other. The share sheet takes a single
  * file, so both use the same Save to Files path from one export.
+ * The second sheet waits until the first has dismissed. A sheet that never
+ * settles fails after CSV_SHARE_TIMEOUT_MS. `isCancelled` skips the rest
+ * when the player has left the screen.
  */
 export async function presentRoundCsvShare(
   files: readonly { filename: string; contents: string }[],
-): Promise<boolean> {
-  if (files.length === 0) return false;
-  for (let index = 0; index < files.length; index += 1) {
-    const file = files[index];
-    const label = csvShareSheetLabel(index + 1, files.length, file.filename);
-    const ok = await shareCacheFile(label, file.contents, label);
-    if (!ok) return false;
-  }
-  return true;
+  options?: { isCancelled?: () => boolean },
+): Promise<CsvShareOutcome> {
+  return shareCsvSheets({
+    sheets: files.map((file, index) => {
+      const title = csvExportSheetTitle(index + 1, files.length, file.filename);
+      return {
+        title,
+        open: () => shareCacheFile(title, file.contents, title),
+      };
+    }),
+    afterClose: () =>
+      waitForShareSheetToClose({
+        runAfterInteractions: (task) => {
+          InteractionManager.runAfterInteractions(task);
+        },
+        frame: (task) => {
+          requestAnimationFrame(task);
+        },
+        delayMs: CSV_SHARE_CLOSE_DELAY_MS,
+        delay,
+      }),
+    timeoutMs: CSV_SHARE_TIMEOUT_MS,
+    isCancelled: options?.isCancelled,
+  });
 }
 
 /**

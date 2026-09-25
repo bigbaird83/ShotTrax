@@ -38,11 +38,6 @@ export const SHOTS_CSV_HEADERS = [
   'typed_yards',
 ] as const;
 
-/** iOS share sheet shows the file name. `title` is not shown there. */
-export function csvShareSheetLabel(position: number, total: number, filename: string): string {
-  return `${position} of ${total} · ${filename}`;
-}
-
 function quotedHeader(headers: readonly string[]): string {
   return headers.map((header) => `"${header}"`).join(',');
 }

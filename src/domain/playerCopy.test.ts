@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   COPY,
+  csvExportSheetTitle,
   restoreFailureCopy,
   finishPuttsChip,
   formatPuttN,
@@ -41,6 +42,14 @@ test('restore failure copy names each reason', () => {
   assert.equal(restoreFailureCopy('save_failed'), 'Couldn’t save the restored rounds.');
   assert.equal(restoreFailureCopy('save_failed'), COPY.restoreRoundsSaveFailed);
   assert.equal(restoreFailureCopy('other'), COPY.restoreRoundsFailed);
+});
+
+test('csv export sheet titles name each file', () => {
+  assert.equal(COPY.exportCsvSheetRounds, '1 of 2 · rounds.csv');
+  assert.equal(COPY.exportCsvSheetShots, '2 of 2 · shots.csv');
+  assert.equal(COPY.exportCsvSavedRoundsOnly, 'Saved rounds.csv. Couldn’t open shots.csv.');
+  assert.equal(csvExportSheetTitle(1, 2, 'rounds.csv'), COPY.exportCsvSheetRounds);
+  assert.equal(csvExportSheetTitle(2, 2, 'shots.csv'), COPY.exportCsvSheetShots);
 });
 
 test('player copy uses words, never ? or SI jargon dump', () => {

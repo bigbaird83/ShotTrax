@@ -8,7 +8,6 @@ import { courseDataSourceLabel } from './courseDataSource';
 import {
   buildRoundsCsv,
   buildShotsCsv,
-  csvShareSheetLabel,
   looksLikeRoundCsvRestore,
   ROUNDS_CSV_HEADERS,
   SHOTS_CSV_HEADERS,
@@ -348,9 +347,7 @@ test('stored round export leaves missing par, score, putts, and source blank', n
   assert.equal(shots[3][2], '');
 });
 
-test('csv share labels and restore detection', () => {
-  assert.equal(csvShareSheetLabel(1, 2, 'rounds.csv'), '1 of 2 · rounds.csv');
-  assert.equal(csvShareSheetLabel(2, 2, 'shots.csv'), '2 of 2 · shots.csv');
+test('csv restore detection', () => {
   assert.equal(looksLikeRoundCsvRestore('rounds.csv', 'hello'), true);
   assert.equal(looksLikeRoundCsvRestore('Shots.CSV', ''), true);
   assert.equal(looksLikeRoundCsvRestore('export/rounds.csv', 'x'), true);

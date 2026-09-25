@@ -259,9 +259,16 @@ test('Home drops export/restore; menu opens Export / Restore rounds', () => {
   assert.match(screen, /COPY\.restoreRoundsUnreadable/);
   assert.match(screen, /COPY\.restoreRoundsSaveFailed/);
   assert.match(screen, /console\.warn/);
+  assert.match(screen, /COPY\.exportCsvSavedRoundsOnly/);
+  assert.match(screen, /useFocusEffect/);
+  assert.match(screen, /setBusy\(false\)/);
   const share = readFileSync(new URL('../services/roundHistoryShare.ts', import.meta.url), 'utf8');
-  assert.match(share, /csvShareSheetLabel/);
-  assert.match(share, /shareCacheFile\(label, file\.contents, label\)/);
+  assert.match(share, /shareCsvSheets/);
+  assert.match(share, /InteractionManager/);
+  assert.match(share, /CSV_SHARE_CLOSE_DELAY_MS/);
+  assert.match(share, /CSV_SHARE_TIMEOUT_MS/);
+  assert.match(share, /csvExportSheetTitle/);
+  assert.match(share, /shareCacheFile\(title, file\.contents, title\)/);
   assert.match(screen, /planBagRestore/);
   assert.match(screen, /applyTransferredBag/);
   assert.match(screen, /COPY\.cancel/);
