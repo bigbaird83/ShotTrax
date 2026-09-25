@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
-import { getClubMap, listHoles, listPenaltiesForHole, listRounds, listShotsForHole } from '@/src/db/repo';
+import { getClubMap, listHoles, listPenaltiesForHole, listShotsForHole, listStatRounds } from '@/src/db/repo';
 import { totalPenaltyStrokes } from '@/src/domain/penalty';
 import { COPY } from '@/src/domain/playerCopy';
 import { planRoundStats } from '@/src/domain/roundReview';
@@ -38,7 +38,7 @@ export default function TrendsScreen() {
 
   const rounds = useMemo<TrendRoundIn[]>(() => {
     const clubs = getClubMap(db);
-    return listRounds(db)
+    return listStatRounds(db)
       .filter((round) => round.finishedAt != null)
       .map((round) => ({
         id: round.id,

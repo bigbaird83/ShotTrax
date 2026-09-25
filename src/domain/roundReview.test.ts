@@ -196,7 +196,7 @@ test('hole times appear only for holes with stored stamps', () => {
 
 test('review screens read saved rounds only — no live GPS, no club book', () => {
   const list = readFileSync(new URL('../../app/review-rounds.tsx', import.meta.url), 'utf8');
-  assert.match(list, /listRounds/);
+  assert.match(list, /listStatRounds/);
   assert.match(list, /planReviewRounds/);
   assert.doesNotMatch(list, /useLiveFix|getActiveRound|listClubAverages/);
   const stats = readFileSync(new URL('../../app/review/[id]/stats.tsx', import.meta.url), 'utf8');

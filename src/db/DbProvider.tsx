@@ -12,6 +12,7 @@ import {
   getCoursePaintCache,
   getGolfApiHydrateCache,
   getSetting,
+  purgeYardTestCourseSaved,
   setCoursePaintCache,
   setGolfApiHydrateCache,
 } from './repo';
@@ -42,8 +43,9 @@ export function DbProvider({ children }: { children: ReactNode }) {
         load: () => getCoursePaintCache(opened),
         save: (json) => setCoursePaintCache(opened, json),
       });
-      // TEMP yard test course switch. Ignored unless the build gate passes.
+      // TEMP yard test course switch. Ignored unless the build gate and geometry pass.
       hydrateYardTestCourseFromSettings((key) => getSetting(opened, key));
+      purgeYardTestCourseSaved(opened);
       // Hydrates the Pro cache before the first screen, then refreshes from RevenueCat.
       startPurchases(opened);
       setDb(opened);

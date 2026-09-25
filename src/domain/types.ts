@@ -56,6 +56,8 @@ export type Round = {
   courseState: string | null;
   /** Paint/hydrate token (cache, osm, gca, golfapi). Null when unknown. */
   courseDataSource: string | null;
+  /** Yard-test rounds stay in history and out of every stat. */
+  isTest: boolean;
 };
 
 export type GreenSource = 'user_estimate' | 'course_centroid';

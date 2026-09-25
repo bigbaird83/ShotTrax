@@ -55,6 +55,7 @@ import { describeGpsSource } from '@/src/services/location';
 import { BagCarryList, BagCustomizeActions } from '@/src/ui/BagCarryList';
 import { BigButton } from '@/src/ui/BigButton';
 import { takePendingCoursePick } from '@/src/course/pendingCoursePick';
+import { courseAllowsFavorite } from '@/src/course/yardTestCourse';
 import type { CoursePick } from '@/src/ui/CoursePicker';
 import { EmptyPanel } from '@/src/ui/EmptyPanel';
 import { HistorySwipeRow } from '@/src/ui/HistorySwipeRow';
@@ -271,7 +272,7 @@ export default function HomeScreen() {
       state: catalog?.state ?? null,
       country: catalog?.country ?? null,
     });
-    if (!favorite) return;
+    if (!favorite || !courseAllowsFavorite(favorite.id)) return;
     const starred = isFavorite(favoriteStore, favorite.id);
     setFavorite(favoriteStore, favorite, !starred);
     bump();
@@ -595,6 +596,7 @@ export default function HomeScreen() {
             courseName: round.courseName,
             teeName: round.teeName,
             score: scored.length ? total : null,
+            test: round.isTest,
           });
           const prompt = historyDeletePrompt();
           const catalog = round.courseApiId ? catalogEntryById(round.courseApiId) : null;
@@ -653,6 +655,7 @@ export default function HomeScreen() {
                 </Text>
                 <Text style={styles.cardMeta}>
                   {row.date} · {row.tees}
+                  {row.testLabel ? ` · ${row.testLabel}` : ''}
                   {open ? ' · in progress' : ''}
                   {paceLine ? ` · ${paceLine}` : ''}
                 </Text>
@@ -660,7 +663,7 @@ export default function HomeScreen() {
               </View>
               <View style={styles.scoreCol}>
                 <Text style={styles.score}>{row.score}</Text>
-                {favorite ? (
+                {favorite && courseAllowsFavorite(favorite.id) ? (
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={starred ? COPY.unfavorite : COPY.favorite}

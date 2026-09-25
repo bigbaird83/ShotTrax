@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { courseAllowsFavorite } from '@/src/course/yardTestCourse';
 import { isGolfCoursesApiConfigured } from '@/src/course/config';
 import { getCourseDataClient } from '@/src/course/client';
 import { formatTeeHoleYards, formatTeeMeta } from '@/src/course/layout';
@@ -163,6 +164,7 @@ export function CoursePicker({
   }, [autoFind, onFind, query]);
 
   const toggleStar = (course: CourseSummary) => {
+    if (!courseAllowsFavorite(course.id)) return;
     const favorite = favoriteFromSummary(course);
     if (!favorite) return;
     setFavorite(store, favorite, !isFavorite(store, course.id));
@@ -303,13 +305,15 @@ export function CoursePicker({
           <PaintMissBanner notice={selectedBanner} />
           <Text style={styles.meta}>{placeLine(selected)}</Text>
           <View style={styles.actions}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={isFavorite(store, selected.id) ? COPY.unfavorite : COPY.favorite}
-              onPress={() => toggleStar(selected)}
-              style={styles.star}>
-              <Text style={styles.starText}>{isFavorite(store, selected.id) ? '★' : '☆'}</Text>
-            </Pressable>
+            {courseAllowsFavorite(selected.id) ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={isFavorite(store, selected.id) ? COPY.unfavorite : COPY.favorite}
+                onPress={() => toggleStar(selected)}
+                style={styles.star}>
+                <Text style={styles.starText}>{isFavorite(store, selected.id) ? '★' : '☆'}</Text>
+              </Pressable>
+            ) : null}
             {showSelectedRequest ? (
               <Pressable accessibilityRole="button" onPress={() => openRequest(selected)} style={styles.link}>
                 <Text style={styles.linkText}>{COPY.requestThisCourse}</Text>
@@ -418,13 +422,15 @@ export function CoursePicker({
                     ) : null}
                   </Pressable>
                   <View style={styles.actions}>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={starred ? COPY.unfavorite : COPY.favorite}
-                      onPress={() => toggleStar(course)}
-                      style={styles.star}>
-                      <Text style={styles.starText}>{starred ? '★' : '☆'}</Text>
-                    </Pressable>
+                    {courseAllowsFavorite(course.id) ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={starred ? COPY.unfavorite : COPY.favorite}
+                        onPress={() => toggleStar(course)}
+                        style={styles.star}>
+                        <Text style={styles.starText}>{starred ? '★' : '☆'}</Text>
+                      </Pressable>
+                    ) : null}
                     {showRequest ? (
                       <Pressable accessibilityRole="button" onPress={() => openRequest(course)} style={styles.link}>
                         <Text style={styles.linkText}>{COPY.requestThisCourse}</Text>

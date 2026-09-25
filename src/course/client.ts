@@ -195,7 +195,7 @@ export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataCli
 
     async getCourse(id: string): Promise<CourseDetail | null> {
       if (!id.trim()) return null;
-      // TEMP yard test course: hand-entered hole 1 only. No waterfall, no paint-cache write.
+      // TEMP yard test course: env geometry for hole 1 only. No waterfall, no paint-cache write.
       if (isYardTestCourseId(id)) return yardTestCourseDetail();
       const gcaBase = getBaseUrl();
       if (isLocalCatalogId(id) || !gcaBase) {

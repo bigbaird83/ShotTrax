@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getCourseDataClient } from '@/src/course/client';
+import { coursesForWatchNearby } from '@/src/course/yardTestCourse';
 import { catalogEntryById } from '@/src/course/catalog';
 import { applyCourseHydrateToLayout } from '@/src/course/hydrate';
 import type { CourseDetail, CourseSummary } from '@/src/course/types';
@@ -163,7 +164,7 @@ export async function pushWatchNearbyCourses(opts?: {
   let courses: { id: string; name: string; distanceMeters: number | null }[] = [];
   if (chosen) {
     try {
-      courses = await getCourseDataClient().nearbyCourses(chosen);
+      courses = coursesForWatchNearby(await getCourseDataClient().nearbyCourses(chosen));
     } catch {
       courses = [];
     }

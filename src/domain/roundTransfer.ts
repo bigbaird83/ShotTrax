@@ -1,4 +1,5 @@
 import { isClubhousePin } from '../course/hydrate';
+import { isYardTestCourseId } from '../course/yardTestCourse';
 import { isPutterClubId, parseTypicalCarryYards } from './defaultBag';
 import { haversineYards, roundYards } from './haversine';
 import { isCourseCardLatLng, isValidLatLng, type LatLng } from './latLng';
@@ -106,6 +107,8 @@ export type RoundTransferRound = {
   teeTotalYards: number | null;
   /** Stored paint/hydrate token. Null when this round never recorded one. */
   courseDataSource: string | null;
+  /** Yard-test round. Absent in older files, which are not test rounds. */
+  test: boolean;
   holes: RoundTransferHole[];
 };
 
@@ -223,6 +226,7 @@ type ExportRoundInput = {
   teeSlope: number | null;
   teeTotalYards: number | null;
   courseDataSource?: string | null;
+  test?: boolean | null;
   holes: ExportHoleInput[];
 };
 
@@ -489,6 +493,7 @@ export function buildRoundHistoryExport(args: {
       teeSlope: finite(round.teeSlope),
       teeTotalYards: finite(round.teeTotalYards),
       courseDataSource: normalizeCourseDataSource(round.courseDataSource),
+      test: round.test === true,
       holes,
     });
   }
@@ -575,6 +580,7 @@ export function planRoundHistoryImport(raw: unknown): RoundHistoryImport {
       teeSlope: finite(row.teeSlope),
       teeTotalYards: finite(row.teeTotalYards),
       courseDataSource: normalizeCourseDataSource(row.courseDataSource),
+      test: row.test === true,
       holes,
     });
   }
@@ -595,7 +601,7 @@ function acceptFavorites(raw: unknown): RoundTransferFavorite[] {
     if (!record) continue;
     const id = text(record.id);
     const name = text(record.name);
-    if (!id || !name || seen.has(id)) continue;
+    if (!id || !name || seen.has(id) || isYardTestCourseId(id)) continue;
     seen.add(id);
     const location = readPoint(record.location);
     out.push({
@@ -735,6 +741,7 @@ function canonicalTransferRound(round: RoundTransferRound) {
     courseCity: round.courseCity,
     courseState: round.courseState,
     courseDataSource: round.courseDataSource,
+    test: round.test === true,
     teeName: round.teeName,
     teeRating: round.teeRating,
     teeSlope: round.teeSlope,

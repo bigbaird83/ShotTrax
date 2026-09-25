@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
-import { listHoles, listRounds } from '@/src/db/repo';
+import { listHoles, listStatRounds } from '@/src/db/repo';
 import { COPY } from '@/src/domain/playerCopy';
 import { planReviewRounds, type ReviewRoundRow } from '@/src/domain/roundReview';
 import { scorecardDiffLabel } from '@/src/domain/scorecard';
@@ -21,7 +21,7 @@ export default function ReviewRoundsScreen() {
   const rows = useMemo(
     () =>
       planReviewRounds(
-        listRounds(db).map((round) => ({
+        listStatRounds(db).map((round) => ({
           id: round.id,
           courseName: round.courseName,
           startedAt: round.startedAt,

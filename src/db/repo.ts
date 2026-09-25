@@ -42,13 +42,18 @@ import {
 } from '../domain/thunderbirdPins';
 import { clubAverageFromShots, type ClubAverage } from '../domain/averages';
 import { rememberResolvedTee } from '../course/osmOverlay';
-import { COURSE_PAINT_CACHE_SETTING_KEY } from '../course/paintCache';
+import { COURSE_PAINT_CACHE_SETTING_KEY, forgetCoursePaintCacheForCourse } from '../course/paintCache';
+import { isYardTestCourseId, YARD_TEST_COURSE_ID, YARD_TEST_COURSE_KEY, yardTestCourseEnabled } from '../course/yardTestCourse';
 import { isValidLatLng } from '../domain/latLng';
 import {
   FAVORITES_SETTING_KEY,
   listFavorites,
+  OFFLINE_PACKS_SETTING_KEY,
+  parseFavorites,
+  parseOfflinePacks,
   type FavoriteCourse,
 } from '../domain/favorites';
+import { WATCH_HOME_LAST_NEARBY_KEY, parseCachedNearby } from '../domain/watchHome';
 import { buildRoundsCsv, buildShotsCsv, type CsvShot } from '../domain/roundCsv';
 import {
   buildRoundHistoryExport,
@@ -138,6 +143,7 @@ type RoundRow = {
   course_city?: string | null;
   course_state?: string | null;
   course_data_source?: string | null;
+  is_test?: number | null;
 };
 
 type HoleRow = {
@@ -244,6 +250,7 @@ function mapRound(row: RoundRow): Round {
     courseCity: row.course_city ?? null,
     courseState: row.course_state ?? null,
     courseDataSource: row.course_data_source ?? null,
+    isTest: (row.is_test ?? 0) === 1,
   };
 }
 
@@ -461,6 +468,11 @@ export function listRounds(db: SQLiteDatabase): Round[] {
     .map(mapRound);
 }
 
+/** Rounds that feed averages, trends, GIR, handicap, and dispersion. Test rounds stay out. */
+export function listStatRounds(db: SQLiteDatabase): Round[] {
+  return listRounds(db).filter((round) => !round.isTest);
+}
+
 export function getRound(db: SQLiteDatabase, id: string): Round | null {
   const row = db.getFirstSync<RoundRow>('SELECT * FROM rounds WHERE id = ?', [id]);
   return row ? mapRound(row) : null;
@@ -487,9 +499,10 @@ export function startRound(
     'SELECT * FROM rounds ORDER BY started_at DESC LIMIT 1',
   );
   const lastClubId = previous?.last_club_id ?? null;
+  const isTest = isYardTestCourseId(courseApiId);
   db.withTransactionSync(() => {
     db.runSync(
-      'INSERT INTO rounds (id, started_at, finished_at, course_name, hole_count, course_api_id, course_lat, course_lng, tee_name, tee_rating, tee_slope, tee_total_yards, last_club_id, course_city, course_state, course_data_source) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO rounds (id, started_at, finished_at, course_name, hole_count, course_api_id, course_lat, course_lng, tee_name, tee_rating, tee_slope, tee_total_yards, last_club_id, course_city, course_state, course_data_source, is_test) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         id,
         startedAt,
@@ -506,6 +519,7 @@ export function startRound(
         layout?.city ?? null,
         layout?.state ?? null,
         layout?.courseDataSource ?? null,
+        isTest ? 1 : 0,
       ],
     );
     for (let n = 1; n <= holeCount; n += 1) {
@@ -557,6 +571,7 @@ export function startRound(
     courseCity: layout?.city ?? null,
     courseState: layout?.state ?? null,
     courseDataSource: layout?.courseDataSource ?? null,
+    isTest,
   };
 }
 
@@ -651,6 +666,7 @@ export function collectRoundHistoryExport(db: SQLiteDatabase, exportedAt: string
     teeRating: round.teeRating,
     teeSlope: round.teeSlope,
     teeTotalYards: round.teeTotalYards,
+    test: round.isTest,
     holes: listHoles(db, round.id).map((hole) => ({
       number: hole.number,
       par: hole.par,
@@ -762,6 +778,7 @@ export function restoreRoundHistory(
       shots += round.holes.reduce((sum, hole) => sum + hole.shots.length, 0);
     }
     favoritesAdded = addRestoredFavorites(db, plan.favorites);
+    purgeYardTestCourseSaved(db);
   });
   return {
     ok: true,
@@ -788,7 +805,7 @@ function insertTransferredRound(
     ? { lat: round.courseLat as number, lng: round.courseLng as number }
     : null;
   db.runSync(
-    'INSERT INTO rounds (id, started_at, finished_at, course_name, hole_count, course_api_id, course_lat, course_lng, tee_name, tee_rating, tee_slope, tee_total_yards, last_club_id, course_city, course_state, course_data_source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)',
+    'INSERT INTO rounds (id, started_at, finished_at, course_name, hole_count, course_api_id, course_lat, course_lng, tee_name, tee_rating, tee_slope, tee_total_yards, last_club_id, course_city, course_state, course_data_source, is_test) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)',
     [
       roundId,
       round.startedAt,
@@ -805,6 +822,7 @@ function insertTransferredRound(
       round.courseCity,
       round.courseState,
       round.courseDataSource,
+      round.test ? 1 : 0,
     ],
   );
   for (const hole of round.holes) {
@@ -955,6 +973,7 @@ function storedRoundAsTransfer(db: SQLiteDatabase, id: string): RoundTransferRou
     teeSlope: round.teeSlope,
     teeTotalYards: round.teeTotalYards,
     courseDataSource: round.courseDataSource,
+    test: round.isTest,
     holes,
   };
 }
@@ -1069,6 +1088,7 @@ export function collectRoundCsv(db: SQLiteDatabase): { roundsCsv: string; shotsC
       state: round.courseState,
       holesPlayed: round.holeCount,
       courseDataSource: round.courseDataSource,
+      test: round.isTest,
       holes: holes.map((hole) => ({
         number: hole.number,
         par: hole.par,
@@ -1175,7 +1195,7 @@ export function getShareBoard(db: SQLiteDatabase, token: string): SpectatorPaylo
 /** Every saved shot with its hole's green pin, shaped for `planDispersion`. Never live GPS. */
 export function listDispersionShots(db: SQLiteDatabase): DispersionShotIn[] {
   const out: DispersionShotIn[] = [];
-  for (const round of listRounds(db)) {
+  for (const round of listStatRounds(db)) {
     for (const hole of listHoles(db, round.id)) {
       const green =
         hole.greenLat != null && hole.greenLng != null ? { lat: hole.greenLat, lng: hole.greenLng } : null;
@@ -1202,7 +1222,7 @@ export function listDispersionShots(db: SQLiteDatabase): DispersionShotIn[] {
 
 /** Saved rounds shaped for `planHandicap`. Holes and tee only — never shots or GPS. */
 export function listHandicapRounds(db: SQLiteDatabase): HandicapRoundIn[] {
-  return listRounds(db).map((round) => ({
+  return listStatRounds(db).map((round) => ({
     id: round.id,
     courseName: round.courseName,
     startedAt: round.startedAt,
@@ -1986,7 +2006,9 @@ export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
             holes.green_back_lat, holes.green_back_lng
      FROM shots
      LEFT JOIN holes ON holes.id = shots.hole_id
+     LEFT JOIN rounds ON rounds.id = holes.round_id
      WHERE shots.distance_yards IS NOT NULL AND shots.club_id IS NOT NULL
+       AND IFNULL(rounds.is_test, 0) = 0
        AND (
          (IFNULL(shots.source, 'gps') = 'gps' AND shots.fix_quality IN ('good', 'soft', 'forced'))
          OR IFNULL(shots.source, 'gps') = 'placed'
@@ -2113,6 +2135,38 @@ export function getSetting(db: SQLiteDatabase, key: string): string | null {
 
 export function setSetting(db: SQLiteDatabase, key: string, value: string): void {
   db.runSync('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [key, value]);
+}
+
+/**
+ * Drop a saved favorite, offline pack, paint-cache row, or Watch nearby cache
+ * row for the yard test course. No-op while that course is switched on.
+ * Never throws — a bad settings blob is left alone.
+ */
+export function purgeYardTestCourseSaved(db: SQLiteDatabase): void {
+  if (yardTestCourseEnabled()) return;
+  try {
+    const store = readSettingStore(db);
+    const favorites = parseFavorites(store.get(FAVORITES_SETTING_KEY));
+    const keptFavorites = favorites.filter((favorite) => !isYardTestCourseId(favorite.id));
+    if (keptFavorites.length !== favorites.length) {
+      store.set(FAVORITES_SETTING_KEY, JSON.stringify(keptFavorites));
+    }
+    const packs = parseOfflinePacks(store.get(OFFLINE_PACKS_SETTING_KEY));
+    const keptPacks = packs.filter((pack) => !isYardTestCourseId(pack.courseId));
+    if (keptPacks.length !== packs.length) {
+      store.set(OFFLINE_PACKS_SETTING_KEY, JSON.stringify(keptPacks));
+    }
+    const nearbyRaw = store.get(WATCH_HOME_LAST_NEARBY_KEY);
+    const nearby = parseCachedNearby(nearbyRaw);
+    const keptNearby = nearby.filter((row) => !isYardTestCourseId(row.id));
+    if (keptNearby.length !== nearby.length) {
+      store.set(WATCH_HOME_LAST_NEARBY_KEY, JSON.stringify(keptNearby));
+    }
+    forgetCoursePaintCacheForCourse(YARD_TEST_COURSE_ID);
+    forgetCoursePaintCacheForCourse(YARD_TEST_COURSE_KEY);
+  } catch {
+    // Silent. A purge must not surface an error to the player.
+  }
 }
 
 export function getBagCarrySuggestionDismissals(db: SQLiteDatabase): string | null {

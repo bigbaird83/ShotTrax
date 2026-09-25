@@ -25,6 +25,7 @@
  * No Export / Restore on the Watch. No cloud account.
  */
 
+import { isYardTestCourseId } from '../course/yardTestCourse';
 import {
   favoriteFromSummary,
   listFavorites,
@@ -361,6 +362,9 @@ export function applyFavoriteToggle(
     known?: Parameters<typeof favoriteFromSummary>[0] | null;
   },
 ): { applied: boolean; favorites: FavoriteCourse[] } {
+  if (toggle.starred && isYardTestCourseId(toggle.courseId)) {
+    return { applied: false, favorites: listFavorites(store) };
+  }
   const atMs = Date.parse(toggle.at);
   const prior = opts.lastAppliedAt.get(toggle.courseId);
   if (prior != null && atMs < prior) {

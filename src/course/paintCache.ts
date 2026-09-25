@@ -202,6 +202,23 @@ function forgetPaintRecord(record: CoursePaintCacheRecord): void {
   flushPersist();
 }
 
+/** Drop every cached card whose key or alias is this course. Silent if nothing matches. */
+export function forgetCoursePaintCacheForCourse(courseId: string): void {
+  const needle = courseId.trim();
+  if (!needle) return;
+  const drop: CoursePaintCacheRecord[] = [];
+  const seen = new Set<CoursePaintCacheRecord>();
+  for (const record of memory.values()) {
+    if (seen.has(record)) continue;
+    const keys = [record.key, ...record.aliases];
+    if (keys.some((key) => key === needle || key === `id:${needle}` || key.endsWith(`:${needle}`))) {
+      seen.add(record);
+      drop.push(record);
+    }
+  }
+  for (const record of drop) forgetPaintRecord(record);
+}
+
 export function restoreCoursePaintCache(raw: string | null | undefined): void {
   const record = asRecord(raw ? safeJson(raw) : null);
   const rows = asRecord(record?.records);

@@ -2,7 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
-import { getRound, listHandicapRounds, listHoles, listRounds } from '@/src/db/repo';
+import { getRound, listHandicapRounds, listHoles, listStatRounds } from '@/src/db/repo';
 import type { Hole } from '@/src/domain/types';
 import {
   formatFairwayMisses,
@@ -43,12 +43,12 @@ export default function NerdOutScreen() {
   const { db, revision } = useDb();
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const rounds = useMemo(() => listRounds(db), [db, revision]);
-  // Current round when opened from play; otherwise the most recent finished round.
+  const statRounds = useMemo(() => listStatRounds(db), [db, revision]);
+  // Current round when opened from play; otherwise the most recent finished round that counts.
   const round = useMemo(() => {
     if (roundId) return getRound(db, roundId);
-    return rounds.find((row) => row.finishedAt != null) ?? null;
-  }, [db, roundId, rounds, revision]);
+    return statRounds.find((row) => row.finishedAt != null) ?? null;
+  }, [db, roundId, statRounds, revision]);
   const holes = useMemo(() => (round ? listHoles(db, round.id) : []), [db, round, revision]);
   const nerd = useMemo(
     () =>
@@ -59,21 +59,21 @@ export default function NerdOutScreen() {
       }),
     [holes],
   );
-  const handicap = useMemo(() => planHandicap(listHandicapRounds(db)), [db, rounds]);
+  const handicap = useMemo(() => planHandicap(listHandicapRounds(db)), [db, statRounds]);
   const roundFairwayGir = useMemo(() => fairwayGirForHoles(holes), [holes]);
   const lifetimeFairwayGir = useMemo(
     () =>
       sumFairwayGir(
-        rounds
+        statRounds
           .filter((row) => row.finishedAt != null)
           .map((row) => fairwayGirForHoles(listHoles(db, row.id))),
       ),
-    [db, rounds],
+    [db, statRounds],
   );
   const lifetime = useMemo(
     () =>
       planNerdOutLifetime(
-        rounds.map((row) => {
+        statRounds.map((row) => {
           const roundHoles = listHoles(db, row.id);
           return {
             finished: row.finishedAt != null,
@@ -82,7 +82,7 @@ export default function NerdOutScreen() {
           };
         }),
       ),
-    [db, rounds],
+    [db, statRounds],
   );
 
   return (

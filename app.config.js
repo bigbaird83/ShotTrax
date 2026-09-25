@@ -23,11 +23,13 @@
  * app.json `ios.buildNumber` is not the store build. The device reads
  * Application.nativeBuildVersion (CFBundleVersion) at runtime.
  *
- * TEMP yard test course (Goode Circle Test, on-device QA only):
- * expo.extra.debugYardCourse is true only when EXPO_PUBLIC_DEBUG_YARD_COURSE=1
- * and the EAS profile is not `production`. The production profile is always
- * false, even if app.json or the env says otherwise. `__DEV__` builds pass the
- * gate without it. The Settings switch (default off) still has to be on.
+ * TEMP yard test course (Yard Test, on-device QA only):
+ * REMOVE BEFORE APP STORE SUBMISSION — delete EXPO_PUBLIC_DEBUG_YARD_COURSE
+ * from eas.json build.production.env. That one line is the only production
+ * enable. Absent (any profile, including production) → extra.debugYardCourse
+ * is false and the course cannot load. `__DEV__` still needs the geometry env.
+ * EXPO_PUBLIC_YARD_TEST_COURSE is JSON { center, tee, green, par } copied into
+ * extra.yardTestCourse. Missing or malformed → null. Never a hard-coded pin.
  *
  * Do not commit a key.
  * @param {{ config: Record<string, unknown> }} args
@@ -68,10 +70,43 @@ function gitHeadSha() {
   }
 }
 
-/** Never true on the production EAS profile. */
+function finiteLatLng(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const { lat, lng } = raw;
+  if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  if (lat === 0 && lng === 0) return null;
+  return { lat, lng };
+}
+
+/**
+ * REMOVE BEFORE APP STORE SUBMISSION
+ * Delete EXPO_PUBLIC_DEBUG_YARD_COURSE=1 from eas.json production env.
+ * Absent line → false, including on the production profile.
+ */
 function debugYardCourseFromEnv(env) {
-  if (trimKey(env.EAS_BUILD_PROFILE) === 'production') return false;
   return trimKey(env.EXPO_PUBLIC_DEBUG_YARD_COURSE) === '1';
+}
+
+/** Geometry JSON only. Missing or malformed → null. No coordinate fallback. */
+function yardTestCourseFromEnv(value) {
+  const raw = trimKey(value);
+  if (!raw) return null;
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+  const center = finiteLatLng(parsed.center);
+  const tee = finiteLatLng(parsed.tee);
+  const green = finiteLatLng(parsed.green);
+  const par = parsed.par;
+  if (!center || !tee || !green) return null;
+  if (typeof par !== 'number' || !Number.isInteger(par) || par < 3 || par > 5) return null;
+  return { center, tee, green, par };
 }
 
 module.exports = ({ config }) => {
@@ -79,6 +114,7 @@ module.exports = ({ config }) => {
     golfCoursesApiKey: _golfCoursesApiKey,
     golfApiKey: _golfApiKey,
     debugYardCourse: _debugYardCourse,
+    yardTestCourse: _yardTestCourse,
     ...extra
   } = config.extra && typeof config.extra === 'object' ? config.extra : {};
   const shareSyncUrl =
@@ -98,6 +134,7 @@ module.exports = ({ config }) => {
       shareSyncUrl,
       coursePaintCacheUrl,
       debugYardCourse: debugYardCourseFromEnv(process.env),
+      yardTestCourse: yardTestCourseFromEnv(process.env.EXPO_PUBLIC_YARD_TEST_COURSE),
       easBuildId: easBuildIdFromEnv(process.env.EAS_BUILD_ID),
       gitCommitHash: gitSha(process.env.EAS_BUILD_GIT_COMMIT_HASH) ?? gitHeadSha(),
     },
