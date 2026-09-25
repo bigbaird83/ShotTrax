@@ -4,7 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
 import { getClubMap, listDispersionShots } from '@/src/db/repo';
 import { dispersionClubs, formatLateral, formatMissShares, planDispersion } from '@/src/domain/dispersion';
-import { COPY } from '@/src/domain/playerCopy';
+import { COPY, formatDispersionPlacedNote } from '@/src/domain/playerCopy';
 import { DispersionPlot } from '@/src/ui/DispersionPlot';
 import { Screen } from '@/src/ui/Screen';
 import { useColors } from '@/src/ui/ColorThemeProvider';
@@ -32,6 +32,7 @@ export default function DispersionScreen() {
   }
 
   const shares = formatMissShares(plan);
+  const placedNote = formatDispersionPlacedNote(plan.placed);
 
   return (
     <Screen>
@@ -78,6 +79,7 @@ export default function DispersionScreen() {
         <Text style={styles.hint}>
           {plan.count} shot{plan.count === 1 ? '' : 's'}
         </Text>
+        {placedNote ? <Text style={styles.hint}>{placedNote}</Text> : null}
       </View>
 
       <View style={styles.card} testID="dispersion-plot">

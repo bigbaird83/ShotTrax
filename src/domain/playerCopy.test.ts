@@ -21,6 +21,7 @@ import {
   formatSiLabel,
   formatSuggestedClubChip,
   formatTeeMeta,
+  formatDispersionPlacedNote,
   markedSuggestedMessage,
   yardsToGreenPlayerLabel,
   showWaitingOnLocationLine,
@@ -249,6 +250,20 @@ test('picker remaining yards are 148 left only when quality is good or soft', ()
   assert.equal(formatPickerLeftYards({ yards: 401, quality: 'good' }), '401 left');
   assert.equal(yardsToGreenPlayerLabel({ yards: 282, quality: 'good' }).value, '282');
   assert.equal(yardsToGreenPlayerLabel({ yards: 401, quality: 'good' }).value, '401');
+});
+
+test('dispersion placed note is singular or plural, and blank at zero', () => {
+  assert.equal(
+    formatDispersionPlacedNote(1),
+    'Includes 1 placed shot. Placed shots are set by hand and may be less accurate than GPS-marked ones.',
+  );
+  assert.equal(
+    formatDispersionPlacedNote(3),
+    'Includes 3 placed shots. Placed shots are set by hand and may be less accurate than GPS-marked ones.',
+  );
+  assert.equal(formatDispersionPlacedNote(0), null);
+  assert.match(COPY.dispersionLimits, /placed shots/i);
+  assert.match(COPY.dispersionLimits, /less accurate/);
 });
 
 test('tee meta shows rating and slope in player voice when present', () => {
