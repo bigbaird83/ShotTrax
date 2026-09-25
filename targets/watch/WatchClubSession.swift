@@ -1,7 +1,8 @@
 import CoreLocation
 import Foundation
+import HealthKit
+import os
 import WatchConnectivity
-import WatchKit
 #if canImport(WidgetKit)
 import WidgetKit
 #endif
@@ -24,21 +25,25 @@ struct ClubListState {
   var complicationQuality: String = "none"
   /// Phone finished the last hole (Made it / Hole Out). Round complete, not the putt sheet.
   var roundComplete: Bool = false
-
-  var statusLine: String {
-    if yardsQuality != "none", let yards = yardsToGreen, yards > 0 {
-      return "Hole \(holeNumber) · \(yards) yd"
-    }
-    return "Hole \(holeNumber) · —"
-  }
-
-  /// Player-voice chip is Approximate (never SOFT).
-  var showSoft: Bool { yardsQuality == "soft" }
+  /// False when the phone is showing a finished round. Missing on the wire means live.
+  var roundLive: Bool = true
 
   /// Top-right live yards. Same gate as the phone: good/soft and a positive number, else —.
   var liveYardsTrusted: Bool {
     (complicationQuality == "good" || complicationQuality == "soft") && (complicationYards ?? 0) > 0
   }
+
+  /// Hole N · live GPS yards, or Hole N · — . Same gate as the top-right number
+  /// and the complication. Club-rank `yardsToGreen` (tee / landing fallback) stays off this line.
+  var statusLine: String {
+    if liveYardsTrusted, let yards = complicationYards {
+      return "Hole \(holeNumber) · \(yards) yd"
+    }
+    return "Hole \(holeNumber) · —"
+  }
+
+  /// Approximate only beside a live soft yardage. Never SOFT. Never on a dash.
+  var showSoft: Bool { liveYardsTrusted && complicationQuality == "soft" }
 
   var liveYardsLabel: String {
     if liveYardsTrusted, let yards = complicationYards {
@@ -178,7 +183,7 @@ struct PuttSheetState {
   }
 }
 
-final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLLocationManagerDelegate, WKExtendedRuntimeSessionDelegate {
+final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLLocationManagerDelegate, HKWorkoutSessionDelegate {
   /// One session for the app and for background WatchConnectivity launches.
   static let shared = WatchClubSession()
 
@@ -240,7 +245,14 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   private var pendingQueue: [[String: Any]] = []
   private let pendingKey = "pendingClubPick"
   private let pendingQueueKey = "pendingWatchQueue"
-  private var staySession: WKExtendedRuntimeSession?
+  private var golfWorkout: HKWorkoutSession?
+  private var endingGolfWorkout = false
+  private var golfAuthInFlight = false
+  private var suppressGolfStart = false
+  private var loggedGolfDenial = false
+  private var loggedHealthUnavailable = false
+  private let healthStore = HKHealthStore()
+  private let workoutLog = Logger(subsystem: "com.shottrax.app.watch", category: "round-workout")
   private var wantsStay = false
   private var userLeftApp = false
   private let location = CLLocationManager()
@@ -1070,6 +1082,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       next.selectedClubId = nil
     }
     next.roundComplete = message["roundComplete"] as? Bool ?? false
+    next.roundLive = message["roundLive"] as? Bool ?? true
     let holeChanged = list.holeNumber > 0 && next.holeNumber != list.holeNumber
     if holeChanged {
       // Cypress H10→H11: leftover 56° must not stay armed on the new hole.
@@ -1190,6 +1203,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     if let last = state.lastClubId { obj["lastClubId"] = last }
     if let selected = state.selectedClubId { obj["selectedClubId"] = selected }
     if state.roundComplete { obj["roundComplete"] = true }
+    if !state.roundLive { obj["roundLive"] = false }
     if let data = try? JSONSerialization.data(withJSONObject: obj),
        let text = String(data: data, encoding: .utf8) {
       defaults?.set(text, forKey: "clubListJSON")
@@ -1281,7 +1295,13 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   private func syncRoundStay() {
-    wantsStay = !userLeftApp && ((hasLiveHole && !list.roundComplete) || putt.open)
+    let next = !userLeftApp && list.roundLive && ((hasLiveHole && !list.roundComplete) || putt.open)
+    if next && !wantsStay {
+      suppressGolfStart = false
+      loggedGolfDenial = false
+      loggedHealthUnavailable = false
+    }
+    wantsStay = next
     if wantsStay {
       startRoundStay()
     } else {
@@ -1289,41 +1309,136 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
   }
 
+  /// True while a golf workout exists and has not ended, or while end() is in flight.
+  /// A second start is ignored so two sessions are never created.
+  private var golfWorkoutOccupied: Bool {
+    if endingGolfWorkout { return true }
+    guard let golfWorkout else { return false }
+    switch golfWorkout.state {
+    case .ended:
+      return false
+    default:
+      return true
+    }
+  }
+
   private func startRoundStay() {
-    if let staySession, staySession.state == .running || staySession.state == .scheduled {
+    guard wantsStay else { return }
+    if golfWorkout?.state == .ended {
+      golfWorkout = nil
+      endingGolfWorkout = false
+    }
+    if golfWorkoutOccupied { return }
+    guard HKHealthStore.isHealthDataAvailable() else {
+      if !loggedHealthUnavailable {
+        loggedHealthUnavailable = true
+        workoutLog.info("HealthKit unavailable; round continues in the foreground")
+      }
       return
     }
-    let next = WKExtendedRuntimeSession()
-    next.delegate = self
-    staySession = next
-    next.start()
+    let workoutType = HKObjectType.workoutType()
+    switch healthStore.authorizationStatus(for: workoutType) {
+    case .sharingDenied:
+      if !loggedGolfDenial {
+        loggedGolfDenial = true
+        workoutLog.info("workout share not authorized; round continues in the foreground")
+      }
+      return
+    case .notDetermined:
+      requestGolfWorkoutAuthorization()
+    case .sharingAuthorized:
+      beginGolfWorkoutSession()
+    @unknown default:
+      workoutLog.info("unknown HealthKit authorization; round continues in the foreground")
+    }
+  }
+
+  /// Share workout only. Read nothing — no heart rate, energy, or other types.
+  private func requestGolfWorkoutAuthorization() {
+    if golfAuthInFlight { return }
+    golfAuthInFlight = true
+    let typesToShare: Set<HKSampleType> = [HKObjectType.workoutType()]
+    let typesToRead: Set<HKObjectType> = []
+    healthStore.requestAuthorization(toShare: typesToShare, read: typesToRead) { [weak self] _, error in
+      DispatchQueue.main.async {
+        guard let self else { return }
+        self.golfAuthInFlight = false
+        if let error {
+          self.workoutLog.info("Health authorization failed: \(error.localizedDescription, privacy: .public)")
+        }
+        guard self.wantsStay else { return }
+        // Do not ask again in this callback if the sheet is still unresolved.
+        if self.healthStore.authorizationStatus(for: HKObjectType.workoutType()) == .notDetermined {
+          return
+        }
+        self.startRoundStay()
+      }
+    }
+  }
+
+  private func beginGolfWorkoutSession() {
+    if golfWorkoutOccupied || suppressGolfStart { return }
+    let configuration = HKWorkoutConfiguration()
+    configuration.activityType = .golf
+    configuration.locationType = .outdoor
+    do {
+      let session = try HKWorkoutSession(healthStore: healthStore, configuration: configuration)
+      session.delegate = self
+      golfWorkout = session
+      // end() writes nothing to Health. No builder and no extra sample types.
+      session.startActivity(with: Date())
+    } catch {
+      golfWorkout = nil
+      suppressGolfStart = true
+      workoutLog.info("golf workout session did not start: \(error.localizedDescription, privacy: .public)")
+    }
   }
 
   private func stopRoundStay() {
-    staySession?.invalidate()
-    staySession = nil
-  }
-
-  func extendedRuntimeSessionDidStart(_ extendedRuntimeSession: WKExtendedRuntimeSession) {}
-
-  func extendedRuntimeSessionWillExpire(_ extendedRuntimeSession: WKExtendedRuntimeSession) {
-    // Chain a replacement before the current session dies so idle does not dump.
-    if wantsStay, !userLeftApp {
-      staySession = nil
-      startRoundStay()
+    guard let session = golfWorkout else {
+      endingGolfWorkout = false
+      return
     }
+    if session.state == .ended {
+      golfWorkout = nil
+      endingGolfWorkout = false
+      return
+    }
+    if endingGolfWorkout { return }
+    endingGolfWorkout = true
+    session.end()
   }
 
-  func extendedRuntimeSession(
-    _ extendedRuntimeSession: WKExtendedRuntimeSession,
-    didInvalidateWith reason: WKExtendedRuntimeSessionInvalidationReason,
-    error: Error?
+  func workoutSession(
+    _ workoutSession: HKWorkoutSession,
+    didChangeTo toState: HKWorkoutSessionState,
+    from _: HKWorkoutSessionState,
+    date _: Date
   ) {
-    if staySession === extendedRuntimeSession {
-      staySession = nil
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      guard self.golfWorkout == nil || self.golfWorkout === workoutSession else { return }
+      if toState == .running {
+        self.endingGolfWorkout = false
+      }
+      if toState == .ended {
+        if self.golfWorkout === workoutSession {
+          self.golfWorkout = nil
+        }
+        self.endingGolfWorkout = false
+      }
     }
-    if wantsStay, !userLeftApp, reason == .expired {
-      DispatchQueue.main.async { self.startRoundStay() }
+  }
+
+  func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      if self.golfWorkout === workoutSession {
+        self.golfWorkout = nil
+      }
+      self.endingGolfWorkout = false
+      self.suppressGolfStart = true
+      self.workoutLog.info("golf workout session failed: \(error.localizedDescription, privacy: .public)")
     }
   }
 
@@ -1375,30 +1490,18 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     lastFix = locations.last
   }
 
-  /// Crown / app switch is an explicit leave. Idle / wrist-down (.inactive)
-  /// is not — keep ShotTraxx up for the round.
+  /// Wrist-down is inactive, then background. The golf workout keeps the round
+  /// up through both, so neither one is a leave and neither ends the session.
   func noteScenePhase(_ phase: String) {
     if phase == "active" {
       userLeftApp = false
+      // A start that failed while the app was not in front can run now.
+      suppressGolfStart = false
       syncRoundStay()
       return
     }
-    if phase == "inactive" {
-      // Wrist-down dim. Do not treat as leave. Restart stay if it never started.
-      if wantsStay || hasLiveHole || putt.open {
-        startRoundStay()
-      }
-      return
-    }
-    if phase == "background" {
-      // Session running → crown / app switch. Session not running → do not
-      // mark leave (idle used to dump here when start() failed without WKBackgroundModes).
-      if staySession?.state == .running || staySession?.state == .scheduled {
-        userLeftApp = true
-        stopRoundStay()
-        return
-      }
-      if !userLeftApp, hasLiveHole || putt.open {
+    if phase == "inactive" || phase == "background" {
+      if !userLeftApp && list.roundLive && ((hasLiveHole && !list.roundComplete) || putt.open) {
         startRoundStay()
       }
     }

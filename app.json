@@ -22,7 +22,9 @@
         "NSLocationWhenInUseUsageDescription": "ShotTraxx™ uses your location while the app is open to find courses near you, show yards to the green, and mark where you hit from when you pick a club.",
         "NSPhotoLibraryUsageDescription": "ShotTraxx™ does not use your photo library except to read one scorecard photo you pick when you add a course.",
         "NSCameraUsageDescription": "ShotTraxx™ uses the camera only when you take a photo of a paper scorecard to add a course.",
-        "NSPhotoLibraryAddUsageDescription": "ShotTraxx™ does not save photos to your library. This description is required to ship on the App Store."
+        "NSPhotoLibraryAddUsageDescription": "ShotTraxx™ does not save photos to your library. This description is required to ship on the App Store.",
+        "NSHealthShareUsageDescription": "ShotTraxx™ does not read your Health data. It uses Health only to keep your round running on your Apple Watch.",
+        "NSHealthUpdateUsageDescription": "ShotTraxx™ uses a golf workout on your Apple Watch only to keep the round running. It does not save the round to Health."
       }
     },
     "android": {
@@ -106,7 +108,8 @@
                   "targetName": "ShotTraxxWatch",
                   "bundleIdentifier": "com.shottrax.app.watch",
                   "entitlements": {
-                    "com.apple.security.application-groups": ["group.com.shottrax.app"]
+                    "com.apple.security.application-groups": ["group.com.shottrax.app"],
+                    "com.apple.developer.healthkit": true
                   }
                 },
                 {

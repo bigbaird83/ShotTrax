@@ -61,6 +61,9 @@ let context: WatchClubContext | null = null;
 let started = false;
 let lastJson = '';
 let lastClubList: ClubListMessage | null = null;
+/** Round whose golf workout must stay ended. Cleared when a different round becomes current. */
+let endedRoundId: string | null = null;
+let clubListChain: Promise<void> = Promise.resolve();
 let lastPuttJson = '';
 let lastClubMark: { clubId: string; appliedAtMs: number } | null = null;
 
@@ -73,6 +76,9 @@ export function watchBridgeAvailable(): boolean {
 }
 
 export function setWatchClubContext(next: WatchClubContext | null): void {
+  if (next && endedRoundId && next.roundId !== endedRoundId) {
+    endedRoundId = null;
+  }
   context = next;
   if (next) {
     void flushPendingClubPicks(next.holeNumber);
@@ -80,7 +86,49 @@ export function setWatchClubContext(next: WatchClubContext | null): void {
   }
 }
 
-export async function pushWatchClubList(msg: ClubListMessage): Promise<void> {
+export function pushWatchClubList(msg: ClubListMessage): Promise<void> {
+  const queuedForRound = context?.roundId ?? endedRoundId;
+  const run = clubListChain.then(
+    () => deliverClubList(msg, queuedForRound),
+    () => deliverClubList(msg, queuedForRound),
+  );
+  clubListChain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+/**
+ * Finish / delete of the open round. Tells the Watch the round is over so the
+ * golf workout ends. Later club lists for this round cannot restart it.
+ */
+export function endWatchRound(roundId: string): void {
+  endedRoundId = roundId;
+  const base = lastClubList;
+  const msg: ClubListMessage = base
+    ? { ...base, roundComplete: true, roundLive: false }
+    : {
+        type: 'clubList',
+        top3: [],
+        bag: [],
+        labels: {},
+        holeNumber: 1,
+        yardsToGreen: null,
+        yardsQuality: 'none',
+        roundComplete: true,
+        roundLive: false,
+      };
+  void pushWatchClubList(msg);
+}
+
+async function deliverClubList(msg: ClubListMessage, queuedForRound: string | null): Promise<void> {
+  const roundId = context?.roundId ?? null;
+  if (msg.roundComplete !== true && endedRoundId && (queuedForRound == null || queuedForRound === endedRoundId)) {
+    if (roundId == null || roundId === endedRoundId) return;
+  }
+  if (msg.roundComplete === true && roundId && queuedForRound && roundId !== queuedForRound) return;
+  if (msg.roundComplete === true && queuedForRound) endedRoundId = queuedForRound;
   const json = JSON.stringify(msg);
   if (json === lastJson) return;
   const mod = native();
@@ -128,6 +176,9 @@ export async function pushWatchMadeItAdvance(args: {
   lengths: PuttLengthId[];
 }): Promise<void> {
   const plan = planWatchMadeItAdvance({ ...args, last: lastClubList });
+  if (plan.clubList.roundComplete === true && context?.roundId) {
+    endedRoundId = context.roundId;
+  }
   // clubList goes out first, in this tick — before the next hole screen mounts
   // and pushes its real clubList, so this placeholder never lands on top of it.
   await Promise.all([
@@ -151,6 +202,8 @@ export function buildClubList(args: {
   selectedClubId?: string | null;
   /** Hole-map `planPlayHeaderYards`. Omit to leave the complication unchanged. */
   complication?: { yards: number | null; quality: string } | null;
+  /** False on a finished round so the Watch ends the golf workout and still shows the hole. */
+  roundLive?: boolean;
 }): ClubListMessage {
   const labels: Record<string, string> = {};
   // Phone bag is source of truth. Full enabled bag — never a pre-trimmed top-3.
@@ -161,7 +214,7 @@ export function buildClubList(args: {
     if (labels[club.id]) continue;
     labels[club.id] = watchBagLabelForPush({ id: club.id, shortName: club.shortName });
   }
-  return clubListPayload({
+  const msg = clubListPayload({
     top3: watchClubListTop3(args.top3.map((club) => club.id)),
     bag: args.bag.map((club) => club.id),
     labels,
@@ -172,6 +225,8 @@ export function buildClubList(args: {
     selectedClubId: args.selectedClubId ?? null,
     ...(args.complication ? { complication: args.complication } : {}),
   });
+  if (args.roundLive === false) msg.roundLive = false;
+  return msg;
 }
 
 async function replyToken(token: string, payload: ClubPickReply | PuttPickReply): Promise<void> {

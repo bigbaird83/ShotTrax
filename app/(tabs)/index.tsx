@@ -37,6 +37,7 @@ import { canFinishBagCarrySetup, countTypedCarries } from '@/src/domain/bagCusto
 import { canStartRound } from '@/src/domain/coursePick';
 import { COPY, formatTeeMeta, SHOTTRAXX_BRAND } from '@/src/domain/playerCopy';
 import { playHrefAfterRoundStart } from '@/src/domain/playNav';
+import { endWatchRound } from '@/src/services/watchClub';
 import {
   courseIsHardMiss,
   favoriteFromHistoryRound,
@@ -433,6 +434,7 @@ export default function HomeScreen() {
               accessibilityLabel="Finish round"
               onPress={() => {
                 finishRound(db, active.id);
+                endWatchRound(active.id);
                 bump();
                 router.push(`/round/${active.id}/summary`);
               }}
@@ -622,7 +624,9 @@ export default function HomeScreen() {
                     text: COPY.deleteRound,
                     style: 'destructive',
                     onPress: () => {
+                      const live = round.finishedAt == null;
                       deleteRound(db, round.id);
+                      if (live) endWatchRound(round.id);
                       setOpenHistoryId(null);
                       bump();
                     },

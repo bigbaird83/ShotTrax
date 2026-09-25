@@ -27,6 +27,7 @@ export default function RoundLiveBoardScreen() {
     return normalizeShareBoardCode(token) ?? token;
   }, [db, id, revision]);
 
+  // Same gate as the hole screen: no worker upload until this round is shared.
   useEffect(() => {
     publishRoundScoreboard(db, id);
   }, [db, id, revision]);

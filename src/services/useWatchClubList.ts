@@ -34,6 +34,8 @@ export function useWatchClubList(
     selectedClubId?: string | null;
     /** Live hole-map yards (`planLiveGpsToPin`). Omitted leaves the Watch header unchanged. */
     complication?: { yards: number | null; quality: string } | null;
+    /** False on a finished round. Omitted means the round is live. */
+    roundLive?: boolean;
   },
 ): void {
   const ctxRef = useRef(ctx);

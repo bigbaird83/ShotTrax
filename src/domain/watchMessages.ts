@@ -39,7 +39,8 @@ export type WatchMessageType = (typeof WATCH_MESSAGE_TYPES)[number];
  * yardsQuality is the same good/soft/none bands as the phone — never invent.
  * lastClubId is optional (Same club on the wrist).
  * complicationYards / complicationQuality are optional live yards for the Watch
- * hole header and complication (`planLiveGpsToPin`). They do not rank clubs.
+ * status line (Hole N · yd), the top-right number, and the complication
+ * (`planLiveGpsToPin`). Null / quality none → Hole N · — . They do not rank clubs.
  * Omit them to leave that number unchanged. quality none clears the yardage.
  */
 export type ClubListMessage = {
@@ -56,6 +57,8 @@ export type ClubListMessage = {
   complicationQuality?: YardsQuality;
   /** Last hole finished (Made it / Hole Out). Watch shows Round complete, not the putt sheet. */
   roundComplete?: boolean;
+  /** False while the phone is showing a finished round. Omitted means the round is live. */
+  roundLive?: boolean;
 };
 
 export const CLUB_LIST_KEYS = [
@@ -190,6 +193,7 @@ export function parseClubList(raw: unknown): ClubListMessage | null {
     typeof row.selectedClubId === 'string' && row.selectedClubId.trim() ? row.selectedClubId : undefined;
   if (selectedClubId) msg.selectedClubId = selectedClubId;
   if (row.roundComplete === true) msg.roundComplete = true;
+  if (row.roundLive === false) msg.roundLive = false;
   return msg;
 }
 
@@ -395,6 +399,7 @@ export function clubListPushKey(msg: ClubListMessage): string {
     complicationYards: msg.complicationYards ?? null,
     complicationQuality: msg.complicationQuality ?? null,
     roundComplete: msg.roundComplete === true,
+    roundLive: msg.roundLive !== false,
   });
 }
 
