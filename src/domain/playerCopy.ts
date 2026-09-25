@@ -216,6 +216,11 @@ export const COPY = {
   statsFairwayGir: 'Fairways & greens',
   statsDifferential: 'Score differential',
   handicap: 'Handicap',
+  trends: 'Trends',
+  trendsLede: 'How your last rounds compare. 9-hole rounds count per 18.',
+  trendsEmpty: 'Finish two rounds to see trends.',
+  trendsNoData: 'Nothing saved for this yet.',
+  trendsCarry: 'Carry by club',
   hcpIndex: 'Handicap index',
   handicapLede: 'World Handicap System math on your saved rounds with a rated tee.',
   handicapLimits:
