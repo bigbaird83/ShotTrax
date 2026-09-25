@@ -7,7 +7,9 @@ import {
   EXPO_GO_PURCHASES_LOG,
   MISSING_REVENUECAT_KEY_LOG,
   PRO_ENTITLEMENT_ID,
+  formatRevenueCatStatus,
   isProFromCache,
+  mapRevenueCatStatus,
   noteExpoGoPurchases,
   noteMissingRevenueCatKey,
   parseProCache,
@@ -158,6 +160,101 @@ test('missing RevenueCat key does not throw and does not configure', () => {
   assert.deepEqual(present, { configure: true, apiKey: 'appl_public' });
 });
 
+const SECRET_APPL_KEY = 'appl_notForDisplay9999';
+const SECRET_TEST_KEY = 'test_notForDisplay9999';
+
+function statusLine(apiKey: unknown, outcome: 'pending' | 'ok' | { error: unknown }, extras?: { platform?: string; inExpoGo?: boolean }) {
+  const plan = planRevenueCatConfigure({
+    apiKey,
+    platform: extras?.platform ?? 'ios',
+    inExpoGo: extras?.inExpoGo ?? false,
+  });
+  const status = mapRevenueCatStatus({ plan, outcome });
+  return { plan, status, line: formatRevenueCatStatus(status) };
+}
+
+test('RevenueCat status: no key', () => {
+  for (const apiKey of [undefined, null, '', '   ']) {
+    const { status, line } = statusLine(apiKey, 'ok');
+    assert.equal(line, 'RevenueCat: no key');
+    assert.equal(JSON.stringify(status).includes('appl_'), false);
+  }
+});
+
+test('RevenueCat status: Expo Go', () => {
+  const { status, line } = statusLine(SECRET_APPL_KEY, 'ok', { inExpoGo: true });
+  assert.equal(line, 'RevenueCat: off in Expo Go');
+  assert.equal(line.includes(SECRET_APPL_KEY), false);
+  assert.equal(line.includes('notForDisplay'), false);
+  assert.equal(JSON.stringify(status).includes(SECRET_APPL_KEY), false);
+
+  const missingInExpoGo = statusLine('', 'ok', { inExpoGo: true });
+  assert.equal(missingInExpoGo.line, 'RevenueCat: no key');
+
+  const android = statusLine(SECRET_APPL_KEY, 'ok', { platform: 'android' });
+  assert.equal(android.line, 'RevenueCat: off');
+  assert.equal(android.line.includes('notForDisplay'), false);
+  assert.equal(JSON.stringify(android.status).includes('notForDisplay'), false);
+});
+
+test('RevenueCat status: configured', () => {
+  const pending = statusLine(`  ${SECRET_APPL_KEY}  `, 'pending');
+  assert.equal(pending.plan.configure, true);
+  assert.equal(pending.line, 'RevenueCat: checking');
+  assert.equal(pending.line.includes('notForDisplay'), false);
+
+  const { status, line } = statusLine(`  ${SECRET_APPL_KEY}  `, 'ok');
+  assert.equal(line, 'RevenueCat: on');
+  assert.equal(line.includes(SECRET_APPL_KEY), false);
+  assert.equal(line.includes('notForDisplay'), false);
+  assert.equal(line.includes('appl_'), false);
+  assert.equal(JSON.stringify(status).includes('notForDisplay'), false);
+});
+
+test('RevenueCat status: wrong prefix', () => {
+  for (const apiKey of [SECRET_TEST_KEY, 'goog_notForDisplay9999', 'Appl_notForDisplay9999']) {
+    const { plan, status, line } = statusLine(apiKey, 'ok');
+    assert.equal(plan.configure, true);
+    assert.equal(line, 'RevenueCat: on (not an appl_ key)');
+    assert.equal(line.includes('notForDisplay'), false);
+    assert.equal(JSON.stringify(status).includes('notForDisplay'), false);
+    assert.equal(JSON.stringify(status).includes('goog_'), false);
+    assert.equal(JSON.stringify(status).includes('test_'), false);
+  }
+});
+
+test('RevenueCat status: error', () => {
+  const leaked = statusLine(SECRET_APPL_KEY, {
+    error: new Error(`Invalid API key. ${SECRET_APPL_KEY}`),
+  });
+  assert.equal(leaked.line, 'RevenueCat: error — Invalid API key.');
+  assert.equal(leaked.line.includes(SECRET_APPL_KEY), false);
+  assert.equal(leaked.line.includes('notForDisplay'), false);
+  assert.equal(leaked.line.includes('appl_'), false);
+  assert.equal(JSON.stringify(leaked.status).includes('notForDisplay'), false);
+
+  const onlyKey = statusLine(SECRET_APPL_KEY, { error: new Error(SECRET_APPL_KEY) });
+  assert.equal(onlyKey.line, 'RevenueCat: error');
+
+  const network = statusLine(SECRET_APPL_KEY, { error: new Error('Network request failed') });
+  assert.equal(network.line, 'RevenueCat: error — Network request failed');
+
+  const codeOnly = statusLine(SECRET_TEST_KEY, {
+    error: { readableErrorCode: 'InvalidCredentialsError', underlyingErrorMessage: SECRET_TEST_KEY },
+  });
+  assert.equal(codeOnly.line, 'RevenueCat: error — InvalidCredentialsError');
+  assert.equal(codeOnly.line.includes('notForDisplay'), false);
+
+  const long = `Store rejected the receipt. ${'x'.repeat(200)}`;
+  const truncated = statusLine(SECRET_APPL_KEY, { error: new Error(long) });
+  assert.equal(truncated.line.startsWith('RevenueCat: error — Store rejected the receipt.'), true);
+  assert.equal(truncated.line.endsWith('...'), true);
+  assert.ok(truncated.line.length < 'RevenueCat: error — '.length + long.length);
+
+  const fetchFailed = statusLine(SECRET_APPL_KEY, { error: 'customer info failed' });
+  assert.equal(fetchFailed.line, 'RevenueCat: error — customer info failed');
+});
+
 test('Expo Go and non-iOS do not configure and do not throw', () => {
   const lines: string[] = [];
   assert.doesNotThrow(() => {
@@ -194,7 +291,7 @@ test('diagnostics is the only screen that reads Pro, and the test switch is dev-
   const root = fileURLToPath(new URL('../..', import.meta.url));
   const appFiles = walk(join(root, 'app')).filter((file) => /\.(tsx|ts)$/.test(file));
   const readers = appFiles.filter((file) =>
-    /useIsPro|isProCached|useProStatus|useProTestOverride/.test(readFileSync(file, 'utf8')),
+    /useIsPro|isProCached|useProStatus|useProTestOverride|useRevenueCatStatus/.test(readFileSync(file, 'utf8')),
   );
   assert.deepEqual(
     readers.map((file) => file.slice(file.indexOf('/app/') + 1)),
@@ -208,11 +305,23 @@ test('diagnostics is the only screen that reads Pro, and the test switch is dev-
   assert.ok(gate > 0 && gate < switchAt);
   assert.ok(screen.indexOf('label="Status"') < switchAt);
   assert.match(screen, /setProTestOverride/);
+  assert.match(screen, /useRevenueCatStatus\(/);
+  assert.match(screen, /label="RevenueCat" value=\{revenueCatStatus\.replace\(\/\^RevenueCat: \/, ''\)\}/);
+  const rcAt = screen.indexOf('label="RevenueCat"');
+  const devAt = screen.indexOf('__DEV__');
+  assert.ok(rcAt > screen.indexOf('label="Status"'));
+  assert.ok(devAt > rcAt && switchAt > devAt);
+  assert.doesNotMatch(screen, /EXPO_PUBLIC_REVENUECAT|appl_[A-Za-z0-9]/);
 
   const service = readFileSync(new URL('../services/purchases.ts', import.meta.url), 'utf8');
   assert.match(service, /dev: __DEV__/);
   assert.match(service, /if \(!__DEV__\) return/);
   assert.match(service, /Purchases\.configure\(\{ apiKey: plan\.apiKey \}\)/);
+  assert.equal((service.match(/Purchases\.configure\(/g) ?? []).length, 1);
+  assert.match(service, /mapRevenueCatStatus/);
+  assert.match(service, /outcome: 'ok'/);
+  assert.match(service, /outcome: \{ error: err \}/);
+  assert.doesNotMatch(service, /\$\{plan\.apiKey\}|\$\{apiKey\}/);
   assert.doesNotMatch(service, /appUserID|logIn\(|collectDeviceIdentifiers|setEmail|setAttributes|setAdjustID/);
 
   const watchFiles = walk(join(root, 'targets'));

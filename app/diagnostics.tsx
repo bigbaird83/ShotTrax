@@ -28,6 +28,7 @@ import {
   useIsPro,
   useProStatus,
   useProTestOverride,
+  useRevenueCatStatus,
 } from '@/src/services/purchases';
 import { useLiveFix } from '@/src/services/useLiveFix';
 import { useColors } from '@/src/ui/ColorThemeProvider';
@@ -60,6 +61,7 @@ export default function DiagnosticsScreen() {
   const isPro = useIsPro(now);
   const pro = useProStatus(now);
   const proOverride = useProTestOverride();
+  const revenueCatStatus = useRevenueCatStatus();
   const proLabel = !isPro ? 'Free' : pro.isTrial ? 'Pro trial' : 'Pro';
   const proExpires = formatProExpiration(pro.expirationDate) ?? DIAGNOSTICS_DASH;
 
@@ -142,6 +144,8 @@ export default function DiagnosticsScreen() {
       <Text style={styles.groupLabel}>Pro</Text>
       <View style={styles.list}>
         <Field styles={styles} label="Status" value={proLabel} />
+        <View style={styles.divider} />
+        <Field styles={styles} label="RevenueCat" value={revenueCatStatus.replace(/^RevenueCat: /, '')} />
         <View style={styles.divider} />
         <Field styles={styles} label="Expires" value={proExpires} />
         {__DEV__ ? (
