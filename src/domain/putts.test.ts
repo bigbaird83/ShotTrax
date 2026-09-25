@@ -34,6 +34,8 @@ import {
   isLivePuttProximityQuality,
   isNearOrOnGreen,
   madeItAdvancesHole,
+  madeItWritesPutts,
+  puttDraftAfterHoleOut,
   NEAR_GREEN_YD,
   parsePuttLengths,
   parsePuttLengthSlots,
@@ -550,6 +552,36 @@ test('TF 51.x: attach putt length after no-length Made it — stats only, never 
     [],
   );
   assert.deepEqual(planFinishedPuttRows({ puttsDone: false, putts: 1, lengths: [] }), []);
+});
+
+test('applyMadeIt clears the putt draft once the hole is holed out', () => {
+  const two = addPuttLength(addPuttLength(emptyPuttDraft(), 'inside_3'), '3_to_10');
+  assert.equal(two.putts, 2);
+  assert.deepEqual(two.lengths, ['inside_3', '3_to_10']);
+  // A leftover Hole Out draft would count a third putt (score 4 → 5).
+  assert.equal(planMadeIt(two, null).putts, 3);
+  assert.equal(madeItWritesPutts(true), false);
+  assert.equal(madeItWritesPutts(false), true);
+  assert.deepEqual(puttDraftAfterHoleOut(), emptyPuttDraft());
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const apply = hole.slice(hole.indexOf('const applyMadeIt'), hole.indexOf('const onAttachFinishedPuttLength'));
+  assert.match(apply, /madeItWritesPutts\(/);
+  assert.match(apply, /planMadeIt\(draft, pending\)/);
+  assert.match(apply, /clearPuttDraft\(\)/);
+  const clear = hole.slice(hole.indexOf('const clearPuttDraft'), hole.indexOf('const applyMadeIt'));
+  assert.match(clear, /puttDraftAfterHoleOut\(\)/);
+  assert.match(clear, /puttDraftRef\.current = cleared/);
+  assert.match(clear, /setPuttDraft\(cleared\)/);
+  const saveAt = apply.indexOf('saveDraft(targetHole, planned, true)');
+  const writeAt = apply.indexOf('madeItWritesPutts(');
+  assert.ok(writeAt !== -1 && saveAt > writeAt);
+  const finish = hole.slice(hole.indexOf('const onFinishHole'), hole.indexOf('const onAddPenalty'));
+  assert.match(finish, /clearPuttDraft\(\)/);
+  const watchStart = hole.indexOf('const onWatchPuttPick');
+  const watchFn = hole.slice(watchStart, hole.indexOf('useWatchClubList', watchStart + 1));
+  assert.match(watchFn, /row\?\.puttsDone \|\| puttOpenRef\.current/);
+  assert.match(watchFn, /clearPuttDraft\(\)/);
 });
 
 test('selecting Putter opens the putt sheet — not a GPS mark; change-club does not', () => {
