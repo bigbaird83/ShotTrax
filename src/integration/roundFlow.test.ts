@@ -31,8 +31,10 @@ import {
   finishHolePutts,
   getHole,
   getRound,
+  insertPenalty,
   listClubs,
   listHoles,
+  listPenaltiesForHole,
   listRounds,
   listShotsForHole,
   startRound,
@@ -260,6 +262,16 @@ type ShotActions = {
     db: SQLiteDatabase,
     args: { roundId: string; holeNumber: number },
   ) => Promise<void>;
+  takeDrop: (
+    db: SQLiteDatabase,
+    args: {
+      roundId: string;
+      holeNumber: number;
+      reason: 'water' | 'ob' | 'unplayable' | 'other';
+      note?: string | null;
+      force?: boolean;
+    },
+  ) => Promise<{ plan: { status: string } }>;
 };
 
 type WatchClub = {
@@ -402,6 +414,55 @@ test('round flow', { skip: DatabaseSync ? false : 'node:sqlite needs Node 22.5+'
   gpsQueue.length = 0;
   pushedClubLists.length = 0;
   listeners.clear();
+
+  // takeDrop used to call insertPenalty inside its own BEGIN. The inner BEGIN
+  // failed, the inner ROLLBACK ended the outer transaction, and the outer
+  // ROLLBACK then threw "cannot rollback - no transaction is active".
+  {
+    const dropDb = memoryDb();
+    const { layout, courseName } = fixtureLayout();
+    const shotsApi = modExports(await import('../services/shotActions.ts')) as unknown as ShotActions;
+    const round = startRound(dropDb, 18, courseName, layout);
+    const hole = mustHole(dropDb, round.id, 1);
+    enqueueFix(locationPoint(layout, 1, 'tee'));
+    const dropped = await shotsApi.takeDrop(dropDb, {
+      roundId: round.id,
+      holeNumber: 1,
+      reason: 'water',
+      note: 'creek',
+    });
+    if (dropped.plan.status !== 'commit') {
+      throw new Error(`takeDrop: expected commit, actual ${dropped.plan.status}`);
+    }
+    const drops = listPenaltiesForHole(dropDb, hole.id);
+    if (drops.length !== 1 || drops[0]?.kind !== 'drop' || drops[0]?.reason !== 'water' || drops[0]?.strokes !== 1) {
+      throw new Error(`takeDrop: expected one water drop, actual ${JSON.stringify(drops)}`);
+    }
+    const afterDrop = getHole(dropDb, round.id, 1);
+    const expectedDropScore = (hole.score ?? hole.par ?? 0) + 1;
+    if (afterDrop?.score !== expectedDropScore) {
+      throw new Error(`takeDrop: expected score ${expectedDropScore}, actual ${afterDrop?.score ?? null}`);
+    }
+
+    // Menu Penalty calls insertPenalty directly — one BEGIN, not a nested one.
+    const saved = insertPenalty(dropDb, {
+      holeId: hole.id,
+      par: hole.par,
+      currentScore: afterDrop?.score ?? null,
+      strokes: 2,
+      reason: 'ob',
+      note: null,
+      kind: 'penalty',
+    });
+    if (saved.penalty.kind !== 'penalty' || saved.score !== expectedDropScore + 2) {
+      throw new Error(`penalty: expected kind penalty and score ${expectedDropScore + 2}, actual ${saved.penalty.kind} ${saved.score}`);
+    }
+    const rows = listPenaltiesForHole(dropDb, hole.id);
+    if (rows.length !== 2 || rows[1]?.kind !== 'penalty' || rows[1]?.reason !== 'ob') {
+      throw new Error(`penalty: expected drop then penalty, actual ${JSON.stringify(rows.map((row) => row.kind))}`);
+    }
+    gpsQueue.length = 0;
+  }
 
   const db = memoryDb();
   check(1, 0, listRounds(db).length);

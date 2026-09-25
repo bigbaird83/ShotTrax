@@ -2030,20 +2030,26 @@ export function listPenaltiesForHole(db: SQLiteDatabase, holeId: string): HolePe
     .map(mapPenalty);
 }
 
-/** Score-only event. Never calls acceptFix, haversine, or club-average inserts. */
-export function insertPenalty(
+type InsertPenaltyArgs = {
+  holeId: string;
+  par: number | null;
+  currentScore: number | null;
+  strokes: number;
+  reason: PenaltyReason;
+  note: string | null;
+  kind?: PenaltyKind;
+  lat?: number | null;
+  lng?: number | null;
+};
+
+/**
+ * Writes the penalty row and hole score. Caller owns the transaction.
+ * Do not call insertPenalty from inside withTransactionSync — that helper
+ * opens its own BEGIN, and expo-sqlite cannot nest those.
+ */
+export function insertPenaltyInTransaction(
   db: SQLiteDatabase,
-  args: {
-    holeId: string;
-    par: number | null;
-    currentScore: number | null;
-    strokes: number;
-    reason: PenaltyReason;
-    note: string | null;
-    kind?: PenaltyKind;
-    lat?: number | null;
-    lng?: number | null;
-  },
+  args: InsertPenaltyArgs,
 ): { penalty: HolePenalty; score: number } {
   const strokes = clampPenaltyStrokes(args.strokes);
   const score = scoreAfterPenalty(args.currentScore, args.par, strokes);
@@ -2058,24 +2064,37 @@ export function insertPenalty(
     lat: args.lat ?? null,
     lng: args.lng ?? null,
   };
-  db.withTransactionSync(() => {
-    db.runSync(
-      'INSERT INTO hole_penalties (id, hole_id, strokes, reason, note, created_at, kind, lat, lng) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [
-        penalty.id,
-        penalty.holeId,
-        penalty.strokes,
-        penalty.reason,
-        penalty.note,
-        penalty.createdAt,
-        penalty.kind,
-        penalty.lat,
-        penalty.lng,
-      ],
-    );
-    db.runSync('UPDATE holes SET score = ? WHERE id = ?', [score, args.holeId]);
-  });
+  db.runSync(
+    'INSERT INTO hole_penalties (id, hole_id, strokes, reason, note, created_at, kind, lat, lng) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [
+      penalty.id,
+      penalty.holeId,
+      penalty.strokes,
+      penalty.reason,
+      penalty.note,
+      penalty.createdAt,
+      penalty.kind,
+      penalty.lat,
+      penalty.lng,
+    ],
+  );
+  db.runSync('UPDATE holes SET score = ? WHERE id = ?', [score, args.holeId]);
   return { penalty, score };
+}
+
+/** Score-only event. Never calls acceptFix, haversine, or club-average inserts. */
+export function insertPenalty(
+  db: SQLiteDatabase,
+  args: InsertPenaltyArgs,
+): { penalty: HolePenalty; score: number } {
+  let saved: { penalty: HolePenalty; score: number } | null = null;
+  db.withTransactionSync(() => {
+    saved = insertPenaltyInTransaction(db, args);
+  });
+  if (!saved) {
+    throw new Error('Penalty was not saved.');
+  }
+  return saved;
 }
 
 export type ClubAverageRow = ClubAverage & {

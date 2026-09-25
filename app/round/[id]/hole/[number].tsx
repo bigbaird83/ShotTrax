@@ -164,7 +164,7 @@ import { thunderbirdCupOnGreen, thunderbirdDailyPin, thunderbirdPinHoleFor } fro
 import { MENU_SHARE_FALLBACK_MS, toastFromShareAttempt } from '@/src/domain/spectator';
 import { publishRoundScoreboard, shareLiveBoard, shareRoundSnapshot } from '@/src/services/shareRound';
 import { shareKindOrScorecard, type ShareKind } from '@/src/domain/shareChoice';
-import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, undoLastSoftGpsClubMark, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, undoShotEdit, deleteHoleShot } from '@/src/services/shotActions';
+import { endOpenShot, markShotWithClub, promptForPlan, undoLastShot, undoLastSoftGpsClubMark, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, undoShotEdit, deleteHoleShot } from '@/src/services/shotActions';
 import { useLiveFix } from '@/src/services/useLiveFix';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
 import { endWatchRound, pushWatchMadeItAdvance, pushWatchPuttSheet } from '@/src/services/watchClub';
@@ -209,7 +209,6 @@ export default function HoleScreen() {
   const { db, revision, bump } = useDb();
   const fix = useLiveFix(true);
   const [busy, setBusy] = useState(false);
-  const [dropOpen, setDropOpen] = useState(false);
   const [penaltyOpen, setPenaltyOpen] = useState(false);
   const [scoreOpen, setScoreOpen] = useState(false);
   const [scorecardOpen, setScorecardOpen] = useState(false);
@@ -1170,33 +1169,6 @@ export default function HoleScreen() {
     }
   };
 
-  const onDrop = async (force = false) => {
-    if (readOnly || placing || !pastRoundCanAddShot(marksOnly)) return;
-    setBusy(true);
-    try {
-      const { plan } = await takeDrop(db, {
-        roundId: id,
-        holeNumber,
-        reason: penaltyReason,
-        note: penaltyNote,
-        force,
-      });
-      const waiting = promptForPlan(plan, () => {
-        void onDrop(true);
-      });
-      if (!waiting) {
-        hapticTap();
-        setDropOpen(false);
-        setPenaltyNote('');
-        bump();
-      }
-    } catch (err) {
-      Alert.alert('Couldn’t drop', err instanceof Error ? err.message : 'Try again.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const onAddPutt = (bucket: PuttLengthId) => {
     if (readOnly) return;
     const next = addPuttLength(puttDraft, bucket);
@@ -1238,15 +1210,21 @@ export default function HoleScreen() {
 
   const onAddPenalty = () => {
     if (readOnly) return;
-    insertPenalty(db, {
-      holeId: hole.id,
-      par: hole.par,
-      currentScore: hole.score,
-      strokes: penaltyStrokes,
-      reason: penaltyReason,
-      note: penaltyReason === 'other' || penaltyNote.trim() ? penaltyNote : null,
-      kind: 'penalty',
-    });
+    try {
+      insertPenalty(db, {
+        holeId: hole.id,
+        par: hole.par,
+        currentScore: hole.score,
+        strokes: penaltyStrokes,
+        reason: penaltyReason,
+        note: penaltyReason === 'other' || penaltyNote.trim() ? penaltyNote : null,
+        kind: 'penalty',
+      });
+    } catch (err) {
+      console.warn(err);
+      Alert.alert(COPY.penaltySaveFailed);
+      return;
+    }
     hapticTap();
     setPenaltyOpen(false);
     setPenaltyStrokes(1);
@@ -1858,6 +1836,16 @@ export default function HoleScreen() {
                 {COPY.allClubs}
               </Text>
             </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={COPY.penalty}
+              disabled={readOnly}
+              onPress={() => setPenaltyOpen(true)}
+              style={styles.allClubsPill}>
+              <Text style={styles.allClubsPillText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                {COPY.penalty}
+              </Text>
+            </Pressable>
           </View>
         ) : null}
 
@@ -2032,15 +2020,6 @@ export default function HoleScreen() {
             onPress={() => {
               setMenuOpen(false);
               onUndo();
-            }}
-          />
-          <BigButton
-            label={COPY.drop}
-            variant="ghost"
-            disabled={readOnly || placing}
-            onPress={() => {
-              setMenuOpen(false);
-              setDropOpen(true);
             }}
           />
           <BigButton
@@ -2415,29 +2394,6 @@ export default function HoleScreen() {
         </ScrollView>
       </FullSheet>
 
-      <FullSheet visible={dropOpen} title={COPY.drop} onClose={() => setDropOpen(false)}>
-        <ScrollView contentContainerStyle={styles.sheetPad}>
-          <View style={styles.reasonRow}>
-            {PENALTY_REASONS.map((item) => (
-              <Pressable
-                key={item.reason}
-                onPress={() => setPenaltyReason(item.reason)}
-                style={[styles.reasonChip, penaltyReason === item.reason && styles.chipOn]}>
-                <Text style={styles.reasonText}>{item.label}</Text>
-              </Pressable>
-            ))}
-          </View>
-          <TextInput
-            placeholder="Note (optional)"
-            placeholderTextColor={colors.muted}
-            value={penaltyNote}
-            onChangeText={setPenaltyNote}
-            style={styles.note}
-          />
-          <BigButton label={COPY.drop} disabled={busy} onPress={() => void onDrop()} />
-        </ScrollView>
-      </FullSheet>
-
       <FullSheet visible={penaltyOpen} title={COPY.penalty} onClose={() => setPenaltyOpen(false)}>
         <ScrollView contentContainerStyle={styles.sheetPad}>
           <View style={styles.row}>
@@ -2602,12 +2558,19 @@ function makeStyles(colors: ColorPalette) {
     left: 12,
     right: 12,
     bottom: PLAY_GLASS_DOCK_LIFT,
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
+    gap: 8,
   },
   allClubsPill: {
     height: PHONE_WHEEL_PILL_HEIGHT,
-    minWidth: 120,
-    paddingHorizontal: 16,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 120,
+    maxWidth: 168,
+    minWidth: 0,
+    paddingHorizontal: 12,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.line,
