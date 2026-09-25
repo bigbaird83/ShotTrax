@@ -403,6 +403,9 @@ struct ContentView: View {
 
   /// #C8F542 — same lime as phone. Asset accent can vanish on Ultra outdoor.
   private let outdoorLime = Color(red: 200.0 / 255.0, green: 245.0 / 255.0, blue: 66.0 / 255.0)
+  /// #F4F1E8 — same cream as the hole title. Literal so the empty dash does not
+  /// depend on a named color the way accent does.
+  private let outdoorCream = Color(red: 244.0 / 255.0, green: 241.0 / 255.0, blue: 232.0 / 255.0)
 
   @ViewBuilder
   private var puttSheet: some View {
@@ -542,11 +545,24 @@ struct ContentView: View {
               .minimumScaleFactor(0.6)
               .frame(maxWidth: .infinity, alignment: .leading)
             VStack(alignment: .trailing, spacing: 0) {
-              Text(session.list.liveYardsLabel)
-                .font(.system(size: 28, weight: .heavy))
-                .foregroundStyle(session.list.liveYardsTrusted ? Color("accent") : Color("muted"))
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
+              // The empty string is still "—", but U+2014 in SF Compact stays a
+              // hairline even at heavy 28. In muted on the dark green that stroke
+              // disappears on Ultra, while size-11 "to hole" in the same color
+              // still reads. A filled bar cannot collapse or antialias away.
+              // Trusted yards use literal lime: Color("accent") vanishes outdoors.
+              if session.list.liveYardsTrusted {
+                Text(session.list.liveYardsLabel)
+                  .font(.system(size: 28, weight: .heavy))
+                  .foregroundStyle(outdoorLime)
+                  .lineLimit(1)
+                  .minimumScaleFactor(0.6)
+              } else {
+                Capsule()
+                  .fill(outdoorCream)
+                  .frame(width: 26, height: 5)
+                  .frame(minHeight: 28, alignment: .center)
+                  .accessibilityLabel(session.list.liveYardsLabel)
+              }
               Group {
                 if let reason = session.liveYardsReason, !reason.isEmpty {
                   Text(reason)
