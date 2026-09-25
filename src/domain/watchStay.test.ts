@@ -209,3 +209,36 @@ test('requestAuthorization is gated on the active Watch scene', () => {
   assert.match(sceneFn, /phase == "background"/);
   assert.doesNotMatch(sceneFn, /stopRoundStay/);
 });
+
+test('denied workout share shows one club-list hint keyed on sharingDenied', () => {
+  const hint =
+    'Watch may sleep wrist-down. Turn on Workouts for ShotTraxx in the Health app on your iPhone.';
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+  const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  assert.ok(session.includes(hint));
+
+  const syncHint = session.slice(
+    session.indexOf('private func syncWorkoutDeniedHint'),
+    session.indexOf('func dismissWorkoutDeniedHint'),
+  );
+  assert.match(syncHint, /status == \.sharingDenied/);
+  assert.match(syncHint, /wantsStay/);
+  assert.match(syncHint, /sharingAuthorized/);
+  assert.match(syncHint, /!list\.roundLive \|\| list\.roundComplete/);
+  assert.match(syncHint, /workoutLog/);
+  assert.match(syncHint, /workoutDeniedHintText/);
+  assert.doesNotMatch(syncHint, /requestAuthorization/);
+
+  const deniedCase = session.slice(session.indexOf('case .sharingDenied:'), session.indexOf('case .notDetermined:'));
+  assert.doesNotMatch(deniedCase, /requestAuthorization/);
+
+  const sceneFn = session.slice(session.indexOf('func noteScenePhase'), session.indexOf('enum ComplicationReloader'));
+  assert.match(sceneFn, /syncWorkoutDeniedHint\(\)/);
+
+  const clubPick = watchUi.slice(watchUi.indexOf('private var clubPick'), watchUi.indexOf('private var moreClubs'));
+  assert.match(clubPick, /session\.workoutDeniedHint/);
+  assert.match(clubPick, /dismissWorkoutDeniedHint\(\)/);
+  assert.ok(clubPick.indexOf('workoutDeniedHint') < clubPick.indexOf('session.leave("back")'));
+  assert.ok(clubPick.indexOf('session.pick(clubId:') < clubPick.indexOf('Text("Hole Out")'));
+  assert.doesNotMatch(clubPick, /requestAuthorization|\.disabled\(/);
+});

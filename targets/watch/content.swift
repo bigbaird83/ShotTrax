@@ -560,6 +560,18 @@ struct ContentView: View {
               .foregroundStyle(session.feedback.contains("✓") ? Color("accent") : Color.orange)
               .lineLimit(2)
           }
+          if !session.workoutDeniedHint.isEmpty {
+            Button(action: { session.dismissWorkoutDeniedHint() }) {
+              Text(session.workoutDeniedHint)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(Color.orange)
+                .multilineTextAlignment(.leading)
+                .lineLimit(3)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+          }
           Spacer(minLength: 0)
         }
         .frame(height: mapHeight, alignment: .topLeading)

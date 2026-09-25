@@ -206,6 +206,9 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   @Published var putt = PuttSheetState()
   @Published var nearby = NearbyState()
   @Published var feedback: String = ""
+  /// Shown on the club list when Health already denied workout share. Empty when hidden.
+  @Published var workoutDeniedHint = ""
+  static let workoutDeniedHintText = "Watch may sleep wrist-down. Turn on Workouts for ShotTraxx in the Health app on your iPhone."
   @Published var sending = false
   @Published var nearbyFromHome = false
   @Published var home = WatchHomeState()
@@ -254,6 +257,9 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   private var suppressGolfStart = false
   private var loggedGolfDenial = false
   private var loggedHealthUnavailable = false
+  /// Tap dismiss lasts until this round ends or share becomes authorized.
+  private var dismissedWorkoutDeniedHint = false
+  private var loggedWorkoutDeniedHint = false
   private let healthStore = HKHealthStore()
   private let workoutLog = Logger(subsystem: "com.shottrax.app.watch", category: "round-workout")
   private var wantsStay = false
@@ -1338,6 +1344,52 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     } else {
       stopRoundStay()
     }
+    syncWorkoutDeniedHint()
+  }
+
+  /// One line on the club list when share is already denied. No new prompt and no retry.
+  private func syncWorkoutDeniedHint() {
+    if !list.roundLive || list.roundComplete {
+      dismissedWorkoutDeniedHint = false
+      loggedWorkoutDeniedHint = false
+      if !workoutDeniedHint.isEmpty {
+        workoutDeniedHint = ""
+        workoutLog.info("round ended; clearing wrist-down hint")
+      }
+      return
+    }
+    let status: HKAuthorizationStatus = HKHealthStore.isHealthDataAvailable()
+      ? healthStore.authorizationStatus(for: HKObjectType.workoutType())
+      : .notDetermined
+    if status == .sharingAuthorized {
+      dismissedWorkoutDeniedHint = false
+      loggedWorkoutDeniedHint = false
+      if !workoutDeniedHint.isEmpty {
+        workoutDeniedHint = ""
+        workoutLog.info("authorization status=sharingAuthorized; clearing wrist-down hint")
+      }
+      return
+    }
+    guard wantsStay, status == .sharingDenied, !dismissedWorkoutDeniedHint else {
+      if !workoutDeniedHint.isEmpty {
+        workoutDeniedHint = ""
+      }
+      return
+    }
+    guard workoutDeniedHint.isEmpty else { return }
+    workoutDeniedHint = Self.workoutDeniedHintText
+    if !loggedWorkoutDeniedHint {
+      loggedWorkoutDeniedHint = true
+      workoutLog.info("workout share denied; status=sharingDenied; showing wrist-down hint")
+    }
+  }
+
+  func dismissWorkoutDeniedHint() {
+    dismissedWorkoutDeniedHint = true
+    if !workoutDeniedHint.isEmpty {
+      workoutDeniedHint = ""
+      workoutLog.info("workout denied hint dismissed for this round")
+    }
   }
 
   /// Home/Back sets `userLeftApp`, which keeps the golf sheet from being asked
@@ -1620,6 +1672,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
         workoutLog.info("scene active; status=\(statusLabel, privacy: .public) sheetUp=\(sheetLabel, privacy: .public)")
       }
       syncRoundStay()
+      // Player may have turned Workouts on in Health while we were away.
+      syncWorkoutDeniedHint()
       return
     }
     if phase == "inactive" || phase == "background" {
