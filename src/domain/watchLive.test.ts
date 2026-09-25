@@ -283,6 +283,30 @@ test('widget reload waits out yard drift and still fires on a hole change', () =
   );
 });
 
+test('widget does not reload while the Watch app hides the face, except on a new hole', () => {
+  const previous = { hole: 1, quality: 'good', yards: 180, atMs: 1_000 };
+  const later = 1_000 + WATCH_WIDGET_RELOAD_MIN_MS * 10;
+  // Big move, long wait: still no reload while the app is on screen.
+  assert.equal(
+    watchWidgetShouldReload({ hole: 1, quality: 'good', yards: 120, previous, nowMs: later, appOnScreen: true }),
+    false,
+  );
+  assert.equal(
+    watchWidgetShouldReload({ hole: 1, quality: 'none', yards: null, previous, nowMs: later, appOnScreen: true }),
+    false,
+  );
+  // A new hole still reloads at once.
+  assert.equal(
+    watchWidgetShouldReload({ hole: 2, quality: 'good', yards: 350, previous, nowMs: 1_100, appOnScreen: true }),
+    true,
+  );
+  // Leaving the app re-checks with the normal rule, so the face catches up.
+  assert.equal(
+    watchWidgetShouldReload({ hole: 1, quality: 'good', yards: 120, previous, nowMs: later, appOnScreen: false }),
+    true,
+  );
+});
+
 test('clubList carries the green, carries, tee length, and fix time without becoming required keys', () => {
   const msg = clubListPayload({
     ...listBase,

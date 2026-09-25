@@ -1529,12 +1529,15 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   /// WidgetKit budget (~40–70 refreshes/day). Hole changes reload immediately.
-  /// Otherwise the displayed yards must move by ≥1 and the last reload must be
-  /// at least 45s ago. In-app yards are not gated. Mirrors `watchWidgetShouldReload`.
+  /// While this app is on screen the face is hidden, so nothing else reloads;
+  /// leaving the app re-checks. Otherwise the displayed yards must move by ≥1
+  /// and the last reload must be at least 45s ago. In-app yards are not gated.
+  /// Mirrors `watchWidgetShouldReload`.
   private func reloadWidgetIfNeeded(_ state: ClubListState) {
     let shown: Int? = state.liveYardsTrusted ? state.complicationYards : nil
     let now = Date()
     if let previous = widgetReload, previous.hole == state.holeNumber {
+      if sceneIsActive { return }
       if now.timeIntervalSince(previous.at) < Self.widgetReloadMinSec { return }
       let moved: Bool
       switch (previous.yards, shown) {
@@ -2190,6 +2193,9 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
         startRoundStay()
       }
       noteLocationScene(active: false)
+      // The face is visible again. Catch it up now (same 45s rule); if that
+      // is too soon, the next wrist-down fix or the 60s timeline does it.
+      reloadWidgetIfNeeded(list)
     }
   }
 
