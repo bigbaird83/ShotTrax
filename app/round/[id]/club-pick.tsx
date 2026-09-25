@@ -270,6 +270,7 @@ export default function ClubPickScreen() {
         yards: liveGpsToPin.yards,
         quality: liveGpsToPin.quality,
       },
+      roundLive: round?.finishedAt == null,
     },
   );
 

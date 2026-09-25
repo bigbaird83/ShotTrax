@@ -286,8 +286,9 @@ test('Watch companion is club-pick only — no motion, mic, or auto-putt', () =>
   assert.match(session, /No motion detection, no mic/);
   assert.match(session, /import CoreLocation/);
   assert.match(session, /attachWatchFix/);
-  assert.doesNotMatch(session, /CoreMotion|CMMotion|AVAudio|microphone|CMPedometer/);
-  assert.match(session, /WKExtendedRuntimeSession/);
+  assert.doesNotMatch(session, /CoreMotion|CMMotion|AVAudio|microphone|CMPedometer|WKExtendedRuntimeSession/);
+  assert.match(session, /HKWorkoutSession/);
+  assert.match(session, /activityType = \.golf/);
   assert.doesNotMatch(watchUi, /CoreMotion|CMMotion|AVAudio|microphone|CMPedometer/);
   assert.doesNotMatch(service, /CoreMotion|CMMotion|AVAudio|getMotionActivity|DeviceMotion/);
 });

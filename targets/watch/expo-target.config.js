@@ -13,11 +13,16 @@ module.exports = (config) => ({
     muted: '#8A9A8E',
     bg: '#0B1A12',
   },
-  frameworks: ['WatchConnectivity', 'CoreLocation', 'WidgetKit'],
+  frameworks: ['WatchConnectivity', 'CoreLocation', 'WidgetKit', 'HealthKit'],
   entitlements: {
     'com.apple.security.application-groups': ['group.com.shottrax.app'],
+    'com.apple.developer.healthkit': true,
   },
   infoPlist: {
-    WKBackgroundModes: ['self-care'],
+    WKBackgroundModes: ['workout-processing'],
+    NSHealthShareUsageDescription:
+      'ShotTraxx™ does not read your Health data. It uses Health only to keep your round running on your Apple Watch.',
+    NSHealthUpdateUsageDescription:
+      'ShotTraxx™ uses a golf workout on your Apple Watch only to keep the round running. It does not save the round to Health.',
   },
 });

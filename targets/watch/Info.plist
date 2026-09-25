@@ -20,13 +20,17 @@
   <string>0.1.0</string>
   <key>CFBundleVersion</key>
   <string>1</string>
+  <key>NSHealthShareUsageDescription</key>
+  <string>ShotTraxx™ does not read your Health data. It uses Health only to keep your round running on your Apple Watch.</string>
+  <key>NSHealthUpdateUsageDescription</key>
+  <string>ShotTraxx™ uses a golf workout on your Apple Watch only to keep the round running. It does not save the round to Health.</string>
   <key>NSLocationWhenInUseUsageDescription</key>
   <string>ShotTraxx™ uses Watch location when you pick a club on the Watch to mark where you hit from.</string>
   <key>WKApplication</key>
   <true/>
   <key>WKBackgroundModes</key>
   <array>
-    <string>self-care</string>
+    <string>workout-processing</string>
   </array>
   <key>WKCompanionAppBundleIdentifier</key>
   <string>com.shottrax.app</string>
