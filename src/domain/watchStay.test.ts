@@ -2,22 +2,36 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
+  WATCH_HEALTH_SHARE_USAGE,
+  WATCH_HEALTH_UPDATE_USAGE,
   shouldWatchStayFrontmost,
+  watchHealthReadTypes,
+  watchHealthShareTypes,
   watchStayAfterExplicitLeave,
   watchStayAfterRoundEnds,
   watchStayBackgroundMode,
   watchStayIdleDoesNotCountAsLeave,
   watchStayUsesExtendedRuntime,
+  watchStayUsesGolfWorkout,
   watchStayWhenIdleWithoutTaps,
   watchStaysFrontmostDuringRound,
+  watchWorkoutActivityType,
+  watchWorkoutLocationType,
+  watchWorkoutSavesToHealth,
 } from './watchStay';
 
 test('TF 54 F: Watch stays in ShotTraxx while the round is live, not after leave', () => {
   assert.equal(watchStaysFrontmostDuringRound(), true);
-  assert.equal(watchStayUsesExtendedRuntime(), true);
+  assert.equal(watchStayUsesGolfWorkout(), true);
+  assert.equal(watchStayUsesExtendedRuntime(), false);
   assert.equal(watchStayWhenIdleWithoutTaps(), true);
   assert.equal(watchStayIdleDoesNotCountAsLeave(), true);
-  assert.equal(watchStayBackgroundMode(), 'self-care');
+  assert.equal(watchStayBackgroundMode(), 'workout-processing');
+  assert.equal(watchWorkoutActivityType(), 'golf');
+  assert.equal(watchWorkoutLocationType(), 'outdoor');
+  assert.equal(watchWorkoutSavesToHealth(), false);
+  assert.deepEqual(watchHealthShareTypes(), ['HKWorkoutType']);
+  assert.deepEqual(watchHealthReadTypes(), []);
   assert.equal(watchStayAfterExplicitLeave(), false);
   assert.equal(watchStayAfterRoundEnds(), false);
 
@@ -28,16 +42,34 @@ test('TF 54 F: Watch stays in ShotTraxx while the round is live, not after leave
     shouldWatchStayFrontmost({ hasLiveHole: true, puttOpen: true, userLeftApp: true }),
     false,
   );
+  assert.equal(shouldWatchStayFrontmost({ hasLiveHole: true, puttOpen: false, roundComplete: true }), false);
+  assert.equal(shouldWatchStayFrontmost({ hasLiveHole: true, puttOpen: true, roundLive: false }), false);
 
   const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
   const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
   const plist = readFileSync(new URL('../../targets/watch/Info.plist', import.meta.url), 'utf8');
   const target = readFileSync(new URL('../../targets/watch/expo-target.config.js', import.meta.url), 'utf8');
-  assert.match(session, /WKExtendedRuntimeSession/);
+  const app = readFileSync(new URL('../../app.json', import.meta.url), 'utf8');
+  const phone = readFileSync(new URL('../../src/services/watchClub.ts', import.meta.url), 'utf8');
+  const home = readFileSync(new URL('../../app/(tabs)/index.tsx', import.meta.url), 'utf8');
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+
+  assert.match(session, /HKWorkoutSession/);
+  assert.doesNotMatch(session, /WKExtendedRuntimeSession/);
+  assert.match(session, /activityType = \.golf/);
+  assert.match(session, /locationType = \.outdoor/);
   assert.match(session, /syncRoundStay/);
   assert.match(session, /startRoundStay/);
-  assert.match(session, /noteScenePhase/);
-  assert.match(session, /hasLiveHole \|\| putt\.open/);
+  assert.match(session, /golfWorkoutOccupied/);
+  assert.match(session, /HKObjectType\.workoutType\(\)/);
+  assert.match(session, /let typesToShare: Set<HKSampleType> = \[HKObjectType\.workoutType\(\)\]/);
+  assert.match(session, /let typesToRead: Set<HKObjectType> = \[\]/);
+  assert.match(session, /session\.end\(\)/);
+  assert.doesNotMatch(session, /HKLiveWorkoutBuilder|finishWorkout|HKLiveWorkoutDataSource|HKQuantityType|heartRate|activeEnergy/);
+  assert.match(session, /sharingDenied/);
+  assert.match(session, /isHealthDataAvailable/);
+  assert.doesNotMatch(session, /fatalError|preconditionFailure/);
+  assert.match(session, /list\.roundLive && \(\(hasLiveHole && !list\.roundComplete\) \|\| putt\.open\)/);
   assert.match(session, /userLeftApp/);
   const leaveFn = session.slice(session.indexOf('func leave('), session.indexOf('func dismissNearbyToHole'));
   assert.match(leaveFn, /userLeftApp = true/);
@@ -48,14 +80,65 @@ test('TF 54 F: Watch stays in ShotTraxx while the round is live, not after leave
     sceneFn.slice(sceneFn.indexOf('phase == "inactive"'), sceneFn.indexOf('phase == "background"')),
     /userLeftApp = true/,
   );
+  assert.doesNotMatch(sceneFn, /stopRoundStay/);
   assert.match(plist, /WKBackgroundModes/);
-  assert.match(plist, /self-care/);
+  assert.match(plist, /workout-processing/);
+  assert.doesNotMatch(plist, /self-care/);
+  assert.match(plist, /NSHealthShareUsageDescription/);
+  assert.match(plist, /NSHealthUpdateUsageDescription/);
   assert.match(target, /WKBackgroundModes/);
-  assert.match(target, /self-care/);
-  assert.doesNotMatch(session, /CoreMotion|CMMotion|HKWorkout|HealthKit/);
-  assert.doesNotMatch(plist, /workout-processing|HealthKit/);
+  assert.match(target, /workout-processing/);
+  assert.doesNotMatch(target, /self-care/);
+  assert.match(target, /com\.apple\.developer\.healthkit/);
+  assert.match(target, /HealthKit/);
+  assert.doesNotMatch(session, /CoreMotion|CMMotion/);
   assert.match(watchUi, /scenePhase/);
   assert.match(watchUi, /noteScenePhase\("active"\)/);
   assert.match(watchUi, /noteScenePhase\("inactive"\)/);
   assert.match(watchUi, /noteScenePhase\("background"\)/);
+
+  assert.ok(plist.includes(WATCH_HEALTH_SHARE_USAGE));
+  assert.ok(plist.includes(WATCH_HEALTH_UPDATE_USAGE));
+  assert.ok(target.includes(WATCH_HEALTH_SHARE_USAGE));
+  assert.ok(target.includes(WATCH_HEALTH_UPDATE_USAGE));
+  assert.ok(app.includes(WATCH_HEALTH_SHARE_USAGE));
+  assert.ok(app.includes(WATCH_HEALTH_UPDATE_USAGE));
+
+  const parsed = JSON.parse(app) as {
+    expo: {
+      ios: { entitlements: Record<string, unknown>; infoPlist: Record<string, string> };
+      extra: {
+        eas: {
+          build: {
+            experimental: {
+              ios: {
+                appExtensions: { targetName: string; entitlements: Record<string, unknown> }[];
+              };
+            };
+          };
+        };
+      };
+    };
+  };
+  assert.equal(parsed.expo.ios.entitlements['com.apple.developer.healthkit'], undefined);
+  assert.equal(parsed.expo.ios.infoPlist.NSHealthShareUsageDescription, WATCH_HEALTH_SHARE_USAGE);
+  assert.equal(parsed.expo.ios.infoPlist.NSHealthUpdateUsageDescription, WATCH_HEALTH_UPDATE_USAGE);
+  const watchExt = parsed.expo.extra.eas.build.experimental.ios.appExtensions.find(
+    (row) => row.targetName === 'ShotTraxxWatch',
+  );
+  const widgetExt = parsed.expo.extra.eas.build.experimental.ios.appExtensions.find(
+    (row) => row.targetName === 'ShotTraxxHole',
+  );
+  assert.equal(watchExt?.entitlements['com.apple.developer.healthkit'], true);
+  assert.equal(widgetExt?.entitlements['com.apple.developer.healthkit'], undefined);
+
+  assert.match(phone, /export function endWatchRound/);
+  assert.match(phone, /roundComplete: true/);
+  assert.match(phone, /roundLive: false/);
+  assert.match(home, /endWatchRound\(active\.id\)/);
+  assert.match(home, /if \(live\) endWatchRound\(round\.id\)/);
+  assert.match(hole, /endWatchRound\(id\)/);
+  assert.match(hole, /roundLive: round\?\.finishedAt == null/);
+  assert.match(session, /message\["roundLive"\]/);
+  assert.match(session, /stopRoundStay\(\)/);
 });

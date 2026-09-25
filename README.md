@@ -145,6 +145,7 @@ eas workflow:run .eas/workflows/production-ios-testflight.yml
 | --- | --- |
 | **Location When In Use** | Nearby courses, yards to green, and club-pick shot marks while the app is open. ShotTraxx does not invent coordinates. Watch location marks a Watch club tap (phone fallback if that sample is missing or stale). Nearby stays phone-only. The `expo-location` plugin sets Always / background / motion purpose keys to `false` so prebuild does not inject them. `motionUsagePermission: false` alone still compiles ExpoLocation's CoreMotion activity APIs (ITMS-90683). `./plugins/withDisableExpoLocationMotion` strips that linkage from the shipping iOS binary. Do not add a dead `NSMotionUsageDescription`. |
 | **Photo Library** (iOS) | Not used. `NSPhotoLibraryUsageDescription` and `NSPhotoLibraryAddUsageDescription` are in the plist so App Store review (ITMS-90683) can ship. Photos prompts stay out of scope. |
+| **Health (Watch)** | The Watch starts a golf workout session so the round stays on the Watch. It asks to share workouts only, reads nothing, and does not save the round to Health. The iPhone app carries the same purpose strings because Apple requires them on the paired app. The phone does not get the HealthKit entitlement and does not call HealthKit. |
 
 Not in this IPA (and not in the plist): Always location, Bluetooth, motion, microphone, speech recognition, Watch mic. Watch Connectivity does not need Bluetooth purpose strings.
 

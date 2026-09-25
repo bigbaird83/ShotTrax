@@ -57,6 +57,8 @@ export type ClubListMessage = {
   complicationQuality?: YardsQuality;
   /** Last hole finished (Made it / Hole Out). Watch shows Round complete, not the putt sheet. */
   roundComplete?: boolean;
+  /** False while the phone is showing a finished round. Omitted means the round is live. */
+  roundLive?: boolean;
 };
 
 export const CLUB_LIST_KEYS = [
@@ -191,6 +193,7 @@ export function parseClubList(raw: unknown): ClubListMessage | null {
     typeof row.selectedClubId === 'string' && row.selectedClubId.trim() ? row.selectedClubId : undefined;
   if (selectedClubId) msg.selectedClubId = selectedClubId;
   if (row.roundComplete === true) msg.roundComplete = true;
+  if (row.roundLive === false) msg.roundLive = false;
   return msg;
 }
 
@@ -396,6 +399,7 @@ export function clubListPushKey(msg: ClubListMessage): string {
     complicationYards: msg.complicationYards ?? null,
     complicationQuality: msg.complicationQuality ?? null,
     roundComplete: msg.roundComplete === true,
+    roundLive: msg.roundLive !== false,
   });
 }
 

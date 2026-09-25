@@ -162,7 +162,7 @@ import { shareKindOrScorecard, type ShareKind } from '@/src/domain/shareChoice';
 import { endOpenShot, markShotWithClub, promptForPlan, takeDrop, undoLastShot, undoLastSoftGpsClubMark, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, undoShotEdit, deleteHoleShot } from '@/src/services/shotActions';
 import { useLiveFix } from '@/src/services/useLiveFix';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
-import { pushWatchMadeItAdvance, pushWatchPuttSheet } from '@/src/services/watchClub';
+import { endWatchRound, pushWatchMadeItAdvance, pushWatchPuttSheet } from '@/src/services/watchClub';
 import { MADE_IT_FEEDBACK, PHONE_UNAVAILABLE } from '@/src/domain/watchMessages';
 import { HoleOutBadge, QualityBadge } from '@/src/ui/Badge';
 import { BigButton } from '@/src/ui/BigButton';
@@ -992,6 +992,7 @@ export default function HoleScreen() {
         yards: liveGpsToPin.yards,
         quality: liveGpsToPin.quality,
       },
+      roundLive: round?.finishedAt == null,
     },
   );
 
@@ -2325,6 +2326,7 @@ export default function HoleScreen() {
                 variant="danger"
                 onPress={() => {
                   finishRound(db, id);
+                  endWatchRound(id);
                   bump();
                   router.replace(`/round/${id}/summary`);
                 }}

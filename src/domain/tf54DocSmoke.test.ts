@@ -70,17 +70,18 @@ test('TF 54 A/E: Watch Made it is reserved on the putt sheet — always enabled,
   assert.doesNotMatch(watchFn, /open: puttOpenRef\.current/);
 });
 
-test('TF 54 F: stay holds while live / idle — crown and Back/Home still end it', () => {
+test('TF 54 F: stay holds through idle and background — Home/Back still ends it', () => {
   assert.equal(watchStayWhenIdleWithoutTaps(), true);
   assert.equal(watchStayIdleDoesNotCountAsLeave(), true);
-  assert.equal(watchStayBackgroundMode(), 'self-care');
+  assert.equal(watchStayBackgroundMode(), 'workout-processing');
   assert.equal(shouldWatchStayFrontmost({ hasLiveHole: true, puttOpen: false }), true);
   assert.equal(shouldWatchStayFrontmost({ hasLiveHole: true, puttOpen: true, userLeftApp: true }), false);
 
   const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
   const plist = readFileSync(new URL('../../targets/watch/Info.plist', import.meta.url), 'utf8');
   assert.match(plist, /<key>WKBackgroundModes<\/key>/);
-  assert.match(plist, /<string>self-care<\/string>/);
+  assert.match(plist, /<string>workout-processing<\/string>/);
+  assert.doesNotMatch(plist, /self-care/);
   assert.match(session, /func leave\(/);
   assert.match(session, /userLeftApp = true/);
   assert.match(session, /stopRoundStay/);
