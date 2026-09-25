@@ -21,7 +21,9 @@ import { planLiveGpsToPin, type LiveGpsToPin } from './yardsToGreen';
 /**
  * Complication reload budget. WidgetKit allows roughly 40–70 refreshes a day.
  * Hole changes reload immediately. Any other displayed-yard change must be at
- * least 1 yard and must wait out 45 seconds. The in-app number is not gated.
+ * least 1 yard and must wait out 45 seconds. While the Watch app is on screen
+ * the face is hidden, so only a hole change reloads; leaving the app re-checks
+ * with the normal rule. The in-app number is not gated.
  */
 export const WATCH_WIDGET_RELOAD_MIN_YD = 1;
 export const WATCH_WIDGET_RELOAD_MIN_MS = 45_000;
@@ -187,12 +189,15 @@ export function watchWidgetShouldReload(args: {
   yards: number | null;
   previous: { hole: number; quality: string; yards: number | null; atMs: number } | null;
   nowMs: number;
+  /** Watch app frontmost: the face cannot be seen, so a reload is wasted. */
+  appOnScreen?: boolean;
 }): boolean {
   const prev = args.previous;
   if (!prev) return true;
   // Quality alone does not reload. good/soft show the same yards; none is a
   // number↔dash change, which still waits out the interval unless the hole changed.
   if (prev.hole !== args.hole) return true;
+  if (args.appOnScreen) return false;
   if (args.nowMs - prev.atMs < WATCH_WIDGET_RELOAD_MIN_MS) return false;
   if (prev.yards == null || args.yards == null) return prev.yards !== args.yards;
   return Math.abs(args.yards - prev.yards) >= WATCH_WIDGET_RELOAD_MIN_YD;
