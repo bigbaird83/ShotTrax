@@ -33,7 +33,7 @@ import {
 test('restore failure copy names each reason', () => {
   assert.equal(
     restoreFailureCopy('not_shottrax'),
-    'That isn’t a shottracker rounds file. Pick the .json from Export rounds. CSV can’t be restored.',
+    'That isn’t a ShotTraxx™ rounds file. Pick the .json from Export rounds. CSV can’t be restored.',
   );
   assert.equal(restoreFailureCopy('not_shottrax'), COPY.restoreRoundsNotFile);
   assert.equal(COPY.restoreRoundsCsv, 'CSV can’t be restored. Pick the .json from Export rounds.');

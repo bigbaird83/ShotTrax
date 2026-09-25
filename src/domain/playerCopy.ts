@@ -44,7 +44,7 @@ export const COPY = {
     'Restore rounds from this file? Existing rounds with the same id will be replaced. Favorites are added. The bag changes only after you confirm the list.',
   restoreRoundsFailed: 'Couldn’t restore rounds.',
   restoreRoundsNotFile:
-    'That isn’t a shottracker rounds file. Pick the .json from Export rounds. CSV can’t be restored.',
+    'That isn’t a ShotTraxx™ rounds file. Pick the .json from Export rounds. CSV can’t be restored.',
   restoreRoundsCsv: 'CSV can’t be restored. Pick the .json from Export rounds.',
   restoreRoundsEmpty: 'Nothing to restore in that file.',
   restoreRoundsUnreadable: 'Couldn’t read that file.',
