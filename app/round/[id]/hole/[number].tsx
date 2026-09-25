@@ -125,7 +125,7 @@ import { planUndoPlacePins } from '@/src/domain/undoLastShot';
 import { planUndoLastSoftGpsClubMark } from '@/src/domain/undoSoftGpsClubMark';
 import type { LatLng } from '@/src/domain/latLng';
 import { formatPenaltyRow, PENALTY_REASONS, totalPenaltyStrokes } from '@/src/domain/penalty';
-import { formatShotStepChip, orderHoleSteps } from '@/src/domain/penaltySteps';
+import { formatHoleCountLine, formatShotStepChip, orderHoleSteps } from '@/src/domain/penaltySteps';
 import {
   addPuttLength,
   applyWatchPuttPickToDraft,
@@ -1227,12 +1227,12 @@ export default function HoleScreen() {
       Alert.alert(COPY.penaltySaveFailed);
       return;
     }
+    bump();
     hapticTap();
     setPenaltyOpen(false);
     setPenaltyStrokes(1);
     setPenaltyReason('water');
     setPenaltyNote('');
-    bump();
   };
 
   const openBag = () => {
@@ -1587,6 +1587,7 @@ export default function HoleScreen() {
               ) : null}
               {playLayout.shotLine === 'header' ? (
                 <ScrollView
+                  key={`hole-steps-${revision}-${penalties.map((row) => row.id).join(',')}`}
                   horizontal
                   style={styles.shotLine}
                   contentContainerStyle={styles.shotLineInner}
@@ -1658,6 +1659,16 @@ export default function HoleScreen() {
                     </Pressable>
                   ) : null}
                 </ScrollView>
+              ) : null}
+              {!finishedMini.visible && penaltyTotal > 0 ? (
+                <Text testID="live-hole-count" style={styles.shotLineMuted}>
+                  {formatHoleCountLine({
+                    shotCount: shots.length,
+                    penaltyStrokes: penaltyTotal,
+                    puttCount: hole.putts,
+                    omitZeroPutts: true,
+                  })}
+                </Text>
               ) : null}
               {finishedMini.visible ? (
                 <View testID="finished-hole-chip" style={styles.finishedHoleChip}>
