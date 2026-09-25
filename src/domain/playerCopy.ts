@@ -232,7 +232,8 @@ export const COPY = {
   trends: 'Trends',
   dispersion: 'Dispersion',
   dispersionLede: 'Where each club finishes, measured from where you hit it toward that hole’s green.',
-  dispersionLimits: 'Only shots with a start, a finish, and a saved green count. Doglegs off the tee can read as misses toward the corner.',
+  dispersionLimits:
+    'GPS and placed shots with a start, a finish, and a saved green count. Placed shots may be less accurate. Doglegs off the tee can read as misses toward the corner.',
   dispersionEmpty: 'No measured shots yet. Mark shots on holes with a green pin and they land here.',
   dispersionAvg: 'Average',
   dispersionOffLine: 'Off line',
@@ -288,6 +289,17 @@ export const COPY = {
   scorecardPar: 'Par',
   summaryHome: 'Home',
 } as const;
+
+/**
+ * Dispersion summary when some included shots were placed by hand.
+ * Null when none were — the screen shows nothing in that case.
+ */
+export function formatDispersionPlacedNote(count: number): string | null {
+  const n = Math.round(count);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const shots = n === 1 ? '1 placed shot' : `${n} placed shots`;
+  return `Includes ${shots}. Placed shots are set by hand and may be less accurate than GPS-marked ones.`;
+}
 
 /** Bag row when the last five dropped shots agree and the typed number does not. */
 export function formatBagCarrySuggestion(clubLabel: string, yards: number): string {

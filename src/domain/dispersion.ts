@@ -9,9 +9,10 @@ import type { ShotFixQuality, ShotSource } from './types';
  * `lateral` = yards off that line (right +, left −).
  *
  * Only real GPS / Placed distance samples (same rule as club averages) with a
- * start, an end, and a saved green pin count. No green → the shot is skipped;
- * a target line is never guessed. A start within MIN_AIM_YARDS of the green has
- * no stable line and is skipped too.
+ * start, an end, and a saved green pin count. Placed shots count and may be
+ * less accurate than GPS. No green → the shot is skipped; a target line is
+ * never guessed. A start within MIN_AIM_YARDS of the green has no stable line
+ * and is skipped too.
  */
 
 export const MIN_AIM_YARDS = 20;
@@ -38,6 +39,8 @@ export type DispersionPoint = {
   shotId: string;
   along: number;
   lateral: number;
+  /** Included point whose source is `placed` (hand-set pins). */
+  placed: boolean;
   playedAt: string;
   courseName: string;
   holeNumber: number;
@@ -55,6 +58,8 @@ export type DispersionPlan = {
   left: number;
   onLine: number;
   right: number;
+  /** Included points whose source is `placed`. Does not change `count` or the averages. */
+  placed: number;
 };
 
 /** Along / lateral yards for one shot, or null when it can't be measured honestly. */
@@ -98,12 +103,14 @@ export function planDispersion(shots: readonly DispersionShotIn[], clubId: strin
     points.push({
       shotId: shot.shotId,
       ...measured,
+      placed: shot.source === 'placed',
       playedAt: shot.playedAt,
       courseName: shot.courseName?.trim() || 'Round',
       holeNumber: shot.holeNumber,
     });
   }
   const count = points.length;
+  const placed = points.reduce((sum, point) => sum + (point.placed ? 1 : 0), 0);
   const avg = (values: number[]) =>
     values.length === 0 ? null : Math.round(values.reduce((sum, v) => sum + v, 0) / values.length);
   let left = 0;
@@ -125,6 +132,7 @@ export function planDispersion(shots: readonly DispersionShotIn[], clubId: strin
     left,
     onLine,
     right,
+    placed,
   };
 }
 

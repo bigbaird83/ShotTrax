@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatLateral, type DispersionPlan } from '@/src/domain/dispersion';
+import { COPY } from '@/src/domain/playerCopy';
 import { formatHistoryDate } from '@/src/domain/roundHistory';
 import { useColors } from './ColorThemeProvider';
 import { type, type ColorPalette } from './theme';
@@ -101,6 +102,7 @@ export function DispersionPlot({ plan }: { plan: DispersionPlan }) {
             <View key={point.shotId} style={styles.tableRow}>
               <Text style={styles.tableLabel} numberOfLines={1}>
                 {formatHistoryDate(point.playedAt)} · {point.courseName} · H{point.holeNumber}
+                {point.placed ? ` · ${COPY.placed}` : ''}
               </Text>
               <Text style={styles.tableValue}>
                 {point.along} yd · {formatLateral(point.lateral)}
