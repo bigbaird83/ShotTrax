@@ -195,6 +195,11 @@ test('complication uses the watch widget families and the phone hole-map number'
 
   const widget = readFileSync(new URL('../../targets/watch-widget/index.swift', import.meta.url), 'utf8');
   assert.match(widget, /kind: "ShotTraxxHoleYards"/);
+  assert.match(widget, /func faceText/);
+  assert.match(widget, /isEmpty \? "—" : text/);
+  assert.doesNotMatch(widget, /value:\s*""|inline:\s*""/);
+  const widgetTarget = readFileSync(new URL('../../targets/watch-widget/expo-target.config.js', import.meta.url), 'utf8');
+  assert.match(widgetTarget, /bundleIdentifier: `\$\{config\.ios\.bundleIdentifier\}\.watch\.widget`/);
   assert.match(widget, /complicationYards/);
   assert.match(widget, /complicationQuality/);
   assert.match(widget, /complicationHole/);

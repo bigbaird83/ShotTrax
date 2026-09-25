@@ -21,9 +21,14 @@ module.exports = (config) => ({
   infoPlist: {
     // `location` must ship with allowsBackgroundLocationUpdates. Setting that
     // property without this mode terminates the watch app.
+    // @bacons/apple-targets 5 does not read this object. Prebuild keeps
+    // targets/watch/Info.plist (it only writes that file when missing, and the
+    // watch template is empty) and Xcode compiles it as INFOPLIST_FILE.
+    // plugins/withWatchInfoPlist.js copies these keys into that file so they
+    // are in the built app.
     WKBackgroundModes: ['workout-processing', 'location'],
     NSLocationWhenInUseUsageDescription:
-      'ShotTraxx™ uses your Apple Watch location during a round to show yards to the green as you walk, and when you pick a club to mark where you hit from.',
+      'ShotTraxx™ uses Watch location during a round to show yards to the green and mark where you hit from.',
     NSHealthShareUsageDescription:
       'ShotTraxx™ does not read your Health data. It uses Health only to keep your round running on your Apple Watch.',
     NSHealthUpdateUsageDescription:

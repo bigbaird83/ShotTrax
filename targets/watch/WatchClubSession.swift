@@ -301,6 +301,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   /// fresh stream from the background, so wrist-down must not clear this while
   /// a live hole is in progress.
   private var locationUpdatesStarted = false
+  /// Avoid asking again while a When In Use sheet from this active scene is up.
+  private var locationAuthRequestInFlight = false
   /// Walking filter once the wrist is down. Wrist-up stays unfiltered so a
   /// stationary club mark still has a fix younger than 3 seconds.
   private static let liveDistanceFilterM: CLLocationDistance = 3
@@ -314,6 +316,9 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     // A pause at the ball cannot be resumed until the scene is active.
     location.pausesLocationUpdatesAutomatically = false
     location.allowsBackgroundLocationUpdates = false
+    let launchStatus = location.authorizationStatus
+    let launchLabel = locationAuthLabel(launchStatus)
+    liveYardsLog.info("launch authorization=\(launchLabel, privacy: .public)")
     location.requestWhenInUseAuthorization()
 
     if WCSession.isSupported() {
@@ -1130,6 +1135,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     } else {
       next.greenLat = nil
       next.greenLng = nil
+      let hole = next.holeNumber
+      liveYardsLog.info("clubList missing green hole=\(hole, privacy: .public) green=false")
     }
     if let rawCarry = message["clubCarry"] as? [String: Any] {
       var carry: [String: Int] = [:]
@@ -1941,8 +1948,23 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     liveYardsLog.info("location updates stopped")
   }
 
+  /// The init request can run before the scene is active, and watchOS then never
+  /// shows the sheet. Ask again once a live round is on screen.
+  private func requestLiveLocationAuthorizationIfNeeded() {
+    guard sceneIsActive, liveHoleInProgress else { return }
+    guard location.authorizationStatus == .notDetermined else {
+      locationAuthRequestInFlight = false
+      return
+    }
+    guard !locationAuthRequestInFlight else { return }
+    locationAuthRequestInFlight = true
+    liveYardsLog.info("requestWhenInUseAuthorization; round live; scene active")
+    location.requestWhenInUseAuthorization()
+  }
+
   private func syncLiveLocation() {
     if liveHoleInProgress {
+      requestLiveLocationAuthorizationIfNeeded()
       startLiveLocationIfAuthorized()
       return
     }
@@ -2014,6 +2036,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     if phase == "active" {
       sceneIsActive = true
       userLeftApp = false
+      let locationLabel = locationAuthLabel(location.authorizationStatus)
+      liveYardsLog.info("scene active authorization=\(locationLabel, privacy: .public)")
       // A start that failed while the app was not in front can run now.
       suppressGolfStart = false
       let status = HKHealthStore.isHealthDataAvailable()
@@ -2037,10 +2061,12 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       // Player may have turned Workouts on in Health while we were away.
       syncWorkoutDeniedHint()
       noteLocationScene(active: true)
+      requestLiveLocationAuthorizationIfNeeded()
       return
     }
     if phase == "inactive" || phase == "background" {
       sceneIsActive = false
+      locationAuthRequestInFlight = false
       // Wrist-down finishes in background. The system sheet is gone, and a
       // request whose callback never arrives must not block the next active.
       if phase == "background" {
