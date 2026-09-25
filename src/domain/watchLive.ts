@@ -46,6 +46,24 @@ export const WATCH_LIVE_YARDS_FINDING_GPS = 'Finding GPS';
 export type WatchLiveYardsAuth = 'notDetermined' | 'restricted' | 'denied' | 'authorized';
 
 /**
+ * The location sheet is shown only while the Watch app is in use.
+ * A background launch (complication transfer, application context, workout)
+ * must not call `requestWhenInUseAuthorization` — watchOS delays that prompt
+ * and leaves status notDetermined. Ask on the active scene, and ask again
+ * the next time the scene becomes active if it is still notDetermined.
+ * An in-flight request is not repeated until the scene leaves active, so a
+ * synchronous notDetermined callback cannot loop.
+ * `WatchClubSession.requestLiveLocationAuthorizationIfNeeded` mirrors this.
+ */
+export function watchShouldRequestLocationAuthorization(args: {
+  sceneActive: boolean;
+  authorization: WatchLiveYardsAuth;
+  requestInFlight: boolean;
+}): boolean {
+  return args.sceneActive && args.authorization === 'notDetermined' && !args.requestInFlight;
+}
+
+/**
  * Why the Watch app is showing a dash. Null when a trusted yardage is showing,
  * or when none of the four honest states apply (still notDetermined, or a fix
  * that was rejected for a reason other than accuracy). Never a yardage.
