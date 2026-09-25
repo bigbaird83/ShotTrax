@@ -773,8 +773,10 @@ export function restoreRoundHistory(
       const id = round.id as string;
       const token = getRoundShareToken(db, id);
       const sharedAt = getRoundSharedAt(db, id);
+      // Read before delete. A hole with no penalties field keeps the rows already on this phone.
+      const carried = penaltiesToCarry(db, id, round);
       deleteRoundRows(db, id);
-      insertTransferredRound(db, round, clubs, id);
+      insertTransferredRound(db, round, clubs, id, carried);
       if (token) db.runSync('UPDATE rounds SET share_token = ? WHERE id = ?', [token, id]);
       if (sharedAt) db.runSync('UPDATE rounds SET shared_at = ? WHERE id = ?', [sharedAt, id]);
     }
@@ -797,11 +799,58 @@ export function restoreRoundHistory(
   };
 }
 
+type CarriedPenalty = {
+  strokes: number;
+  reason: string;
+  note: string | null;
+  createdAt: string;
+  kind: string;
+  lat: number | null;
+  lng: number | null;
+};
+
+/** Stored penalty rows for incoming holes whose file does not mention penalties. */
+function penaltiesToCarry(
+  db: SQLiteDatabase,
+  roundId: string,
+  incoming: RoundTransferRound,
+): Map<number, CarriedPenalty[]> {
+  const unknown = new Set(
+    incoming.holes.filter((hole) => hole.penalties == null).map((hole) => hole.number),
+  );
+  const carried = new Map<number, CarriedPenalty[]>();
+  if (unknown.size === 0) return carried;
+  const holes = db.getAllSync<{ id: string; number: number }>('SELECT id, number FROM holes WHERE round_id = ?', [
+    roundId,
+  ]);
+  for (const hole of holes) {
+    if (!unknown.has(hole.number)) continue;
+    const rows = db.getAllSync<PenaltyRow>(
+      'SELECT * FROM hole_penalties WHERE hole_id = ? ORDER BY created_at ASC',
+      [hole.id],
+    );
+    carried.set(
+      hole.number,
+      rows.map((row) => ({
+        strokes: row.strokes,
+        reason: row.reason,
+        note: row.note,
+        createdAt: row.created_at,
+        kind: row.kind ?? 'penalty',
+        lat: row.lat ?? null,
+        lng: row.lng ?? null,
+      })),
+    );
+  }
+  return carried;
+}
+
 function insertTransferredRound(
   db: SQLiteDatabase,
   round: RoundTransferRound,
   clubs: Set<string>,
   roundId: string,
+  carriedPenalties?: ReadonlyMap<number, CarriedPenalty[]>,
 ): void {
   const courseLoc = isValidLatLng(
     round.courseLat != null && round.courseLng != null
@@ -897,25 +946,44 @@ function insertTransferredRound(
         ],
       );
     }
-    for (const penalty of hole.penalties ?? []) {
-      const point =
-        penalty.lat != null && penalty.lng != null && isValidLatLng({ lat: penalty.lat, lng: penalty.lng })
-          ? { lat: penalty.lat, lng: penalty.lng }
-          : null;
-      db.runSync(
-        'INSERT INTO hole_penalties (id, hole_id, strokes, reason, note, created_at, kind, lat, lng) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-          newId(),
-          holeId,
-          penalty.strokes,
-          penalty.reason,
-          penalty.note,
-          penalty.createdAt,
-          penalty.kind,
-          point?.lat ?? null,
-          point?.lng ?? null,
-        ],
-      );
+    if (hole.penalties == null) {
+      for (const penalty of carriedPenalties?.get(hole.number) ?? []) {
+        db.runSync(
+          'INSERT INTO hole_penalties (id, hole_id, strokes, reason, note, created_at, kind, lat, lng) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [
+            newId(),
+            holeId,
+            penalty.strokes,
+            penalty.reason,
+            penalty.note,
+            penalty.createdAt,
+            penalty.kind,
+            penalty.lat,
+            penalty.lng,
+          ],
+        );
+      }
+    } else {
+      for (const penalty of hole.penalties) {
+        const point =
+          penalty.lat != null && penalty.lng != null && isValidLatLng({ lat: penalty.lat, lng: penalty.lng })
+            ? { lat: penalty.lat, lng: penalty.lng }
+            : null;
+        db.runSync(
+          'INSERT INTO hole_penalties (id, hole_id, strokes, reason, note, created_at, kind, lat, lng) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [
+            newId(),
+            holeId,
+            penalty.strokes,
+            penalty.reason,
+            penalty.note,
+            penalty.createdAt,
+            penalty.kind,
+            point?.lat ?? null,
+            point?.lng ?? null,
+          ],
+        );
+      }
     }
   }
 }

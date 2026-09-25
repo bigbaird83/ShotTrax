@@ -18,9 +18,10 @@ import type { PenaltyKind, ShotFixQuality, ShotSource } from './types';
 export const ROUND_HISTORY_EXPORT_KIND = 'shottrax.round-history';
 /**
  * v2 adds favorites and the bag. Penalties and drops are an optional `penalties`
- * array on each hole, so this stays v2: v1 files and build 92 v2 files (no such
- * field) still restore. Build 92's parser ignores unknown hole fields, so a
- * newer file that includes `penalties` still opens there.
+ * array on each hole, so this stays v2. A missing field means the file does not
+ * know the list (v1 and build 92). `[]` means the file says there are none.
+ * Build 92's parser ignores unknown hole fields, so a newer file that includes
+ * `penalties` still opens there.
  */
 export const ROUND_HISTORY_EXPORT_VERSION = 2;
 
@@ -102,8 +103,11 @@ export type RoundTransferHole = {
   /** Tee shot on par 4+. Null in older files or when never tapped. */
   fairway: FairwayResult | null;
   shots: RoundTransferShot[];
-  /** Empty when the file had no penalties field. */
-  penalties: RoundTransferPenalty[];
+  /**
+   * Undefined when the file has no `penalties` field (the list is unknown).
+   * `[]` means the file says this hole has none. New files always write the array.
+   */
+  penalties: RoundTransferPenalty[] | undefined;
 };
 
 export type RoundTransferRound = {
@@ -394,9 +398,12 @@ export function acceptTransferPenalty(raw: unknown): RoundTransferPenalty | null
   return penalty;
 }
 
-/** Missing or non-array `penalties` means none. Bad rows are dropped, not fatal. */
-function acceptPenalties(raw: unknown): RoundTransferPenalty[] {
-  if (!Array.isArray(raw)) return [];
+/**
+ * An array is a known list, possibly empty after bad rows are skipped.
+ * No field, null, or any non-array is unknown — not "none".
+ */
+function acceptPenalties(raw: unknown): RoundTransferPenalty[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
   const penalties: RoundTransferPenalty[] = [];
   for (const item of raw) {
     const accepted = acceptTransferPenalty(item);
@@ -408,7 +415,7 @@ function acceptPenalties(raw: unknown): RoundTransferPenalty[] {
 function acceptHole(raw: unknown): { hole: RoundTransferHole; rejectedShots: number } | null {
   const record = asRecord(raw);
   if (!record) return null;
-  // Unknown hole fields are ignored, same as build 92. A missing penalties list is none.
+  // Unknown hole fields are ignored, same as build 92. A missing penalties field stays unknown.
   const number = finite(record.number);
   if (number == null || !Number.isInteger(number) || number < 1 || number > 18) return null;
   const shotsRaw = Array.isArray(record.shots) ? record.shots : [];
@@ -541,7 +548,8 @@ export function buildRoundHistoryExport(args: {
         completedAt: isoTime(hole.completedAt),
         fairway: parseFairwayResult(hole.fairway ?? null),
         shots,
-        penalties: acceptPenalties(hole.penalties),
+        // New files always write the array, including [] when the hole has none.
+        penalties: acceptPenalties(hole.penalties) ?? [],
       });
     }
     rounds.push({
@@ -817,10 +825,16 @@ function canonicalPenalties(penalties: readonly RoundTransferPenalty[] | undefin
 
 /** Identity of a transferred round, ignoring row ids that restore regenerates. */
 export function sameRoundTransferContent(a: RoundTransferRound, b: RoundTransferRound): boolean {
-  return JSON.stringify(canonicalTransferRound(a)) === JSON.stringify(canonicalTransferRound(b));
+  return JSON.stringify(canonicalTransferRound(a, b)) === JSON.stringify(canonicalTransferRound(b, a));
 }
 
-function canonicalTransferRound(round: RoundTransferRound) {
+function penaltiesKnownForComparison(hole: RoundTransferHole, other: RoundTransferRound): boolean {
+  if (hole.penalties == null) return false;
+  const counterpart = other.holes.find((row) => row.number === hole.number);
+  return counterpart?.penalties != null;
+}
+
+function canonicalTransferRound(round: RoundTransferRound, other: RoundTransferRound) {
   return {
     id: round.id,
     startedAt: round.startedAt,
@@ -883,7 +897,9 @@ function canonicalTransferRound(round: RoundTransferRound) {
             holeOut: shot.holeOut,
             averageEligibleAt: shot.averageEligibleAt,
           })),
-        penalties: canonicalPenalties(hole.penalties),
+        ...(penaltiesKnownForComparison(hole, other)
+          ? { penalties: canonicalPenalties(hole.penalties) }
+          : {}),
       })),
   };
 }
