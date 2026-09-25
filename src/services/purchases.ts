@@ -11,6 +11,9 @@
  * rejects a native Apple key, so this module does not call configure there.
  * Real sandbox purchases belong on a dev client or TestFlight. The Watch
  * app does not use this module.
+ *
+ * Diagnostics reads one status line from this same configure attempt.
+ * The line never includes the key.
  */
 
 import { useEffect, useState } from 'react';
@@ -27,6 +30,8 @@ import {
   noteMissingRevenueCatKey,
   parseProCache,
   parseProTestOverride,
+  formatRevenueCatStatus,
+  mapRevenueCatStatus,
   planRevenueCatConfigure,
   proCacheFromCustomerEntitlements,
   resolveProStatus,
@@ -34,12 +39,14 @@ import {
   type ProEntitlementCache,
   type ProTestOverride,
   type ResolvedProStatus,
+  type RevenueCatStatus,
 } from '@/src/domain/proEntitlement';
 
 type Listener = () => void;
 
 let cache: ProEntitlementCache | null = null;
 let override: ProTestOverride = 'off';
+let revenueCatStatus: RevenueCatStatus = { kind: 'pending' };
 let started = false;
 const listeners = new Set<Listener>();
 
@@ -88,6 +95,13 @@ export function useIsPro(nowMs?: number): boolean {
   return useProStatus(nowMs).isPro;
 }
 
+/** Diagnostics line for this process. Same configure attempt as Pro; never the key. */
+export function useRevenueCatStatus(): string {
+  const [, bump] = useState(0);
+  useEffect(() => subscribe(() => bump((n) => n + 1)), []);
+  return formatRevenueCatStatus(revenueCatStatus);
+}
+
 export function useProTestOverride(): ProTestOverride {
   const [, bump] = useState(0);
   useEffect(() => subscribe(() => bump((n) => n + 1)), []);
@@ -119,21 +133,27 @@ function applyCustomerInfo(db: SQLiteDatabase, info: CustomerInfo): void {
   rememberCache(db, proCacheFromCustomerEntitlements(info?.entitlements));
 }
 
+function publishRevenueCatStatus(next: RevenueCatStatus): void {
+  revenueCatStatus = next;
+  emit();
+}
+
 async function refreshPurchases(db: SQLiteDatabase): Promise<void> {
+  const plan = planRevenueCatConfigure({
+    apiKey: process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY,
+    platform: Platform.OS,
+    inExpoGo: isExpoGoRuntime({
+      appOwnership: Constants.appOwnership,
+      expoVersion: Constants.expoVersion,
+    }),
+  });
+  if (!plan.configure) {
+    if (plan.reason === 'missing-key') noteMissingRevenueCatKey();
+    else if (plan.reason === 'expo-go') noteExpoGoPurchases();
+    publishRevenueCatStatus(mapRevenueCatStatus({ plan, outcome: 'pending' }));
+    return;
+  }
   try {
-    const plan = planRevenueCatConfigure({
-      apiKey: process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY,
-      platform: Platform.OS,
-      inExpoGo: isExpoGoRuntime({
-        appOwnership: Constants.appOwnership,
-        expoVersion: Constants.expoVersion,
-      }),
-    });
-    if (!plan.configure) {
-      if (plan.reason === 'missing-key') noteMissingRevenueCatKey();
-      else if (plan.reason === 'expo-go') noteExpoGoPurchases();
-      return;
-    }
     Purchases.configure({ apiKey: plan.apiKey });
     const onInfo = (info: CustomerInfo) => {
       try {
@@ -144,8 +164,10 @@ async function refreshPurchases(db: SQLiteDatabase): Promise<void> {
     };
     onInfo(await Purchases.getCustomerInfo());
     Purchases.addCustomerInfoUpdateListener(onInfo);
-  } catch {
+    publishRevenueCatStatus(mapRevenueCatStatus({ plan, outcome: 'ok' }));
+  } catch (err) {
     console.warn('[purchases] RevenueCat configure failed; Pro stays on the last cache');
+    publishRevenueCatStatus(mapRevenueCatStatus({ plan, outcome: { error: err } }));
   }
 }
 

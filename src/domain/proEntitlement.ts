@@ -47,6 +47,20 @@ export type PurchasesConfigurePlan =
   | { configure: false; reason: 'missing-key' | 'expo-go' | 'not-ios' }
   | { configure: true; apiKey: string };
 
+/**
+ * Diagnostics only. The key itself is never stored here.
+ * `pending` is the gap before configure and the first customer-info fetch finish.
+ */
+export type RevenueCatStatus =
+  | { kind: 'pending' }
+  | { kind: 'no-key' }
+  | { kind: 'expo-go' }
+  | { kind: 'not-ios' }
+  | { kind: 'on'; applKey: boolean }
+  | { kind: 'error'; message: string };
+
+const REVENUECAT_ERROR_MAX = 80;
+
 type EntitlementSnapshot = {
   isActive?: boolean;
   expirationDate?: string | null;
@@ -78,6 +92,97 @@ export function planRevenueCatConfigure(args: {
   if (args.inExpoGo) return { configure: false, reason: 'expo-go' };
   if (args.platform !== 'ios') return { configure: false, reason: 'not-ios' };
   return { configure: true, apiKey };
+}
+
+function errorCandidates(error: unknown): string[] {
+  if (typeof error === 'string') return [error];
+  if (!error || typeof error !== 'object') return [];
+  const rec = error as Record<string, unknown>;
+  const out: string[] = [];
+  if (typeof rec.message === 'string') out.push(rec.message);
+  if (typeof rec.underlyingErrorMessage === 'string') out.push(rec.underlyingErrorMessage);
+  if (typeof rec.readableErrorCode === 'string') out.push(rec.readableErrorCode);
+  return out;
+}
+
+/** Drop the key and any public-key-shaped token. Short keys are removed only as whole tokens. */
+function redactRevenueCatKey(message: string, apiKey: string): string {
+  const key = apiKey.trim();
+  let out = message;
+  if (key.length >= 12) {
+    const lower = out.toLowerCase();
+    const needle = key.toLowerCase();
+    let next = '';
+    let i = 0;
+    while (i < out.length) {
+      const at = lower.indexOf(needle, i);
+      if (at < 0) {
+        next += out.slice(i);
+        break;
+      }
+      next += out.slice(i, at);
+      i = at + needle.length;
+    }
+    out = next;
+  } else if (key.length > 0) {
+    const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    out = out.replace(new RegExp(`(^|\\s)${escaped}(?=\\s|$)`, 'gi'), '$1');
+  }
+  return out.replace(/(?:appl_|goog_|amzn_|test_|rcb_|strp_)[A-Za-z0-9]+/gi, '');
+}
+
+function cleanRevenueCatError(message: string): string {
+  let out = message.replace(/\s+/g, ' ').trim();
+  out = out.replace(/^[\s:;—-]+|[\s:;—-]+$/g, '').trim();
+  if (out.length > REVENUECAT_ERROR_MAX) {
+    out = `${out.slice(0, REVENUECAT_ERROR_MAX - 3).trimEnd()}...`;
+  }
+  return out;
+}
+
+function shortRevenueCatError(error: unknown, apiKey: string): string {
+  for (const candidate of errorCandidates(error)) {
+    const message = cleanRevenueCatError(redactRevenueCatKey(candidate, apiKey));
+    if (message) return message;
+  }
+  return '';
+}
+
+/**
+ * Map the configure plan plus the first fetch onto a diagnostics status.
+ * A skipped plan stays skipped even if `outcome` says ok. The returned value
+ * never contains the key; a non-`appl_` key is only a boolean on `on`.
+ */
+export function mapRevenueCatStatus(args: {
+  plan: PurchasesConfigurePlan;
+  outcome: 'pending' | 'ok' | { error: unknown };
+}): RevenueCatStatus {
+  if (!args.plan.configure) {
+    if (args.plan.reason === 'missing-key') return { kind: 'no-key' };
+    if (args.plan.reason === 'expo-go') return { kind: 'expo-go' };
+    return { kind: 'not-ios' };
+  }
+  if (args.outcome === 'pending') return { kind: 'pending' };
+  if (args.outcome === 'ok') return { kind: 'on', applKey: args.plan.apiKey.startsWith('appl_') };
+  return { kind: 'error', message: shortRevenueCatError(args.outcome.error, args.plan.apiKey) };
+}
+
+/** One diagnostics line. Never includes the key. */
+export function formatRevenueCatStatus(status: RevenueCatStatus): string {
+  switch (status.kind) {
+    case 'pending':
+      return 'RevenueCat: checking';
+    case 'no-key':
+      return 'RevenueCat: no key';
+    case 'expo-go':
+      return 'RevenueCat: off in Expo Go';
+    case 'not-ios':
+      return 'RevenueCat: off';
+    case 'on':
+      return status.applKey ? 'RevenueCat: on' : 'RevenueCat: on (not an appl_ key)';
+    case 'error':
+      return status.message ? `RevenueCat: error — ${status.message}` : 'RevenueCat: error';
+  }
 }
 
 export function canonicalExpiration(value: string | null | undefined): string | null {
