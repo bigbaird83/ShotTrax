@@ -23,6 +23,12 @@
  * app.json `ios.buildNumber` is not the store build. The device reads
  * Application.nativeBuildVersion (CFBundleVersion) at runtime.
  *
+ * TEMP yard test course (Goode Circle Test, on-device QA only):
+ * expo.extra.debugYardCourse is true only when EXPO_PUBLIC_DEBUG_YARD_COURSE=1
+ * and the EAS profile is not `production`. The production profile is always
+ * false, even if app.json or the env says otherwise. `__DEV__` builds pass the
+ * gate without it. The Settings switch (default off) still has to be on.
+ *
  * Do not commit a key.
  * @param {{ config: Record<string, unknown> }} args
  */
@@ -62,10 +68,17 @@ function gitHeadSha() {
   }
 }
 
+/** Never true on the production EAS profile. */
+function debugYardCourseFromEnv(env) {
+  if (trimKey(env.EAS_BUILD_PROFILE) === 'production') return false;
+  return trimKey(env.EXPO_PUBLIC_DEBUG_YARD_COURSE) === '1';
+}
+
 module.exports = ({ config }) => {
   const {
     golfCoursesApiKey: _golfCoursesApiKey,
     golfApiKey: _golfApiKey,
+    debugYardCourse: _debugYardCourse,
     ...extra
   } = config.extra && typeof config.extra === 'object' ? config.extra : {};
   const shareSyncUrl =
@@ -84,6 +97,7 @@ module.exports = ({ config }) => {
       ...extra,
       shareSyncUrl,
       coursePaintCacheUrl,
+      debugYardCourse: debugYardCourseFromEnv(process.env),
       easBuildId: easBuildIdFromEnv(process.env.EAS_BUILD_ID),
       gitCommitHash: gitSha(process.env.EAS_BUILD_GIT_COMMIT_HASH) ?? gitHeadSha(),
     },

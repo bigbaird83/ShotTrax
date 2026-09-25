@@ -1,7 +1,7 @@
 import { router, useFocusEffect } from 'expo-router';
 import type { ComponentProps } from 'react';
 import { useCallback, useMemo, useRef } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
 import {
   getColorTheme,
@@ -9,8 +9,14 @@ import {
   getThunderbirdPinSheet,
   setColorTheme,
   setCourseDistanceUnit,
+  setSetting,
   setThunderbirdPinSheet,
 } from '@/src/db/repo';
+import {
+  setYardTestCourseSwitch,
+  yardTestCourseBuildAllowed,
+  yardTestCourseEnabled,
+} from '@/src/course/yardTestCourse';
 import { formatBuildStamp, readBuildStamp } from '@/src/domain/buildStamp';
 import { advanceVersionRowTap, type VersionRowTapState } from '@/src/domain/diagnostics';
 import { COPY } from '@/src/domain/playerCopy';
@@ -33,6 +39,8 @@ export default function SettingsScreen() {
   const unit = getCourseDistanceUnit(db);
   const themeId = getColorTheme(db);
   const pinSheet = getThunderbirdPinSheet(db);
+  const showYardTestCourse = yardTestCourseBuildAllowed();
+  const yardTestCourseOn = yardTestCourseEnabled();
   const buildStamp = useMemo(() => formatBuildStamp(readBuildStamp()), []);
   const versionTaps = useRef<VersionRowTapState>({ count: 0, firstAtMs: null });
   const diagnosticsOpen = useRef(false);
@@ -63,6 +71,11 @@ export default function SettingsScreen() {
 
   const setTheme = (next: ColorThemeId) => {
     setColorTheme(db, next);
+    bump();
+  };
+
+  const setYardTestCourse = (on: boolean) => {
+    setYardTestCourseSwitch(on, (key, value) => setSetting(db, key, value));
     bump();
   };
 
@@ -130,6 +143,23 @@ export default function SettingsScreen() {
         <View style={styles.divider} />
         {linkRow('plus', '+', colors.red, COPY.contributeCourse, () => router.push('/contribute-course'))}
       </View>
+
+      {showYardTestCourse ? (
+        <View style={styles.list}>
+          <View style={styles.listRow}>
+            <View style={[styles.rowIcon, { backgroundColor: tint(colors.amber) }]}>
+              <Icon name="flag.fill" color={colors.amber} size={18} glyph="⚑" />
+            </View>
+            <Text style={styles.rowLabel}>{COPY.yardTestCourse}</Text>
+            <Switch
+              accessibilityLabel={COPY.yardTestCourse}
+              value={yardTestCourseOn}
+              onValueChange={setYardTestCourse}
+              trackColor={{ true: colors.lime, false: colors.line }}
+            />
+          </View>
+        </View>
+      ) : null}
 
       <Text style={styles.groupLabel}>{COPY.credits}</Text>
       <Text style={styles.credits}>{COPY.courseDataCredits}</Text>

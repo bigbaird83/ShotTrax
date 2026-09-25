@@ -7,6 +7,7 @@ import {
   searchLocalCatalog,
 } from './catalog';
 import { fetchOsmOverlay } from './osmOverlay';
+import { isYardTestCourseId, pinYardTestCourseFirst, yardTestCourseDetail } from './yardTestCourse';
 import {
   mergeGreenCenters,
   parseCourseDetail,
@@ -157,7 +158,7 @@ export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataCli
       const base = getBaseUrl();
       const radius = Math.min(MAX_RADIUS_KM, Math.max(1, radiusKm));
       const local = nearbyLocalCatalog(from, radius);
-      if (!base) return local;
+      if (!base) return pinYardTestCourseFirst(local);
       const query = new URLSearchParams({
         lat: String(from.lat),
         lng: String(from.lng),
@@ -170,7 +171,9 @@ export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataCli
       if (status < 200 || status >= 300) {
         throw new GolfCoursesApiError('Couldn’t load courses nearby.', status);
       }
-      return withinNearbyRadius(mergeCatalogSummaries(parseNearbyCourses(json), local), radius);
+      return pinYardTestCourseFirst(
+        withinNearbyRadius(mergeCatalogSummaries(parseNearbyCourses(json), local), radius),
+      );
     },
 
     async searchCourses(query: string): Promise<CourseSummary[]> {
@@ -192,6 +195,8 @@ export function createCourseDataClient(deps: CourseDataDeps = {}): CourseDataCli
 
     async getCourse(id: string): Promise<CourseDetail | null> {
       if (!id.trim()) return null;
+      // TEMP yard test course: hand-entered hole 1 only. No waterfall, no paint-cache write.
+      if (isYardTestCourseId(id)) return yardTestCourseDetail();
       const gcaBase = getBaseUrl();
       if (isLocalCatalogId(id) || !gcaBase) {
         const catalog = catalogCourseDetail(id);

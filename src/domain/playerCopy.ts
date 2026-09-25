@@ -263,6 +263,8 @@ export const COPY = {
   requestThisCourse: 'Request this course',
   requestCourseTitle: 'Request this course',
   requestCourseLede: `Tell us the course. This opens your email app — ${SHOTTRAXX_BRAND} does not send it for you.`,
+  /** TEMP dev-only Settings switch for the Goode Circle backyard course. */
+  yardTestCourse: 'Yard test course',
   contributeCourse: 'Contribute a course',
   contributeCourseTitle: 'Add this course',
   contributeOnTee: 'I’m on this tee',
