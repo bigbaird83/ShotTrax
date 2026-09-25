@@ -70,6 +70,7 @@ function ThemedNavigation() {
               return { title: 'Settings', headerBackTitle: expoStackBackTitle(prev) };
             }}
           />
+          <Stack.Screen name="diagnostics" options={{ title: 'Diagnostics', headerBackTitle: 'Settings' }} />
         </Stack>
       </ThemeProvider>
     </View>
