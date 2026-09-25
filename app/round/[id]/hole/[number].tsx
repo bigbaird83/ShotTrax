@@ -21,6 +21,7 @@ import { ensureHoleTeeGreen } from '@/src/course/prefetch';
 import {
   cachedOsmOverlay,
   cachedResolvedTee,
+  featuresForHole,
   rememberResolvedTee,
   resolveOverlayTee,
 } from '@/src/course/osmOverlay';
@@ -147,6 +148,7 @@ import {
 import { canMoveFromPin, canMoveToPin, type ShotEditSnapshot } from '@/src/domain/shotEdit';
 import { addShotSheetRankYards, addShotSuggestYardsLeft, clubToRankInput, lastClosedShotYards, rankDistanceYards, rankTopClubs, resolveAddShotSuggestTarget, resolveLiveSuggestTarget, resolveNextShotDistanceTarget, type LiveSuggestHold } from '@/src/domain/rankClubs';
 import { planFinishedHoleMiniSummary } from '@/src/domain/finishedHoleSummary';
+import { formatHazardCarry, hazardCarryAccessibilityLabel, planHazardCarries } from '@/src/domain/hazardCarry';
 import { holeHasFairway, nextFairwayValue, showFairwayPrompt, type FairwayResult } from '@/src/domain/fairwayGir';
 import { planRunningParBadge } from '@/src/domain/runningPar';
 import { planScorecardDismiss } from '@/src/domain/scorecard';
@@ -580,6 +582,18 @@ export default function HoleScreen() {
   });
   /** Corner badge under the header: live GPS → green pin; — when GPS is poor, no pin, or > 600 yd. */
   const liveGpsToPin = planLiveGpsToPin({ fix, green });
+  // Reach / carry for OSM-mapped bunkers and water in play, from live good/soft GPS only.
+  const hazardCarries = useMemo(
+    () =>
+      readOnly || marksOnly || liveGpsToPin.quality === 'none' || !fix
+        ? []
+        : planHazardCarries({
+            fix: { lat: fix.lat, lng: fix.lng },
+            green,
+            features: featuresForHole(overlay, holeNumber),
+          }),
+    [readOnly, marksOnly, liveGpsToPin.quality, fix, green, overlay, holeNumber],
+  );
   // Suggested top-3 re-rank as the player walks in: live good/soft yards win;
   // quality none keeps the last good/soft D on this hole; else the pin target.
   const liveSuggest = resolveLiveSuggestTarget({
@@ -1766,6 +1780,19 @@ export default function HoleScreen() {
               hasGreen={Boolean(green)}
             />
           </View>
+          {hazardCarries.length > 0 ? (
+            <View pointerEvents="none" testID="hazard-carries" style={styles.hazardBadge}>
+              {hazardCarries.map((row) => (
+                <Text
+                  key={`${row.kind}-${row.reach}-${row.carry}`}
+                  accessibilityLabel={hazardCarryAccessibilityLabel(row)}
+                  style={styles.hazardText}
+                  numberOfLines={1}>
+                  {formatHazardCarry(row)}
+                </Text>
+              ))}
+            </View>
+          ) : null}
           {runningPar.visible ? (
             <View
               pointerEvents="none"
@@ -2539,6 +2566,16 @@ function makeStyles(colors: ColorPalette) {
     gap: 6,
     maxWidth: '46%',
   },
+  hazardBadge: {
+    maxWidth: 160,
+    backgroundColor: colors.overlay,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    gap: 2,
+    alignItems: 'flex-end',
+  },
+  hazardText: { color: colors.cream, fontSize: type.tiny, fontWeight: '800' },
   runningParBadge: {
     maxWidth: 132,
     backgroundColor: colors.overlay,
