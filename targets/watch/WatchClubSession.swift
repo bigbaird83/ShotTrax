@@ -308,6 +308,11 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   /// Walking filter once the wrist is down. Wrist-up stays unfiltered so a
   /// stationary club mark still has a fix younger than 3 seconds.
   private static let liveDistanceFilterM: CLLocationDistance = 3
+  /// After a Watch shot mark: no live-yard change for 30 s, then only after
+  /// moving 10 yd from the mark. Mirrors `watchShotHoldDecision`.
+  private static let shotHoldSec: TimeInterval = 30
+  private static let shotHoldMinMoveYd = 10.0
+  private var shotHold: (hole: Int, at: Date, anchor: CLLocation?)?
 
   override init() {
     super.init()
@@ -577,6 +582,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     // Putter opens the putt sheet / select only — never attach Watch GPS.
     if clubId != "club_putter" {
       attachWatchFix(&payload)
+      beginShotHold()
     }
     sendPick(payload)
   }
@@ -682,6 +688,54 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     payload["lat"] = loc.coordinate.latitude
     payload["lng"] = loc.coordinate.longitude
     payload["accuracyM"] = acc
+  }
+
+  /// Freeze live yards where the shot was marked. The anchor is the mark's fix
+  /// when one is fresh; otherwise the first fix after 30 s.
+  private func beginShotHold() {
+    var anchor: CLLocation?
+    if let loc = lastFix,
+       Date().timeIntervalSince(loc.timestamp) <= 10,
+       loc.horizontalAccuracy > 0,
+       loc.horizontalAccuracy <= 25,
+       CLLocationCoordinate2DIsValid(loc.coordinate) {
+      anchor = loc
+    }
+    shotHold = (hole: list.holeNumber, at: Date(), anchor: anchor)
+    let anchored = anchor == nil ? "false" : "true"
+    liveYardsLog.info("shot hold started anchor=\(anchored, privacy: .public)")
+  }
+
+  private enum ShotHoldDecision { case update, hold, anchor, release }
+
+  private static func shotHoldDecision(
+    hold: (hole: Int, at: Date, anchor: CLLocation?)?,
+    hole: Int,
+    now: Date,
+    fix: CLLocation
+  ) -> ShotHoldDecision {
+    guard let hold, hold.hole == hole else { return .update }
+    if now.timeIntervalSince(hold.at) < shotHoldSec { return .hold }
+    // GPS scatter on a weak fix is not a walk, and it is no place to measure from.
+    let accuracy = fix.horizontalAccuracy
+    guard accuracy.isFinite, accuracy > 0, accuracy <= 25 else { return .hold }
+    guard let anchor = hold.anchor else { return .anchor }
+    let moved = haversineYards(
+      lat1: anchor.coordinate.latitude,
+      lng1: anchor.coordinate.longitude,
+      lat2: fix.coordinate.latitude,
+      lng2: fix.coordinate.longitude
+    )
+    return moved >= shotHoldMinMoveYd ? .release : .hold
+  }
+
+  /// A phone push must not move a held number either. Without Watch location
+  /// no fix can release the hold, so it then ends after the 30 s.
+  private func shotHoldBlocksPhone(hole: Int) -> Bool {
+    guard let hold = shotHold, hold.hole == hole else { return false }
+    if Date().timeIntervalSince(hold.at) < Self.shotHoldSec { return true }
+    let status = location.authorizationStatus
+    return status == .authorizedWhenInUse || status == .authorizedAlways
   }
 
   func pickSameClub() {
@@ -1152,7 +1206,10 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       next.clubCarry = [:]
     }
     let phoneAt = Self.complicationDouble(message["complicationAt"])
-    let replaceLive = Self.phoneLiveShouldReplace(
+    if let hold = shotHold, hold.hole != next.holeNumber {
+      shotHold = nil
+    }
+    let replaceLive = !shotHoldBlocksPhone(hole: next.holeNumber) && Self.phoneLiveShouldReplace(
       phoneHole: next.holeNumber,
       phoneAtMs: phoneAt,
       watchHole: list.liveAtMs > 0 ? list.holeNumber : nil,
@@ -1359,6 +1416,19 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       let quality = list.complicationQuality
       liveYardsLog.info("fix rejected reason=stale accuracy=\(accuracyText, privacy: .public) quality=\(quality, privacy: .public) green=true")
       return
+    }
+    switch Self.shotHoldDecision(hold: shotHold, hole: list.holeNumber, now: Date(), fix: fix) {
+    case .update:
+      shotHold = nil
+    case .hold:
+      return
+    case .anchor:
+      shotHold?.anchor = fix
+      liveYardsLog.info("shot hold anchored after the wait")
+      return
+    case .release:
+      shotHold = nil
+      liveYardsLog.info("shot hold released after moving")
     }
     let live = Self.liveYards(
       lat: fix.coordinate.latitude,

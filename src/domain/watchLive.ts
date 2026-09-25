@@ -1,4 +1,5 @@
 import { SOFT_GPS_MAX_M } from '../config/sensing';
+import { haversineYards } from './haversine';
 import { isPutterClubId } from './defaultBag';
 import { isCourseCardLatLng, type LatLng } from './latLng';
 import { planLiveGpsToPin, type LiveGpsToPin } from './yardsToGreen';
@@ -25,6 +26,42 @@ import { planLiveGpsToPin, type LiveGpsToPin } from './yardsToGreen';
  */
 export const WATCH_WIDGET_RELOAD_MIN_YD = 1;
 export const WATCH_WIDGET_RELOAD_MIN_MS = 45_000;
+
+/**
+ * After a shot is marked on the Watch, the live yards hold still: nothing
+ * updates for 30 seconds, and after that only once the Watch has moved at
+ * least 10 yards from where the shot was marked. A hole change ends the hold.
+ * The complication follows the held number.
+ * `WatchClubSession.shotHoldDecision` mirrors `watchShotHoldDecision`.
+ */
+export const WATCH_SHOT_HOLD_MS = 30_000;
+export const WATCH_SHOT_HOLD_MIN_MOVE_YD = 10;
+
+export type WatchShotHold = { hole: number; atMs: number; anchor: LatLng | null };
+
+/**
+ * `update`: no hold (or a different hole) — adopt the fix.
+ * `hold`: keep the number on screen.
+ * `anchor`: the mark had no fresh fix; this fix becomes the spot to measure
+ * 10 yards from, and the number stays held.
+ * `release`: moved far enough — clear the hold and adopt the fix.
+ */
+export function watchShotHoldDecision(args: {
+  hold: WatchShotHold | null;
+  hole: number;
+  nowMs: number;
+  fix: LatLng;
+  accuracyM: number;
+}): 'update' | 'hold' | 'anchor' | 'release' {
+  const hold = args.hold;
+  if (!hold || hold.hole !== args.hole) return 'update';
+  if (args.nowMs - hold.atMs < WATCH_SHOT_HOLD_MS) return 'hold';
+  // GPS scatter on a weak fix is not a walk, and it is no place to measure from.
+  const usable = Number.isFinite(args.accuracyM) && args.accuracyM > 0 && args.accuracyM <= SOFT_GPS_MAX_M;
+  if (!usable) return 'hold';
+  if (!hold.anchor) return 'anchor';
+  return haversineYards(hold.anchor, args.fix) >= WATCH_SHOT_HOLD_MIN_MOVE_YD ? 'release' : 'hold';
+}
 
 /** Background GPS during the golf workout. Must ship with allowsBackgroundLocationUpdates. */
 export function watchLiveLocationBackgroundMode(): 'location' {
