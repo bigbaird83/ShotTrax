@@ -14,12 +14,14 @@ import {
   readSettingStore,
   restoreRoundHistory,
   setClubEnabled,
+  setSetting,
   updateClubCarry,
 } from '../db/repo';
 import { migrate } from '../db/schema';
 import { layoutForFavoriteStart } from '../course/startRoundEntry';
 import { THUNDERBIRD_HEBER_CLUBHOUSE, THUNDERBIRD_HEBER_SPRINGS_AR_KEY } from '../course/hydrate';
 import { FAVORITES_SETTING_KEY, listFavorites, OFFLINE_PACKS_SETTING_KEY, setFavorite } from './favorites';
+import { PRO_CACHE_SETTING_KEY, PRO_OVERRIDE_SETTING_KEY } from './proEntitlement';
 import { yardsToGreenPlayerLabel } from './playerCopy';
 import {
   formatBagChange,
@@ -367,6 +369,9 @@ test('bag diff lists on, off, order, and carry including blank, and apply waits 
 
 test('restore adds favorites without duplicates or a download, and a second pass is a no-op', needsSqlite, () => {
   const db = memoryDb();
+  const proCache = '{"active":true,"expirationDate":null,"isTrial":false}';
+  setSetting(db, PRO_CACHE_SETTING_KEY, proCache);
+  setSetting(db, PRO_OVERRIDE_SETTING_KEY, 'force-pro');
   const thunderId = `local:${THUNDERBIRD_HEBER_SPRINGS_AR_KEY}`;
   const file = JSON.stringify({
     kind: ROUND_HISTORY_EXPORT_KIND,
@@ -421,6 +426,8 @@ test('restore adds favorites without duplicates or a download, and a second pass
   assert.equal(storedFavorites.includes('downloaded'), false);
   assert.equal(storedFavorites.includes('paint'), false);
   assert.equal(getSetting(db, OFFLINE_PACKS_SETTING_KEY), null);
+  assert.equal(getSetting(db, PRO_CACHE_SETTING_KEY), proCache);
+  assert.equal(getSetting(db, PRO_OVERRIDE_SETTING_KEY), 'force-pro');
 
   const layout = layoutForFavoriteStart(favorites[0]);
   assert.equal(layout.holes?.some((hole) => hole.greenCentroid != null || hole.teeCentroid != null) ?? false, false);
@@ -451,4 +458,6 @@ test('restore adds favorites without duplicates or a download, and a second pass
   assert.equal(listShotsForHole(db, listHoles(db, 'r-1')[0].id).length, 1);
   assert.equal(listShotsForHole(db, listHoles(db, 'r-1')[0].id)[0]?.id, shotId);
   assert.equal(planBagRestore(listClubs(db), again.bag).length, 0);
+  assert.equal(getSetting(db, PRO_CACHE_SETTING_KEY), proCache);
+  assert.equal(getSetting(db, PRO_OVERRIDE_SETTING_KEY), 'force-pro');
 });
