@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { clubStripThreeClosestIds } from './clubStrip';
 import { SOFT_GPS_MAX_M, SOFT_GPS_MIN_M } from '../config/sensing';
 import { clubListPayload, parseClubList } from './watchMessages';
@@ -188,8 +190,7 @@ test('Watch re-rank uses the same closest-carry window as the phone wheel', () =
 test('Watch live location stays up wrist-down and stops when the round ends', () => {
   assert.equal(watchLiveLocationBackgroundMode(), 'location');
   assert.equal(WATCH_LIVE_DISTANCE_FILTER_M, 3);
-  assert.match(WATCH_LOCATION_WHEN_IN_USE, /yards to the green as you walk/);
-  assert.match(WATCH_LOCATION_WHEN_IN_USE, /pick a club to mark where you hit from/);
+  assert.match(WATCH_LOCATION_WHEN_IN_USE, /show yards to the green and mark where you hit from/);
   assert.doesNotMatch(WATCH_LOCATION_WHEN_IN_USE, /more accurate than the phone/);
 
   const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
@@ -197,6 +198,8 @@ test('Watch live location stays up wrist-down and stops when the round ends', ()
   const target = readFileSync(new URL('../../targets/watch/expo-target.config.js', import.meta.url), 'utf8');
   assert.ok(plist.includes(WATCH_LOCATION_WHEN_IN_USE));
   assert.ok(target.includes(WATCH_LOCATION_WHEN_IN_USE));
+  assert.match(target, /NSLocationWhenInUseUsageDescription/);
+  assert.match(plist, /<key>NSLocationWhenInUseUsageDescription<\/key>/);
   assert.match(plist, /<string>workout-processing<\/string>/);
   assert.match(plist, /<string>location<\/string>/);
   assert.match(target, /WKBackgroundModes: \['workout-processing', 'location'\]/);
@@ -207,6 +210,17 @@ test('Watch live location stays up wrist-down and stops when the round ends', ()
   assert.match(session, /func locationManagerDidChangeAuthorization/);
   assert.match(session, /didFailWithError/);
   assert.match(session, /category: "liveYards"/);
+  assert.match(session, /launch authorization=/);
+  assert.match(session, /scene active authorization=/);
+  assert.match(session, /clubList missing green/);
+  const ask = session.slice(
+    session.indexOf('private func requestLiveLocationAuthorizationIfNeeded'),
+    session.indexOf('private func syncLiveLocation'),
+  );
+  assert.match(ask, /sceneIsActive, liveHoleInProgress/);
+  assert.match(ask, /authorizationStatus == \.notDetermined/);
+  assert.match(ask, /requestWhenInUseAuthorization\(\)/);
+  assert.match(ask, /requestWhenInUseAuthorization; round live; scene active/);
   assert.match(session, /fix accepted/);
   assert.match(session, /fix rejected/);
   assert.match(session, /allowsBackgroundLocationUpdates = true/);
@@ -234,4 +248,23 @@ test('Watch live location stays up wrist-down and stops when the round ends', ()
   assert.match(scene, /noteLocationScene\(active: false\)/);
   assert.doesNotMatch(scene, /stopUpdatingLocation/);
   assert.doesNotMatch(scene, /stopRoundStay/);
+});
+
+test('watch target infoPlist is copied into the Info.plist Xcode compiles', () => {
+  const require = createRequire(import.meta.url);
+  const { mergeInfoPlist, watchTargetInfoPlist } = require('../../plugins/withWatchInfoPlist.js') as {
+    mergeInfoPlist: (
+      plistText: string,
+      infoPlist: Record<string, unknown>,
+    ) => { changed: boolean; text: string };
+    watchTargetInfoPlist: (projectRoot: string, expoConfig: { ios: { bundleIdentifier: string } }) => Record<string, unknown>;
+  };
+  const projectRoot = fileURLToPath(new URL('../..', import.meta.url));
+  const info = watchTargetInfoPlist(projectRoot, { ios: { bundleIdentifier: 'com.shottrax.app' } });
+  assert.equal(info.NSLocationWhenInUseUsageDescription, WATCH_LOCATION_WHEN_IN_USE);
+  assert.deepEqual(info.WKBackgroundModes, ['workout-processing', 'location']);
+  const plistText = readFileSync(new URL('../../targets/watch/Info.plist', import.meta.url), 'utf8');
+  assert.equal(mergeInfoPlist(plistText, info).changed, false);
+  const app = readFileSync(new URL('../../app.json', import.meta.url), 'utf8');
+  assert.match(app, /plugins\/withWatchInfoPlist/);
 });

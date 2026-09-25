@@ -34,7 +34,7 @@ export function watchLiveLocationBackgroundMode(): 'location' {
 export const WATCH_LIVE_DISTANCE_FILTER_M = 3;
 
 export const WATCH_LOCATION_WHEN_IN_USE =
-  'ShotTraxx™ uses your Apple Watch location during a round to show yards to the green as you walk, and when you pick a club to mark where you hit from.';
+  'ShotTraxx™ uses Watch location during a round to show yards to the green and mark where you hit from.';
 
 export type WatchGreenFields = {
   greenLat: number;

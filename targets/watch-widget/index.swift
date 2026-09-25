@@ -15,14 +15,7 @@ struct HoleYardsEntry: TimelineEntry {
 
 struct HoleYardsProvider: TimelineProvider {
   func placeholder(in context: Context) -> HoleYardsEntry {
-    HoleYardsEntry(
-      date: Date(),
-      holeNumber: nil,
-      yards: nil,
-      inline: "—",
-      value: "—",
-      unavailable: true
-    )
+    makeEntry(holeNumber: nil, yards: nil, inline: "—", value: "—", unavailable: true)
   }
 
   func getSnapshot(in context: Context, completion: @escaping (HoleYardsEntry) -> Void) {
@@ -34,6 +27,28 @@ struct HoleYardsProvider: TimelineProvider {
     // .after re-reads the app group if a reload was dropped while the face was covered.
     // 60s matches the Watch reload ceiling so a 15s policy cannot spend the budget.
     completion(Timeline(entries: [current()], policy: .after(Date().addingTimeInterval(60))))
+  }
+
+  /// A timeline string is never empty. A blank complication face is this view not running.
+  private func faceText(_ text: String) -> String {
+    text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "—" : text
+  }
+
+  private func makeEntry(
+    holeNumber: Int?,
+    yards: Int?,
+    inline: String,
+    value: String,
+    unavailable: Bool
+  ) -> HoleYardsEntry {
+    HoleYardsEntry(
+      date: Date(),
+      holeNumber: holeNumber,
+      yards: yards,
+      inline: faceText(inline),
+      value: faceText(value),
+      unavailable: unavailable
+    )
   }
 
   private func current() -> HoleYardsEntry {
@@ -57,8 +72,7 @@ struct HoleYardsProvider: TimelineProvider {
     } else {
       inline = "—"
     }
-    return HoleYardsEntry(
-      date: Date(),
+    return makeEntry(
       holeNumber: holeNumber,
       yards: yards,
       inline: inline,
