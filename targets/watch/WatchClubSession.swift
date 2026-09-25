@@ -1915,9 +1915,21 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
   }
 
-  /// Requires `WKBackgroundModes` to include `location`. Never set at launch.
+  /// The built Info.plist has UIBackgroundModes `location`. Without it,
+  /// setting allowsBackgroundLocationUpdates terminates the app.
+  private static let hasBackgroundLocationMode: Bool = {
+    let modes = Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String] ?? []
+    return modes.contains("location")
+  }()
+
+  /// Requires UIBackgroundModes `location`. Never set at launch.
   private func enableWorkoutBackgroundLocation() {
     guard !location.allowsBackgroundLocationUpdates else { return }
+    // A plist missing the mode loses wrist-down yards instead of crashing.
+    guard Self.hasBackgroundLocationMode else {
+      liveYardsLog.error("background location not enabled: UIBackgroundModes has no location")
+      return
+    }
     location.allowsBackgroundLocationUpdates = true
     liveYardsLog.info("background location enabled for the golf workout")
   }

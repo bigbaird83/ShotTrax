@@ -28,10 +28,13 @@
   <string>ShotTraxx™ uses Watch location during a round to show yards to the green and mark where you hit from.</string>
   <key>WKApplication</key>
   <true/>
+  <key>UIBackgroundModes</key>
+  <array>
+    <string>location</string>
+  </array>
   <key>WKBackgroundModes</key>
   <array>
     <string>workout-processing</string>
-    <string>location</string>
   </array>
   <key>WKCompanionAppBundleIdentifier</key>
   <string>com.shottrax.app</string>
