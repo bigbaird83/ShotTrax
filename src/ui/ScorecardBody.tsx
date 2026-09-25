@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { fairwayGlyph, girGlyph, type FairwayResult } from '@/src/domain/fairwayGir';
 import { COPY } from '@/src/domain/playerCopy';
 import {
   planScorecard,
@@ -24,6 +25,7 @@ type HoleIn = {
   puttsDone?: boolean;
   shotCount?: number;
   penaltyStrokes?: number;
+  fairway?: FairwayResult | null;
 };
 
 export function ScorecardBody({
@@ -55,6 +57,8 @@ export function ScorecardBody({
           <Text style={styles.cell}>{COPY.scorecardPar}</Text>
           <Text style={styles.cell}>{COPY.score}</Text>
           <Text style={styles.cell}>{COPY.putts}</Text>
+          <Text style={[styles.cell, styles.stat]}>{COPY.scorecardFairway}</Text>
+          <Text style={[styles.cell, styles.stat]}>{COPY.scorecardGir}</Text>
           <Text style={[styles.cell, styles.mark]} />
         </View>
         {rows.map((row) => {
@@ -83,6 +87,16 @@ export function ScorecardBody({
                 {mark}
               </Text>
               <Text style={styles.val}>{row.putts}</Text>
+              <Text
+                testID={`scorecard-fw-${row.number}`}
+                style={[styles.val, styles.stat, row.fairway === 'hit' && styles.statHit]}>
+                {fairwayGlyph(row.par, row.fairway)}
+              </Text>
+              <Text
+                testID={`scorecard-gir-${row.number}`}
+                style={[styles.val, styles.stat, row.gir === true && styles.statHit]}>
+                {girGlyph(row.gir)}
+              </Text>
               <Text
                 style={[
                   styles.val,
@@ -137,6 +151,8 @@ function makeStyles(colors: ColorPalette) {
     score: { color: colors.cream, fontWeight: '900', fontSize: type.button },
     incompleteScore: { color: colors.red, fontWeight: '900' },
     num: { flex: 0.6 },
+    stat: { flex: 0.6, textAlign: 'center', color: colors.muted },
+    statHit: { color: colors.good },
     mark: { flex: 0.7, textAlign: 'right', color: colors.cream },
     diffGood: { color: colors.good, fontWeight: '900' },
     diffBad: { color: colors.red, fontWeight: '900' },

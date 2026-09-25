@@ -32,6 +32,7 @@ export default function ReviewScorecardScreen() {
             puttsDone: row.puttsDone,
             shotCount: listShotsForHole(db, row.id).length,
             penaltyStrokes: totalPenaltyStrokes(listPenaltiesForHole(db, row.id)),
+            fairway: row.fairway,
           }))
         : [],
     [db, round, revision],

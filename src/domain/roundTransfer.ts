@@ -2,6 +2,7 @@ import { isClubhousePin } from '../course/hydrate';
 import { haversineYards, roundYards } from './haversine';
 import { isCourseCardLatLng, isValidLatLng, type LatLng } from './latLng';
 import { SHOTTRAXX_BRAND } from './playerCopy';
+import { parseFairwayResult, type FairwayResult } from './fairwayGir';
 import type { ShotFixQuality, ShotSource } from './types';
 
 /**
@@ -74,6 +75,8 @@ export type RoundTransferHole = {
   /** Pace of play: hole begun / Made it · Hole Out. Null when never stamped. */
   startedAt: string | null;
   completedAt: string | null;
+  /** Tee shot on par 4+. Null in older files or when never tapped. */
+  fairway: FairwayResult | null;
   shots: RoundTransferShot[];
 };
 
@@ -167,6 +170,7 @@ type ExportHoleInput = {
   puttsDone: boolean;
   startedAt?: string | null;
   completedAt?: string | null;
+  fairway?: FairwayResult | null;
   shots: ExportShotInput[];
 };
 
@@ -326,6 +330,7 @@ function acceptHole(raw: unknown): { hole: RoundTransferHole; rejectedShots: num
       puttsDone: record.puttsDone === true,
       startedAt: isoTime(record.startedAt),
       completedAt: isoTime(record.completedAt),
+      fairway: parseFairwayResult(record.fairway),
       shots,
     },
   };
@@ -388,6 +393,7 @@ export function buildRoundHistoryExport(args: {
         puttsDone: hole.puttsDone,
         startedAt: isoTime(hole.startedAt),
         completedAt: isoTime(hole.completedAt),
+        fairway: parseFairwayResult(hole.fairway ?? null),
         shots,
       });
     }

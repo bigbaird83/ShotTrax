@@ -53,16 +53,26 @@ test('scorecard rows keep stored par/score/putts and never invent par', () => {
     { number: 7, par: 4, score: null, putts: 0 },
   ]);
   assert.deepEqual(rows, [
-    { number: 1, par: 4, score: 3, putts: 1, mark: 'birdie', incomplete: false },
-    { number: 2, par: null, score: 4, putts: 2, mark: null, incomplete: false },
-    { number: 3, par: 4, score: 5, putts: 2, mark: 'bogey', incomplete: false },
-    { number: 4, par: 5, score: 3, putts: 1, mark: 'eagle', incomplete: false },
-    { number: 5, par: 3, score: 3, putts: 2, mark: 'par', incomplete: false },
-    { number: 6, par: 4, score: 6, putts: 2, mark: 'double', incomplete: false },
-    { number: 7, par: 4, score: null, putts: 0, mark: null, incomplete: false },
+    { number: 1, par: 4, score: 3, putts: 1, mark: 'birdie', incomplete: false, fairway: null, gir: null },
+    { number: 2, par: null, score: 4, putts: 2, mark: null, incomplete: false, fairway: null, gir: null },
+    { number: 3, par: 4, score: 5, putts: 2, mark: 'bogey', incomplete: false, fairway: null, gir: null },
+    { number: 4, par: 5, score: 3, putts: 1, mark: 'eagle', incomplete: false, fairway: null, gir: null },
+    { number: 5, par: 3, score: 3, putts: 2, mark: 'par', incomplete: false, fairway: null, gir: null },
+    { number: 6, par: 4, score: 6, putts: 2, mark: 'double', incomplete: false, fairway: null, gir: null },
+    { number: 7, par: 4, score: null, putts: 0, mark: null, incomplete: false, fairway: null, gir: null },
   ]);
-  assert.deepEqual(Object.keys(rows[0]!).sort(), ['incomplete', 'mark', 'number', 'par', 'putts', 'score']);
-  assert.equal('gir' in rows[0]!, false);
+  assert.deepEqual(Object.keys(rows[0]!).sort(), [
+    'fairway',
+    'gir',
+    'incomplete',
+    'mark',
+    'number',
+    'par',
+    'putts',
+    'score',
+  ]);
+  // Not closed with Made it / Hole Out → GIR stays unknown, never guessed.
+  assert.equal(rows[0]!.gir, null);
   assert.equal('strokesGained' in rows[0]!, false);
   assert.equal(rows[1]!.par, null);
   assert.equal(scorecardMarkGlyph(rows[4]!.mark), '');
@@ -151,7 +161,7 @@ test('opening scorecard and Back never mark or close a shot', () => {
   assert.equal(scorecardRunsAcceptFix(), false);
   assert.equal(scorecardMarksShot(), false);
   assert.equal(scorecardClosesShot(), false);
-  assert.equal(scorecardShowsGir(), false);
+  assert.equal(scorecardShowsGir(), true);
   assert.equal(scorecardShowsStrokesGained(), false);
 });
 

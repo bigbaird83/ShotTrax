@@ -259,6 +259,7 @@ export function migrate(db: SQLiteDatabase): void {
     db.execSync('UPDATE holes SET putts_done = 1 WHERE IFNULL(putts, 0) > 0');
   }
   ensureColumn(db, 'holes', 'started_at', 'TEXT');
+  ensureColumn(db, 'holes', 'fairway', 'TEXT');
   ensureColumn(db, 'holes', 'completed_at', 'TEXT');
   migrateNoGpsSensingLock(db);
 

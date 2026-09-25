@@ -46,6 +46,7 @@ import {
   saveHoleTee,
   setHoleGreen,
   setThunderbirdPinSheet,
+  updateHoleFairway,
   updateHolePar,
   updateHolePutts,
   finishHolePutts,
@@ -146,6 +147,7 @@ import {
 import { canMoveFromPin, canMoveToPin, type ShotEditSnapshot } from '@/src/domain/shotEdit';
 import { addShotSheetRankYards, addShotSuggestYardsLeft, clubToRankInput, lastClosedShotYards, rankDistanceYards, rankTopClubs, resolveAddShotSuggestTarget, resolveLiveSuggestTarget, resolveNextShotDistanceTarget, type LiveSuggestHold } from '@/src/domain/rankClubs';
 import { planFinishedHoleMiniSummary } from '@/src/domain/finishedHoleSummary';
+import { holeHasFairway, nextFairwayValue, showFairwayPrompt, type FairwayResult } from '@/src/domain/fairwayGir';
 import { planRunningParBadge } from '@/src/domain/runningPar';
 import { planScorecardDismiss } from '@/src/domain/scorecard';
 import { reconcileHoleScore, scoreMismatchMessage } from '@/src/domain/scoreReconcile';
@@ -183,6 +185,7 @@ import { FinishedPuttRows } from '@/src/ui/FinishedPuttRows';
 import { PuttDock } from '@/src/ui/PuttDock';
 import { PuttSheetBody } from '@/src/ui/PuttSheetBody';
 import { ScorecardBody } from '@/src/ui/ScorecardBody';
+import { FairwayPicker } from '@/src/ui/FairwayPicker';
 import { ShareChoice } from '@/src/ui/ShareChoice';
 import { YardsToGreenBadge } from '@/src/ui/YardsToGreenBadge';
 import { COLOR_THEMES, tapTarget, type, type ColorPalette } from '@/src/ui/theme';
@@ -1371,6 +1374,20 @@ export default function HoleScreen() {
     penaltyStrokes: penaltyTotal,
     shots,
   });
+  const fairwayPrompt = showFairwayPrompt({
+    par: hole.par,
+    fairway: hole.fairway,
+    shotCount: shots.length,
+    firstShotClosed: shots[0]?.endedAt != null,
+    puttsDone: hole.puttsDone,
+    readOnly: readOnly || placing,
+  });
+  const onPickFairway = (result: FairwayResult) => {
+    if (readOnly) return;
+    hapticSelect();
+    updateHoleFairway(db, hole.id, nextFairwayValue(hole.fairway, result));
+    bump();
+  };
   const runningPar = planRunningParBadge({
     holes: holes.map((row) => ({
       number: row.number,
@@ -1662,6 +1679,9 @@ export default function HoleScreen() {
                     onAttach={onAttachFinishedPuttLength}
                   />
                 </View>
+              ) : null}
+              {fairwayPrompt ? (
+                <FairwayPicker overlay value={hole.fairway} onPick={onPickFairway} />
               ) : null}
               {simBanner ? <GpsBanner message={simBanner} /> : null}
               {showFirstLaunchTip ? (
@@ -2026,6 +2046,7 @@ export default function HoleScreen() {
               puttsDone: row.puttsDone,
               shotCount: listShotsForHole(db, row.id).length,
               penaltyStrokes: totalPenaltyStrokes(listPenaltiesForHole(db, row.id)),
+              fairway: row.fairway,
             }))}
             currentHoleNumber={holeNumber}
             onSelectHole={(nextNumber) => {
@@ -2254,6 +2275,9 @@ export default function HoleScreen() {
             </Pressable>
           </View>
           {reconcile.mismatch ? <Text style={styles.warn}>{scoreMismatchMessage(reconcile)}</Text> : null}
+          {holeHasFairway(hole.par) ? (
+            <FairwayPicker value={hole.fairway} disabled={readOnly} onPick={onPickFairway} />
+          ) : null}
 
           <Text style={styles.label}>{COPY.shots}</Text>
           {shots.length === 0 ? (
