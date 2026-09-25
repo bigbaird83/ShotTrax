@@ -1,9 +1,11 @@
+import { router } from 'expo-router';
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
 import { listClubAverages } from '@/src/db/repo';
 import { planClubData } from '@/src/domain/nerdOut';
 import { COPY } from '@/src/domain/playerCopy';
+import { BigButton } from '@/src/ui/BigButton';
 import { Screen } from '@/src/ui/Screen';
 import { useColors } from '@/src/ui/ColorThemeProvider';
 import { type ColorPalette } from '@/src/ui/theme';
@@ -48,6 +50,7 @@ export default function ClubDataScreen() {
           <Text style={styles.score}>{row.yards != null ? `${row.yards}` : '—'}</Text>
         </View>
       ))}
+      <BigButton label={COPY.dispersion} variant="secondary" onPress={() => router.push('/dispersion')} />
     </Screen>
   );
 }

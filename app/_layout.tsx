@@ -60,6 +60,7 @@ function ThemedNavigation() {
           <Stack.Screen name="club-data" options={{ title: 'Club data' }} />
           <Stack.Screen name="handicap" options={{ title: 'Handicap' }} />
           <Stack.Screen name="trends" options={{ title: 'Trends' }} />
+          <Stack.Screen name="dispersion" options={{ title: 'Dispersion' }} />
           <Stack.Screen name="board" options={{ title: 'Live board' }} />
           <Stack.Screen name="request-course" options={{ title: 'Request this course' }} />
           <Stack.Screen name="rounds-transfer" options={{ title: 'Export / Restore' }} />

@@ -52,6 +52,7 @@ import { planHoleOutCloseToPin } from '../domain/holeOutClose';
 import { planFinishHoleScore, planRecomputeFinishedHoleScore } from '../domain/holeScore';
 import { parseFairwayResult, type FairwayResult } from '../domain/fairwayGir';
 import type { HandicapRoundIn } from '../domain/handicap';
+import type { DispersionShotIn } from '../domain/dispersion';
 import { clampPenaltyStrokes, scoreAfterPenalty, totalPenaltyStrokes } from '../domain/penalty';
 import {
   clampPutts,
@@ -898,6 +899,34 @@ export function getShareBoard(db: SQLiteDatabase, token: string): SpectatorPaylo
   } catch {
     return null;
   }
+}
+
+/** Every saved shot with its hole's green pin, shaped for `planDispersion`. Never live GPS. */
+export function listDispersionShots(db: SQLiteDatabase): DispersionShotIn[] {
+  const out: DispersionShotIn[] = [];
+  for (const round of listRounds(db)) {
+    for (const hole of listHoles(db, round.id)) {
+      const green =
+        hole.greenLat != null && hole.greenLng != null ? { lat: hole.greenLat, lng: hole.greenLng } : null;
+      for (const shot of listShotsForHole(db, hole.id)) {
+        out.push({
+          shotId: shot.id,
+          clubId: shot.clubId,
+          source: shot.source,
+          fixQuality: shot.fixQuality,
+          distanceYards: shot.distanceYards,
+          impossibleJump: shot.impossibleJump,
+          start: shot.startLat != null && shot.startLng != null ? { lat: shot.startLat, lng: shot.startLng } : null,
+          end: shot.endLat != null && shot.endLng != null ? { lat: shot.endLat, lng: shot.endLng } : null,
+          green,
+          playedAt: round.finishedAt ?? round.startedAt,
+          courseName: round.courseName,
+          holeNumber: hole.number,
+        });
+      }
+    }
+  }
+  return out;
 }
 
 /** Saved rounds shaped for `planHandicap`. Holes and tee only — never shots or GPS. */
