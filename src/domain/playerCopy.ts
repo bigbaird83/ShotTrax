@@ -321,7 +321,7 @@ export function restoreFailureCopy(reason: string): string {
 /** Bag row when the last five dropped shots agree and the typed number does not. */
 export function formatBagCarrySuggestion(clubLabel: string, yards: number): string {
   const n = Math.round(yards);
-  return `Your last 5 ${clubLabel} shots averaged ${n}. Update your ${clubLabel} to ${n}?`;
+  return `Your last five ${clubLabel} shots averaged ${n}. Update your ${clubLabel} to ${n}?`;
 }
 
 /** Suggested chip: that club's carry, not yards-to-green. */
