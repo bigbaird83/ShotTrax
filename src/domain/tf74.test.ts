@@ -262,6 +262,8 @@ test('round history JSON restores real GPS marks and recomputes averages from th
     exportedAt: '2026-09-22T00:00:00.000Z',
     clubs: [],
     rounds: plan.rounds,
+    favorites: [],
+    bag: [],
   }).includes('"avgYards":9999'), false);
 
   // Export / Restore lives behind the menu (app/rounds-transfer.tsx), not on Home.

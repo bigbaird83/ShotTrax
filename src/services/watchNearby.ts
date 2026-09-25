@@ -8,6 +8,7 @@ import { layoutFromTee } from '@/src/course/layout';
 import { prefetchCourseCardInBackground, rememberLayoutHoles } from '@/src/course/prefetch';
 import { favoriteStartHoleCount, layoutForFavoriteStart } from '@/src/course/startRoundEntry';
 import { attachCourseToRound, readSettingStore, startRound } from '@/src/db/repo';
+import { courseDataSourceToken } from '@/src/domain/courseDataSource';
 import { listFavorites } from '@/src/domain/favorites';
 import { layoutForPlayedHoles, resolveCourseNumHoles } from '@/src/domain/nineByTwo';
 import { playHrefAfterRoundStart } from '@/src/domain/playNav';
@@ -260,13 +261,18 @@ export async function handleWatchNearbyJson(json: string): Promise<{ ok: boolean
         catalogHoleCount: catalogEntryById(detail.id)?.holeCount ?? null,
       });
       const layout = layoutForPlayedHoles(
-        applyCourseHydrateToLayout(layoutFromTee(detail, tee), {
-          name: detail.name,
-          city: detail.city,
-          state: detail.state,
-          location: detail.location,
-          courseKey: detail.id,
-        }),
+        {
+          ...applyCourseHydrateToLayout(layoutFromTee(detail, tee), {
+            name: detail.name,
+            city: detail.city,
+            state: detail.state,
+            location: detail.location,
+            courseKey: detail.id,
+          }),
+          city: detail.city ?? null,
+          state: detail.state ?? null,
+          courseDataSource: courseDataSourceToken(detail.paintResult),
+        },
         { numHoles, playHoleCount: holeCount },
       );
       rememberLayoutHoles(layout);

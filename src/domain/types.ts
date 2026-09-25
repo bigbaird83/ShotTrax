@@ -50,6 +50,12 @@ export type Round = {
   teeTotalYards: number | null;
   /** Last club used on a mark. Sticky for Same club. */
   lastClubId: string | null;
+  /** City from the course card when the round was started. Null if never stored. */
+  courseCity: string | null;
+  /** State from the course card when the round was started. Null if never stored. */
+  courseState: string | null;
+  /** Paint/hydrate token (cache, osm, gca, golfapi). Null when unknown. */
+  courseDataSource: string | null;
 };
 
 export type GreenSource = 'user_estimate' | 'course_centroid';

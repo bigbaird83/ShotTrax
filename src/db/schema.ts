@@ -232,6 +232,9 @@ export function migrate(db: SQLiteDatabase): void {
   ensureColumn(db, 'rounds', 'tee_slope', 'INTEGER');
   ensureColumn(db, 'rounds', 'tee_total_yards', 'INTEGER');
   ensureColumn(db, 'rounds', 'last_club_id', 'TEXT');
+  ensureColumn(db, 'rounds', 'course_city', 'TEXT');
+  ensureColumn(db, 'rounds', 'course_state', 'TEXT');
+  ensureColumn(db, 'rounds', 'course_data_source', 'TEXT');
   ensureColumn(db, 'rounds', 'share_token', 'TEXT');
   // Null until the golfer taps Share. Not copied from share_token — that code was minted without a tap.
   ensureColumn(db, 'rounds', 'shared_at', 'TEXT');

@@ -3,22 +3,35 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import {
+  applyTransferredBag,
   collectRoundHistoryExport,
   deleteRound,
+  getSetting,
+  listClubs,
   listHoles,
   listRounds,
   listShotsForHole,
+  readSettingStore,
   restoreRoundHistory,
+  setClubEnabled,
+  updateClubCarry,
 } from '../db/repo';
 import { migrate } from '../db/schema';
+import { layoutForFavoriteStart } from '../course/startRoundEntry';
+import { THUNDERBIRD_HEBER_CLUBHOUSE, THUNDERBIRD_HEBER_SPRINGS_AR_KEY } from '../course/hydrate';
+import { FAVORITES_SETTING_KEY, listFavorites, OFFLINE_PACKS_SETTING_KEY, setFavorite } from './favorites';
+import { yardsToGreenPlayerLabel } from './playerCopy';
 import {
+  formatBagChange,
   formatRestoreToast,
+  planBagRestore,
   planRoundHistoryImport,
   planRoundRestoreMerge,
   roundExportFilename,
   ROUND_HISTORY_EXPORT_KIND,
   ROUND_HISTORY_EXPORT_VERSION,
   serializeRoundHistory,
+  type RoundTransferBagClub,
   type RoundTransferRound,
 } from './roundTransfer';
 
@@ -231,6 +244,211 @@ test('Home drops export/restore; menu opens Export / Restore rounds', () => {
   const screen = readFileSync(new URL('../../app/rounds-transfer.tsx', import.meta.url), 'utf8');
   assert.match(screen, /pickRoundHistoryFile/);
   assert.match(screen, /presentRoundHistoryShare/);
+  assert.match(screen, /presentRoundCsvShare/);
+  assert.match(screen, /ROUNDS_CSV_FILENAME/);
+  assert.match(screen, /SHOTS_CSV_FILENAME/);
+  const csvSource = readFileSync(new URL('./roundCsv.ts', import.meta.url), 'utf8');
+  assert.match(csvSource, /rounds\.csv/);
+  assert.match(csvSource, /shots\.csv/);
   assert.match(screen, /COPY\.restoreRoundsConfirm/);
+  assert.match(screen, /planBagRestore/);
+  assert.match(screen, /applyTransferredBag/);
+  assert.match(screen, /COPY\.cancel/);
+  assert.match(screen, /bag-restore-changes/);
   assert.doesNotMatch(screen, /TextInput/);
+  assert.doesNotMatch(screen, /isPro|Paywall|purchase/);
+});
+
+test('export file round-trips favorites and the typed bag, and a v1 file still restores', needsSqlite, () => {
+  const db = memoryDb();
+  const store = readSettingStore(db);
+  setFavorite(
+    store,
+    {
+      id: 'magnolia',
+      name: 'Magnolia',
+      city: 'Magnolia',
+      state: 'AR',
+      country: 'US',
+      location: { lat: 33.26, lng: -93.24 },
+    },
+    true,
+  );
+  updateClubCarry(db, 'club_8i', 140);
+  setClubEnabled(db, 'club_3w', false);
+  restoreRoundHistory(
+    db,
+    doc([
+      fileRound({
+        id: 'r-1',
+        startedAt: '2026-09-20T15:00:00.000Z',
+        courseName: 'Magnolia',
+        courseCity: 'Magnolia',
+        courseState: 'AR',
+        courseDataSource: 'osm',
+      } as Partial<RoundTransferRound> & { id: string; startedAt: string }),
+    ]),
+  );
+  const payload = JSON.parse(serializeRoundHistory(collectRoundHistoryExport(db, '2026-09-24T12:00:00.000Z')));
+  assert.equal(payload.version, 2);
+  assert.equal(payload.favorites.length, 1);
+  assert.deepEqual(Object.keys(payload.favorites[0]).sort(), ['city', 'id', 'location', 'name', 'state']);
+  assert.equal(payload.favorites[0].city, 'Magnolia');
+  assert.equal(JSON.stringify(payload.favorites).includes('ready'), false);
+  assert.equal(JSON.stringify(payload.favorites).includes('downloaded'), false);
+  const eight = payload.bag.find((club: RoundTransferBagClub) => club.id === 'club_8i');
+  const driver = payload.bag.find((club: RoundTransferBagClub) => club.id === 'club_driver');
+  const wood = payload.bag.find((club: RoundTransferBagClub) => club.id === 'club_3w');
+  assert.equal(eight.typicalCarryYards, 140);
+  assert.equal(driver.typicalCarryYards, null);
+  assert.equal(wood.enabled, false);
+  assert.equal(payload.rounds[0].courseCity, 'Magnolia');
+  assert.equal(payload.rounds[0].courseDataSource, 'osm');
+
+  const fresh = memoryDb();
+  const restored = restoreRoundHistory(fresh, JSON.stringify(payload));
+  assert.equal(restored.ok, true);
+  if (!restored.ok) return;
+  assert.equal(restored.favoritesAdded, 1);
+  assert.equal(listFavorites(readSettingStore(fresh))[0]?.id, 'magnolia');
+  assert.equal(getSetting(fresh, OFFLINE_PACKS_SETTING_KEY), null);
+
+  const v1 = memoryDb();
+  const old = restoreRoundHistory(
+    v1,
+    JSON.stringify({
+      kind: ROUND_HISTORY_EXPORT_KIND,
+      version: 1,
+      exportedAt: '2026-01-01T00:00:00.000Z',
+      rounds: [fileRound({ id: 'old', startedAt: '2026-01-02T00:00:00.000Z' })],
+    }),
+  );
+  assert.equal(old.ok, true);
+  if (!old.ok) return;
+  assert.equal(old.added, 1);
+  assert.equal(old.favoritesAdded, 0);
+  assert.equal(old.bag.length, 0);
+  assert.equal(listRounds(v1).length, 1);
+});
+
+test('bag diff lists on, off, order, and carry including blank, and apply waits for confirm', () => {
+  const current = [
+    { id: 'club_driver', name: 'Driver', shortName: 'Dr', enabled: false, sortOrder: 0, typicalCarryYards: null },
+    { id: 'club_3w', name: '3 Wood', shortName: '3W', enabled: true, sortOrder: 1, typicalCarryYards: null },
+    { id: 'club_6i', name: '6 Iron', shortName: '6i', enabled: true, sortOrder: 8, typicalCarryYards: null },
+    { id: 'club_7i', name: '7 Iron', shortName: '7i', enabled: true, sortOrder: 9, typicalCarryYards: null },
+    { id: 'club_8i', name: '8 Iron', shortName: '8i', enabled: true, sortOrder: 10, typicalCarryYards: 140 },
+    { id: 'club_putter', name: 'Putter', shortName: 'Pt', enabled: true, sortOrder: 18, typicalCarryYards: null },
+  ];
+  const incoming: RoundTransferBagClub[] = [
+    { id: 'club_driver', enabled: true, sortOrder: 0, typicalCarryYards: null },
+    { id: 'club_3w', enabled: false, sortOrder: 1, typicalCarryYards: null },
+    { id: 'club_6i', enabled: true, sortOrder: 8, typicalCarryYards: 155 },
+    { id: 'club_7i', enabled: true, sortOrder: 3, typicalCarryYards: null },
+    { id: 'club_8i', enabled: true, sortOrder: 10, typicalCarryYards: null },
+    { id: 'club_putter', enabled: true, sortOrder: 18, typicalCarryYards: 12 },
+    { id: 'club_missing', enabled: true, sortOrder: 20, typicalCarryYards: 200 },
+  ];
+  const lines = planBagRestore(current, incoming).map(formatBagChange);
+  assert.deepEqual(lines, [
+    'Driver turned on',
+    '3 Wood turned off',
+    '6 Iron carry blank → 155',
+    '7 Iron moved from 9 to 3',
+    '8 Iron carry 140 → blank',
+  ]);
+  assert.equal(planBagRestore(current, current.map((club) => ({
+    id: club.id,
+    enabled: club.enabled,
+    sortOrder: club.sortOrder,
+    typicalCarryYards: club.typicalCarryYards,
+  }))).length, 0);
+});
+
+test('restore adds favorites without duplicates or a download, and a second pass is a no-op', needsSqlite, () => {
+  const db = memoryDb();
+  const thunderId = `local:${THUNDERBIRD_HEBER_SPRINGS_AR_KEY}`;
+  const file = JSON.stringify({
+    kind: ROUND_HISTORY_EXPORT_KIND,
+    version: ROUND_HISTORY_EXPORT_VERSION,
+    exportedAt: '2026-09-24T12:00:00.000Z',
+    clubs: [{ id: 'club_driver', name: 'Driver', shortName: 'Dr' }],
+    favorites: [
+      {
+        id: thunderId,
+        name: 'Thunderbird Country Club',
+        city: 'Heber Springs',
+        state: 'AR',
+        location: THUNDERBIRD_HEBER_CLUBHOUSE,
+        status: 'ready',
+        downloaded: true,
+        paint: { holes: [{ green: { lat: 1, lng: 2 } }] },
+      },
+      {
+        id: 'magnolia',
+        name: 'Magnolia',
+        city: 'Magnolia',
+        state: 'AR',
+        location: { lat: 33.26, lng: -93.24 },
+      },
+      {
+        id: 'magnolia',
+        name: 'Magnolia duplicate',
+        city: 'Elsewhere',
+        state: 'TX',
+        location: null,
+      },
+    ],
+    bag: listClubs(db).map((club) => ({
+      id: club.id,
+      enabled: club.id !== 'club_driver',
+      sortOrder: club.sortOrder,
+      typicalCarryYards: club.id === 'club_8i' ? 140 : null,
+    })),
+    rounds: [fileRound({ id: 'r-1', startedAt: '2026-09-20T15:00:00.000Z' })],
+  });
+
+  const first = restoreRoundHistory(db, file);
+  assert.equal(first.ok, true);
+  if (!first.ok) return;
+  assert.equal(first.added, 1);
+  assert.equal(first.favoritesAdded, 2);
+  const favorites = listFavorites(readSettingStore(db));
+  assert.deepEqual(favorites.map((favorite) => favorite.id), [thunderId, 'magnolia']);
+  assert.equal(favorites[0]?.name, 'Thunderbird Country Club');
+  const storedFavorites = getSetting(db, FAVORITES_SETTING_KEY) ?? '';
+  assert.equal(storedFavorites.includes('ready'), false);
+  assert.equal(storedFavorites.includes('downloaded'), false);
+  assert.equal(storedFavorites.includes('paint'), false);
+  assert.equal(getSetting(db, OFFLINE_PACKS_SETTING_KEY), null);
+
+  const layout = layoutForFavoriteStart(favorites[0]);
+  assert.equal(layout.holes?.some((hole) => hole.greenCentroid != null || hole.teeCentroid != null) ?? false, false);
+  assert.equal(layout.holes?.some((hole) => hole.yards != null) ?? false, false);
+  assert.equal(yardsToGreenPlayerLabel({ yards: null, quality: 'none' }, { hasGreen: false }).value, '—');
+
+  const before = listClubs(db).find((club) => club.id === 'club_driver');
+  assert.equal(before?.enabled, true);
+  const lines = planBagRestore(listClubs(db), first.bag).map(formatBagChange);
+  assert.ok(lines.includes('Driver turned off'));
+  assert.ok(lines.includes('8 Iron carry blank → 140'));
+  assert.equal(listClubs(db).find((club) => club.id === 'club_driver')?.enabled, true);
+
+  applyTransferredBag(db, first.bag);
+  assert.equal(listClubs(db).find((club) => club.id === 'club_driver')?.enabled, false);
+  assert.equal(listClubs(db).find((club) => club.id === 'club_8i')?.typicalCarryYards, 140);
+  assert.equal(planBagRestore(listClubs(db), first.bag).length, 0);
+
+  const shotId = listShotsForHole(db, listHoles(db, 'r-1')[0].id)[0]?.id;
+  const again = restoreRoundHistory(db, file);
+  assert.equal(again.ok, true);
+  if (!again.ok) return;
+  assert.equal(again.added, 0);
+  assert.equal(again.updated, 0);
+  assert.equal(again.favoritesAdded, 0);
+  assert.equal(listRounds(db).length, 1);
+  assert.equal(listFavorites(readSettingStore(db)).length, 2);
+  assert.equal(listShotsForHole(db, listHoles(db, 'r-1')[0].id).length, 1);
+  assert.equal(listShotsForHole(db, listHoles(db, 'r-1')[0].id)[0]?.id, shotId);
+  assert.equal(planBagRestore(listClubs(db), again.bag).length, 0);
 });

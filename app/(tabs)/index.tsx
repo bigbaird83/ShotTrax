@@ -32,6 +32,7 @@ import {
   type CourseLayoutSeed,
 } from '@/src/db/repo';
 import { formatLastPlayedChip, formatPaintSourceChip } from '@/src/domain/courseCard';
+import { courseDataSourceToken } from '@/src/domain/courseDataSource';
 import { planPaintMissBanner } from '@/src/domain/paintMiss';
 import { canFinishBagCarrySetup, countTypedCarries } from '@/src/domain/bagCustomize';
 import { canStartRound } from '@/src/domain/coursePick';
@@ -111,7 +112,12 @@ function loadLayout(
     courseKey: course.id,
   });
   rememberLayoutHoles(layout);
-  return layout;
+  return {
+    ...layout,
+    city: course.city ?? null,
+    state: course.state ?? null,
+    courseDataSource: courseDataSourceToken(resolved?.paintResult ?? null),
+  };
 }
 
 export default function HomeScreen() {
