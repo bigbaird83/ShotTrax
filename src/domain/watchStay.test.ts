@@ -142,3 +142,103 @@ test('TF 54 F: Watch stays in ShotTraxx while the round is live, not after leave
   assert.match(session, /message\["roundLive"\]/);
   assert.match(session, /stopRoundStay\(\)/);
 });
+
+test('Watch round start clears userLeftApp so the golf workout is requested', () => {
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+
+  const replyFn = session.slice(session.indexOf('private func handleReply'), session.indexOf('private func failUnavailable'));
+  const started = replyFn.slice(replyFn.indexOf('type == "startRound"'), replyFn.indexOf('if ok, let clubId'));
+  assert.match(started, /hasPrefix\("Started"\)/);
+  assert.match(started, /resumeRoundStayAfterWatchStart\(\)/);
+
+  const startRound = session.slice(
+    session.indexOf('private func startPickedRound'),
+    session.indexOf('private var lastClubTapAt'),
+  );
+  assert.match(startRound, /resumeRoundStayAfterWatchStart\(\)/);
+
+  const apply = session.slice(session.indexOf('private func applyClubList'), session.indexOf('private func applyPuttSheet'));
+  assert.match(apply, /freshLiveListAfterHomeCoursePick/);
+  assert.match(apply, /resumeRoundStayAfterWatchStart\(\)/);
+
+  const resume = session.slice(
+    session.indexOf('private func resumeRoundStayAfterWatchStart'),
+    session.indexOf('private func clearWatchRoundStartPending'),
+  );
+  assert.match(resume, /userLeftApp = false/);
+  assert.match(resume, /syncRoundStay\(\)/);
+
+  const leaveFn = session.slice(session.indexOf('func leave('), session.indexOf('func homeAfterRound'));
+  assert.match(leaveFn, /userLeftApp = true/);
+  assert.match(leaveFn, /clearWatchRoundStartPending\(\)/);
+});
+
+test('requestAuthorization is gated on the active Watch scene', () => {
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+
+  const requestFn = session.slice(
+    session.indexOf('private func requestGolfWorkoutAuthorization'),
+    session.indexOf('private func workoutShareStatusLabel'),
+  );
+  assert.match(requestFn, /guard sceneIsActive else/);
+  assert.match(requestFn, /requestAuthorization\(toShare:/);
+  assert.match(requestFn, /let typesToRead: Set<HKObjectType> = \[\]/);
+  assert.match(requestFn, /workoutLog\.info\("requestAuthorization sent/);
+  assert.match(requestFn, /workoutLog\.info\("requestAuthorization not sent/);
+  assert.match(requestFn, /requestAuthorization callback success/);
+  assert.match(requestFn, /requestAuthorization callback error/);
+  assert.ok(requestFn.indexOf('guard sceneIsActive else') < requestFn.indexOf('requestAuthorization(toShare:'));
+  assert.ok(requestFn.indexOf('golfAuthSheetUp = true') < requestFn.indexOf('requestAuthorization(toShare:'));
+
+  const startFn = session.slice(
+    session.indexOf('private func startRoundStay'),
+    session.indexOf('private func requestGolfWorkoutAuthorization'),
+  );
+  const authorized = startFn.slice(startFn.indexOf('case .sharingAuthorized:'), startFn.indexOf('@unknown default'));
+  assert.match(authorized, /beginGolfWorkoutSession\(\)/);
+  assert.doesNotMatch(authorized, /sceneIsActive/);
+  assert.match(startFn, /authorization status=/);
+
+  const sceneFn = session.slice(session.indexOf('func noteScenePhase'), session.indexOf('enum ComplicationReloader'));
+  assert.match(sceneFn, /sceneIsActive = true/);
+  assert.match(sceneFn, /sceneIsActive = false/);
+  assert.match(sceneFn, /status == \.notDetermined && !golfAuthSheetUp/);
+  assert.match(sceneFn, /golfAuthInFlight = false/);
+  assert.match(sceneFn, /startRoundStay\(\)/);
+  assert.match(sceneFn, /phase == "inactive"/);
+  assert.match(sceneFn, /phase == "background"/);
+  assert.doesNotMatch(sceneFn, /stopRoundStay/);
+});
+
+test('denied workout share shows one club-list hint keyed on sharingDenied', () => {
+  const hint =
+    'Watch may sleep wrist-down. Turn on Workouts for ShotTraxx in the Health app on your iPhone.';
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+  const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  assert.ok(session.includes(hint));
+
+  const syncHint = session.slice(
+    session.indexOf('private func syncWorkoutDeniedHint'),
+    session.indexOf('func dismissWorkoutDeniedHint'),
+  );
+  assert.match(syncHint, /status == \.sharingDenied/);
+  assert.match(syncHint, /wantsStay/);
+  assert.match(syncHint, /sharingAuthorized/);
+  assert.match(syncHint, /!list\.roundLive \|\| list\.roundComplete/);
+  assert.match(syncHint, /workoutLog/);
+  assert.match(syncHint, /workoutDeniedHintText/);
+  assert.doesNotMatch(syncHint, /requestAuthorization/);
+
+  const deniedCase = session.slice(session.indexOf('case .sharingDenied:'), session.indexOf('case .notDetermined:'));
+  assert.doesNotMatch(deniedCase, /requestAuthorization/);
+
+  const sceneFn = session.slice(session.indexOf('func noteScenePhase'), session.indexOf('enum ComplicationReloader'));
+  assert.match(sceneFn, /syncWorkoutDeniedHint\(\)/);
+
+  const clubPick = watchUi.slice(watchUi.indexOf('private var clubPick'), watchUi.indexOf('private var moreClubs'));
+  assert.match(clubPick, /session\.workoutDeniedHint/);
+  assert.match(clubPick, /dismissWorkoutDeniedHint\(\)/);
+  assert.ok(clubPick.indexOf('workoutDeniedHint') < clubPick.indexOf('session.leave("back")'));
+  assert.ok(clubPick.indexOf('session.pick(clubId:') < clubPick.indexOf('Text("Hole Out")'));
+  assert.doesNotMatch(clubPick, /requestAuthorization|\.disabled\(/);
+});
