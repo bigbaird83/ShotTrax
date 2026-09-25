@@ -177,6 +177,11 @@ test('request only while active, re-request on next active if still notDetermine
   assert.match(scene, /locationAuthRequestInFlight = false/);
   const liveStart = session.slice(session.indexOf('private func syncLiveLocation'), session.indexOf('func locationManagerDidChangeAuthorization'));
   assert.match(liveStart, /if liveHoleInProgress \{[\s\S]*requestLiveLocationAuthorizationIfNeeded\(\)/);
+  const stay = session.slice(session.indexOf('private func syncRoundStay'), session.indexOf('private func syncWorkoutDeniedHint'));
+  const roundGoesLive = stay.slice(stay.indexOf('if next && !wantsStay'), stay.indexOf('wantsStay = next'));
+  assert.match(roundGoesLive, /sceneIsActive/);
+  assert.match(roundGoesLive, /locationAuthRequestInFlight = false/);
+  assert.ok(stay.indexOf('locationAuthRequestInFlight = false') < stay.indexOf('syncLiveLocation()'));
 
   const authChange = session.slice(
     session.indexOf('func locationManagerDidChangeAuthorization'),
