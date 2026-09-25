@@ -63,9 +63,7 @@ import {
   COPY,
   finishPuttsChip,
   finishShotChip,
-  formatPlayHeader,
-  formatPlayHeaderPrimary,
-  formatPlayHeaderSecondary,
+  formatPlayHeaderCourseLength,
   formatSuggestedClubChip,
   markedSuggestedMessage,
 } from '@/src/domain/playerCopy';
@@ -155,7 +153,8 @@ import { planScorecardDismiss } from '@/src/domain/scorecard';
 import { reconcileHoleScore, scoreMismatchMessage } from '@/src/domain/scoreReconcile';
 import { resolveStickyClub, selectClubForMark } from '@/src/domain/stickyClub';
 import type { Club, PenaltyReason } from '@/src/domain/types';
-import { lastLandingMark, markToGreen, planLiveGpsToPin, planPlayHeaderYards, toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
+import { courseTeeYards, lastLandingMark, markToGreen, planLiveGpsToPin, planPlayHeaderYards, toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
+import { watchClubCarry, watchGreenFields } from '@/src/domain/watchLive';
 import { yardsToGreen } from '@/src/sensing/yardsToGreen';
 import { describeGpsSource } from '@/src/services/location';
 import { formatPaintSourceChip } from '@/src/domain/courseCard';
@@ -1028,8 +1027,12 @@ export default function HoleScreen() {
       complication: {
         yards: liveGpsToPin.yards,
         quality: liveGpsToPin.quality,
+        atMs: fix?.timestamp ?? null,
       },
       roundLive: round?.finishedAt == null,
+      teeLengthYards: courseTeeYards(hole?.yards),
+      green: watchGreenFields({ green, front: pins.front, back: pins.back }),
+      clubCarry: watchClubCarry(stripPlan.carries),
     },
   );
 
@@ -1040,6 +1043,8 @@ export default function HoleScreen() {
       </View>
     );
   }
+
+  const courseHeader = formatPlayHeaderCourseLength(hole.number, hole.par, round.teeName, hole.yards);
 
   const simBanner =
     Device.isDevice === false || fix?.mocked ? COPY.simulator : describeGpsSource(fix ?? { mocked: false, isSimulator: false });
@@ -1549,10 +1554,10 @@ export default function HoleScreen() {
                   <Text
                     style={styles.holeTitle}
                     numberOfLines={1}
-                    accessibilityLabel={formatPlayHeader(hole.number, hole.par, playHeaderYards.yards)}>
-                    {formatPlayHeaderPrimary(hole.number)}
+                    accessibilityLabel={courseHeader.label}>
+                    {courseHeader.primary}
                     <Text style={styles.holeMeta}>
-                      {` · ${formatPlayHeaderSecondary(hole.par, round.teeName)}`}
+                      {` · ${courseHeader.secondary}`}
                     </Text>
                   </Text>
                 </View>
@@ -1574,10 +1579,10 @@ export default function HoleScreen() {
                   <Text
                     style={styles.holeTitle}
                     numberOfLines={1}
-                    accessibilityLabel={formatPlayHeader(hole.number, hole.par, playHeaderYards.yards)}>
-                    {formatPlayHeaderPrimary(hole.number)}
+                    accessibilityLabel={courseHeader.label}>
+                    {courseHeader.primary}
                     <Text style={styles.holeMeta}>
-                      {` · ${formatPlayHeaderSecondary(hole.par, round.teeName)}`}
+                      {` · ${courseHeader.secondary}`}
                     </Text>
                   </Text>
                 </View>
@@ -2021,7 +2026,7 @@ export default function HoleScreen() {
             }}
           />
           <BigButton
-            label={COPY.undoLast}
+            label={COPY.undoLastShot}
             variant="ghost"
             disabled={busy || readOnly || shots.length === 0}
             onPress={() => {

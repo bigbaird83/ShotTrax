@@ -92,6 +92,7 @@
       ],
       "expo-mail-composer",
       "react-native-maps",
+      "./plugins/withWatchWidgetEmbed",
       "@bacons/apple-targets"
     ],
     "experiments": {

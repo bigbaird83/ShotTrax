@@ -337,7 +337,7 @@ test('Signal Lab: TF 49 putt sheet is pick → Made it on putt N≥1; Add putt i
   assert.equal(watchPuttSheetLengthLabel('inside_3'), '0–3');
   assert.equal(COPY.addPutt, 'Add a putt');
   const watchDock = watch.slice(watch.indexOf('private var clubPick'), watch.indexOf('private var moreClubs'));
-  assert.match(watchDock, /Text\("Hole Out"\)/);
+  assert.match(watchDock, /actionPill\("Hole Out"\)/);
   assert.match(watchDock, /session\.madeIt\(\)/);
 
   const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');

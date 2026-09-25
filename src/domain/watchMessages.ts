@@ -10,6 +10,8 @@
  */
 
 import { complicationFromHoleMap } from './watchComplication';
+import { isCourseCardLatLng } from './latLng';
+import { watchClubCarry } from './watchLive';
 import { isPutterClubId } from './defaultBag';
 import { isPuttLengthId, PUTT_LENGTHS, type PuttLengthId } from './putts';
 import { OPEN_PHONE } from './watchNearby';
@@ -38,10 +40,14 @@ export type WatchMessageType = (typeof WATCH_MESSAGE_TYPES)[number];
  * yardsToGreen is yardsToGreen().yards (null when quality is none).
  * yardsQuality is the same good/soft/none bands as the phone — never invent.
  * lastClubId is optional (Same club on the wrist).
- * complicationYards / complicationQuality are optional live yards for the Watch
- * status line (Hole N · yd), the top-right number, and the complication
- * (`planLiveGpsToPin`). Null / quality none → Hole N · — . They do not rank clubs.
- * Omit them to leave that number unchanged. quality none clears the yardage.
+ * complicationYards / complicationQuality / complicationAt are the phone's live
+ * GPS yards (`planLiveGpsToPin`) and that fix's timestamp in epoch ms. The Watch
+ * shows them only when they are newer than yards it already computed for this
+ * hole. Older watches ignore the extra fields. They are not the fixed tee length.
+ * teeLengthYards is the course tee-to-green length (`holes.yards`). Omit when
+ * unknown. greenLat/greenLng is the cup the phone passed to planLiveGpsToPin,
+ * only when that point is course data. clubCarry is the play-wheel carry for
+ * each bag club so the Watch can re-rank while the phone is locked.
  */
 export type ClubListMessage = {
   type: 'clubList';
@@ -55,6 +61,19 @@ export type ClubListMessage = {
   selectedClubId?: ClubId | null;
   complicationYards?: number | null;
   complicationQuality?: YardsQuality;
+  /** Epoch ms of the phone fix behind complicationYards. Omit when there is no fix. */
+  complicationAt?: number;
+  /** Fixed tee-to-green length from course data. Omit when unknown. Older watches ignore it. */
+  teeLengthYards?: number | null;
+  /** Course cup used by planLiveGpsToPin. Omit when the phone has no course green. */
+  greenLat?: number;
+  greenLng?: number;
+  greenFrontLat?: number;
+  greenFrontLng?: number;
+  greenBackLat?: number;
+  greenBackLng?: number;
+  /** Play-wheel carry by club id. Putter omitted. Older watches ignore it. */
+  clubCarry?: Record<string, number>;
   /** Last hole finished (Made it / Hole Out). Watch shows Round complete, not the putt sheet. */
   roundComplete?: boolean;
   /** False while the phone is showing a finished round. Omitted means the round is live. */
@@ -194,7 +213,46 @@ export function parseClubList(raw: unknown): ClubListMessage | null {
   if (selectedClubId) msg.selectedClubId = selectedClubId;
   if (row.roundComplete === true) msg.roundComplete = true;
   if (row.roundLive === false) msg.roundLive = false;
+  const teeLength = optionalPositiveYards(row.teeLengthYards);
+  if (teeLength != null) msg.teeLengthYards = teeLength;
+  const at = optionalEpochMs(row.complicationAt);
+  if (at != null) msg.complicationAt = at;
+  const green = parseGreenPair(row.greenLat, row.greenLng);
+  if (green) {
+    msg.greenLat = green.lat;
+    msg.greenLng = green.lng;
+  }
+  const front = parseGreenPair(row.greenFrontLat, row.greenFrontLng);
+  if (front) {
+    msg.greenFrontLat = front.lat;
+    msg.greenFrontLng = front.lng;
+  }
+  const back = parseGreenPair(row.greenBackLat, row.greenBackLng);
+  if (back) {
+    msg.greenBackLat = back.lat;
+    msg.greenBackLng = back.lng;
+  }
+  if (row.clubCarry && typeof row.clubCarry === 'object' && !Array.isArray(row.clubCarry)) {
+    const carry = watchClubCarry(row.clubCarry as Record<string, number>);
+    if (Object.keys(carry).length > 0) msg.clubCarry = carry;
+  }
   return msg;
+}
+
+function optionalPositiveYards(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return null;
+  return Math.round(value);
+}
+
+function optionalEpochMs(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return null;
+  return value;
+}
+
+function parseGreenPair(lat: unknown, lng: unknown): { lat: number; lng: number } | null {
+  if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+  if (!isCourseCardLatLng({ lat, lng })) return null;
+  return { lat, lng };
 }
 
 export function parseClubNav(raw: unknown): ClubNavMessage | null {
@@ -323,7 +381,15 @@ export function clubListPayload(args: {
   lastClubId?: ClubId | null;
   selectedClubId?: ClubId | null;
   /** Hole-map yards. Omit to leave the Watch complication unchanged. */
-  complication?: { yards: number | null; quality: string } | null;
+  complication?: { yards: number | null; quality: string; atMs?: number | null } | null;
+  teeLengthYards?: number | null;
+  green?: {
+    lat: number;
+    lng: number;
+    front?: { lat: number; lng: number } | null;
+    back?: { lat: number; lng: number } | null;
+  } | null;
+  clubCarry?: Record<string, number | null | undefined> | null;
 }): ClubListMessage {
   const yardsToGreen =
     args.yardsQuality === 'none' ||
@@ -338,6 +404,12 @@ export function clubListPayload(args: {
         map: args.complication,
       })
     : null;
+  const teeLength = optionalPositiveYards(args.teeLengthYards);
+  const green = parseGreenPair(args.green?.lat, args.green?.lng);
+  const front = parseGreenPair(args.green?.front?.lat, args.green?.front?.lng);
+  const back = parseGreenPair(args.green?.back?.lat, args.green?.back?.lng);
+  const carry = watchClubCarry(args.clubCarry);
+  const at = optionalEpochMs(args.complication?.atMs);
   return {
     type: 'clubList',
     top3: args.top3,
@@ -351,6 +423,12 @@ export function clubListPayload(args: {
     ...(complication
       ? { complicationQuality: complication.quality, complicationYards: complication.yards }
       : {}),
+    ...(at != null ? { complicationAt: at } : {}),
+    ...(teeLength != null ? { teeLengthYards: teeLength } : {}),
+    ...(green ? { greenLat: green.lat, greenLng: green.lng } : {}),
+    ...(front ? { greenFrontLat: front.lat, greenFrontLng: front.lng } : {}),
+    ...(back ? { greenBackLat: back.lat, greenBackLng: back.lng } : {}),
+    ...(Object.keys(carry).length > 0 ? { clubCarry: carry } : {}),
   };
 }
 
@@ -398,6 +476,11 @@ export function clubListPushKey(msg: ClubListMessage): string {
     selectedClubId: msg.selectedClubId ?? null,
     complicationYards: msg.complicationYards ?? null,
     complicationQuality: msg.complicationQuality ?? null,
+    complicationAt: msg.complicationAt ?? null,
+    teeLengthYards: msg.teeLengthYards ?? null,
+    greenLat: msg.greenLat ?? null,
+    greenLng: msg.greenLng ?? null,
+    clubCarry: msg.clubCarry ?? null,
     roundComplete: msg.roundComplete === true,
     roundLive: msg.roundLive !== false,
   });

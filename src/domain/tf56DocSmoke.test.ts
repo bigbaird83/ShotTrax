@@ -148,10 +148,11 @@ test('Fairway: dedicated Watch Putt opens the sheet only — no attachWatchFix, 
   const clubPick = watch.slice(watch.indexOf('private var clubPick'), watch.indexOf('private var moreClubs'));
   assert.match(clubPick, /actionPill\("Putt"\)/);
   assert.match(clubPick, /session\.openPuttSheet\(\)/);
-  assert.match(clubPick, /Text\("Hole Out"\)/);
+  assert.match(clubPick, /actionPill\("Hole Out"\)/);
   assert.doesNotMatch(clubPick, WATCH_MADE);
-  assert.ok(clubPick.indexOf('session.openPuttSheet()') < clubPick.indexOf('Text("Hole Out")'));
-  assert.ok(clubPick.indexOf('session.leave("back")') < clubPick.indexOf('actionPill("Putt")'));
+  assert.ok(clubPick.indexOf('actionPill("Hole Out")') < clubPick.indexOf('session.openPuttSheet()'));
+  assert.doesNotMatch(clubPick, /session\.leave\("back"\)/);
+  assert.ok(clubPick.indexOf('session.madeIt()') < clubPick.indexOf('actionPill("Putt")'));
   assert.ok(clubPick.indexOf('actionPill("Putt")') < clubPick.indexOf('ScrollView(.horizontal'));
 
   const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');

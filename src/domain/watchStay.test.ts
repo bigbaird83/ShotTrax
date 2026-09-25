@@ -238,7 +238,7 @@ test('denied workout share shows one club-list hint keyed on sharingDenied', () 
   const clubPick = watchUi.slice(watchUi.indexOf('private var clubPick'), watchUi.indexOf('private var moreClubs'));
   assert.match(clubPick, /session\.workoutDeniedHint/);
   assert.match(clubPick, /dismissWorkoutDeniedHint\(\)/);
-  assert.ok(clubPick.indexOf('workoutDeniedHint') < clubPick.indexOf('session.leave("back")'));
-  assert.ok(clubPick.indexOf('session.pick(clubId:') < clubPick.indexOf('Text("Hole Out")'));
+  assert.ok(clubPick.indexOf('workoutDeniedHint') < clubPick.indexOf('session.madeIt()'));
+  assert.ok(clubPick.indexOf('actionPill("Hole Out")') < clubPick.indexOf('session.pick(clubId:'));
   assert.doesNotMatch(clubPick, /requestAuthorization|\.disabled\(/);
 });

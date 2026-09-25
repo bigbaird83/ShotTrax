@@ -10,6 +10,7 @@ import {
   formatShotCount,
   formatHoleHeader,
   formatPlayHeader,
+  formatPlayHeaderCourseLength,
   formatPlayHeaderPrimary,
   formatPlayHeaderSecondary,
   formatRunningParBadge,
@@ -35,6 +36,18 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(formatHoleHeader(1, 4), 'Hole 1 · Par 4');
   assert.equal(formatPlayHeader(1, 4, 371), 'Hole 1 · Par 4 · 371 yd');
   assert.equal(formatPlayHeader(1, 4, null), 'Hole 1 · Par 4 · —');
+  assert.deepEqual(formatPlayHeaderCourseLength(1, 4, null, 385), {
+    primary: 'Hole 1',
+    secondary: 'Par 4 · 385 yd',
+    label: 'Hole 1 · Par 4 · 385 yd',
+  });
+  assert.deepEqual(formatPlayHeaderCourseLength(1, 4, 'Gold', 385), {
+    primary: 'Hole 1',
+    secondary: 'Par 4 · Gold · 385 yd',
+    label: 'Hole 1 · Par 4 · Gold · 385 yd',
+  });
+  assert.equal(formatPlayHeaderCourseLength(1, 4, null, null).secondary, 'Par 4');
+  assert.doesNotMatch(formatPlayHeaderCourseLength(1, 4, null, null).label, /—|yd/);
   assert.doesNotMatch(formatPlayHeader(1, 4, 371), /SI |Rating |Slope /);
   assert.equal(COPY.homeLede, 'Find a course, pick your tee, start the round.');
   assert.equal(COPY.nearbyHint, 'Courses near you — pull to refresh.');
@@ -54,6 +67,7 @@ test('player copy uses words, never ? or SI jargon dump', () => {
   assert.equal(COPY.top3Unlock, 'Top clubs unlock after a few shots');
   assert.equal(COPY.stickyClub, 'Same club');
   assert.equal(COPY.undoLast, 'Undo last');
+  assert.equal(COPY.undoLastShot, 'Undo last shot');
   assert.equal(COPY.markWithoutClub, 'Mark without club');
   assert.equal(COPY.approximate, 'Approximate');
   assert.equal(COPY.gpsConfidenceGood, 'good');

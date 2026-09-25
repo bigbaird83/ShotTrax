@@ -131,10 +131,12 @@ final class PhoneWatchSession: NSObject, WCSessionDelegate {
   /// front. Same clubList payload — no second yardage. watchOS budgets these
   /// transfers, so hole / quality flips always go and yard drift only in ≥20 yd steps.
   private func transferComplicationIfNeeded(_ safe: [String: Any], session: WCSession) {
+    // WidgetKit faces leave isComplicationEnabled false, so that flag must not
+    // block the wake. The remaining-transfer budget applies only when ClockKit
+    // reports the complication is actually on the face.
     guard session.activationState == .activated,
           session.isPaired,
           session.isWatchAppInstalled,
-          session.isComplicationEnabled,
           let quality = safe["complicationQuality"] as? String else { return }
     let hole = Self.intValue(safe["holeNumber"]) ?? 0
     let yards = Self.intValue(safe["complicationYards"])
@@ -146,8 +148,8 @@ final class PhoneWatchSession: NSObject, WCSessionDelegate {
       moved = (yards == nil) != (sentComplicationYards == nil)
     }
     guard flipped || moved else { return }
-    // Keep a few transfers for the next hole change.
-    if !flipped, session.remainingComplicationUserInfoTransfers <= 5 { return }
+    // Keep a few transfers for the next hole change. WidgetKit (flag false) is not budgeted here.
+    if session.isComplicationEnabled, !flipped, session.remainingComplicationUserInfoTransfers <= 5 { return }
     for transfer in session.outstandingUserInfoTransfers where transfer.isCurrentComplicationInfo {
       transfer.cancel()
     }
@@ -314,8 +316,13 @@ final class PhoneWatchSession: NSObject, WCSessionDelegate {
   }
 
   func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
-    if activationState == .activated, pendingClubList != nil || lastWatchHome != nil {
-      try? session.updateApplicationContext(applicationContext())
+    if activationState == .activated {
+      if let pending = pendingClubList {
+        transferComplicationIfNeeded(pending, session: session)
+      }
+      if pendingClubList != nil || lastWatchHome != nil {
+        try? session.updateApplicationContext(applicationContext())
+      }
     }
     module?.sendEvent("onReachabilityChange", [
       "reachable": session.isReachable,

@@ -102,6 +102,9 @@ test('puttPick made on hole 7 → next clubList.holeNumber === 8 and puttSheet.o
     yardsQuality: 'good',
     selectedClubId: 'club_putter',
     complication: { yards: 12, quality: 'good' },
+    teeLengthYards: 385,
+    green: { lat: 33.4, lng: -111.9 },
+    clubCarry: { club_7i: 150 },
   });
   const plan = planWatchMadeItAdvance({ holeNumber: 7, holeCount: 18, lengths: ['3_to_10'], last });
   assert.equal(plan.clubList.holeNumber, 8);
@@ -114,6 +117,9 @@ test('puttPick made on hole 7 → next clubList.holeNumber === 8 and puttSheet.o
   assert.equal(plan.clubList.yardsQuality, 'none');
   assert.equal(plan.clubList.complicationYards, null);
   assert.equal(plan.clubList.selectedClubId, undefined);
+  assert.equal(plan.clubList.teeLengthYards, undefined);
+  assert.equal(plan.clubList.greenLat, undefined);
+  assert.equal(plan.clubList.clubCarry, undefined);
   assert.ok(parseClubList(plan.clubList));
   assert.equal(parsePuttSheet(plan.puttSheet)?.open, false);
 });
