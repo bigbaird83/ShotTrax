@@ -51,14 +51,17 @@ import {
 } from '../domain/favorites';
 import { buildRoundsCsv, buildShotsCsv, type CsvShot } from '../domain/roundCsv';
 import {
+  acceptTransferPenalty,
   buildRoundHistoryExport,
   planFavoriteRestoreMerge,
+  penaltiesNewerThanExport,
   planRoundHistoryImport,
   planRoundRestoreMerge,
   sameRoundTransferContent,
   type RoundHistoryDocument,
   type RoundTransferBagClub,
   type RoundTransferFavorite,
+  type RoundTransferPenalty,
   type RoundTransferRound,
   type RoundTransferShot,
 } from '../domain/roundTransfer';
@@ -633,6 +636,27 @@ export function attachCourseToRound(
   });
 }
 
+function transferredPenalties(db: SQLiteDatabase, holeId: string): RoundTransferPenalty[] {
+  return db
+    .getAllSync<PenaltyRow>(
+      'SELECT * FROM hole_penalties WHERE hole_id = ? ORDER BY created_at ASC',
+      [holeId],
+    )
+    .flatMap((row) => {
+      const penalty = acceptTransferPenalty({
+        id: row.id,
+        kind: row.kind,
+        strokes: row.strokes,
+        reason: row.reason,
+        note: row.note,
+        createdAt: row.created_at,
+        lat: row.lat,
+        lng: row.lng,
+      });
+      return penalty ? [penalty] : [];
+    });
+}
+
 export function collectRoundHistoryExport(db: SQLiteDatabase, exportedAt: string): RoundHistoryDocument {
   const store = readSettingStore(db);
   const rounds = listRounds(db).map((round) => ({
@@ -674,6 +698,7 @@ export function collectRoundHistoryExport(db: SQLiteDatabase, exportedAt: string
       startedAt: hole.startedAt,
       completedAt: hole.completedAt,
       fairway: hole.fairway,
+      penalties: transferredPenalties(db, hole.id),
       shots: listShotsForHole(db, hole.id).map((shot) => ({
         clubId: shot.clubId,
         seq: shot.seq,
@@ -741,7 +766,7 @@ export function restoreRoundHistory(
   const merge = planRoundRestoreMerge({ existing: listRounds(db), incoming: plan.rounds });
   const replace = merge.replace.filter((round) => {
     const stored = round.id ? storedRoundAsTransfer(db, round.id) : null;
-    return stored == null || !sameRoundTransferContent(stored, round);
+    return stored == null || !sameRoundTransferContent(stored, round, plan.exportedAt);
   });
   let shots = 0;
   let favoritesAdded = 0;
@@ -750,8 +775,10 @@ export function restoreRoundHistory(
       const id = round.id as string;
       const token = getRoundShareToken(db, id);
       const sharedAt = getRoundSharedAt(db, id);
+      // Read before delete. Unknown lists are copied whole. An explicit list keeps phone rows newer than exportedAt.
+      const carried = phonePenaltiesByHole(db, id);
       deleteRoundRows(db, id);
-      insertTransferredRound(db, round, clubs, id);
+      insertTransferredRound(db, round, clubs, id, carried, plan.exportedAt);
       if (token) db.runSync('UPDATE rounds SET share_token = ? WHERE id = ?', [token, id]);
       if (sharedAt) db.runSync('UPDATE rounds SET shared_at = ? WHERE id = ?', [sharedAt, id]);
     }
@@ -774,11 +801,69 @@ export function restoreRoundHistory(
   };
 }
 
+type CarriedPenalty = {
+  id: string;
+  strokes: number;
+  reason: string;
+  note: string | null;
+  createdAt: string;
+  kind: string;
+  lat: number | null;
+  lng: number | null;
+};
+
+/** Every stored penalty on the round, keyed by hole number. Caller still owns the rows. */
+function phonePenaltiesByHole(db: SQLiteDatabase, roundId: string): Map<number, CarriedPenalty[]> {
+  const carried = new Map<number, CarriedPenalty[]>();
+  const holes = db.getAllSync<{ id: string; number: number }>('SELECT id, number FROM holes WHERE round_id = ?', [
+    roundId,
+  ]);
+  for (const hole of holes) {
+    const rows = db.getAllSync<PenaltyRow>(
+      'SELECT * FROM hole_penalties WHERE hole_id = ? ORDER BY created_at ASC',
+      [hole.id],
+    );
+    carried.set(
+      hole.number,
+      rows.map((row) => ({
+        id: row.id,
+        strokes: row.strokes,
+        reason: row.reason,
+        note: row.note,
+        createdAt: row.created_at,
+        kind: row.kind ?? 'penalty',
+        lat: row.lat ?? null,
+        lng: row.lng ?? null,
+      })),
+    );
+  }
+  return carried;
+}
+
+function insertCarriedPenalty(db: SQLiteDatabase, holeId: string, penalty: CarriedPenalty): void {
+  db.runSync(
+    'INSERT INTO hole_penalties (id, hole_id, strokes, reason, note, created_at, kind, lat, lng) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [
+      penalty.id.trim() || newId(),
+      holeId,
+      penalty.strokes,
+      penalty.reason,
+      penalty.note,
+      penalty.createdAt,
+      penalty.kind,
+      penalty.lat,
+      penalty.lng,
+    ],
+  );
+}
+
 function insertTransferredRound(
   db: SQLiteDatabase,
   round: RoundTransferRound,
   clubs: Set<string>,
   roundId: string,
+  carriedPenalties?: ReadonlyMap<number, CarriedPenalty[]>,
+  exportedAt?: string | null,
 ): void {
   const courseLoc = isValidLatLng(
     round.courseLat != null && round.courseLng != null
@@ -874,6 +959,32 @@ function insertTransferredRound(
         ],
       );
     }
+    const phoneRows = carriedPenalties?.get(hole.number) ?? [];
+    if (hole.penalties == null) {
+      for (const penalty of phoneRows) insertCarriedPenalty(db, holeId, penalty);
+    } else {
+      // File list wins for rows at or before exportedAt. Newer phone rows are added.
+      // A delete on the phone after export is not timestamped, so a file that still
+      // lists that penalty writes it again.
+      for (const penalty of hole.penalties) {
+        const point =
+          penalty.lat != null && penalty.lng != null && isValidLatLng({ lat: penalty.lat, lng: penalty.lng })
+            ? { lat: penalty.lat, lng: penalty.lng }
+            : null;
+        insertCarriedPenalty(db, holeId, {
+          id: penalty.id ?? '',
+          strokes: penalty.strokes,
+          reason: penalty.reason,
+          note: penalty.note,
+          createdAt: penalty.createdAt,
+          kind: penalty.kind,
+          lat: point?.lat ?? null,
+          lng: point?.lng ?? null,
+        });
+      }
+      const newer = penaltiesNewerThanExport(hole.penalties, phoneRows, exportedAt ?? null);
+      for (const penalty of newer) insertCarriedPenalty(db, holeId, penalty);
+    }
   }
 }
 
@@ -936,6 +1047,7 @@ function storedRoundAsTransfer(db: SQLiteDatabase, id: string): RoundTransferRou
       completedAt: hole.completedAt,
       fairway: hole.fairway,
       shots,
+      penalties: transferredPenalties(db, hole.id),
     };
   });
   return {
