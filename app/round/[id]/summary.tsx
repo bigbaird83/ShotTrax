@@ -3,9 +3,15 @@ import { useMemo, useRef, useState } from 'react';
 import { findNodeHandle, Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatParLabel, formatSiLabel, formatTeeMeta } from '@/src/course/layout';
 import { useDb } from '@/src/db/DbProvider';
-import { getRound, listHoles, listPenaltiesForHole, listShotsForHole } from '@/src/db/repo';
+import { getClubMap, getRound, listHoles, listPenaltiesForHole, listShotsForHole } from '@/src/db/repo';
 import { finishedHoleDisplayScore } from '@/src/domain/holeScore';
 import { formatPenaltyRow, totalPenaltyStrokes } from '@/src/domain/penalty';
+import {
+  formatHoleCountLine,
+  formatShotStepChip,
+  orderHoleSteps,
+  penaltiesMissingFromSteps,
+} from '@/src/domain/penaltySteps';
 import { COPY, holeOutClosedOnShot } from '@/src/domain/playerCopy';
 import { holeClosedByShot } from '@/src/domain/putts';
 import { formatHoleTimeSpan, formatRoundPaceLine, planLivePace } from '@/src/domain/livePace';
@@ -26,6 +32,7 @@ export default function RoundSummaryScreen() {
   const shareAnchorRef = useRef<View>(null);
   const round = useMemo(() => getRound(db, id), [db, id, revision]);
   const holes = useMemo(() => (round ? listHoles(db, round.id) : []), [db, round, revision]);
+  const clubs = useMemo(() => getClubMap(db), [db, revision]);
 
   if (!round) {
     return (
@@ -108,9 +115,16 @@ export default function RoundSummaryScreen() {
         }).mismatch;
         const closer = holeClosedByShot(shots);
         const timeSpan = formatHoleTimeSpan(hole);
+        const steps = orderHoleSteps(shots, penalties);
+        const inlinePenalty = steps.some((step) => step.kind === 'penalty');
+        const tagPenalties = penaltiesMissingFromSteps(penalties, steps);
         const shotBits = [
-          `${shots.length} shot${shots.length === 1 ? '' : 's'}`,
-          hole.putts ? `${hole.putts} putt${hole.putts === 1 ? '' : 's'}` : null,
+          formatHoleCountLine({
+            shotCount: shots.length,
+            penaltyStrokes: penStrokes,
+            puttCount: hole.putts,
+            omitZeroPutts: true,
+          }),
           closedGps.length ? `${yards} yd` : null,
         ].filter(Boolean);
         return (
@@ -125,15 +139,42 @@ export default function RoundSummaryScreen() {
                 {hole.yards != null ? ` · ${hole.yards} yd` : ''}
               </Text>
               <Text style={styles.muted}>{shotBits.join(' · ')}</Text>
+              {inlinePenalty ? (
+                <View testID="summary-hole-steps">
+                  {steps.map((step) => {
+                    if (step.kind === 'penalty') {
+                      return (
+                        <Text key={`penalty-${step.sourceIndex}`} style={styles.penalty}>
+                          {step.label}
+                        </Text>
+                      );
+                    }
+                    const shot = shots[step.sourceIndex];
+                    if (!shot) return null;
+                    return (
+                      <Text key={shot.id} style={styles.muted}>
+                        {formatShotStepChip({
+                          seq: shot.seq,
+                          clubShortName: shot.clubId ? clubs[shot.clubId]?.shortName : null,
+                          source: shot.source,
+                          fixQuality: shot.fixQuality,
+                          endedAt: shot.endedAt,
+                          distanceYards: shot.distanceYards,
+                        })}
+                      </Text>
+                    );
+                  })}
+                </View>
+              ) : null}
               {timeSpan ? <Text style={styles.time}>{timeSpan}</Text> : null}
               {closer ? (
                 <Text style={styles.holeOutLine} testID="hole-out-summary">
                   {holeOutClosedOnShot(closer.seq)}
                 </Text>
               ) : null}
-              {penalties.length > 0 ? (
+              {tagPenalties.length > 0 ? (
                 <Text style={styles.penalty}>
-                  {penalties.map((p) => formatPenaltyRow(p)).join(' · ')}
+                  {tagPenalties.map((p) => formatPenaltyRow(p)).join(' · ')}
                 </Text>
               ) : null}
               {mismatch ? (

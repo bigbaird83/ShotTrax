@@ -190,6 +190,40 @@ test('Signal Lab: TF 48 finished-hole revisit is a thin chip — score vs par, s
   assert.equal(cypress.vsPar, 'E');
   assert.equal(cypress.flag, COPY.madeIt);
   assert.equal(cypress.line, '4 · E · 2 shots · 2 putts · Made it');
+  assert.equal(cypress.penaltyLabel, null);
+
+  const withPenalty = planFinishedHoleMiniSummary({
+    puttsDone: true,
+    score: 5,
+    par: 4,
+    shotCount: 2,
+    putts: 2,
+    penaltyStrokes: 1,
+    shots: [
+      { seq: 1, holeOut: false },
+      { seq: 2, holeOut: false },
+    ],
+  });
+  assert.equal(withPenalty.penaltyLabel, '1 penalty');
+  assert.equal(withPenalty.vsPar, '+1');
+  assert.equal(withPenalty.line, '5 · +1 · 2 shots · 1 penalty · 2 putts · Made it');
+
+  // +1 is score-to-par (5 − 4), not the penalty. Two penalty strokes stay in the count.
+  const twoPenaltyStrokes = planFinishedHoleMiniSummary({
+    puttsDone: true,
+    score: 5,
+    par: 4,
+    shotCount: 2,
+    putts: 2,
+    penaltyStrokes: 2,
+    shots: [
+      { seq: 1, holeOut: false },
+      { seq: 2, holeOut: false },
+    ],
+  });
+  assert.equal(twoPenaltyStrokes.vsPar, '+1');
+  assert.equal(twoPenaltyStrokes.penaltyLabel, '2 penalties');
+  assert.equal(twoPenaltyStrokes.line, '5 · +1 · 2 shots · 2 penalties · 2 putts · Made it');
 
   const noPar = planFinishedHoleMiniSummary({
     puttsDone: true,

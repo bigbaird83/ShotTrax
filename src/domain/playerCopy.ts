@@ -113,6 +113,7 @@ export const COPY = {
   drop: 'Drop',
   penalty: 'Penalty',
   penaltySaveFailed: 'Couldn’t save the penalty. Try again.',
+  afterShot: 'After shot',
   sayClub: 'Say a club',
   bag: 'Bag',
   fullBag: 'Full bag',

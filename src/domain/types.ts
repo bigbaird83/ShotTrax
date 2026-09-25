@@ -151,6 +151,10 @@ export type HolePenalty = {
   kind: PenaltyKind;
   lat: number | null;
   lng: number | null;
+  /** Shot this penalty follows. Null on older rows and when the hole had no shots. */
+  afterShotId: string | null;
+  /** Seq of that shot, kept so a deleted shot can still place the penalty. */
+  afterShotSeq: number | null;
 };
 
 export type OpenShot = {

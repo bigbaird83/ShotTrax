@@ -211,6 +211,8 @@ type PenaltyRow = {
   kind: string | null;
   lat: number | null;
   lng: number | null;
+  after_shot_id?: string | null;
+  after_shot_seq?: number | null;
 };
 
 function mapClub(row: ClubRow): Club {
@@ -345,7 +347,20 @@ function mapPenalty(row: PenaltyRow): HolePenalty {
     kind,
     lat: row.lat ?? null,
     lng: row.lng ?? null,
+    afterShotId: textOrNull(row.after_shot_id),
+    afterShotSeq: integerOrNull(row.after_shot_seq),
   };
+}
+
+function textOrNull(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function integerOrNull(value: number | null | undefined): number | null {
+  if (typeof value !== 'number' || !Number.isInteger(value)) return null;
+  return value;
 }
 
 export function listClubs(db: SQLiteDatabase, enabledOnly = false): Club[] {
@@ -667,6 +682,8 @@ function transferredPenalties(db: SQLiteDatabase, holeId: string): RoundTransfer
         createdAt: row.created_at,
         lat: row.lat,
         lng: row.lng,
+        afterShotId: row.after_shot_id,
+        afterShotSeq: row.after_shot_seq,
       });
       return penalty ? [penalty] : [];
     });
@@ -827,6 +844,8 @@ type CarriedPenalty = {
   kind: string;
   lat: number | null;
   lng: number | null;
+  afterShotId: string | null;
+  afterShotSeq: number | null;
 };
 
 /** Every stored penalty on the round, keyed by hole number. Caller still owns the rows. */
@@ -851,6 +870,8 @@ function phonePenaltiesByHole(db: SQLiteDatabase, roundId: string): Map<number, 
         kind: row.kind ?? 'penalty',
         lat: row.lat ?? null,
         lng: row.lng ?? null,
+        afterShotId: textOrNull(row.after_shot_id),
+        afterShotSeq: integerOrNull(row.after_shot_seq),
       })),
     );
   }
@@ -859,7 +880,7 @@ function phonePenaltiesByHole(db: SQLiteDatabase, roundId: string): Map<number, 
 
 function insertCarriedPenalty(db: SQLiteDatabase, holeId: string, penalty: CarriedPenalty): void {
   db.runSync(
-    'INSERT INTO hole_penalties (id, hole_id, strokes, reason, note, created_at, kind, lat, lng) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO hole_penalties (id, hole_id, strokes, reason, note, created_at, kind, lat, lng, after_shot_id, after_shot_seq) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     [
       penalty.id.trim() || newId(),
       holeId,
@@ -870,6 +891,8 @@ function insertCarriedPenalty(db: SQLiteDatabase, holeId: string, penalty: Carri
       penalty.kind,
       penalty.lat,
       penalty.lng,
+      textOrNull(penalty.afterShotId),
+      integerOrNull(penalty.afterShotSeq),
     ],
   );
 }
@@ -998,6 +1021,8 @@ function insertTransferredRound(
           kind: penalty.kind,
           lat: point?.lat ?? null,
           lng: point?.lng ?? null,
+          afterShotId: penalty.afterShotId,
+          afterShotSeq: penalty.afterShotSeq,
         });
       }
       const newer = penaltiesNewerThanExport(hole.penalties, phoneRows, exportedAt ?? null);
@@ -2040,6 +2065,8 @@ type InsertPenaltyArgs = {
   kind?: PenaltyKind;
   lat?: number | null;
   lng?: number | null;
+  afterShotId?: string | null;
+  afterShotSeq?: number | null;
 };
 
 /**
@@ -2063,9 +2090,11 @@ export function insertPenaltyInTransaction(
     kind: args.kind ?? 'penalty',
     lat: args.lat ?? null,
     lng: args.lng ?? null,
+    afterShotId: textOrNull(args.afterShotId),
+    afterShotSeq: integerOrNull(args.afterShotSeq),
   };
   db.runSync(
-    'INSERT INTO hole_penalties (id, hole_id, strokes, reason, note, created_at, kind, lat, lng) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO hole_penalties (id, hole_id, strokes, reason, note, created_at, kind, lat, lng, after_shot_id, after_shot_seq) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     [
       penalty.id,
       penalty.holeId,
@@ -2076,6 +2105,8 @@ export function insertPenaltyInTransaction(
       penalty.kind,
       penalty.lat,
       penalty.lng,
+      penalty.afterShotId,
+      penalty.afterShotSeq,
     ],
   );
   db.runSync('UPDATE holes SET score = ? WHERE id = ?', [score, args.holeId]);

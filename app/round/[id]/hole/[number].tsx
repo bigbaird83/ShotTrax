@@ -125,6 +125,7 @@ import { planUndoPlacePins } from '@/src/domain/undoLastShot';
 import { planUndoLastSoftGpsClubMark } from '@/src/domain/undoSoftGpsClubMark';
 import type { LatLng } from '@/src/domain/latLng';
 import { formatPenaltyRow, PENALTY_REASONS, totalPenaltyStrokes } from '@/src/domain/penalty';
+import { defaultPenaltyAfterShot, formatHoleCountLine, formatShotStepChip, orderHoleSteps } from '@/src/domain/penaltySteps';
 import {
   addPuttLength,
   applyWatchPuttPickToDraft,
@@ -252,6 +253,7 @@ export default function HoleScreen() {
   const [penaltyStrokes, setPenaltyStrokes] = useState(1);
   const [penaltyReason, setPenaltyReason] = useState<PenaltyReason>('water');
   const [penaltyNote, setPenaltyNote] = useState('');
+  const [penaltyAfterShotId, setPenaltyAfterShotId] = useState<string | null>(null);
   const [osmOverlay, setOsmOverlay] = useState<OsmOverlay | null>(null);
   const [checkNonce, setCheckNonce] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
@@ -292,6 +294,7 @@ export default function HoleScreen() {
     markFirstLaunchTipSeen(db);
   }, [db, historyRoundCount]);
   const penaltyTotal = totalPenaltyStrokes(penalties);
+  const holeSteps = useMemo(() => orderHoleSteps(shots, penalties), [shots, penalties]);
   const reconcile = reconcileHoleScore({
     score: hole?.score ?? null,
     shotCount: shots.length,
@@ -1208,8 +1211,14 @@ export default function HoleScreen() {
     })();
   };
 
+  const openPenaltySheet = () => {
+    setPenaltyAfterShotId(defaultPenaltyAfterShot(shots)?.id ?? null);
+    setPenaltyOpen(true);
+  };
+
   const onAddPenalty = () => {
-    if (readOnly) return;
+    if (readOnly || !hole) return;
+    const attached = shots.find((shot) => shot.id === penaltyAfterShotId) ?? null;
     try {
       insertPenalty(db, {
         holeId: hole.id,
@@ -1219,18 +1228,21 @@ export default function HoleScreen() {
         reason: penaltyReason,
         note: penaltyReason === 'other' || penaltyNote.trim() ? penaltyNote : null,
         kind: 'penalty',
+        afterShotId: attached?.id ?? null,
+        afterShotSeq: attached?.seq ?? null,
       });
     } catch (err) {
       console.warn(err);
       Alert.alert(COPY.penaltySaveFailed);
       return;
     }
+    bump();
     hapticTap();
     setPenaltyOpen(false);
     setPenaltyStrokes(1);
     setPenaltyReason('water');
     setPenaltyNote('');
-    bump();
+    setPenaltyAfterShotId(null);
   };
 
   const openBag = () => {
@@ -1585,22 +1597,31 @@ export default function HoleScreen() {
               ) : null}
               {playLayout.shotLine === 'header' ? (
                 <ScrollView
+                  key={`hole-steps-${revision}-${penalties.map((row) => row.id).join(',')}`}
                   horizontal
                   style={styles.shotLine}
                   contentContainerStyle={styles.shotLineInner}
                   showsHorizontalScrollIndicator={false}>
-                  {shots.length === 0 ? (
+                  {holeSteps.length === 0 ? (
                     <Text style={styles.shotLineMuted}>{COPY.noShots}</Text>
                   ) : (
-                    shots.map((shot) => {
+                    holeSteps.map((step) => {
+                      if (step.kind === 'penalty') {
+                        return (
+                          <View
+                            key={`penalty-${step.sourceIndex}`}
+                            style={styles.shotLineItem}
+                            testID="penalty-shot-chip">
+                            <View style={styles.shotLineShot} accessibilityRole="text">
+                              <Text style={styles.shotLinePenalty}>{step.label}</Text>
+                            </View>
+                          </View>
+                        );
+                      }
+                      const shot = shots.find((row) => row.id === step.id);
+                      if (!shot) return null;
                       const club = shot.clubId ? clubMap[shot.clubId] : null;
                       const slot = insertSlots.find((row) => row.afterShotId === shot.id);
-                      const label =
-                        shot.source === 'no_gps' || shot.fixQuality === 'none'
-                          ? COPY.logged
-                          : shot.endedAt == null
-                            ? COPY.inPlay
-                            : `${shot.distanceYards ?? '—'} yd`;
                       return (
                         <View key={shot.id} style={styles.shotLineItem}>
                           <Pressable
@@ -1608,7 +1629,14 @@ export default function HoleScreen() {
                             onPress={() => openEdit(shot.id)}
                             style={styles.shotLineShot}>
                             <Text style={styles.shotLineText}>
-                              {shot.seq} {club?.shortName ?? 'Club'} · {label}
+                              {formatShotStepChip({
+                                seq: shot.seq,
+                                clubShortName: club?.shortName,
+                                source: shot.source,
+                                fixQuality: shot.fixQuality,
+                                endedAt: shot.endedAt,
+                                distanceYards: shot.distanceYards,
+                              })}
                               {isHoleOutShot(shot) ? (
                                 <Text testID="hole-out-shot-badge" style={styles.shotLineHoleOut}>
                                   {` · ${COPY.holeOut}`}
@@ -1642,6 +1670,16 @@ export default function HoleScreen() {
                   ) : null}
                 </ScrollView>
               ) : null}
+              {!finishedMini.visible && penaltyTotal > 0 ? (
+                <Text testID="live-hole-count" style={styles.shotLineMuted}>
+                  {formatHoleCountLine({
+                    shotCount: shots.length,
+                    penaltyStrokes: penaltyTotal,
+                    puttCount: hole.putts,
+                    omitZeroPutts: true,
+                  })}
+                </Text>
+              ) : null}
               {finishedMini.visible ? (
                 <View testID="finished-hole-chip" style={styles.finishedHoleChip}>
                   <Pressable
@@ -1660,7 +1698,7 @@ export default function HoleScreen() {
                           {finishedMini.score != null ? ` · ${finishedMini.vsPar}` : finishedMini.vsPar}
                         </Text>
                       ) : null}
-                      {`${finishedMini.score != null || finishedMini.vsPar ? ' · ' : ''}${finishedMini.shotsLabel} · ${finishedMini.puttsLabel}`}
+                      {`${finishedMini.score != null || finishedMini.vsPar ? ' · ' : ''}${finishedMini.shotsLabel}${finishedMini.penaltyLabel ? ` · ${finishedMini.penaltyLabel}` : ''} · ${finishedMini.puttsLabel}`}
                       {finishedMini.flag ? (
                         <Text testID="finished-hole-flag" style={styles.finishedHoleFlag}>
                           {` · ${finishedMini.flag}`}
@@ -1840,7 +1878,7 @@ export default function HoleScreen() {
               accessibilityRole="button"
               accessibilityLabel={COPY.penalty}
               disabled={readOnly}
-              onPress={() => setPenaltyOpen(true)}
+              onPress={openPenaltySheet}
               style={styles.allClubsPill}>
               <Text style={styles.allClubsPillText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                 {COPY.penalty}
@@ -2028,7 +2066,7 @@ export default function HoleScreen() {
             disabled={readOnly}
             onPress={() => {
               setMenuOpen(false);
-              setPenaltyOpen(true);
+              openPenaltySheet();
             }}
           />
           <BigButton
@@ -2415,6 +2453,38 @@ export default function HoleScreen() {
               </Pressable>
             ))}
           </View>
+          {shots.length > 0 ? (
+            <View>
+              <Text style={styles.label}>{COPY.afterShot}</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.afterShotRow}>
+                {shots.map((shot) => {
+                  const club = shot.clubId ? clubMap[shot.clubId] : null;
+                  const selected = penaltyAfterShotId === shot.id;
+                  return (
+                    <Pressable
+                      key={shot.id}
+                      accessibilityRole="button"
+                      onPress={() => setPenaltyAfterShotId(shot.id)}
+                      style={[styles.afterShotChip, selected && styles.chipOn]}>
+                      <Text style={styles.afterShotText} numberOfLines={1}>
+                        {formatShotStepChip({
+                          seq: shot.seq,
+                          clubShortName: club?.shortName,
+                          source: shot.source,
+                          fixQuality: shot.fixQuality,
+                          endedAt: shot.endedAt,
+                          distanceYards: shot.distanceYards,
+                        })}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          ) : null}
           <TextInput
             placeholder="Note (optional)"
             placeholderTextColor={colors.muted}
@@ -2592,6 +2662,7 @@ function makeStyles(colors: ColorPalette) {
     justifyContent: 'center',
   },
   shotLineText: { color: colors.cream, fontSize: type.tiny, fontWeight: '800' },
+  shotLinePenalty: { color: colors.amber, fontSize: type.tiny, fontWeight: '800' },
   shotLineHoleOut: { color: colors.lime, fontSize: type.tiny, fontWeight: '900' },
   shotLineMuted: { color: colors.muted, fontSize: type.tiny, fontWeight: '700' },
   shotLinePlus: {
@@ -2821,6 +2892,19 @@ function makeStyles(colors: ColorPalette) {
     backgroundColor: colors.bg,
   },
   reasonText: { color: colors.cream, fontSize: 16, fontWeight: '800' },
+  afterShotRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 4 },
+  afterShotChip: {
+    minHeight: 36,
+    maxWidth: 168,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: colors.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bg,
+  },
+  afterShotText: { color: colors.cream, fontSize: type.tiny, fontWeight: '800' },
   note: {
     minHeight: 52,
     borderWidth: 1,

@@ -437,7 +437,8 @@ test('play header is one line; shot list is one overlay row with + and In play o
   assert.doesNotMatch(play, /styles\.insertPlus/);
   assert.doesNotMatch(play, /styles\.shotList/);
   const overlayShots = play.slice(play.indexOf('playLayout.shotLine'), play.indexOf('!hideHoleButtons'));
-  assert.match(overlayShots, /COPY\.inPlay/);
+  assert.match(overlayShots, /formatShotStepChip/);
+  assert.match(readFileSync(new URL('./penaltySteps.ts', import.meta.url), 'utf8'), /COPY\.inPlay/);
   assert.doesNotMatch(overlayShots, /QualityBadge/);
   assert.match(overlayShots, /styles\.shotLinePlus/);
 
