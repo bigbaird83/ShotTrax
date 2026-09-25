@@ -1,10 +1,17 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
-import { listClubAverages, setClubEnabled, updateClubCarry } from '@/src/db/repo';
+import {
+  getBagCarrySuggestionDismissals,
+  listClubAverages,
+  setBagCarrySuggestionDismissals,
+  setClubEnabled,
+  updateClubCarry,
+} from '@/src/db/repo';
 import { bagCarryChip, canEditTypedCarry, clubCarryMeta, type BagCarry } from '@/src/domain/bagDistance';
+import { bagSuggestionIsDismissed, dismissBagSuggestion } from '@/src/domain/bagSuggestion';
 import { isPutterClubId, parseTypicalCarryYards } from '@/src/domain/defaultBag';
-import { COPY } from '@/src/domain/playerCopy';
+import { COPY, formatBagCarrySuggestion } from '@/src/domain/playerCopy';
 import type { Club } from '@/src/domain/types';
 import { useColors } from './ColorThemeProvider';
 import { tapTarget, type, type ColorPalette } from './theme';
@@ -20,16 +27,22 @@ export function BagCarryList({ db, clubs, onChange, onRename }: Props) {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   // Same resolved number as Club data and Suggested: live ≥5 → typed → estimated → seed.
-  const carries = useMemo(
-    () => new Map<string, BagCarry>(listClubAverages(db).map((row) => [row.club.id, row.bag] as const)),
-    [db, clubs],
-  );
+  const averages = useMemo(() => {
+    const dismissed = getBagCarrySuggestionDismissals(db);
+    const byClub = new Map(listClubAverages(db).map((row) => [row.club.id, row] as const));
+    return { dismissed, byClub };
+  }, [db, clubs]);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
 
   return (
     <View style={styles.list}>
       {clubs.map((club) => {
-        const carry = carries.get(club.id);
+        const row = averages.byClub.get(club.id);
+        const carry: BagCarry | undefined = row?.bag;
+        const suggestion = row?.suggestion ?? null;
+        const showSuggestion =
+          suggestion != null &&
+          !bagSuggestionIsDismissed(averages.dismissed, club.id, suggestion.newestShotId);
         const putter = isPutterClubId(club.id);
         const editable = carry == null || canEditTypedCarry(carry);
         const draft = editable ? drafts[club.id] : undefined;
@@ -87,6 +100,46 @@ export function BagCarryList({ db, clubs, onChange, onRename }: Props) {
                   ) : null}
                 </View>
               )}
+              {!putter && showSuggestion && suggestion ? (
+                <View style={styles.suggest}>
+                  <Text style={styles.suggestLine}>
+                    {formatBagCarrySuggestion(club.name, suggestion.yards)}
+                  </Text>
+                  <View style={styles.suggestActions}>
+                    <Pressable
+                      accessibilityRole="button"
+                      hitSlop={8}
+                      onPress={() => {
+                        setDrafts((prev) => {
+                          if (prev[club.id] === undefined) return prev;
+                          const next = { ...prev };
+                          delete next[club.id];
+                          return next;
+                        });
+                        updateClubCarry(db, club.id, suggestion.yards);
+                        onChange();
+                      }}>
+                      <Text style={styles.suggestUpdate}>{COPY.bagCarrySuggestionUpdate}</Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      hitSlop={8}
+                      onPress={() => {
+                        setBagCarrySuggestionDismissals(
+                          db,
+                          dismissBagSuggestion(
+                            getBagCarrySuggestionDismissals(db),
+                            club.id,
+                            suggestion.newestShotId,
+                          ),
+                        );
+                        onChange();
+                      }}>
+                      <Text style={styles.suggestDismiss}>{COPY.bagCarrySuggestionNotNow}</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ) : null}
             </View>
             <Switch
               value={club.enabled}
@@ -162,6 +215,11 @@ function makeStyles(colors: ColorPalette) {
   carryLive: { borderColor: 'transparent', backgroundColor: 'transparent' },
   badge: { color: colors.amber, fontSize: type.tiny, fontWeight: '800' },
   seedBadge: { color: colors.muted, fontSize: type.tiny, fontWeight: '800' },
+  suggest: { gap: 6 },
+  suggestLine: { color: colors.muted, fontSize: type.meta },
+  suggestActions: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  suggestUpdate: { color: colors.lime, fontSize: type.body, fontWeight: '800' },
+  suggestDismiss: { color: colors.muted, fontSize: type.body, fontWeight: '800' },
   actions: { flexDirection: 'row', gap: 10 },
   skip: {
     flex: 1,

@@ -5,6 +5,11 @@ import {
   type CourseLayoutSeed,
 } from '../course/layout';
 import { clubIsLive, resolveBagCarry, type BagCarry } from '../domain/bagDistance';
+import {
+  BAG_CARRY_SUGGESTION_DISMISS_KEY,
+  suggestBagCarry,
+  type BagCarrySuggestion,
+} from '../domain/bagSuggestion';
 import { fillEstimatedCarries, type CarrySource } from '../domain/carryFill';
 import { DEFAULT_BAG, isPutterClubId } from '../domain/defaultBag';
 import {
@@ -1685,6 +1690,8 @@ export type ClubAverageRow = ClubAverage & {
   estimatedCarryYards: number | null;
   /** THE bag number — bag row, Club data and Suggested all read this. */
   bag: BagCarry;
+  /** Typed/estimated carry the real shots keep missing. Null when nothing to offer. */
+  suggestion: BagCarrySuggestion | null;
 };
 
 export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
@@ -1692,23 +1699,37 @@ export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
   const filled = fillEstimatedCarries(clubs);
   const nowMs = Date.now();
   const shots = db.getAllSync<{
+    id: string;
     club_id: string;
     distance_yards: number;
     fix_quality: string;
     source: string | null;
     average_eligible_at: string | null;
+    start_lat: number | null;
+    start_lng: number | null;
+    green_front_lat: number | null;
+    green_front_lng: number | null;
+    green_lat: number | null;
+    green_lng: number | null;
+    green_back_lat: number | null;
+    green_back_lng: number | null;
   }>(
-    `SELECT club_id, distance_yards, fix_quality, source, average_eligible_at
+    `SELECT shots.id, shots.club_id, shots.distance_yards, shots.fix_quality, shots.source,
+            shots.average_eligible_at, shots.start_lat, shots.start_lng,
+            holes.green_front_lat, holes.green_front_lng,
+            holes.green_lat, holes.green_lng,
+            holes.green_back_lat, holes.green_back_lng
      FROM shots
-     WHERE distance_yards IS NOT NULL AND club_id IS NOT NULL
+     LEFT JOIN holes ON holes.id = shots.hole_id
+     WHERE shots.distance_yards IS NOT NULL AND shots.club_id IS NOT NULL
        AND (
-         (IFNULL(source, 'gps') = 'gps' AND fix_quality IN ('good', 'soft', 'forced'))
-         OR IFNULL(source, 'gps') = 'placed'
+         (IFNULL(shots.source, 'gps') = 'gps' AND shots.fix_quality IN ('good', 'soft', 'forced'))
+         OR IFNULL(shots.source, 'gps') = 'placed'
        )
-     ORDER BY started_at ASC`,
+     ORDER BY shots.started_at ASC`,
   );
   return clubs.map((club) => {
-    const forClub = shots
+    const eligible = shots
       .filter(
         (s) =>
           s.club_id === club.id &&
@@ -1735,13 +1756,29 @@ export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
             : s.fix_quality === 'soft' || s.fix_quality === 'forced' || s.fix_quality === 'good'
               ? s.fix_quality
               : null;
-        return { yards: s.distance_yards, fixQuality: quality };
+        return {
+          id: s.id,
+          yards: s.distance_yards,
+          fixQuality: quality,
+          startLat: s.start_lat,
+          startLng: s.start_lng,
+          greenFrontLat: s.green_front_lat,
+          greenFrontLng: s.green_front_lng,
+          greenLat: s.green_lat,
+          greenLng: s.green_lng,
+          greenBackLat: s.green_back_lat,
+          greenBackLng: s.green_back_lng,
+        };
       });
     const fill = filled.get(club.id);
-    const average = clubAverageFromShots(forClub, {
+    const seed = {
       typedCarryYards: fill?.source === 'typed' ? fill.yards : null,
       estimatedCarryYards: fill?.source === 'estimated' ? fill.yards : null,
-    });
+    };
+    const average = clubAverageFromShots(
+      eligible.map((s) => ({ yards: s.yards, fixQuality: s.fixQuality })),
+      seed,
+    );
     const live = clubIsLive(average);
     const estimatedCarryYards = !live && fill?.source === 'estimated' ? fill.yards : null;
     return {
@@ -1753,10 +1790,16 @@ export function listClubAverages(db: SQLiteDatabase): ClubAverageRow[] {
         id: club.id,
         liveCount: average.count,
         liveAvgYards: average.avgYards,
-        typedYards: fill?.source === 'typed' ? fill.yards : null,
+        typedYards: seed.typedCarryYards,
         estimatedYards: estimatedCarryYards,
       }),
       ...average,
+      suggestion: suggestBagCarry({
+        clubId: club.id,
+        shots: eligible,
+        typedCarryYards: seed.typedCarryYards,
+        estimatedCarryYards: seed.estimatedCarryYards,
+      }),
     };
   });
 }
@@ -1805,6 +1848,14 @@ export function getSetting(db: SQLiteDatabase, key: string): string | null {
 
 export function setSetting(db: SQLiteDatabase, key: string, value: string): void {
   db.runSync('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [key, value]);
+}
+
+export function getBagCarrySuggestionDismissals(db: SQLiteDatabase): string | null {
+  return getSetting(db, BAG_CARRY_SUGGESTION_DISMISS_KEY);
+}
+
+export function setBagCarrySuggestionDismissals(db: SQLiteDatabase, value: string): void {
+  setSetting(db, BAG_CARRY_SUGGESTION_DISMISS_KEY, value);
 }
 
 export function getCourseDistanceUnit(db: SQLiteDatabase): CourseDistanceUnit {
