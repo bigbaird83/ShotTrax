@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
-import { setClubEnabled, updateClubCarry } from '@/src/db/repo';
-import { fillEstimatedCarries } from '@/src/domain/carryFill';
+import { listClubAverages, setClubEnabled, updateClubCarry } from '@/src/db/repo';
+import { bagCarryChip, canEditTypedCarry, clubCarryMeta, type BagCarry } from '@/src/domain/bagDistance';
 import { isPutterClubId, parseTypicalCarryYards } from '@/src/domain/defaultBag';
 import { COPY } from '@/src/domain/playerCopy';
 import type { Club } from '@/src/domain/types';
@@ -19,21 +19,29 @@ type Props = {
 export function BagCarryList({ db, clubs, onChange, onRename }: Props) {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const filled = useMemo(() => fillEstimatedCarries(clubs), [clubs]);
+  // Same resolved number as Club data and Suggested: live ≥5 → typed → estimated → seed.
+  const carries = useMemo(
+    () => new Map<string, BagCarry>(listClubAverages(db).map((row) => [row.club.id, row.bag] as const)),
+    [db, clubs],
+  );
   const [drafts, setDrafts] = useState<Record<string, string>>({});
 
   return (
     <View style={styles.list}>
       {clubs.map((club) => {
-        const fill = filled.get(club.id);
+        const carry = carries.get(club.id);
         const putter = isPutterClubId(club.id);
-        const draft = drafts[club.id];
+        const editable = carry == null || canEditTypedCarry(carry);
+        const draft = editable ? drafts[club.id] : undefined;
+        // Seed shows as the placeholder so typing starts from empty, never from the stock number.
+        const seed = carry?.kind === 'seed' && carry.yards != null ? String(carry.yards) : null;
         const display =
           draft !== undefined
             ? draft
-            : fill?.yards != null
-              ? String(fill.yards)
+            : carry?.yards != null && seed == null
+              ? String(carry.yards)
               : '';
+        const chip = draft === undefined ? bagCarryChip(carry?.kind ?? null) : null;
         return (
           <View key={club.id} style={styles.row}>
             <View style={{ flex: 1, gap: 6 }}>
@@ -48,10 +56,12 @@ export function BagCarryList({ db, clubs, onChange, onRename }: Props) {
                 <View style={styles.carryRow}>
                   <TextInput
                     accessibilityLabel={`${club.shortName} ${COPY.typicalCarryYards}`}
-                    placeholder={COPY.typicalCarryYards}
+                    placeholder={seed ?? COPY.typicalCarryYards}
                     placeholderTextColor={colors.muted}
                     value={display}
+                    editable={editable}
                     onChangeText={(raw) => {
+                      if (!editable) return;
                       setDrafts((prev) => ({ ...prev, [club.id]: raw }));
                       const yards = parseTypicalCarryYards(raw);
                       if (raw.trim() === '' || yards != null) {
@@ -68,10 +78,12 @@ export function BagCarryList({ db, clubs, onChange, onRename }: Props) {
                     }}
                     keyboardType="number-pad"
                     inputMode="numeric"
-                    style={styles.carry}
+                    style={[styles.carry, !editable && styles.carryLive]}
                   />
-                  {fill?.source === 'estimated' && draft === undefined ? (
-                    <Text style={styles.badge}>{COPY.estimated}</Text>
+                  {chip === 'estimated' ? <Text style={styles.badge}>{COPY.estimated}</Text> : null}
+                  {chip === 'seed' ? <Text style={styles.seedBadge}>{COPY.typicalCarry}</Text> : null}
+                  {carry?.kind === 'live' ? (
+                    <Text style={styles.short}>{clubCarryMeta(carry)}</Text>
                   ) : null}
                 </View>
               )}
@@ -147,7 +159,9 @@ function makeStyles(colors: ColorPalette) {
     fontSize: 18,
     backgroundColor: colors.bg,
   },
+  carryLive: { borderColor: 'transparent', backgroundColor: 'transparent' },
   badge: { color: colors.amber, fontSize: type.tiny, fontWeight: '800' },
+  seedBadge: { color: colors.muted, fontSize: type.tiny, fontWeight: '800' },
   actions: { flexDirection: 'row', gap: 10 },
   skip: {
     flex: 1,

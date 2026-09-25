@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
 import { listClubAverages } from '@/src/db/repo';
+import { clubCarryMeta } from '@/src/domain/bagDistance';
 import { planClubData } from '@/src/domain/nerdOut';
 import { COPY } from '@/src/domain/playerCopy';
 import { BigButton } from '@/src/ui/BigButton';
@@ -37,15 +38,7 @@ export default function ClubDataScreen() {
         <View key={row.id} style={styles.row}>
           <View style={{ flex: 1 }}>
             <Text style={styles.holeTitle}>{row.name}</Text>
-            <Text style={styles.muted}>
-              {row.kind === 'live'
-                ? `${row.count} shot${row.count === 1 ? '' : 's'}`
-                : row.kind === 'estimated'
-                  ? COPY.estimated
-                  : row.kind === 'typed'
-                    ? COPY.typicalCarry
-                    : COPY.noClosedShots}
-            </Text>
+            <Text style={styles.muted}>{clubCarryMeta(row)}</Text>
           </View>
           <Text style={styles.score}>{row.yards != null ? `${row.yards}` : '—'}</Text>
         </View>

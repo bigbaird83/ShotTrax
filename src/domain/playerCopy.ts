@@ -178,6 +178,7 @@ export const COPY = {
   averagesLede: 'How far you hit each club — from marked shots.',
   noClosedShots: 'No marked shots yet. Play a hole and they land here.',
   typicalCarry: 'Typical',
+  typedCarry: 'Your number',
   typicalCarryYards: 'Carry (yd)',
   clearTypicalCarry: 'Clear carry',
   estimated: 'Estimated',
