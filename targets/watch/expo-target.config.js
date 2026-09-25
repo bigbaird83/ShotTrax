@@ -19,7 +19,11 @@ module.exports = (config) => ({
     'com.apple.developer.healthkit': true,
   },
   infoPlist: {
-    WKBackgroundModes: ['workout-processing'],
+    // `location` must ship with allowsBackgroundLocationUpdates. Setting that
+    // property without this mode terminates the watch app.
+    WKBackgroundModes: ['workout-processing', 'location'],
+    NSLocationWhenInUseUsageDescription:
+      'ShotTraxx™ uses your Apple Watch location during a round to show yards to the green as you walk, and when you pick a club to mark where you hit from.',
     NSHealthShareUsageDescription:
       'ShotTraxx™ does not read your Health data. It uses Health only to keep your round running on your Apple Watch.',
     NSHealthUpdateUsageDescription:

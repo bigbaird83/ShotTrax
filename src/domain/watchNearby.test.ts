@@ -428,7 +428,7 @@ test('build 26 locks stay: delete confirm, 60% map, one-line header, 600-yard te
   const watchPlist = readFileSync(new URL('../../targets/watch/Info.plist', import.meta.url), 'utf8');
   assert.match(
     watchPlist,
-    /NSLocationWhenInUseUsageDescription[\s\S]*Watch location when you pick a club on the Watch to mark where you hit from/,
+    /NSLocationWhenInUseUsageDescription[\s\S]*show yards to the green as you walk, and when you pick a club to mark where you hit from/,
   );
   assert.doesNotMatch(watchPlist, /NSMotionUsageDescription/);
   assert.doesNotMatch(watchPlist, /more accurate than the phone/);

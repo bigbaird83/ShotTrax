@@ -283,6 +283,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   private var loggedWorkoutDeniedHint = false
   private let healthStore = HKHealthStore()
   private let workoutLog = Logger(subsystem: "com.shottrax.app.watch", category: "round-workout")
+  private let liveYardsLog = Logger(subsystem: "com.shottrax.app.watch", category: "liveYards")
   private var wantsStay = false
   private var userLeftApp = false
   /// Frontmost. `requestAuthorization` only presents the sheet while this is true.
@@ -296,13 +297,24 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   private var holeAtHomePick = 0
   private let location = CLLocationManager()
   private var lastFix: CLLocation?
+  /// True after a foreground `startUpdatingLocation`. watchOS will not start a
+  /// fresh stream from the background, so wrist-down must not clear this while
+  /// a live hole is in progress.
+  private var locationUpdatesStarted = false
+  /// Walking filter once the wrist is down. Wrist-up stays unfiltered so a
+  /// stationary club mark still has a fix younger than 3 seconds.
+  private static let liveDistanceFilterM: CLLocationDistance = 3
 
   override init() {
     super.init()
     location.delegate = self
     location.desiredAccuracy = kCLLocationAccuracyBest
+    location.activityType = .fitness
+    location.distanceFilter = Self.liveDistanceFilterM
+    // A pause at the ball cannot be resumed until the scene is active.
+    location.pausesLocationUpdatesAutomatically = false
+    location.allowsBackgroundLocationUpdates = false
     location.requestWhenInUseAuthorization()
-    location.startUpdatingLocation()
 
     if WCSession.isSupported() {
       let session = WCSession.default
@@ -1263,9 +1275,9 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     syncRoundStay()
   }
 
-  private static let widgetReloadMinYd = 5
-  private static let widgetReloadMinSec = 5.0
-  private var widgetReload: (hole: Int, quality: String, yards: Int?, at: Date)?
+  private static let widgetReloadMinYd = 1
+  private static let widgetReloadMinSec = 45.0
+  private var widgetReload: (hole: Int, yards: Int?, at: Date)?
 
   private static func complicationInt(_ value: Any?) -> Int? {
     if let yards = value as? Int { return yards }
@@ -1324,13 +1336,22 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
 
   /// Walking update. A locked phone sends nothing; this is the live number.
   private func adoptWatchFix(_ fix: CLLocation) {
-    guard let greenLat = list.greenLat, let greenLng = list.greenLng else { return }
+    let accuracy = fix.horizontalAccuracy
+    let accuracyText = String(format: "%.1f", accuracy)
+    guard let greenLat = list.greenLat, let greenLng = list.greenLng else {
+      liveYardsLog.info("fix rejected reason=noGreen accuracy=\(accuracyText, privacy: .public) quality=none green=false")
+      return
+    }
     let atMs = fix.timestamp.timeIntervalSince1970 * 1000
-    if list.liveAtMs > 0, atMs <= list.liveAtMs, list.complicationHole == list.holeNumber { return }
+    if list.liveAtMs > 0, atMs <= list.liveAtMs, list.complicationHole == list.holeNumber {
+      let quality = list.complicationQuality
+      liveYardsLog.info("fix rejected reason=stale accuracy=\(accuracyText, privacy: .public) quality=\(quality, privacy: .public) green=true")
+      return
+    }
     let live = Self.liveYards(
       lat: fix.coordinate.latitude,
       lng: fix.coordinate.longitude,
-      accuracyM: fix.horizontalAccuracy,
+      accuracyM: accuracy,
       greenLat: greenLat,
       greenLng: greenLng
     )
@@ -1350,6 +1371,9 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
         next.rankHoldHole = 0
       }
     }
+    let yardsText = live.yards.map(String.init) ?? "none"
+    let quality = live.quality
+    liveYardsLog.info("fix accepted accuracy=\(accuracyText, privacy: .public) quality=\(quality, privacy: .public) yards=\(yardsText, privacy: .public) green=true")
     list = next
     persist(next)
   }
@@ -1422,23 +1446,26 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     reloadWidgetIfNeeded(state)
   }
 
-  /// WidgetKit budget: hole / quality / dash flips always, otherwise a ≥5 yd
-  /// step or any change that has waited 5 s. Mirrors `watchWidgetShouldReload`.
+  /// WidgetKit budget (~40–70 refreshes/day). Hole changes reload immediately.
+  /// Otherwise the displayed yards must move by ≥1 and the last reload must be
+  /// at least 45s ago. In-app yards are not gated. Mirrors `watchWidgetShouldReload`.
   private func reloadWidgetIfNeeded(_ state: ClubListState) {
     let shown: Int? = state.liveYardsTrusted ? state.complicationYards : nil
     let now = Date()
-    let previous = widgetReload
-    let holeFlip = previous == nil || previous?.hole != state.complicationHole
-    let qualityFlip = previous == nil || previous?.quality != state.complicationQuality
-    let dashFlip = previous == nil || ((previous?.yards == nil) != (shown == nil))
-    var yardStep = false
-    if let shown, let prev = previous?.yards {
-      yardStep = abs(shown - prev) >= Self.widgetReloadMinYd
+    if let previous = widgetReload, previous.hole == state.holeNumber {
+      if now.timeIntervalSince(previous.at) < Self.widgetReloadMinSec { return }
+      let moved: Bool
+      switch (previous.yards, shown) {
+      case let (prev?, next?):
+        moved = abs(next - prev) >= Self.widgetReloadMinYd
+      case (nil, nil):
+        moved = false
+      default:
+        moved = true
+      }
+      if !moved { return }
     }
-    let elapsed = previous == nil ? Self.widgetReloadMinSec : now.timeIntervalSince(previous?.at ?? now)
-    let drifted = previous != nil && shown != previous?.yards && elapsed >= Self.widgetReloadMinSec
-    guard holeFlip || qualityFlip || dashFlip || yardStep || drifted else { return }
-    widgetReload = (hole: state.complicationHole, quality: state.complicationQuality, yards: shown, at: now)
+    widgetReload = (hole: state.holeNumber, yards: shown, at: now)
     ComplicationReloader.reload()
   }
 
@@ -1534,6 +1561,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       stopRoundStay()
     }
     syncWorkoutDeniedHint()
+    syncLiveLocation()
   }
 
   /// One line on the club list when share is already denied. No new prompt and no retry.
@@ -1625,7 +1653,12 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       golfWorkout = nil
       endingGolfWorkout = false
     }
-    if golfWorkoutOccupied { return }
+    if golfWorkoutOccupied {
+      if golfWorkout?.state == .running {
+        enableWorkoutBackgroundLocation()
+      }
+      return
+    }
     guard HKHealthStore.isHealthDataAvailable() else {
       if !loggedHealthUnavailable {
         loggedHealthUnavailable = true
@@ -1730,14 +1763,20 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       golfWorkout = session
       // end() writes nothing to Health. No builder and no extra sample types.
       session.startActivity(with: Date())
+      // Location background mode is in the watch Info.plist. The property and
+      // that mode ship together; setting it without the mode crashes.
+      enableWorkoutBackgroundLocation()
+      startLiveLocationIfAuthorized()
     } catch {
       golfWorkout = nil
       suppressGolfStart = true
+      disableWorkoutBackgroundLocation()
       workoutLog.info("golf workout session did not start: \(error.localizedDescription, privacy: .public)")
     }
   }
 
   private func stopRoundStay() {
+    disableWorkoutBackgroundLocation()
     guard let session = golfWorkout else {
       endingGolfWorkout = false
       return
@@ -1763,12 +1802,18 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       guard self.golfWorkout == nil || self.golfWorkout === workoutSession else { return }
       if toState == .running {
         self.endingGolfWorkout = false
+        if self.wantsStay {
+          self.enableWorkoutBackgroundLocation()
+          self.startLiveLocationIfAuthorized()
+        }
       }
       if toState == .ended {
         if self.golfWorkout === workoutSession {
           self.golfWorkout = nil
         }
         self.endingGolfWorkout = false
+        self.disableWorkoutBackgroundLocation()
+        self.syncLiveLocation()
       }
     }
   }
@@ -1781,6 +1826,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       }
       self.endingGolfWorkout = false
       self.suppressGolfStart = true
+      self.disableWorkoutBackgroundLocation()
+      self.syncLiveLocation()
       self.workoutLog.info("golf workout session failed: \(error.localizedDescription, privacy: .public)")
     }
   }
@@ -1829,6 +1876,127 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
   }
 
+  /// Same gate as the golf round stay: wrist-down is still a live hole.
+  private var liveHoleInProgress: Bool {
+    !userLeftApp && list.roundLive && ((hasLiveHole && !list.roundComplete) || putt.open)
+  }
+
+  private func locationAuthLabel(_ status: CLAuthorizationStatus) -> String {
+    switch status {
+    case .notDetermined:
+      return "notDetermined"
+    case .restricted:
+      return "restricted"
+    case .denied:
+      return "denied"
+    case .authorizedAlways:
+      return "authorizedAlways"
+    case .authorizedWhenInUse:
+      return "authorizedWhenInUse"
+    @unknown default:
+      return "unknown"
+    }
+  }
+
+  /// Requires `WKBackgroundModes` to include `location`. Never set at launch.
+  private func enableWorkoutBackgroundLocation() {
+    guard !location.allowsBackgroundLocationUpdates else { return }
+    location.allowsBackgroundLocationUpdates = true
+    liveYardsLog.info("background location enabled for the golf workout")
+  }
+
+  private func disableWorkoutBackgroundLocation() {
+    guard location.allowsBackgroundLocationUpdates else { return }
+    location.allowsBackgroundLocationUpdates = false
+    liveYardsLog.info("background location disabled")
+  }
+
+  /// Foreground start, or a repeat start of a stream that is already running.
+  /// A stopped stream cannot be started again until the scene is active.
+  private func startLiveLocationIfAuthorized() {
+    let status = location.authorizationStatus
+    guard status == .authorizedWhenInUse || status == .authorizedAlways else {
+      let label = locationAuthLabel(status)
+      liveYardsLog.info("location waiting for authorization status=\(label, privacy: .public)")
+      return
+    }
+    if !sceneIsActive && !locationUpdatesStarted {
+      liveYardsLog.info("location start deferred until the scene is active")
+      return
+    }
+    location.distanceFilter = sceneIsActive ? kCLDistanceFilterNone : Self.liveDistanceFilterM
+    location.startUpdatingLocation()
+    if !locationUpdatesStarted {
+      locationUpdatesStarted = true
+      liveYardsLog.info("location updates started")
+    }
+  }
+
+  /// Round ended and the wrist is down. Does not run on wrist-down during a hole.
+  private func endLiveLocation() {
+    disableWorkoutBackgroundLocation()
+    guard locationUpdatesStarted else { return }
+    location.stopUpdatingLocation()
+    locationUpdatesStarted = false
+    liveYardsLog.info("location updates stopped")
+  }
+
+  private func syncLiveLocation() {
+    if liveHoleInProgress {
+      startLiveLocationIfAuthorized()
+      return
+    }
+    if sceneIsActive {
+      location.distanceFilter = kCLDistanceFilterNone
+      startLiveLocationIfAuthorized()
+      return
+    }
+    endLiveLocation()
+  }
+
+  func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+    let status = manager.authorizationStatus
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      let label = self.locationAuthLabel(status)
+      self.liveYardsLog.info("authorization=\(label, privacy: .public)")
+      switch status {
+      case .authorizedWhenInUse, .authorizedAlways:
+        self.syncLiveLocation()
+      case .denied, .restricted:
+        self.disableWorkoutBackgroundLocation()
+        self.endLiveLocation()
+      case .notDetermined:
+        break
+      @unknown default:
+        break
+      }
+    }
+  }
+
+  func locationManager(_: CLLocationManager, didFailWithError error: Error) {
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      let ns = error as NSError
+      let domain = ns.domain
+      let code = ns.code
+      self.liveYardsLog.info("location failed domain=\(domain, privacy: .public) code=\(code, privacy: .public)")
+      if let clError = error as? CLError, clError.code == .denied {
+        self.disableWorkoutBackgroundLocation()
+        self.endLiveLocation()
+      }
+    }
+  }
+
+  func locationManagerDidPauseLocationUpdates(_: CLLocationManager) {
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.liveYardsLog.info("location paused")
+      guard self.liveHoleInProgress, self.sceneIsActive else { return }
+      self.location.startUpdatingLocation()
+    }
+  }
+
   func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
     guard let fix = locations.last else { return }
     DispatchQueue.main.async { [weak self] in
@@ -1868,6 +2036,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       syncRoundStay()
       // Player may have turned Workouts on in Health while we were away.
       syncWorkoutDeniedHint()
+      noteLocationScene(active: true)
       return
     }
     if phase == "inactive" || phase == "background" {
@@ -1882,7 +2051,24 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       if !userLeftApp && list.roundLive && ((hasLiveHole && !list.roundComplete) || putt.open) {
         startRoundStay()
       }
+      noteLocationScene(active: false)
     }
+  }
+
+  /// Wrist-down keeps a running stream. It does not start a stopped one, and
+  /// it does not stop updates while a live hole is in progress.
+  private func noteLocationScene(active: Bool) {
+    if active {
+      location.distanceFilter = kCLDistanceFilterNone
+      startLiveLocationIfAuthorized()
+      return
+    }
+    guard !liveHoleInProgress else {
+      location.distanceFilter = Self.liveDistanceFilterM
+      liveYardsLog.info("wrist down; keeping location updates for the live hole")
+      return
+    }
+    endLiveLocation()
   }
 }
 

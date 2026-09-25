@@ -199,7 +199,7 @@ test('complication uses the watch widget families and the phone hole-map number'
   assert.match(widget, /complicationQuality/);
   assert.match(widget, /complicationHole/);
   assert.match(widget, /policy: \.after/);
-  assert.match(widget, /addingTimeInterval\(15\)/);
+  assert.match(widget, /addingTimeInterval\(60\)/);
   assert.match(widget, /AccessoryWidgetBackground\(\)/);
   assert.doesNotMatch(widget, /Color\("widgetBackground"\)/);
   assert.doesNotMatch(widget, /policy: \.never/);
@@ -209,7 +209,7 @@ test('complication uses the watch widget families and the phone hole-map number'
   assert.match(widget, /\.accessoryInline/);
   assert.match(widget, /\.accessoryRectangular/);
   assert.doesNotMatch(widget, /CoreLocation|CLLocation|WCSession|WatchConnectivity/);
-  assert.match(widget, /addingTimeInterval\(15\)/);
+  assert.match(widget, /addingTimeInterval\(60\)/);
   assert.doesNotMatch(widget, /Hole 1/);
   assert.doesNotMatch(widget, /yardsToGreen/);
 
