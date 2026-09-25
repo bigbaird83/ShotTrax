@@ -35,10 +35,20 @@ export const COPY = {
   exportCsv: 'Export CSV',
   exportCsvDone: 'CSV exported.',
   exportCsvFailed: 'Couldn’t export CSV.',
+  /** iOS share sheet shows the file name. `Share.share` title is not shown there. */
+  exportCsvSheetRounds: '1 of 2 · rounds.csv',
+  exportCsvSheetShots: '2 of 2 · shots.csv',
+  exportCsvSavedRoundsOnly: 'Saved rounds.csv. Couldn’t open shots.csv.',
   restoreRounds: 'Restore rounds',
   restoreRoundsConfirm:
     'Restore rounds from this file? Existing rounds with the same id will be replaced. Favorites are added. The bag changes only after you confirm the list.',
   restoreRoundsFailed: 'Couldn’t restore rounds.',
+  restoreRoundsNotFile:
+    'That isn’t a shottracker rounds file. Pick the .json from Export rounds. CSV can’t be restored.',
+  restoreRoundsCsv: 'CSV can’t be restored. Pick the .json from Export rounds.',
+  restoreRoundsEmpty: 'Nothing to restore in that file.',
+  restoreRoundsUnreadable: 'Couldn’t read that file.',
+  restoreRoundsSaveFailed: 'Couldn’t save the restored rounds.',
   bagRestoreTitle: 'Update bag?',
   bagRestoreHint: 'These are the only bag changes. Cancel leaves the bag as it is.',
   bagRestoreConfirm: 'Update bag',
@@ -291,6 +301,22 @@ export const COPY = {
   scorecardPar: 'Par',
   summaryHome: 'Home',
 } as const;
+
+/** Sheet label for one CSV file. The two export sheets use the COPY lines above. */
+export function csvExportSheetTitle(position: number, total: number, filename: string): string {
+  if (position === 1 && total === 2 && filename === 'rounds.csv') return COPY.exportCsvSheetRounds;
+  if (position === 2 && total === 2 && filename === 'shots.csv') return COPY.exportCsvSheetShots;
+  return `${position} of ${total} · ${filename}`;
+}
+
+/** Toast for a restore that did not save. CSV is decided by the caller before this. */
+export function restoreFailureCopy(reason: string): string {
+  if (reason === 'not_shottrax') return COPY.restoreRoundsNotFile;
+  if (reason === 'empty') return COPY.restoreRoundsEmpty;
+  if (reason === 'unreadable') return COPY.restoreRoundsUnreadable;
+  if (reason === 'save_failed') return COPY.restoreRoundsSaveFailed;
+  return COPY.restoreRoundsFailed;
+}
 
 /** Bag row when the last five dropped shots agree and the typed number does not. */
 export function formatBagCarrySuggestion(clubLabel: string, yards: number): string {
