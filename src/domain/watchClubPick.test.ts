@@ -8,6 +8,8 @@ import {
   planWatchClubTap,
   watchAllClubsLabel,
   watchAllClubsSitsUnderTop3,
+  watchBagBelowSuggested,
+  watchBagBelowSuggestedKeepsOrder,
   watchBagPickMarksLikeTop3,
   watchBagPickUsesChosenFix,
   watchBagPickUsesHomeClubTap,
@@ -24,7 +26,9 @@ import {
   watchPutterPickOpensPuttSheetImmediately,
   watchPuttChipsShowMadeIt,
   watchPutterSkipsAttachWatchFix,
+  watchPlayShowsAllClubsButton,
   watchRestOfBagBelowAllClubs,
+  watchRestOfBagUnderSuggested,
   watchSameClubSitsAboveTop3,
   watchSameClubSitsOnFirstScreen,
   watchSameClubIsLightOnDark,
@@ -92,10 +96,12 @@ test('Watch opens on the same top 3 as the phone; no scroll to hit one', () => {
   assert.equal(watchClubPickOpensOnTop3(), true);
   assert.equal(watchTop3MatchesPhone(), true);
   assert.equal(watchTop3RequiresScroll(), false);
-  assert.equal(watchAllClubsSitsUnderTop3(), true);
+  assert.equal(watchAllClubsSitsUnderTop3(), false);
+  assert.equal(watchPlayShowsAllClubsButton(), false);
   assert.equal(watchAllClubsLabel(), 'All clubs');
   assert.equal(COPY.allClubs, 'All clubs');
-  assert.equal(watchRestOfBagBelowAllClubs(), true);
+  assert.equal(watchRestOfBagBelowAllClubs(), false);
+  assert.equal(watchRestOfBagUnderSuggested(), true);
   assert.equal(watchSameClubSitsAboveTop3(), false);
   assert.equal(watchSameClubSitsOnFirstScreen(), false);
   assert.equal(watchSameClubVisibleWithoutShot(), false);
@@ -135,13 +141,14 @@ test('Watch opens on the same top 3 as the phone; no scroll to hit one', () => {
   assert.match(pick, /actionPill\("Hole Out"\)/);
   assert.doesNotMatch(pick, /pickSameClub|sameClubTitle/);
   assert.doesNotMatch(watchUi, /Scorecard/);
-  assert.match(pick, /Text\("All clubs"\)/);
+  assert.doesNotMatch(pick, /Text\("All clubs"\)/);
+  assert.doesNotMatch(pick, /showAllClubs/);
   const headerAt = pick.indexOf('session.list.statusLine');
   const holeOutAt = pick.indexOf('session.madeIt()');
   const homeAt = pick.indexOf('session.leave("home")');
   const stripAt = pick.indexOf('ScrollView(.horizontal');
-  const allClubsAt = pick.indexOf('Text("All clubs")');
-  assert.ok(headerAt >= 0 && holeOutAt > headerAt && homeAt > holeOutAt && stripAt > homeAt && allClubsAt > stripAt);
+  const bagAt = pick.indexOf('bagBelowSuggested');
+  assert.ok(headerAt >= 0 && holeOutAt > headerAt && homeAt > holeOutAt && stripAt > homeAt && bagAt > stripAt);
   assert.equal(watchOneHomeOnly(), true);
   assert.equal(watchSameClubSharesRowWithAllClubs(), false);
   assert.equal(watchBackHomeAreTinyText(), false);
@@ -153,13 +160,18 @@ test('Watch opens on the same top 3 as the phone; no scroll to hit one', () => {
   const holeOut = pick.slice(holeOutAt, homeAt);
   assert.match(holeOut, /actionPill\("Hole Out"\)/);
   assert.doesNotMatch(holeOut, /Color\.black|borderedProminent/);
-  assert.match(pick.slice(pick.indexOf('HStack(spacing: 8)'), pick.indexOf('if showAllClubs')), /session\.madeIt\(\)/);
-  assert.match(pick.slice(pick.indexOf('HStack(spacing: 8)'), pick.indexOf('if showAllClubs')), /actionPill\("Hole Out"\)/);
-  assert.match(pick.slice(pick.indexOf('HStack(spacing: 8)'), pick.indexOf('if showAllClubs')), /Text\("All clubs"\)/);
+  const navToBag = pick.slice(pick.indexOf('HStack(spacing: 8)'), bagAt);
+  assert.match(navToBag, /session\.madeIt\(\)/);
+  assert.match(navToBag, /actionPill\("Hole Out"\)/);
+  assert.match(navToBag, /actionPill\("Home"\)/);
+  assert.match(navToBag, /actionPill\("Putt"\)/);
+  assert.doesNotMatch(navToBag, /Text\("All clubs"\)/);
   assert.doesNotMatch(watchUi, /"Same club · \\\(name\)"/);
   assert.match(pick, /moreClubs/);
   assert.match(watchUi, /session\.list\.bag/);
-  assert.match(pick.slice(0, allClubsAt), /ScrollView\(\.horizontal/);
+  assert.match(pick.slice(0, bagAt), /ScrollView\(\.horizontal/);
+  assert.ok(pick.indexOf('actionPill("Hole Out")') < bagAt);
+  assert.ok(pick.indexOf('actionPill("Putt")') < bagAt);
 
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const push = hole.slice(hole.indexOf('useWatchClubList'), hole.indexOf('if (!round || !hole)'));
@@ -172,6 +184,74 @@ test('Watch opens on the same top 3 as the phone; no scroll to hit one', () => {
   assert.match(clubPush, /top3: ranked\.map/);
   assert.match(clubPush, /formatSuggestedClubChip\(club\.shortName, rankDistanceYards\(club\)\)/);
   assert.doesNotMatch(clubPush, /formatPickerLeftYards/);
+});
+
+test('Watch bag under the suggested three follows phone bag order and drops the live window', () => {
+  const bag = [
+    'club_driver',
+    'club_3w',
+    'club_5i',
+    'club_6i',
+    'club_7i',
+    'club_8i',
+    'club_9i',
+    'club_pw',
+    PUTTER_CLUB_ID,
+  ];
+  const far = ['club_driver', 'club_3w', 'club_5i'];
+  const walkedIn = ['club_8i', 'club_9i', 'club_pw'];
+  const restFar = watchBagBelowSuggested({ bag, suggested: far });
+  const restNear = watchBagBelowSuggested({ bag, suggested: walkedIn });
+  assert.deepEqual(restFar, ['club_6i', 'club_7i', 'club_8i', 'club_9i', 'club_pw', PUTTER_CLUB_ID]);
+  assert.deepEqual(restNear, ['club_driver', 'club_3w', 'club_5i', 'club_6i', 'club_7i', PUTTER_CLUB_ID]);
+  assert.equal(watchBagBelowSuggestedKeepsOrder(restFar, restNear.filter((id) => restFar.includes(id))), true);
+  for (const id of far) assert.equal(restFar.includes(id), false);
+  for (const id of walkedIn) assert.equal(restNear.includes(id), false);
+  assert.equal(new Set(restNear).size, restNear.length);
+  assert.equal(restNear.includes('club_not_in_bag'), false);
+
+  const duped = watchBagBelowSuggested({
+    bag: ['club_7i', 'club_7i', 'club_8i', 'club_driver', 'club_8i', ''],
+    suggested: ['club_7i', 'club_made_up'],
+  });
+  assert.deepEqual(duped, ['club_8i', 'club_driver']);
+
+  const putterShown = watchBagBelowSuggested({
+    bag: ['club_pw', PUTTER_CLUB_ID, 'club_7i'],
+    suggested: ['club_9i', 'club_pw', PUTTER_CLUB_ID],
+  });
+  assert.deepEqual(putterShown, ['club_7i']);
+  assert.deepEqual(watchBagBelowSuggested({ bag, suggested: [] }), bag);
+  assert.deepEqual(watchBagBelowSuggested({ bag: [], suggested: far }), []);
+
+  const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  const bagAt = watchUi.indexOf('bagBelowSuggested');
+  const bagScroll = watchUi.slice(watchUi.indexOf('ScrollView {', bagAt), watchUi.indexOf('private var suggestedWindowIds'));
+  assert.match(bagScroll, /ScrollView \{/);
+  assert.match(bagScroll, /ForEach\(moreClubs, id: \\.self\)/);
+  assert.match(bagScroll, /session\.pick\(clubId: clubId\)/);
+  assert.doesNotMatch(bagScroll, /scrollTo|stripWindowToken|stripScrollKey|\.id\(/);
+  assert.doesNotMatch(bagScroll, /Text\("All clubs"\)|showAllClubs/);
+  const more = watchUi.slice(watchUi.indexOf('private var moreClubs'), watchUi.indexOf('private var stripScrollKey'));
+  assert.match(more, /session\.list\.bag/);
+  assert.match(more, /suggestedWindowIds/);
+  assert.doesNotMatch(more, /stockCarryYards|top3/);
+  const windowIds = watchUi.slice(
+    watchUi.indexOf('private var suggestedWindowIds'),
+    watchUi.indexOf('private var moreClubs'),
+  );
+  assert.match(windowIds, /stripClubs/);
+  assert.match(windowIds, /stripWindowStart/);
+  assert.doesNotMatch(windowIds, /stockCarryYards/);
+  const pills = watchUi.slice(watchUi.indexOf('private func actionPill'), watchUi.indexOf('private var clubPick'));
+  assert.match(pills, /minHeight: 44/);
+  assert.match(watchUi, /actionPill\("Hole Out"\)/);
+  assert.match(watchUi, /actionPill\("Home"\)/);
+  assert.match(watchUi, /actionPill\("Putt"\)/);
+  const clubPick = watchUi.slice(watchUi.indexOf('private var clubPick'), watchUi.indexOf('private var moreClubs'));
+  assert.ok(clubPick.indexOf('workoutDeniedHint') < clubPick.indexOf('session.madeIt()'));
+  assert.ok(clubPick.indexOf('actionPill("Hole Out")') < clubPick.indexOf('bagBelowSuggested'));
+  assert.match(clubPick, /Color\.orange/);
 });
 
 test('Watch suggested strip shows carry, opens on the pick, and is not stacked rows', () => {
@@ -318,7 +398,7 @@ test('Watch suggested strip shows carry, opens on the pick, and is not stacked r
 
   const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
   const pickUi = watchUi.slice(watchUi.indexOf('private var clubPick'), watchUi.indexOf('private var moreClubs'));
-  const stripUi = pickUi.slice(pickUi.indexOf('ScrollView(.horizontal'), pickUi.indexOf('Text("All clubs")'));
+  const stripUi = pickUi.slice(pickUi.indexOf('ScrollView(.horizontal'), pickUi.indexOf('bagBelowSuggested'));
   assert.match(stripUi, /session\.pick\(clubId: club.id\)/);
   assert.match(stripUi, /scrollTo\(stripWindowToken/);
   assert.match(stripUi, /anchor: \.leading/);
@@ -476,7 +556,7 @@ test('Watch putter opens the putt sheet and stays out of the top 3', () => {
   const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
   assert.match(watchUi, /session\.putt\.open/);
   assert.match(watchUi, /puttSheet/);
-  const stripPick = watchUi.slice(watchUi.indexOf('ScrollView(.horizontal'), watchUi.indexOf('Text("All clubs")'));
+  const stripPick = watchUi.slice(watchUi.indexOf('ScrollView(.horizontal'), watchUi.indexOf('bagBelowSuggested'));
   const allClubsPick = watchUi.slice(watchUi.indexOf('ForEach(moreClubs'), watchUi.indexOf('private var moreClubs'));
   assert.match(stripPick, /session\.pick\(clubId: club.id\)/);
   assert.match(allClubsPick, /session\.pick\(clubId: clubId\)/);
@@ -493,7 +573,7 @@ test('Watch putter opens the putt sheet and stays out of the top 3', () => {
   assert.ok(pickFn.indexOf('sheet.open = true') < pickFn.indexOf('sendPick(payload)'));
 });
 
-test('a bag club under All clubs marks with the same rules as a top-3 tap', () => {
+test('a bag club under the suggested three marks with the same rules as a top-3 tap', () => {
   assert.equal(watchBagPickMarksLikeTop3(), true);
   assert.equal(watchBagPickUsesHomeClubTap(), true);
   assert.equal(watchBagPickUsesChosenFix(), true);
@@ -522,7 +602,7 @@ test('a bag club under All clubs marks with the same rules as a top-3 tap', () =
   assert.equal(planWatchClubTap({ action: 'home' }).marks, false);
 
   const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
-  const top3Btn = watchUi.slice(watchUi.indexOf('ScrollView(.horizontal'), watchUi.indexOf('Text("All clubs")'));
+  const top3Btn = watchUi.slice(watchUi.indexOf('ScrollView(.horizontal'), watchUi.indexOf('bagBelowSuggested'));
   const bagBtn = watchUi.slice(watchUi.indexOf('ForEach(moreClubs'), watchUi.indexOf('private var moreClubs'));
   assert.match(top3Btn, /session\.pick\(clubId: club.id\)/);
   assert.match(top3Btn, /Button\(action: \{ session\.pick\(clubId: club.id\) \}\)/);

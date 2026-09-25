@@ -213,9 +213,11 @@ test('after a shot lands the middle pill is closest to yards left, and the strip
   assert.doesNotMatch(stripClubs, /10_000/);
   assert.match(watch, /session\.list\.rankYards/);
   assert.match(watch, /clubCarry/);
-  assert.match(watch, /Text\("All clubs"\)/);
+  assert.doesNotMatch(watch, /Text\("All clubs"\)/);
+  assert.match(watch, /bagBelowSuggested/);
   const more = watch.slice(watch.indexOf('private var moreClubs'), watch.indexOf('private var stripScrollKey'));
   assert.match(more, /session\.list\.bag/);
+  assert.match(more, /suggestedWindowIds/);
 });
 
 test('phone strip tap is the old chip mark, and the center pill is closest to hole yards', () => {

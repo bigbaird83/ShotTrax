@@ -398,7 +398,7 @@ test('Signal: Cypress ghost 56° — highlight never marks; debounce; no hole-ad
   assert.doesNotMatch(flushFn, /holeNumber\s*=/);
 
   const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
-  const strip = watch.slice(watch.indexOf('ScrollView(.horizontal'), watch.indexOf('Text("All clubs")'));
+  const strip = watch.slice(watch.indexOf('ScrollView(.horizontal'), watch.indexOf('bagBelowSuggested'));
   assert.doesNotMatch(strip, /session\.select\(/);
   assert.doesNotMatch(strip, /onTapGesture/);
   assert.match(strip, /session\.pick\(clubId: club.id\)/);

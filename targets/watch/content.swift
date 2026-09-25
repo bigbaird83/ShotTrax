@@ -8,7 +8,8 @@ private enum WatchHomePush: Hashable {
 struct ContentView: View {
   @EnvironmentObject private var session: WatchClubSession
   @Environment(\.scenePhase) private var scenePhase
-  @State private var showAllClubs = false
+  /// Crown target for the bag list under the suggested three. Not tied to rank.
+  @FocusState private var bagListFocused: Bool
   /// Search nearby is a push on this stack so Back pops and Home stays mounted.
   @State private var homePath = NavigationPath()
 
@@ -572,9 +573,8 @@ struct ContentView: View {
             }
             .buttonStyle(.plain)
           }
-          Spacer(minLength: 0)
         }
-        .frame(height: mapHeight, alignment: .topLeading)
+        .frame(maxHeight: mapHeight, alignment: .topLeading)
 
         VStack(alignment: .leading, spacing: 6) {
           HStack(spacing: 8) {
@@ -592,6 +592,7 @@ struct ContentView: View {
             }
             .buttonStyle(.plain)
           }
+          .layoutPriority(1)
 
           GeometryReader { wheelGeo in
             let visible = min(3, max(stripClubs.count, 1))
@@ -635,19 +636,11 @@ struct ContentView: View {
           .frame(height: 52)
           .layoutPriority(1)
 
-          Button(action: { showAllClubs.toggle() }) {
-            Text("All clubs")
-              .font(.system(size: 15, weight: .heavy))
-              .foregroundStyle(Color("cream"))
-              .frame(maxWidth: .infinity, minHeight: 40)
-              .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                  .stroke(Color("cream"), lineWidth: 1)
-              )
-          }
-          .buttonStyle(.plain)
-
-          if showAllClubs {
+          // bagBelowSuggested — phone bag order, excluding the suggested window.
+          // Stable view: no .id and no scrollTo, so a re-rank does not jump to the top.
+          // The list reader takes only the space under the buttons and the strip,
+          // so this ScrollView is what the Digital Crown moves.
+          GeometryReader { listGeo in
             ScrollView {
               VStack(spacing: 4) {
                 ForEach(moreClubs, id: \.self) { clubId in
@@ -663,16 +656,45 @@ struct ContentView: View {
                 }
               }
             }
+            .frame(width: listGeo.size.width, height: listGeo.size.height, alignment: .top)
+            .focusable()
+            .focused($bagListFocused)
+            .onAppear { bagListFocused = true }
           }
+          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .frame(minHeight: controlHeight, alignment: .top)
+        .frame(minHeight: controlHeight, maxHeight: .infinity, alignment: .top)
       }
+      .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
     }
     .padding(.horizontal, 4)
   }
 
+  /// Up to three clubs in the suggested strip window — the same window the wheel opens on.
+  private var suggestedWindowIds: [String] {
+    let clubs = stripClubs
+    let n = clubs.count
+    guard n > 0 else { return [] }
+    if n <= 3 { return clubs.map { $0.id } }
+    let start = min(max(stripWindowStart, 0), n - 3)
+    return (0..<3).compactMap { offset in
+      let index = start + offset
+      return index < n ? clubs[index].id : nil
+    }
+  }
+
+  /// Phone list order minus the suggested window.
+  /// Nothing is added that session.list.bag did not send. Duplicate ids are dropped.
   private var moreClubs: [String] {
-    session.list.bag
+    let shown = Set(suggestedWindowIds)
+    var seen = Set<String>()
+    var rest: [String] = []
+    for id in session.list.bag {
+      if id.isEmpty || shown.contains(id) || seen.contains(id) { continue }
+      seen.insert(id)
+      rest.append(id)
+    }
+    return rest
   }
 
   private var stripScrollKey: String {

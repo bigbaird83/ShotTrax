@@ -1,7 +1,8 @@
 /**
- * Watch club-pick: map / top area ~60%, control band ~40%.
- * Back, Home, Putt, All clubs, and the wheel pills live in the control band.
- * Dedicated Putt shares the Back/Home row (same pill as Back / Home) so the top-3 strip stays on-screen.
+ * Watch club-pick: status block is capped at ~60%. Hole Out, Home, Putt, and the
+ * suggested strip stay fixed under it. The rest of the bag scrolls in the space
+ * that remains (at least the old ~40% control band when the status block is short).
+ * Dedicated Putt shares the Hole Out / Home row (same pill) so the top-3 strip stays on-screen.
  */
 
 export const WATCH_MAP_RATIO = 0.6;
@@ -10,7 +11,7 @@ export const WATCH_CONTROL_RATIO = 0.4;
 /** Back / Home in the control band. Not tiny text. */
 export const WATCH_BACK_HOME_MIN_HEIGHT = 44;
 
-/** All clubs / Same club under the wheel. */
+/** Bag rows under the suggested strip. */
 export const WATCH_UNDER_WHEEL_MIN_HEIGHT = 40;
 
 /** Dedicated Putt on the Back/Home row, same pill as Back / Home. Never its own full-width row. */

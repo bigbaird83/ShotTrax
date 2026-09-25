@@ -3,7 +3,8 @@
  * Phone owns undo, averages, Drop/Penalty, GPS, and marks.
  * Nearby course list uses the phone fix only. Watch never guesses a course.
  * Ranking/seeds/avgs stay on phone. Bag, settings, and scoring stay off the Watch.
- * Watch UI shows a carry-sorted bag strip by default; All clubs opens the bag menu.
+ * Watch UI shows the live top 3 on a carry-sorted strip. The rest of the phone bag
+ * sits under that strip, in bag order. There is no separate All clubs screen.
  * Putter opens the putt sheet (pick length → Add putt → Made it) — never a GPS mark.
  * Stretch: prefer a fresh Watch GPS fix; else phone GPS. Same acceptFix bands.
  * Watch never marks alone, never silent-forces, no motion/mic, no auto-detect putts.

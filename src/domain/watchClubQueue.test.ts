@@ -256,7 +256,7 @@ test('TF 58: ghost Watch marks — replay, debounce, and hole-advance never inve
   assert.doesNotMatch(pickFn, /func select/);
 
   const watch = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
-  const strip = watch.slice(watch.indexOf('ScrollView(.horizontal'), watch.indexOf('Text("All clubs")'));
+  const strip = watch.slice(watch.indexOf('ScrollView(.horizontal'), watch.indexOf('bagBelowSuggested'));
   assert.match(strip, /session\.pick\(clubId: club.id\)/);
   assert.doesNotMatch(strip, /onTapGesture/);
   assert.doesNotMatch(strip, /session\.select\(/);

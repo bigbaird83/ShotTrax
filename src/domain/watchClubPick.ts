@@ -30,16 +30,26 @@ export function watchTop3RequiresScroll(): false {
   return false;
 }
 
-export function watchAllClubsSitsUnderTop3(): true {
-  return true;
+/** The separate All clubs control is gone. The rest of the bag is the list under the strip. */
+export function watchAllClubsSitsUnderTop3(): false {
+  return false;
+}
+
+export function watchPlayShowsAllClubsButton(): false {
+  return false;
 }
 
 export function watchAllClubsLabel(): 'All clubs' {
   return COPY.allClubs;
 }
 
-/** Rest of the bag sits below All clubs — scroll to reach it. */
-export function watchRestOfBagBelowAllClubs(): true {
+/** Old All clubs screen. The play list is not behind that button. */
+export function watchRestOfBagBelowAllClubs(): false {
+  return false;
+}
+
+/** Rest of the phone bag, in bag order, directly under the suggested three. */
+export function watchRestOfBagUnderSuggested(): true {
   return true;
 }
 
@@ -127,7 +137,7 @@ export function watchShowsSameClub(): false {
   return false;
 }
 
-/** First screen is Hole · yards, top 3, Same club, All clubs — no scroll. */
+/** Hole, yards, action row, and the suggested three are on screen without scrolling to them. */
 export function watchFirstScreenFitsWithoutScroll(): true {
   return true;
 }
@@ -437,7 +447,7 @@ export function watchClubPickHomeMarksShot(): false {
   return false;
 }
 
-/** A bag club under All clubs marks with the same rules as a top-3 tap. */
+/** A bag club under the suggested three marks with the same rules as a top-3 tap. */
 export function watchBagPickMarksLikeTop3(): true {
   return true;
 }
@@ -458,9 +468,39 @@ export function watchClubListTop3(ids: string[]): string[] {
   return ids.filter((id) => !isPutterClubId(id)).slice(0, 3);
 }
 
+/**
+ * Clubs under the suggested strip. `bag` is the phone's order. `suggested`
+ * is the live window already on screen (the re-ranked top three, or fewer).
+ * Those ids are left out. Duplicate bag ids are dropped. Nothing is added
+ * that the phone did not send. Clubs that stay in the list keep their order
+ * when `suggested` changes, so a row keyed by club id does not have to jump
+ * back to the top.
+ */
+export function watchBagBelowSuggested(args: { bag: readonly string[]; suggested: readonly string[] }): string[] {
+  const shown = new Set(args.suggested.filter((id) => id.length > 0));
+  const seen = new Set<string>();
+  const rest: string[] = [];
+  for (const id of args.bag) {
+    if (!id || shown.has(id) || seen.has(id)) continue;
+    seen.add(id);
+    rest.push(id);
+  }
+  return rest;
+}
+
+/** True when every id in `next` still appears, in the same order, inside `prev`. */
+export function watchBagBelowSuggestedKeepsOrder(prev: readonly string[], next: readonly string[]): boolean {
+  let from = 0;
+  for (const id of next) {
+    const at = prev.indexOf(id, from);
+    if (at < 0) return false;
+    from = at + 1;
+  }
+  return true;
+}
+
 export function watchClubPickRestOfBag(args: { top3: string[]; bag: string[] }): string[] {
-  const top = new Set(watchClubListTop3(args.top3));
-  return args.bag.filter((id) => !top.has(id));
+  return watchBagBelowSuggested({ bag: args.bag, suggested: watchClubListTop3(args.top3) });
 }
 
 export type WatchClubTapPlan =
