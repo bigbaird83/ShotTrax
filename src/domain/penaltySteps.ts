@@ -2,12 +2,11 @@
  * Display order for a hole's shots and penalty strokes.
  * Does not score, renumber, or write. A penalty is never a swing.
  *
- * Stored penalties have `createdAt` and no after-shot index. When that time
- * parses, the penalty sits after the latest shot whose `startedAt` (or
- * `endedAt` if the start is missing) is at or before it. An explicit
- * `afterShotId` / `afterShotSeq` on the row wins over the timestamp. If the
- * row has neither a usable attachment nor a usable time, it goes at the end
- * of that hole's shots.
+ * A stored `afterShotId` places the penalty after that shot. If that shot is
+ * gone, `afterShotSeq` is next, then `createdAt` against each shot's
+ * `startedAt` (or `endedAt` when the start is missing). No usable time puts
+ * the penalty at the end. No shots at all puts it first. Older rows leave
+ * both attachment fields null and keep the time fallback.
  */
 
 import type { PenaltyReason } from './types';
@@ -28,9 +27,9 @@ export type HoleStepPenalty = {
   note?: string | null;
   kind?: string | null;
   createdAt?: string | null;
-  /** Not stored today. Used when a row carries an attachment. */
+  /** Shot this penalty follows. Null on older rows and when the hole had no shots. */
   afterShotId?: string | null;
-  /** Not stored today. Used when a row carries an after-shot seq. */
+  /** Seq of that shot. Kept when the shot id is gone. Null on older rows. */
   afterShotSeq?: number | null;
 };
 
@@ -94,6 +93,23 @@ export function formatHoleCountLine(args: {
   return [formatShotCount(args.shotCount), penalty, showPutts ? formatPuttCount(puttCount) : null]
     .filter(Boolean)
     .join(' · ');
+}
+
+/** Last shot on the hole, by seq. Null when the hole has no shots yet. */
+export function defaultPenaltyAfterShot<T extends { seq?: number | null }>(
+  shots: readonly T[] | null | undefined,
+): T | null {
+  if (!Array.isArray(shots) || shots.length === 0) return null;
+  let best: T | null = null;
+  let bestSeq = Number.NEGATIVE_INFINITY;
+  for (const shot of shots) {
+    const seq = typeof shot.seq === 'number' && Number.isFinite(shot.seq) ? shot.seq : Number.NEGATIVE_INFINITY;
+    if (!best || seq >= bestSeq) {
+      best = shot;
+      bestSeq = seq;
+    }
+  }
+  return best;
 }
 
 /** Round-screen chip text for a real shot: `1 8i · 170 yd`. */

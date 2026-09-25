@@ -125,7 +125,7 @@ import { planUndoPlacePins } from '@/src/domain/undoLastShot';
 import { planUndoLastSoftGpsClubMark } from '@/src/domain/undoSoftGpsClubMark';
 import type { LatLng } from '@/src/domain/latLng';
 import { formatPenaltyRow, PENALTY_REASONS, totalPenaltyStrokes } from '@/src/domain/penalty';
-import { formatHoleCountLine, formatShotStepChip, orderHoleSteps } from '@/src/domain/penaltySteps';
+import { defaultPenaltyAfterShot, formatHoleCountLine, formatShotStepChip, orderHoleSteps } from '@/src/domain/penaltySteps';
 import {
   addPuttLength,
   applyWatchPuttPickToDraft,
@@ -253,6 +253,7 @@ export default function HoleScreen() {
   const [penaltyStrokes, setPenaltyStrokes] = useState(1);
   const [penaltyReason, setPenaltyReason] = useState<PenaltyReason>('water');
   const [penaltyNote, setPenaltyNote] = useState('');
+  const [penaltyAfterShotId, setPenaltyAfterShotId] = useState<string | null>(null);
   const [osmOverlay, setOsmOverlay] = useState<OsmOverlay | null>(null);
   const [checkNonce, setCheckNonce] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
@@ -1210,8 +1211,14 @@ export default function HoleScreen() {
     })();
   };
 
+  const openPenaltySheet = () => {
+    setPenaltyAfterShotId(defaultPenaltyAfterShot(shots)?.id ?? null);
+    setPenaltyOpen(true);
+  };
+
   const onAddPenalty = () => {
-    if (readOnly) return;
+    if (readOnly || !hole) return;
+    const attached = shots.find((shot) => shot.id === penaltyAfterShotId) ?? null;
     try {
       insertPenalty(db, {
         holeId: hole.id,
@@ -1221,6 +1228,8 @@ export default function HoleScreen() {
         reason: penaltyReason,
         note: penaltyReason === 'other' || penaltyNote.trim() ? penaltyNote : null,
         kind: 'penalty',
+        afterShotId: attached?.id ?? null,
+        afterShotSeq: attached?.seq ?? null,
       });
     } catch (err) {
       console.warn(err);
@@ -1233,6 +1242,7 @@ export default function HoleScreen() {
     setPenaltyStrokes(1);
     setPenaltyReason('water');
     setPenaltyNote('');
+    setPenaltyAfterShotId(null);
   };
 
   const openBag = () => {
@@ -1868,7 +1878,7 @@ export default function HoleScreen() {
               accessibilityRole="button"
               accessibilityLabel={COPY.penalty}
               disabled={readOnly}
-              onPress={() => setPenaltyOpen(true)}
+              onPress={openPenaltySheet}
               style={styles.allClubsPill}>
               <Text style={styles.allClubsPillText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                 {COPY.penalty}
@@ -2056,7 +2066,7 @@ export default function HoleScreen() {
             disabled={readOnly}
             onPress={() => {
               setMenuOpen(false);
-              setPenaltyOpen(true);
+              openPenaltySheet();
             }}
           />
           <BigButton
@@ -2443,6 +2453,38 @@ export default function HoleScreen() {
               </Pressable>
             ))}
           </View>
+          {shots.length > 0 ? (
+            <View>
+              <Text style={styles.label}>{COPY.afterShot}</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.afterShotRow}>
+                {shots.map((shot) => {
+                  const club = shot.clubId ? clubMap[shot.clubId] : null;
+                  const selected = penaltyAfterShotId === shot.id;
+                  return (
+                    <Pressable
+                      key={shot.id}
+                      accessibilityRole="button"
+                      onPress={() => setPenaltyAfterShotId(shot.id)}
+                      style={[styles.afterShotChip, selected && styles.chipOn]}>
+                      <Text style={styles.afterShotText} numberOfLines={1}>
+                        {formatShotStepChip({
+                          seq: shot.seq,
+                          clubShortName: club?.shortName,
+                          source: shot.source,
+                          fixQuality: shot.fixQuality,
+                          endedAt: shot.endedAt,
+                          distanceYards: shot.distanceYards,
+                        })}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          ) : null}
           <TextInput
             placeholder="Note (optional)"
             placeholderTextColor={colors.muted}
@@ -2850,6 +2892,19 @@ function makeStyles(colors: ColorPalette) {
     backgroundColor: colors.bg,
   },
   reasonText: { color: colors.cream, fontSize: 16, fontWeight: '800' },
+  afterShotRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 4 },
+  afterShotChip: {
+    minHeight: 36,
+    maxWidth: 168,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: colors.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bg,
+  },
+  afterShotText: { color: colors.cream, fontSize: type.tiny, fontWeight: '800' },
   note: {
     minHeight: 52,
     borderWidth: 1,

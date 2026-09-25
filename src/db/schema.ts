@@ -249,6 +249,8 @@ export function migrate(db: SQLiteDatabase): void {
   ensureColumn(db, 'hole_penalties', 'kind', "TEXT NOT NULL DEFAULT 'penalty'");
   ensureColumn(db, 'hole_penalties', 'lat', 'REAL');
   ensureColumn(db, 'hole_penalties', 'lng', 'REAL');
+  ensureColumn(db, 'hole_penalties', 'after_shot_id', 'TEXT');
+  ensureColumn(db, 'hole_penalties', 'after_shot_seq', 'INTEGER');
   migrateHolesParNullable(db);
   migrateShotsP3(db);
   ensureColumn(db, 'shots', 'source', "TEXT NOT NULL DEFAULT 'gps'");

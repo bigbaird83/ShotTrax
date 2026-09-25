@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
+  defaultPenaltyAfterShot,
   formatHoleCountLine,
   formatPenaltyCount,
   formatShotStepChip,
@@ -168,6 +169,104 @@ test('a legacy penalty with no ordering info is placed at the end and still rend
   );
 });
 
+test('the Penalty sheet defaults to the latest shot and none when the hole is empty', () => {
+  assert.equal(defaultPenaltyAfterShot([]), null);
+  assert.equal(defaultPenaltyAfterShot(null), null);
+  const last = defaultPenaltyAfterShot([
+    { id: 's1', seq: 1 },
+    { id: 's2', seq: 2 },
+  ]);
+  assert.equal(last?.id, 's2');
+  const earlierListedLast = defaultPenaltyAfterShot([
+    { id: 's2', seq: 2 },
+    { id: 's1', seq: 1 },
+  ]);
+  assert.equal(earlierListedLast?.id, 's2');
+});
+
+test('a stored attachment places the penalty after that shot, including an earlier pick', () => {
+  const late: HoleStepPenalty = {
+    id: 'late',
+    strokes: 1,
+    reason: 'ob',
+    note: null,
+    kind: 'penalty',
+    createdAt: '2026-09-20T15:09:00.000Z',
+    afterShotId: 's1',
+    afterShotSeq: 1,
+  };
+  assert.deepEqual(
+    orderHoleSteps([eightIron, wedge], [late]).map((step) => (step.kind === 'penalty' ? step.label : step.id)),
+    ['s1', '+1 OB', 's2'],
+  );
+});
+
+test('a deleted shot falls back to seq, then time, then the end', () => {
+  const shots = [eightIron, wedge];
+  const bySeq: HoleStepPenalty = {
+    id: 'gone-id',
+    strokes: 1,
+    reason: 'ob',
+    note: null,
+    kind: 'penalty',
+    createdAt: '2026-09-20T15:09:00.000Z',
+    afterShotId: 'deleted-shot',
+    afterShotSeq: 1,
+  };
+  assert.deepEqual(
+    orderHoleSteps(shots, [bySeq]).map((step) => (step.kind === 'penalty' ? step.label : step.id)),
+    ['s1', '+1 OB', 's2'],
+  );
+
+  const byTime: HoleStepPenalty = {
+    id: 'gone-both',
+    strokes: 1,
+    reason: 'water',
+    note: null,
+    kind: 'penalty',
+    createdAt: '2026-09-20T15:02:00.000Z',
+    afterShotId: 'deleted-shot',
+    afterShotSeq: 9,
+  };
+  assert.deepEqual(
+    orderHoleSteps(shots, [byTime]).map((step) => (step.kind === 'penalty' ? step.label : step.id)),
+    ['s1', '+1 Water', 's2'],
+  );
+
+  const atEnd: HoleStepPenalty = {
+    id: 'no-anchor',
+    strokes: 1,
+    reason: 'unplayable',
+    note: null,
+    kind: 'penalty',
+    afterShotId: 'deleted-shot',
+    afterShotSeq: 9,
+  };
+  assert.deepEqual(
+    orderHoleSteps([{ id: 's1', seq: 1 }, { id: 's2', seq: 2 }], [atEnd]).map((step) =>
+      step.kind === 'penalty' ? step.label : step.id,
+    ),
+    ['s1', 's2', '+1 Unplayable'],
+  );
+});
+
+test('a penalty with no shots is the first step', () => {
+  const only: HoleStepPenalty = {
+    id: 'first',
+    strokes: 1,
+    reason: 'ob',
+    note: null,
+    kind: 'penalty',
+    createdAt: '2026-09-20T15:02:00.000Z',
+    afterShotId: null,
+    afterShotSeq: null,
+  };
+  assert.deepEqual(
+    orderHoleSteps([], [only]).map((step) => (step.kind === 'penalty' ? step.label : step.id)),
+    ['+1 OB'],
+  );
+});
+
 test('an explicit after-shot index beats a later timestamp', () => {
   const attached: HoleStepPenalty = {
     id: 'late-but-attached',
@@ -237,4 +336,9 @@ test('round screen and summary render ordered penalty steps and keep insert on s
   assert.match(summary, /formatHoleCountLine\(/);
   assert.match(summary, /penaltiesMissingFromSteps/);
   assert.match(summary, /formatShotStepChip/);
+  const sheet = hole.slice(hole.indexOf('title={COPY.penalty}'), hole.indexOf('label={`Add +${penaltyStrokes}`}'));
+  assert.match(sheet, /COPY\.afterShot/);
+  assert.match(sheet, /setPenaltyAfterShotId\(shot\.id\)/);
+  assert.match(hole, /afterShotId: attached\?\.id/);
+  assert.match(hole, /afterShotSeq: attached\?\.seq/);
 });

@@ -82,6 +82,10 @@ export type RoundTransferPenalty = {
   createdAt: string;
   lat?: number;
   lng?: number;
+  /** Shot the penalty follows. Null when the file or the hole had none. */
+  afterShotId: string | null;
+  /** Seq of that shot. Null on older files. */
+  afterShotSeq: number | null;
 };
 
 export type RoundTransferHole = {
@@ -392,12 +396,15 @@ export function acceptTransferPenalty(raw: unknown): RoundTransferPenalty | null
   const createdAt = isoTime(record.createdAt);
   if (!kind || strokes == null || !reason || !createdAt) return null;
   const point = pair(finite(record.lat), finite(record.lng));
+  const afterSeq = finite(record.afterShotSeq);
   const penalty: RoundTransferPenalty = {
     kind,
     strokes,
     reason,
     note: text(record.note),
     createdAt,
+    afterShotId: text(record.afterShotId),
+    afterShotSeq: afterSeq != null && Number.isInteger(afterSeq) ? afterSeq : null,
   };
   const id = text(record.id);
   if (id) penalty.id = id;
@@ -866,6 +873,11 @@ function canonicalPenalties(penalties: readonly RoundTransferPenalty[] | undefin
         createdAt: penalty.createdAt,
         lat: point?.lat ?? null,
         lng: point?.lng ?? null,
+        afterShotId: text(penalty.afterShotId),
+        afterShotSeq:
+          typeof penalty.afterShotSeq === 'number' && Number.isInteger(penalty.afterShotSeq)
+            ? penalty.afterShotSeq
+            : null,
       };
     })
     .sort(
