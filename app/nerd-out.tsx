@@ -172,6 +172,7 @@ export default function NerdOutScreen() {
       <BigButton label={COPY.clubData} variant="secondary" onPress={() => router.push('/club-data')} />
       <BigButton label={COPY.handicap} variant="secondary" onPress={() => router.push('/handicap')} />
       <BigButton label={COPY.trends} variant="secondary" onPress={() => router.push('/trends')} />
+      <BigButton label={COPY.dispersion} variant="secondary" onPress={() => router.push('/dispersion')} />
     </Screen>
   );
 }
