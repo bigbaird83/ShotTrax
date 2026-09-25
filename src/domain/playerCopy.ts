@@ -39,6 +39,12 @@ export const COPY = {
   restoreRoundsConfirm:
     'Restore rounds from this file? Existing rounds with the same id will be replaced. Favorites are added. The bag changes only after you confirm the list.',
   restoreRoundsFailed: 'Couldn’t restore rounds.',
+  restoreRoundsNotFile:
+    'That isn’t a shottracker rounds file. Pick the .json from Export rounds. CSV can’t be restored.',
+  restoreRoundsCsv: 'CSV can’t be restored. Pick the .json from Export rounds.',
+  restoreRoundsEmpty: 'Nothing to restore in that file.',
+  restoreRoundsUnreadable: 'Couldn’t read that file.',
+  restoreRoundsSaveFailed: 'Couldn’t save the restored rounds.',
   bagRestoreTitle: 'Update bag?',
   bagRestoreHint: 'These are the only bag changes. Cancel leaves the bag as it is.',
   bagRestoreConfirm: 'Update bag',
@@ -288,6 +294,15 @@ export const COPY = {
   scorecardPar: 'Par',
   summaryHome: 'Home',
 } as const;
+
+/** Toast for a restore that did not save. CSV is decided by the caller before this. */
+export function restoreFailureCopy(reason: string): string {
+  if (reason === 'not_shottrax') return COPY.restoreRoundsNotFile;
+  if (reason === 'empty') return COPY.restoreRoundsEmpty;
+  if (reason === 'unreadable') return COPY.restoreRoundsUnreadable;
+  if (reason === 'save_failed') return COPY.restoreRoundsSaveFailed;
+  return COPY.restoreRoundsFailed;
+}
 
 /** Bag row when the last five dropped shots agree and the typed number does not. */
 export function formatBagCarrySuggestion(clubLabel: string, yards: number): string {

@@ -1,4 +1,5 @@
 import { InteractionManager, Share } from 'react-native';
+import { csvShareSheetLabel } from '../domain/roundCsv';
 import { roundHistoryShareTitle } from '../domain/roundTransfer';
 
 function waitForShareHost(run: () => void): void {
@@ -11,8 +12,7 @@ function waitForShareHost(run: () => void): void {
  * Share sheet carries one file (Save to Files, Mail, Messages).
  * No account, no live-board URL. False when the sheet could not open.
  */
-async function shareCacheFile(filename: string, contents: string): Promise<boolean> {
-  const title = roundHistoryShareTitle();
+async function shareCacheFile(filename: string, contents: string, title: string = roundHistoryShareTitle()): Promise<boolean> {
   let url: string | undefined;
   try {
     const { File, Paths } = await import('expo-file-system');
@@ -29,7 +29,10 @@ async function shareCacheFile(filename: string, contents: string): Promise<boole
       waitForShareHost(() => {
         // With a file the sheet offers Save to Files; without one, fall back to the text.
         const content = url ? { title, url } : { title, message: contents };
-        Share.share(content).then(() => resolve(), reject);
+        // iOS ignores title. The file name is what the sheet shows, so CSV
+        // passes the "1 of 2" label as the filename. subject is the Mail label.
+        const options = title === roundHistoryShareTitle() ? undefined : { subject: title };
+        Share.share(content, options).then(() => resolve(), reject);
       });
     });
     return true;
@@ -50,8 +53,10 @@ export async function presentRoundCsvShare(
   files: readonly { filename: string; contents: string }[],
 ): Promise<boolean> {
   if (files.length === 0) return false;
-  for (const file of files) {
-    const ok = await shareCacheFile(file.filename, file.contents);
+  for (let index = 0; index < files.length; index += 1) {
+    const file = files[index];
+    const label = csvShareSheetLabel(index + 1, files.length, file.filename);
+    const ok = await shareCacheFile(label, file.contents, label);
     if (!ok) return false;
   }
   return true;
@@ -61,7 +66,13 @@ export async function presentRoundCsvShare(
  * System document picker for a .json rounds file. Null when the player
  * cancels. Throws when the file cannot be read.
  */
-export async function pickRoundHistoryFile(): Promise<string | null> {
+export type PickedRoundHistoryFile = {
+  /** Display name from the picker, when it has one. Used to spot a .csv. */
+  name: string | null;
+  text: string;
+};
+
+export async function pickRoundHistoryFile(): Promise<PickedRoundHistoryFile | null> {
   const { getDocumentAsync } = await import('expo-document-picker');
   const result = await getDocumentAsync({
     type: ['application/json', 'public.json', 'text/plain'],
@@ -72,5 +83,7 @@ export async function pickRoundHistoryFile(): Promise<string | null> {
   const asset = result.assets?.[0];
   if (!asset) return null;
   const { File } = await import('expo-file-system');
-  return new File(asset.uri).text();
+  const text = await new File(asset.uri).text();
+  const name = typeof asset.name === 'string' && asset.name.trim() ? asset.name.trim() : null;
+  return { name, text };
 }

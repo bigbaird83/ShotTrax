@@ -9,8 +9,8 @@ import {
   listRounds,
   restoreRoundHistory,
 } from '@/src/db/repo';
-import { COPY } from '@/src/domain/playerCopy';
-import { ROUNDS_CSV_FILENAME, SHOTS_CSV_FILENAME } from '@/src/domain/roundCsv';
+import { COPY, restoreFailureCopy } from '@/src/domain/playerCopy';
+import { looksLikeRoundCsvRestore, ROUNDS_CSV_FILENAME, SHOTS_CSV_FILENAME } from '@/src/domain/roundCsv';
 import {
   formatBagChange,
   formatRestoreToast,
@@ -80,11 +80,15 @@ export default function RoundsTransferScreen() {
     }
   };
 
-  const restoreFrom = (raw: string) => {
+  const restoreFrom = (picked: { name: string | null; text: string }) => {
+    if (looksLikeRoundCsvRestore(picked.name, picked.text)) {
+      setToast(COPY.restoreRoundsCsv);
+      return;
+    }
     try {
-      const result = restoreRoundHistory(db, raw);
+      const result = restoreRoundHistory(db, picked.text);
       if (!result.ok) {
-        setToast(COPY.restoreRoundsFailed);
+        setToast(restoreFailureCopy(result.reason));
         return;
       }
       bump();
@@ -97,8 +101,9 @@ export default function RoundsTransferScreen() {
       );
       const lines = planBagRestore(listClubs(db), result.bag).map(formatBagChange);
       if (lines.length > 0) setBagPrompt({ bag: result.bag, lines });
-    } catch {
-      setToast(COPY.restoreRoundsFailed);
+    } catch (error) {
+      console.warn(error instanceof Error ? error.message : String(error));
+      setToast(COPY.restoreRoundsSaveFailed);
     }
   };
 
@@ -108,8 +113,9 @@ export default function RoundsTransferScreen() {
       applyTransferredBag(db, bagPrompt.bag);
       bump();
       setToast(COPY.bagRestoreDone);
-    } catch {
-      setToast(COPY.restoreRoundsFailed);
+    } catch (error) {
+      console.warn(error instanceof Error ? error.message : String(error));
+      setToast(COPY.restoreRoundsSaveFailed);
     } finally {
       setBagPrompt(null);
     }
@@ -118,20 +124,21 @@ export default function RoundsTransferScreen() {
   const onRestore = async () => {
     if (busy) return;
     setBusy(true);
-    let raw: string | null;
+    let picked: { name: string | null; text: string } | null;
     try {
-      raw = await pickRoundHistoryFile();
-    } catch {
-      setToast(COPY.restoreRoundsFailed);
+      picked = await pickRoundHistoryFile();
+    } catch (error) {
+      console.warn(error instanceof Error ? error.message : String(error));
+      setToast(COPY.restoreRoundsUnreadable);
       setBusy(false);
       return;
     }
     setBusy(false);
-    if (raw == null) return;
-    const text = raw;
+    if (picked == null) return;
+    const file = picked;
     Alert.alert(COPY.restoreRounds, COPY.restoreRoundsConfirm, [
       { text: COPY.cancel, style: 'cancel' },
-      { text: COPY.restoreRounds, onPress: () => restoreFrom(text) },
+      { text: COPY.restoreRounds, onPress: () => restoreFrom(file) },
     ]);
   };
 
