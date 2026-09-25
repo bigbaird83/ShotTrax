@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import { EARTH_RADIUS_M, METERS_PER_YARD } from '../config/sensing';
 import { decideCourseCardPaint } from '../domain/courseCardPaint';
+import { haversineYards } from '../domain/haversine';
 import { planCourseCardCamera } from '../domain/holeCamera';
+import type { LatLng } from '../domain/latLng';
 import {
   signalLabCypressHydrate,
   signalLabGreystoneHydrate,
@@ -25,6 +28,7 @@ import {
   MOUNTAIN_RANCH_FAIRFIELD_BAY_CLUBHOUSE,
   GREENS_NORTH_HILLS_SHERWOOD_AR_KEY,
   GREENS_NORTH_HILLS_SHERWOOD_CLUBHOUSE,
+  HYDRATE_SAME_HOLE_GREEN_YARDS,
   applyCourseHydrateToLayout,
   fetchGolfApiCypressHydrate,
   getGolfApiBase,
@@ -560,6 +564,154 @@ test('Pro-null Cypress uses hydrate; a sane Pro card is left alone', () => {
     lng: greystoneHydrate!.holes[0].tee.lng,
   });
   assert.equal(decideCourseCardPaint({ tee: pleasant.tee, green: pleasant.green, phone: null }).mount, true);
+});
+
+/** Move due north by `yards`. Used to place a saved green relative to a hydrate green. */
+function northOf(point: LatLng, yards: number): LatLng {
+  const dLat = ((yards * METERS_PER_YARD) / EARTH_RADIUS_M) * (180 / Math.PI);
+  return { lat: point.lat + dLat, lng: point.lng };
+}
+
+test('sane saved green stays when the hydrate green is on the next fairway (~250 yd)', () => {
+  const hole = hydrate!.holes[0]!;
+  const hydrateGreen = { lat: hole.green.lat, lng: hole.green.lng };
+  const savedGreen = northOf(hydrateGreen, 250);
+  const apart = haversineYards(hydrateGreen, savedGreen);
+  assert.ok(apart > HYDRATE_SAME_HOLE_GREEN_YARDS);
+  assert.ok(apart > 240 && apart < 260);
+
+  const kept = resolveHydrateTeeGreen({
+    name: 'Cypress Creek Golf Club',
+    city: 'Cabot',
+    state: 'AR',
+    holeNumber: 1,
+    tee: null,
+    green: savedGreen,
+  });
+  assert.equal(kept.usedHydrate, false);
+  assert.equal(kept.tee, null);
+  assert.deepEqual(kept.green, savedGreen);
+  assert.notDeepEqual(kept.green, hydrateGreen);
+
+  const wrongTee = resolveHydrateTeeGreen({
+    name: 'Cypress Creek Golf Club',
+    city: 'Cabot',
+    state: 'AR',
+    holeNumber: 1,
+    tee: CYPRESS_CREEK_CLUBHOUSE,
+    green: savedGreen,
+  });
+  assert.equal(wrongTee.usedHydrate, false);
+  assert.deepEqual(wrongTee.tee, CYPRESS_CREEK_CLUBHOUSE);
+  assert.deepEqual(wrongTee.green, savedGreen);
+});
+
+test('missing tee is filled only when the hydrate green is the same hole', () => {
+  const hole = hydrate!.holes[0]!;
+  const hydrateGreen = { lat: hole.green.lat, lng: hole.green.lng };
+  const hydrateTee = { lat: hole.tee.lat, lng: hole.tee.lng };
+  const savedGreen = northOf(hydrateGreen, 20);
+  const apart = haversineYards(hydrateGreen, savedGreen);
+  assert.ok(apart <= HYDRATE_SAME_HOLE_GREEN_YARDS);
+  assert.ok(apart > 10);
+
+  const filled = resolveHydrateTeeGreen({
+    name: 'Cypress Creek Golf Club',
+    city: 'Cabot',
+    state: 'AR',
+    holeNumber: 1,
+    tee: null,
+    green: savedGreen,
+  });
+  assert.equal(filled.usedHydrate, true);
+  assert.deepEqual(filled.tee, hydrateTee);
+  assert.deepEqual(filled.green, savedGreen);
+  assert.notDeepEqual(filled.green, hydrateGreen);
+  assert.equal(decideCourseCardPaint({ tee: filled.tee, green: filled.green, phone: null }).mount, true);
+
+  const presentTee = resolveHydrateTeeGreen({
+    name: 'Cypress Creek Golf Club',
+    city: 'Cabot',
+    state: 'AR',
+    holeNumber: 1,
+    tee: CYPRESS_CREEK_CLUBHOUSE,
+    green: savedGreen,
+  });
+  assert.equal(presentTee.usedHydrate, false);
+  assert.deepEqual(presentTee.tee, CYPRESS_CREEK_CLUBHOUSE);
+  assert.deepEqual(presentTee.green, savedGreen);
+});
+
+test('missing saved green still fills tee and green from hydrate', () => {
+  const hole = hydrate!.holes[0]!;
+  const live = resolveHydrateTeeGreen({
+    name: 'Cypress Creek Golf Club',
+    city: 'Cabot',
+    state: 'AR',
+    holeNumber: 1,
+    tee: null,
+    green: null,
+  });
+  assert.equal(live.usedHydrate, true);
+  assert.deepEqual(live.tee, { lat: hole.tee.lat, lng: hole.tee.lng });
+  assert.deepEqual(live.green, { lat: hole.green.lat, lng: hole.green.lng });
+  assert.equal(decideCourseCardPaint({ tee: live.tee, green: live.green, phone: null }).mount, true);
+});
+
+test('clubhouse or near-zero saved green still falls back to hydrate', () => {
+  const hole = hydrate!.holes[0]!;
+  const hydrateTee = { lat: hole.tee.lat, lng: hole.tee.lng };
+  const hydrateGreen = { lat: hole.green.lat, lng: hole.green.lng };
+
+  const clubhouse = resolveHydrateTeeGreen({
+    name: 'Cypress Creek Golf Club',
+    city: 'Cabot',
+    state: 'AR',
+    holeNumber: 1,
+    tee: null,
+    green: CYPRESS_CREEK_CLUBHOUSE,
+  });
+  assert.equal(clubhouse.usedHydrate, true);
+  assert.deepEqual(clubhouse.tee, hydrateTee);
+  assert.deepEqual(clubhouse.green, hydrateGreen);
+  assert.notDeepEqual(clubhouse.green, CYPRESS_CREEK_CLUBHOUSE);
+
+  const zero = resolveHydrateTeeGreen({
+    name: 'Cypress Creek Golf Club',
+    city: 'Cabot',
+    state: 'AR',
+    holeNumber: 1,
+    tee: null,
+    green: { lat: 0, lng: 0 },
+  });
+  assert.equal(zero.usedHydrate, true);
+  assert.deepEqual(zero.tee, hydrateTee);
+  assert.deepEqual(zero.green, hydrateGreen);
+
+  const nearZero = resolveHydrateTeeGreen({
+    name: 'Cypress Creek Golf Club',
+    city: 'Cabot',
+    state: 'AR',
+    holeNumber: 1,
+    tee: null,
+    green: { lat: 0.001, lng: 0 },
+  });
+  assert.equal(nearZero.usedHydrate, true);
+  assert.deepEqual(nearZero.tee, hydrateTee);
+  assert.deepEqual(nearZero.green, hydrateGreen);
+
+  const thunderbird = resolveHydrateTeeGreen({
+    name: 'Thunderbird Country Club',
+    city: 'Heber Springs',
+    state: 'AR',
+    holeNumber: 1,
+    tee: null,
+    green: { lat: 35.53, lng: -92.04 },
+  });
+  assert.equal(thunderbird.usedHydrate, false);
+  assert.equal(thunderbird.tee, null);
+  assert.deepEqual(thunderbird.green, { lat: 35.53, lng: -92.04 });
+  assert.equal(thunderbird.courseKey, THUNDERBIRD_HEBER_SPRINGS_AR_KEY);
 });
 
 test('layout apply fills thin Cypress, Greystone, and Pleasant Valley cards', () => {
