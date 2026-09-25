@@ -21,7 +21,9 @@ import {
   watchGreenFields,
   watchLiveLocationBackgroundMode,
   watchLiveYardsReason,
+  watchShouldRequestLocationAuthorization,
   watchWidgetShouldReload,
+  type WatchLiveYardsAuth,
 } from './watchLive';
 
 const listBase = {
@@ -113,6 +115,77 @@ test('a dash names why there are no live yards and never invents a number', () =
     assert.doesNotMatch(reason, /\d/);
   }
   assert.equal(watchLiveYardsReason(base), WATCH_LIVE_YARDS_FINDING_GPS);
+});
+
+test('request only while active, re-request on next active if still notDetermined', () => {
+  let sceneActive = false;
+  let authorization: WatchLiveYardsAuth = 'notDetermined';
+  let requestInFlight = false;
+  const requests: string[] = [];
+  const decide = (where: string) => {
+    if (!watchShouldRequestLocationAuthorization({ sceneActive, authorization, requestInFlight })) return;
+    requestInFlight = true;
+    requests.push(where);
+  };
+
+  decide('background-launch');
+  assert.deepEqual(requests, []);
+
+  sceneActive = true;
+  decide('scene-active');
+  decide('live-round-while-active');
+  assert.deepEqual(requests, ['scene-active']);
+
+  sceneActive = false;
+  requestInFlight = false;
+  decide('wrist-down');
+  assert.deepEqual(requests, ['scene-active']);
+
+  sceneActive = true;
+  decide('next-active');
+  assert.deepEqual(requests, ['scene-active', 'next-active']);
+
+  authorization = 'authorized';
+  requestInFlight = false;
+  decide('authorized');
+  authorization = 'denied';
+  decide('denied');
+  authorization = 'restricted';
+  decide('restricted');
+  assert.deepEqual(requests, ['scene-active', 'next-active']);
+
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+  const initFn = session.slice(session.indexOf('override init()'), session.indexOf('func requestHome'));
+  assert.match(initFn, /launch authorization=/);
+  assert.doesNotMatch(initFn, /requestWhenInUseAuthorization/);
+  const requestCalls = session.match(/location\.requestWhenInUseAuthorization\(\)/g) ?? [];
+  assert.equal(requestCalls.length, 1);
+
+  const ask = session.slice(
+    session.indexOf('private func requestLiveLocationAuthorizationIfNeeded'),
+    session.indexOf('private func syncLiveLocation'),
+  );
+  assert.match(ask, /guard sceneIsActive else \{ return \}/);
+  assert.doesNotMatch(ask, /liveHoleInProgress/);
+  assert.match(ask, /authorizationStatus == \.notDetermined/);
+  assert.match(ask, /!locationAuthRequestInFlight/);
+  assert.ok(ask.indexOf('guard sceneIsActive else') < ask.indexOf('location.requestWhenInUseAuthorization()'));
+  assert.match(ask, /requestWhenInUseAuthorization; scene active/);
+
+  const scene = session.slice(session.indexOf('func noteScenePhase'), session.indexOf('private func noteLocationScene'));
+  assert.ok(scene.indexOf('sceneIsActive = true') < scene.indexOf('requestLiveLocationAuthorizationIfNeeded()'));
+  assert.match(scene, /locationAuthRequestInFlight = false/);
+  const liveStart = session.slice(session.indexOf('private func syncLiveLocation'), session.indexOf('func locationManagerDidChangeAuthorization'));
+  assert.match(liveStart, /if liveHoleInProgress \{[\s\S]*requestLiveLocationAuthorizationIfNeeded\(\)/);
+
+  const authChange = session.slice(
+    session.indexOf('func locationManagerDidChangeAuthorization'),
+    session.indexOf('func locationManager(_: CLLocationManager, didFailWithError'),
+  );
+  assert.match(authChange, /case \.authorizedWhenInUse, \.authorizedAlways:/);
+  assert.match(authChange, /startLiveLocationIfAuthorized\(\)/);
+  assert.doesNotMatch(authChange, /requestWhenInUseAuthorization/);
+  assert.match(authChange, /case \.notDetermined:\s*break/);
 });
 
 test('a stale phone push cannot overwrite fresher Watch yards on the same hole', () => {
@@ -282,10 +355,11 @@ test('Watch live location stays up wrist-down and stops when the round ends', ()
     session.indexOf('private func requestLiveLocationAuthorizationIfNeeded'),
     session.indexOf('private func syncLiveLocation'),
   );
-  assert.match(ask, /sceneIsActive, liveHoleInProgress/);
+  assert.match(ask, /guard sceneIsActive else \{ return \}/);
+  assert.doesNotMatch(ask, /liveHoleInProgress/);
   assert.match(ask, /authorizationStatus == \.notDetermined/);
   assert.match(ask, /requestWhenInUseAuthorization\(\)/);
-  assert.match(ask, /requestWhenInUseAuthorization; round live; scene active/);
+  assert.match(ask, /requestWhenInUseAuthorization; scene active/);
   assert.match(session, /fix accepted/);
   assert.match(session, /fix rejected/);
   assert.match(session, /allowsBackgroundLocationUpdates = true/);

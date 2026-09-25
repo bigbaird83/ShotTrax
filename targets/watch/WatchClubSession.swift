@@ -321,7 +321,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     let launchStatus = location.authorizationStatus
     let launchLabel = locationAuthLabel(launchStatus)
     liveYardsLog.info("launch authorization=\(launchLabel, privacy: .public)")
-    location.requestWhenInUseAuthorization()
+    // Do not request here. A complication push or workout often launches this
+    // process in the background, and watchOS will not show the sheet then.
 
     if WCSession.isSupported() {
       let session = WCSession.default
@@ -1988,17 +1989,18 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
   }
 
-  /// The init request can run before the scene is active, and watchOS then never
-  /// shows the sheet. Ask again once a live round is on screen.
+  /// Mirrors `watchShouldRequestLocationAuthorization`. Only an active scene
+  /// can present the sheet. The next active scene asks again if status is
+  /// still notDetermined (`locationAuthRequestInFlight` clears on wrist-down).
   private func requestLiveLocationAuthorizationIfNeeded() {
-    guard sceneIsActive, liveHoleInProgress else { return }
+    guard sceneIsActive else { return }
     guard location.authorizationStatus == .notDetermined else {
       locationAuthRequestInFlight = false
       return
     }
     guard !locationAuthRequestInFlight else { return }
     locationAuthRequestInFlight = true
-    liveYardsLog.info("requestWhenInUseAuthorization; round live; scene active")
+    liveYardsLog.info("requestWhenInUseAuthorization; scene active")
     location.requestWhenInUseAuthorization()
   }
 
@@ -2024,7 +2026,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       self.liveYardsLog.info("authorization=\(label, privacy: .public)")
       switch status {
       case .authorizedWhenInUse, .authorizedAlways:
-        self.syncLiveLocation()
+        self.locationAuthRequestInFlight = false
+        self.startLiveLocationIfAuthorized()
       case .denied, .restricted:
         self.disableWorkoutBackgroundLocation()
         self.endLiveLocation()
