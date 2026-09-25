@@ -171,7 +171,10 @@ test('export keeps penalties and drops, and a replace puts them back', needsSqli
       { kind: 'penalty', strokes: 1, reason: 'unplayable', note: null, createdAt: zeroAt, lat: null, lng: null },
     ],
   );
-  assert.equal(after.some((row) => row.id === seeded.penaltyId || row.id === seeded.dropId), false);
+  assert.deepEqual(
+    after.map((row) => row.id),
+    [seeded.penaltyId, seeded.dropId, 'pen-zero'],
+  );
 
   const ids = after.map((row) => row.id);
   const again = restoreRoundHistory(db, serializeRoundHistory(doc));
@@ -213,7 +216,11 @@ test('fresh install restore keeps penalties and drops and skips bad rows', needs
       { kind: 'drop', strokes: 1, reason: 'lost ball', note: null, createdAt: '2026-09-20T15:40:00.000Z', lat: null, lng: null },
     ],
   );
-  assert.equal(rows.some((row) => row.id === 'pen-water' || row.id === 'pen-drop' || row.id === 'pen-zero'), false);
+  assert.deepEqual(
+    rows.map((row) => row.id),
+    ['pen-water', 'pen-drop', 'pen-zero', rows[3]?.id],
+  );
+  assert.equal(rows[3]?.id === 'pen-water' || rows[3]?.id === 'pen-drop' || rows[3]?.id === 'pen-zero', false);
 });
 
 test('v1 and build 92 v2 files with no penalties field still restore', needsSqlite, () => {
@@ -356,4 +363,119 @@ test('an explicit empty penalties list removes them, and a second restore is a n
   assert.equal(again.updated, 0);
   assert.deepEqual(savedPenalties(db, seeded.roundId), []);
   assert.deepEqual(strokeSnapshot(db, seeded.roundId), { score: 6, total: 2 });
+});
+
+const exportedAt = '2026-09-24T12:00:00.000Z';
+const beforeExport = '2026-09-24T08:00:00.000Z';
+const afterExport = '2026-09-24T18:00:00.000Z';
+
+function blankRound(db: SQLiteDatabase): { roundId: string; holeId: string } {
+  const round = startRound(db, 9, 'Magnolia');
+  const hole = listHoles(db, round.id)[0];
+  db.runSync('UPDATE holes SET par = 4, score = 4, putts = 2, putts_done = 1 WHERE id = ?', [hole.id]);
+  return { roundId: round.id, holeId: hole.id };
+}
+
+function addPenalty(db: SQLiteDatabase, holeId: string, id: string, createdAt: string, reason = 'water'): void {
+  db.runSync(
+    `INSERT INTO hole_penalties (id, hole_id, strokes, reason, note, created_at, kind, lat, lng)
+     VALUES (?, ?, 1, ?, NULL, ?, 'penalty', 35.51, -92.11)`,
+    [id, holeId, reason, createdAt],
+  );
+}
+
+test('empty file list keeps a phone penalty created after exportedAt', needsSqlite, () => {
+  const db = memoryDb();
+  const { roundId, holeId } = blankRound(db);
+  const file = serializeRoundHistory(collectRoundHistoryExport(db, exportedAt));
+  addPenalty(db, holeId, 'pen-later', afterExport);
+  const restored = restoreRoundHistory(db, file);
+  assert.equal(restored.ok, true);
+  if (!restored.ok) return;
+  assert.equal(restored.updated, 0);
+  assert.deepEqual(
+    savedPenalties(db, roundId).map((row) => row.id),
+    ['pen-later'],
+  );
+});
+
+test('empty file list removes a phone penalty created before exportedAt', needsSqlite, () => {
+  const db = memoryDb();
+  const { roundId, holeId } = blankRound(db);
+  addPenalty(db, holeId, 'pen-early', beforeExport);
+  const file = JSON.parse(serializeRoundHistory(collectRoundHistoryExport(db, exportedAt))) as {
+    rounds: { holes: { penalties: unknown[] }[] }[];
+  };
+  for (const hole of file.rounds[0].holes) hole.penalties = [];
+  const restored = restoreRoundHistory(db, JSON.stringify(file));
+  assert.equal(restored.ok, true);
+  if (!restored.ok) return;
+  assert.equal(restored.updated, 1);
+  assert.deepEqual(savedPenalties(db, roundId), []);
+});
+
+test('file penalty plus a newer phone penalty does not duplicate the file row', needsSqlite, () => {
+  const db = memoryDb();
+  const { roundId, holeId } = blankRound(db);
+  addPenalty(db, holeId, 'pen-a', afterExport, 'water');
+  addPenalty(db, holeId, 'pen-b', '2026-09-24T19:00:00.000Z', 'ob');
+  const file = JSON.parse(serializeRoundHistory(collectRoundHistoryExport(db, exportedAt))) as {
+    rounds: { holes: ({ id?: string; penalties: { id?: string }[] } & { score: number })[] }[];
+  };
+  const hole = file.rounds[0].holes[0];
+  hole.penalties = hole.penalties.filter((row) => row.id === 'pen-a');
+  hole.score = 8;
+  const restored = restoreRoundHistory(db, JSON.stringify(file));
+  assert.equal(restored.ok, true);
+  if (!restored.ok) return;
+  assert.equal(restored.updated, 1);
+  assert.equal(listHoles(db, roundId)[0].score, 8);
+  assert.deepEqual(
+    savedPenalties(db, roundId).map((row) => row.id),
+    ['pen-a', 'pen-b'],
+  );
+});
+
+test('replacing a round for another reason still keeps a newer phone penalty', needsSqlite, () => {
+  const db = memoryDb();
+  const { roundId, holeId } = blankRound(db);
+  const file = JSON.parse(serializeRoundHistory(collectRoundHistoryExport(db, exportedAt))) as {
+    rounds: { holes: { penalties: unknown[]; score: number }[] }[];
+  };
+  addPenalty(db, holeId, 'pen-later', afterExport);
+  file.rounds[0].holes[0].score = 9;
+  const restored = restoreRoundHistory(db, JSON.stringify(file));
+  assert.equal(restored.ok, true);
+  if (!restored.ok) return;
+  assert.equal(restored.updated, 1);
+  assert.equal(listHoles(db, roundId)[0].score, 9);
+  assert.deepEqual(
+    savedPenalties(db, roundId).map((row) => ({ id: row.id, createdAt: row.createdAt, lat: row.lat, lng: row.lng })),
+    [{ id: 'pen-later', createdAt: afterExport, lat: 35.51, lng: -92.11 }],
+  );
+});
+
+test('restoring the same new-format file twice does not change the newer penalty', needsSqlite, () => {
+  const db = memoryDb();
+  const { roundId, holeId } = blankRound(db);
+  const file = JSON.parse(serializeRoundHistory(collectRoundHistoryExport(db, exportedAt))) as {
+    rounds: { holes: { penalties: unknown[]; score: number }[] }[];
+  };
+  addPenalty(db, holeId, 'pen-later', afterExport);
+  file.rounds[0].holes[0].score = 9;
+  const raw = JSON.stringify(file);
+  const first = restoreRoundHistory(db, raw);
+  assert.equal(first.ok, true);
+  if (!first.ok) return;
+  assert.equal(first.updated, 1);
+  const ids = savedPenalties(db, roundId).map((row) => row.id);
+  const score = listHoles(db, roundId)[0].score;
+  const second = restoreRoundHistory(db, raw);
+  assert.equal(second.ok, true);
+  if (!second.ok) return;
+  assert.equal(second.updated, 0);
+  assert.equal(second.added, 0);
+  assert.deepEqual(savedPenalties(db, roundId).map((row) => row.id), ids);
+  assert.equal(listHoles(db, roundId)[0].score, score);
+  assert.deepEqual(ids, ['pen-later']);
 });
