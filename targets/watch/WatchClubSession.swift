@@ -1565,6 +1565,11 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       suppressGolfStart = false
       loggedGolfDenial = false
       loggedHealthUnavailable = false
+      // The app may already be on screen from before the round, with a request
+      // marked in flight that never presented a sheet. Ask again now.
+      if sceneIsActive {
+        locationAuthRequestInFlight = false
+      }
     }
     wantsStay = next
     if wantsStay {
