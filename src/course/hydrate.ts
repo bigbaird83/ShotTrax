@@ -125,6 +125,12 @@ const CLUBHOUSE_PINS: readonly LatLng[] = [
 
 const metered = new Set<string>();
 
+/**
+ * Same-hole match for a missing tee. A hydrate green farther than this
+ * (the next fairway) must not supply a tee, and must never replace the saved green.
+ */
+export const HYDRATE_SAME_HOLE_GREEN_YARDS = 40;
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value != null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -180,6 +186,11 @@ export function hydrateHolePassesGates(hole: {
 export function isClubhousePin(point: LatLng | null | undefined): boolean {
   if (!isCourseCardLatLng(point)) return false;
   return CLUBHOUSE_PINS.some((pin) => haversineYards(point, pin) < 5);
+}
+
+/** Course-card coordinate, not ~0,0, and not a clubhouse pin. */
+function isSaneGreen(point: LatLng | null | undefined): point is LatLng {
+  return isCourseCardLatLng(point) && !isClubhousePin(point);
 }
 
 export function inventGreenFromClubhouse(): false {
@@ -568,7 +579,14 @@ export function prefetchCourseHydrateOnce(args: CourseHydrateMatch & { courseId?
 }
 
 /**
- * Pro card wins when it already paints. Hydrate fills a miss only.
+ * A sane saved green is never replaced.
+ * Hydrate supplies a green only when the saved green is missing or not sane
+ * (not a course-card coordinate, near-zero, or a clubhouse pin).
+ * When that green is kept and the tee is missing, hydrate may supply the tee
+ * only if this hole's hydrate green is within HYDRATE_SAME_HOLE_GREEN_YARDS
+ * and the tee+green pair passes the gates. Otherwise the saved tee (possibly
+ * null) and the saved green are returned.
+ * usedHydrate is true only when a hydrate point is actually returned.
  * Never invents a point. Never uses the clubhouse.
  */
 export function resolveHydrateTeeGreen(args: CourseHydrateMatch & {
@@ -582,15 +600,26 @@ export function resolveHydrateTeeGreen(args: CourseHydrateMatch & {
   courseKey: string | null;
 } {
   const courseKey = resolveCourseHydrateKey(args);
-  if (hydrateHolePassesGates({ tee: args.tee, green: args.green })) {
-    return { tee: args.tee, green: args.green, usedHydrate: false, courseKey };
+  const savedGreen = args.green;
+  if (isSaneGreen(savedGreen)) {
+    if (hydrateHolePassesGates({ tee: args.tee, green: savedGreen })) {
+      return { tee: args.tee, green: savedGreen, usedHydrate: false, courseKey };
+    }
+    if (args.tee == null) {
+      const filledTee = teeFromSameHoleHydrate(courseKey, args.holeNumber, savedGreen);
+      if (filledTee) {
+        return { tee: filledTee, green: savedGreen, usedHydrate: true, courseKey };
+      }
+    }
+    return { tee: args.tee, green: savedGreen, usedHydrate: false, courseKey };
   }
+
   const hole = hydrateHoleFor(loadCourseHydrate(courseKey), args.holeNumber);
   if (!hole) {
     return { tee: args.tee, green: args.green, usedHydrate: false, courseKey };
   }
   const green = { lat: hole.green.lat, lng: hole.green.lng };
-  if (!isCourseCardLatLng(green) || isClubhousePin(green)) {
+  if (!isSaneGreen(green)) {
     return { tee: args.tee, green: args.green, usedHydrate: false, courseKey };
   }
   if (hole.tee) {
@@ -602,7 +631,26 @@ export function resolveHydrateTeeGreen(args: CourseHydrateMatch & {
   return { tee: args.tee, green, usedHydrate: true, courseKey };
 }
 
-/** Fill missing / failing layout holes from hydrate. Existing sane Pro coords win. */
+/**
+ * Hydrate tee for a missing saved tee. Only when this hydrate hole's green
+ * is the same hole as the saved green and the pair passes the gates.
+ */
+function teeFromSameHoleHydrate(
+  courseKey: string | null,
+  holeNumber: number,
+  savedGreen: LatLng,
+): LatLng | null {
+  const hole = hydrateHoleFor(loadCourseHydrate(courseKey), holeNumber);
+  if (!hole?.tee) return null;
+  const hydrateGreen = { lat: hole.green.lat, lng: hole.green.lng };
+  if (!isSaneGreen(hydrateGreen)) return null;
+  if (haversineYards(hydrateGreen, savedGreen) > HYDRATE_SAME_HOLE_GREEN_YARDS) return null;
+  const tee = { lat: hole.tee.lat, lng: hole.tee.lng };
+  if (!hydrateHolePassesGates({ tee, green: savedGreen })) return null;
+  return tee;
+}
+
+/** Fill missing greens from hydrate. A sane saved green is never replaced. */
 export function applyCourseHydrateToLayout(
   layout: CourseLayoutSeed,
   course: CourseHydrateMatch = {},
