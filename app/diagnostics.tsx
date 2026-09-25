@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { getWatchBridgeNative } from '@/modules/watch-bridge';
 import { catalogEntryById } from '@/src/course/catalog';
 import { recordedPaintWaterfallStep } from '@/src/course/waterfall';
@@ -22,6 +22,13 @@ import {
   watchLinkFromNative,
   type WatchLinkSnapshot,
 } from '@/src/domain/diagnostics';
+import { formatProExpiration } from '@/src/domain/proEntitlement';
+import {
+  setProTestOverride,
+  useIsPro,
+  useProStatus,
+  useProTestOverride,
+} from '@/src/services/purchases';
 import { useLiveFix } from '@/src/services/useLiveFix';
 import { useColors } from '@/src/ui/ColorThemeProvider';
 import { Screen } from '@/src/ui/Screen';
@@ -50,6 +57,11 @@ export default function DiagnosticsScreen() {
   const holes = useMemo(() => (round ? listHoles(db, round.id) : []), [db, round, revision]);
   const holeNumber = currentPlayedHoleNumber(holes);
   const [greenSource, setGreenSource] = useState(() => formatDiagnosticsGreenSource(null));
+  const isPro = useIsPro(now);
+  const pro = useProStatus(now);
+  const proOverride = useProTestOverride();
+  const proLabel = !isPro ? 'Free' : pro.isTrial ? 'Pro trial' : 'Pro';
+  const proExpires = formatProExpiration(pro.expirationDate) ?? DIAGNOSTICS_DASH;
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -127,6 +139,40 @@ export default function DiagnosticsScreen() {
         />
       </View>
 
+      <Text style={styles.groupLabel}>Pro</Text>
+      <View style={styles.list}>
+        <Field styles={styles} label="Status" value={proLabel} />
+        <View style={styles.divider} />
+        <Field styles={styles} label="Expires" value={proExpires} />
+        {__DEV__ ? (
+          <>
+            <View style={styles.divider} />
+            <View style={styles.testBlock}>
+              <Text style={styles.label}>Pro (test)</Text>
+              <View style={styles.segment}>
+                {(
+                  [
+                    ['off', 'Off'],
+                    ['force-pro', 'Force Pro'],
+                    ['force-free', 'Force Free'],
+                  ] as const
+                ).map(([id, label]) => (
+                  <Pressable
+                    key={id}
+                    accessibilityRole="button"
+                    accessibilityLabel={id === 'off' ? 'Off, use real status' : label}
+                    accessibilityState={{ selected: proOverride === id }}
+                    onPress={() => setProTestOverride(id, db)}
+                    style={[styles.segmentItem, proOverride === id && styles.segmentOn]}>
+                    <Text style={[styles.segmentText, proOverride === id && styles.segmentTextOn]}>{label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          </>
+        ) : null}
+      </View>
+
       <Text style={styles.groupLabel}>Build</Text>
       <View style={styles.list}>
         <Field styles={styles} label="Version" value={build.version} />
@@ -187,5 +233,11 @@ function makeStyles(colors: ColorPalette) {
     label: { flex: 1, color: colors.muted, fontSize: type.meta, fontWeight: '800' },
     value: { color: colors.cream, fontSize: type.body, fontWeight: '800', flexShrink: 1, textAlign: 'right' },
     divider: { height: colors.flat ? 2 : 1, backgroundColor: colors.line, marginLeft: 14 },
+    testBlock: { paddingHorizontal: 14, paddingVertical: 12, gap: 10 },
+    segment: { flexDirection: 'row', backgroundColor: colors.accentWash, borderRadius: 12, padding: 3, gap: 3 },
+    segmentItem: { flex: 1, minHeight: 36, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+    segmentOn: { backgroundColor: colors.lime },
+    segmentText: { color: colors.muted, fontSize: type.tiny, fontWeight: '800', textAlign: 'center' },
+    segmentTextOn: { color: colors.onAccent },
   });
 }

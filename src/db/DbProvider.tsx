@@ -5,6 +5,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import * as SQLite from 'expo-sqlite';
 import { attachGolfApiCachePersist } from '../course/golfapi';
 import { attachCoursePaintCachePersist } from '../course/paintCache';
+import { startPurchases } from '../services/purchases';
 import { migrate } from './schema';
 import {
   getCoursePaintCache,
@@ -39,6 +40,8 @@ export function DbProvider({ children }: { children: ReactNode }) {
         load: () => getCoursePaintCache(opened),
         save: (json) => setCoursePaintCache(opened, json),
       });
+      // Hydrates the Pro cache before the first screen, then refreshes from RevenueCat.
+      startPurchases(opened);
       setDb(opened);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to open database');
