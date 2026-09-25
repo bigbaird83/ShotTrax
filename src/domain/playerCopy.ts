@@ -182,6 +182,10 @@ export const COPY = {
   typicalCarryYards: 'Carry (yd)',
   clearTypicalCarry: 'Clear carry',
   estimated: 'Estimated',
+  bagCarrySuggestionUpdate: 'Update',
+  bagCarrySuggestionNotNow: 'Not now',
+  averagesDisclaimer:
+    'Averages are only as good as the numbers you enter and the GPS data from your rounds.',
   insertShot: 'Insert shot',
   nerdOut: 'Nerd out',
   nerdOutLede: 'Score vs par, putts, fairways, and greens from saved rounds.',
@@ -276,6 +280,12 @@ export const COPY = {
   scorecardPar: 'Par',
   summaryHome: 'Home',
 } as const;
+
+/** Bag row when the last five dropped shots agree and the typed number does not. */
+export function formatBagCarrySuggestion(clubLabel: string, yards: number): string {
+  const n = Math.round(yards);
+  return `Your last 5 ${clubLabel} shots averaged ${n}. Update your ${clubLabel} to ${n}?`;
+}
 
 /** Suggested chip: that club's carry, not yards-to-green. */
 export function formatSuggestedClubChip(shortName: string, carryYards: number | null | undefined): string {

@@ -9,7 +9,7 @@ import { COPY } from '@/src/domain/playerCopy';
 import { BigButton } from '@/src/ui/BigButton';
 import { Screen } from '@/src/ui/Screen';
 import { useColors } from '@/src/ui/ColorThemeProvider';
-import { type ColorPalette } from '@/src/ui/theme';
+import { type, type ColorPalette } from '@/src/ui/theme';
 
 /** Club data — the club-book carry table that used to sit under Nerd out. */
 export default function ClubDataScreen() {
@@ -34,6 +34,7 @@ export default function ClubDataScreen() {
 
   return (
     <Screen>
+      <Text style={styles.disclaimer}>{COPY.averagesDisclaimer}</Text>
       {clubs.map((row) => (
         <View key={row.id} style={styles.row}>
           <View style={{ flex: 1 }}>
@@ -50,6 +51,7 @@ export default function ClubDataScreen() {
 
 function makeStyles(colors: ColorPalette) {
   return StyleSheet.create({
+    disclaimer: { color: colors.muted, fontSize: type.body, lineHeight: 22 },
     muted: { color: colors.muted, fontSize: 16 },
     holeTitle: { color: colors.cream, fontSize: 18, fontWeight: '700' },
     score: { color: colors.cream, fontSize: 24, fontWeight: '900' },
