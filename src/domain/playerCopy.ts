@@ -299,6 +299,7 @@ export const COPY = {
   groupStrokePlay: 'Stroke play (always on)',
   groupHowScored: 'How it’s scored',
   groupCard: 'Group scorecard',
+  groupScoreChip: 'Group score',
   groupCardPar: 'Par',
   groupCardSi: 'SI',
   groupCardDots: '• net stroke (off the lowest handicap)',
