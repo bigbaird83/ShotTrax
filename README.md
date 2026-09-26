@@ -80,6 +80,15 @@ A round in progress shows on the Lock Screen and in the Dynamic Island (iOS 16.2
 - Location for it runs only while the activity is up. It ends when the round is finished (from any screen, or on app launch with no round in progress) or when the golfer dismisses it.
 - The widget is `targets/live-activity` (`ShotTraxxRound`, `com.shottrax.app.round`). `ShotTraxxRoundAttributes.swift` exists in the module and the widget and must stay identical (checked in `liveActivity.test.ts`). The Watch compile workflow also builds this widget for the iOS Simulator and typechecks the module's plain Swift.
 
+## Caddie
+
+During a round, a **Caddie · 8 Iron · 139** chip sits under the yards badge: the pick and the same distance the wheel shows for that club. Tap it for the reasons (`src/domain/caddie.ts`):
+
+- Distance: the same carry the club wheel uses (your average once live, else your bag number, an estimate, or a typical distance — the sheet says which). Distances are where the ball finished.
+- Spread: the middle 80% of your measured shots with that club (Dispersion), once there are at least 5; fewer → no spread is claimed.
+- Hazards: the mapped bunkers and water in play from live GPS (the same reach / far-edge yards as the hazard badge). A club whose spread finishes in water — or, less strongly, a bunker — on your miss side is swapped for one within 12 yd of the target that avoids it; otherwise the pick carries a warning. Side hazards count only when your left/right misses reach that way.
+- Target is the middle of the green (the flag is not known). No yards left or no club with a distance → no chip. Off for finished rounds.
+
 ## Install on your iPhone (TestFlight)
 
 The Watch companion needs a **native** binary. A production EAS build submitted to TestFlight is the path that covers Watch on a real iPhone.
