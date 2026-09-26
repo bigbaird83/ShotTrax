@@ -1597,6 +1597,7 @@ function HoleScreenBody() {
           holeNumber={hole.number}
           shots={shots}
           userFix={catchUpFullScreen ? null : fix}
+          liveGpsToPin={liveGpsToPin}
           green={green}
           yardsToGreen={{
             yards: playHeaderYards.yards,
@@ -2356,6 +2357,7 @@ function HoleScreenBody() {
             holeNumber={hole.number}
             shots={shots}
             userFix={fix}
+            liveGpsToPin={liveGpsToPin}
             green={green}
             yardsToGreen={{
               yards: playHeaderYards.yards,

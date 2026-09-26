@@ -2287,7 +2287,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   /// Same gate as the golf round stay: wrist-down is still a live hole.
-  private var liveHoleInProgress: Bool {
+  /// The launch splash is skipped while this is true so a shot is one tap away.
+  var liveHoleInProgress: Bool {
     !userLeftApp && list.roundLive && ((hasLiveHole && !list.roundComplete) || putt.open)
   }
 
