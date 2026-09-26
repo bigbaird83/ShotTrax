@@ -261,6 +261,13 @@ export const COPY = {
     'Lie is not tracked, so fairway and rough are averaged. Distance is to the saved green, not the flag. Shots with no GPS start, no green, or no first-putt length land in Not split.',
   strokesGainedEmpty: 'Finish a hole with Made it or Hole Out to see strokes gained.',
   strokesGainedWeakest: 'Most strokes lost:',
+  caddie: 'Caddie',
+  caddieToMiddle: 'to the middle',
+  caddieFinishes: 'Finishes',
+  caddieShorter: 'Shorter',
+  caddieLonger: 'Longer',
+  caddieNote:
+    'From your own shots: distances are where the ball finished, and the range is the middle 80% of your measured shots with that club. The target is the middle of the green (the flag isn’t known). Hazards are the mapped bunkers and water in play from where you stand.',
   group: 'Group',
   groupLede: 'Keep score for up to three partners and play side games. Your own score comes from your card.',
   groupYourScoreNote: 'Your score is the one on your card. Partners start at par: − / + to change, Save to keep. Press and hold Saved to clear.',

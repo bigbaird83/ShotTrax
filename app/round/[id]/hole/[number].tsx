@@ -39,6 +39,7 @@ import {
   insertPenalty,
   listClubAverages,
   listClubs,
+  listDispersionShots,
   listHoles,
   listPenaltiesForHole,
   listRounds,
@@ -85,6 +86,8 @@ import {
 } from '@/src/domain/holeTransition';
 import { canAdvanceHole, holesNeedingOpenShots } from '@/src/domain/holeAdvance';
 import { isPutterClubId } from '@/src/domain/defaultBag';
+import { caddieCarrySource, formatCaddieChip, planCaddie, type CaddieOption } from '@/src/domain/caddie';
+import { planDispersion } from '@/src/domain/dispersion';
 import { catchUpPinFromTap, planCancelCatchUp, planCatchUpSheet } from '@/src/domain/catchUpMap';
 import {
   decideCourseCardPaint,
@@ -214,6 +217,11 @@ import { tapTarget, type, type ColorPalette } from '@/src/ui/theme';
 
 /** Play may flip to high contrast in bright sun. The whole subtree — map chips,
  * badges, sheets — reads that theme, not only this screen's own styles. */
+/** "9 Iron 121–134" or "9 Iron 128" for the caddie's neighbours. */
+function caddieOptionLine(option: CaddieOption): string {
+  return option.range ? `${option.name} ${option.range.low}–${option.range.high}` : `${option.name} ${option.carry}`;
+}
+
 export default function HoleScreen() {
   const { themeId: savedThemeId } = useColorTheme();
   const ambient = useAmbientLight();
@@ -243,6 +251,7 @@ function HoleScreenBody() {
   const [penaltyOpen, setPenaltyOpen] = useState(false);
   const [scoreOpen, setScoreOpen] = useState(false);
   const [scorecardOpen, setScorecardOpen] = useState(false);
+  const [caddieOpen, setCaddieOpen] = useState(false);
   const [selectedClubId, setSelectedClubId] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButtonRef = useRef<View>(null);
@@ -736,6 +745,29 @@ function HoleScreenBody() {
     yardsLeft: target?.dYards ?? toGreen.yards,
     selectedClubId,
   });
+  // Caddie: one club for the yards left from your own distances, spread, and the mapped hazards.
+  // History is read once per round screen, not on every change during play.
+  const dispersionShots = useMemo(() => listDispersionShots(db), [db, round?.id]);
+  const dispersionByClub = useMemo(
+    () => new Map(averages.map((row) => [row.club.id, planDispersion(dispersionShots, row.club.id)])),
+    [dispersionShots, averages],
+  );
+  const caddie =
+    readOnly || marksOnly
+      ? null
+      : planCaddie({
+          yardsLeft: target?.dYards ?? null,
+          clubs: averages
+            .filter((row) => !isPutterClubId(row.club.id))
+            .map((row) => ({
+              id: row.club.id,
+              name: row.club.name,
+              carry: stripPlan.carries[row.club.id] ?? null,
+              source: caddieCarrySource(row.bag?.kind),
+              dispersion: dispersionByClub.get(row.club.id) ?? null,
+            })),
+          hazards: hazardCarries,
+        });
   const stripItems = stripPlan.ids.map((id) => {
     const club = clubs.find((row) => row.id === id);
     return { id, label: formatClubStripLabel({ id, shortName: club?.shortName ?? id, carry: stripPlan.carries[id] }) };
@@ -2057,6 +2089,18 @@ function HoleScreenBody() {
               </Text>
             </Pressable>
           ) : null}
+          {caddie && !catchUpFullScreen ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${formatCaddieChip(caddie)}, ${caddie.yardsLeft} yards left. Opens the reasons.`}
+              testID="caddie-chip"
+              onPress={() => setCaddieOpen(true)}
+              style={styles.caddieBadge}>
+              <Text style={styles.caddieText} numberOfLines={1}>
+                {formatCaddieChip(caddie)}
+              </Text>
+            </Pressable>
+          ) : null}
           {hazardCarries.length > 0 ? (
             <View pointerEvents="none" testID="hazard-carries" style={styles.hazardBadge}>
               {hazardCarries.map((row) => (
@@ -2242,6 +2286,38 @@ function HoleScreenBody() {
         </View>
       ) : null}
       </View>
+
+      <FullSheet
+        visible={caddieOpen && caddie != null}
+        title={caddie ? `${COPY.caddie} · ${caddie.yardsLeft} ${COPY.caddieToMiddle}` : COPY.caddie}
+        onClose={() => setCaddieOpen(false)}>
+        {caddie ? (
+          <ScrollView contentContainerStyle={styles.sheetPad} testID="caddie-sheet">
+            <Text style={styles.caddiePick}>{caddie.pick.name}</Text>
+            <Text style={styles.caddieRange}>
+              {caddie.pick.range
+                ? `${COPY.caddieFinishes} ${caddie.pick.range.low}–${caddie.pick.range.high}`
+                : `${COPY.caddieFinishes} ${caddie.pick.carry}`}
+            </Text>
+            {caddie.reasons.map((line) => (
+              <Text key={line} style={styles.caddieReason}>
+                {line}
+              </Text>
+            ))}
+            {caddie.shorter || caddie.longer ? (
+              <Text style={styles.caddieReason}>
+                {[
+                  caddie.shorter ? `${COPY.caddieShorter}: ${caddieOptionLine(caddie.shorter)}` : null,
+                  caddie.longer ? `${COPY.caddieLonger}: ${caddieOptionLine(caddie.longer)}` : null,
+                ]
+                  .filter(Boolean)
+                  .join('  ·  ')}
+              </Text>
+            ) : null}
+            <Text style={styles.caddieNote}>{COPY.caddieNote}</Text>
+          </ScrollView>
+        ) : null}
+      </FullSheet>
 
       <FullSheet
         visible={menuOpen}
@@ -2924,6 +3000,22 @@ function makeStyles(colors: ColorPalette) {
     alignItems: 'flex-end',
   },
   hazardText: { color: colors.cream, fontSize: type.tiny, fontWeight: '800' },
+  caddieBadge: {
+    maxWidth: 160,
+    minHeight: 32,
+    justifyContent: 'center',
+    backgroundColor: colors.overlay,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.lime,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  caddieText: { color: colors.lime, fontSize: type.tiny, fontWeight: '900' },
+  caddiePick: { color: colors.lime, fontSize: 30, fontWeight: '900' },
+  caddieRange: { color: colors.cream, fontSize: 18, fontWeight: '800' },
+  caddieReason: { color: colors.cream, fontSize: 15, lineHeight: 21 },
+  caddieNote: { color: colors.muted, fontSize: 13, lineHeight: 18 },
   runningParBadge: {
     maxWidth: 132,
     backgroundColor: colors.overlay,
