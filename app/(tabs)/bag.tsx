@@ -8,6 +8,7 @@ import { BigButton } from '@/src/ui/BigButton';
 import { useColors } from '@/src/ui/ColorThemeProvider';
 import { Screen } from '@/src/ui/Screen';
 import { type, type ColorPalette } from '@/src/ui/theme';
+import { TabSwipe } from '@/src/ui/TabSwipe';
 
 export default function BagScreen() {
   const { db, revision, bump } = useDb();
@@ -25,71 +26,73 @@ export default function BagScreen() {
   };
 
   return (
-    <Screen>
-      <Text style={styles.lede}>{COPY.bagLede}</Text>
-      <BagCarryList
-        db={db}
-        clubs={clubs}
-        onChange={bump}
-        onRename={(club) => {
-          setEditingId(club.id);
-          setName(club.name);
-          setShortName(club.shortName);
-        }}
-      />
-      <Text style={styles.addTitle}>{editingId ? 'Edit name' : 'Add club'}</Text>
-      <TextInput
-        placeholder="Name"
-        placeholderTextColor={colors.muted}
-        value={name}
-        onChangeText={setName}
-        style={styles.input}
-      />
-      <TextInput
-        placeholder="Short name"
-        placeholderTextColor={colors.muted}
-        value={shortName}
-        onChangeText={setShortName}
-        style={styles.input}
-      />
-      <BigButton
-        label={editingId ? 'Save name' : 'Add to bag'}
-        variant="secondary"
-        disabled={!name.trim()}
-        onPress={() => {
-          if (editingId) {
-            updateClub(db, editingId, name, shortName);
-          } else {
-            addClub(db, name, shortName, null);
-          }
-          resetForm();
-          bump();
-        }}
-      />
-      {editingId ? (
+    <TabSwipe tab="bag">
+      <Screen>
+        <Text style={styles.lede}>{COPY.bagLede}</Text>
+        <BagCarryList
+          db={db}
+          clubs={clubs}
+          onChange={bump}
+          onRename={(club) => {
+            setEditingId(club.id);
+            setName(club.name);
+            setShortName(club.shortName);
+          }}
+        />
+        <Text style={styles.addTitle}>{editingId ? 'Edit name' : 'Add club'}</Text>
+        <TextInput
+          placeholder="Name"
+          placeholderTextColor={colors.muted}
+          value={name}
+          onChangeText={setName}
+          style={styles.input}
+        />
+        <TextInput
+          placeholder="Short name"
+          placeholderTextColor={colors.muted}
+          value={shortName}
+          onChangeText={setShortName}
+          style={styles.input}
+        />
         <BigButton
-          label="Delete club"
-          variant="danger"
+          label={editingId ? 'Save name' : 'Add to bag'}
+          variant="secondary"
+          disabled={!name.trim()}
           onPress={() => {
-            const result = deleteClub(db, editingId);
-            if (result === 'disabled') {
-              Alert.alert('Club has shots', 'It was turned off so your history stays intact.');
+            if (editingId) {
+              updateClub(db, editingId, name, shortName);
+            } else {
+              addClub(db, name, shortName, null);
             }
             resetForm();
             bump();
           }}
         />
-      ) : null}
-      <BigButton
-        label={COPY.restoreBag}
-        variant="ghost"
-        onPress={() => {
-          restoreDefaultBag(db);
-          resetForm();
-          bump();
-        }}
-      />
-    </Screen>
+        {editingId ? (
+          <BigButton
+            label="Delete club"
+            variant="danger"
+            onPress={() => {
+              const result = deleteClub(db, editingId);
+              if (result === 'disabled') {
+                Alert.alert('Club has shots', 'It was turned off so your history stays intact.');
+              }
+              resetForm();
+              bump();
+            }}
+          />
+        ) : null}
+        <BigButton
+          label={COPY.restoreBag}
+          variant="ghost"
+          onPress={() => {
+            restoreDefaultBag(db);
+            resetForm();
+            bump();
+          }}
+        />
+      </Screen>
+    </TabSwipe>
   );
 }
 

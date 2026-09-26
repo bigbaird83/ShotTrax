@@ -8,6 +8,7 @@ import { EmptyPanel } from '@/src/ui/EmptyPanel';
 import { useColors } from '@/src/ui/ColorThemeProvider';
 import { Screen } from '@/src/ui/Screen';
 import { tapTarget, type, type ColorPalette } from '@/src/ui/theme';
+import { TabSwipe } from '@/src/ui/TabSwipe';
 
 export default function AveragesScreen() {
   const { db, revision } = useDb();
@@ -17,22 +18,24 @@ export default function AveragesScreen() {
   const hasLive = rows.some((row) => row.count > 0);
 
   return (
-    <Screen>
-      <Text style={styles.lede}>{COPY.averagesLede}</Text>
-      {!hasLive ? <EmptyPanel title={COPY.noClosedShots} hint={COPY.firstRoundHint} /> : null}
-      {rows.map((row) => {
-        const book = row.bag;
-        return (
-          <View key={row.club.id} style={styles.row}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.name}>{row.club.name}</Text>
-              <Text style={styles.meta}>{clubCarryMeta(book)}</Text>
+    <TabSwipe tab="averages">
+      <Screen>
+        <Text style={styles.lede}>{COPY.averagesLede}</Text>
+        {!hasLive ? <EmptyPanel title={COPY.noClosedShots} hint={COPY.firstRoundHint} /> : null}
+        {rows.map((row) => {
+          const book = row.bag;
+          return (
+            <View key={row.club.id} style={styles.row}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.name}>{row.club.name}</Text>
+                <Text style={styles.meta}>{clubCarryMeta(book)}</Text>
+              </View>
+              <Text style={styles.yards}>{book.yards != null ? `${book.yards} yd` : '—'}</Text>
             </View>
-            <Text style={styles.yards}>{book.yards != null ? `${book.yards} yd` : '—'}</Text>
-          </View>
-        );
-      })}
-    </Screen>
+          );
+        })}
+      </Screen>
+    </TabSwipe>
   );
 }
 

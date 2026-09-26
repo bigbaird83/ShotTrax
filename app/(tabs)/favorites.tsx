@@ -35,6 +35,7 @@ import { useColors } from '@/src/ui/ColorThemeProvider';
 import { EmptyPanel } from '@/src/ui/EmptyPanel';
 import { Screen } from '@/src/ui/Screen';
 import { space, tapTarget, type, type ColorPalette } from '@/src/ui/theme';
+import { TabSwipe } from '@/src/ui/TabSwipe';
 
 export default function FavoritesScreen() {
   const { db, revision, bump } = useDb();
@@ -118,101 +119,103 @@ export default function FavoritesScreen() {
   };
 
   return (
-    <Screen scroll={false} padded={false}>
-      <View style={styles.fill}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <Text style={styles.title}>{COPY.favorites}</Text>
-          <Text style={styles.bannerText}>{FAVORITES_BANNER}</Text>
-          {favorites.length === 0 ? (
-            <EmptyPanel title={COPY.favorites} hint={FAVORITES_BANNER} />
-          ) : (
-            favorites.map((course) => {
-              const pack = offlinePackFor(store, course.id);
-              const hardMiss = courseIsHardMiss({
-                courseKey: course.id,
-                courseApiId: course.id,
-                name: course.name,
-                city: course.city,
-                state: course.state,
-                location: course.location,
-              });
-              const displayed = favoriteDisplayedOfflineStatus(pack?.status ?? null, hardMiss);
-              const label = offlineStatusLabel(displayed);
-              const compact = favoriteRowCompact(displayed);
-              const showDownload = favoriteShowsDownloadPill(displayed);
-              const readyChip = favoriteReadyChipOnly(displayed);
-              const place = [course.city, course.state].filter(Boolean).join(', ');
-              return (
-                <View
-                  key={course.id}
-                  style={[
-                    styles.card,
-                    compact && styles.cardCompact,
-                    { minHeight: favoriteRowMinHeight(displayed) ?? undefined },
-                  ]}>
-                  <View style={styles.row}>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`Start round ${course.name}`}
-                      onPress={() => playFavorite(course)}
-                      style={styles.playHit}>
-                      <Text style={styles.name}>{course.name}</Text>
-                      {place ? <Text style={styles.meta}>{place}</Text> : null}
-                      {hardMiss ? <Text style={styles.warn}>{COPY.hardMissNeedPins}</Text> : null}
-                      {readyChip ? <Text style={styles.readyChip}>{COPY.offlineReady}</Text> : null}
-                      {!readyChip && label ? <Text style={styles.status}>{label}</Text> : null}
-                    </Pressable>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={COPY.unfavorite}
-                      onPress={() => unstar(course)}
-                      style={styles.star}>
-                      <Text style={styles.starText}>★</Text>
-                    </Pressable>
+    <TabSwipe tab="favorites">
+      <Screen scroll={false} padded={false}>
+        <View style={styles.fill}>
+          <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+            <Text style={styles.title}>{COPY.favorites}</Text>
+            <Text style={styles.bannerText}>{FAVORITES_BANNER}</Text>
+            {favorites.length === 0 ? (
+              <EmptyPanel title={COPY.favorites} hint={FAVORITES_BANNER} />
+            ) : (
+              favorites.map((course) => {
+                const pack = offlinePackFor(store, course.id);
+                const hardMiss = courseIsHardMiss({
+                  courseKey: course.id,
+                  courseApiId: course.id,
+                  name: course.name,
+                  city: course.city,
+                  state: course.state,
+                  location: course.location,
+                });
+                const displayed = favoriteDisplayedOfflineStatus(pack?.status ?? null, hardMiss);
+                const label = offlineStatusLabel(displayed);
+                const compact = favoriteRowCompact(displayed);
+                const showDownload = favoriteShowsDownloadPill(displayed);
+                const readyChip = favoriteReadyChipOnly(displayed);
+                const place = [course.city, course.state].filter(Boolean).join(', ');
+                return (
+                  <View
+                    key={course.id}
+                    style={[
+                      styles.card,
+                      compact && styles.cardCompact,
+                      { minHeight: favoriteRowMinHeight(displayed) ?? undefined },
+                    ]}>
+                    <View style={styles.row}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Start round ${course.name}`}
+                        onPress={() => playFavorite(course)}
+                        style={styles.playHit}>
+                        <Text style={styles.name}>{course.name}</Text>
+                        {place ? <Text style={styles.meta}>{place}</Text> : null}
+                        {hardMiss ? <Text style={styles.warn}>{COPY.hardMissNeedPins}</Text> : null}
+                        {readyChip ? <Text style={styles.readyChip}>{COPY.offlineReady}</Text> : null}
+                        {!readyChip && label ? <Text style={styles.status}>{label}</Text> : null}
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={COPY.unfavorite}
+                        onPress={() => unstar(course)}
+                        style={styles.star}>
+                        <Text style={styles.starText}>★</Text>
+                      </Pressable>
+                    </View>
+                    {showDownload ? (
+                      <BigButton
+                        label={COPY.downloadForOffline}
+                        variant="secondary"
+                        disabled={busyId === course.id || displayed === 'downloading'}
+                        onPress={() => download(course)}
+                      />
+                    ) : null}
+                    {requestThisCourseVisible({
+                      course: {
+                        courseKey: course.id,
+                        courseApiId: course.id,
+                        name: course.name,
+                        city: course.city,
+                        state: course.state,
+                        location: course.location,
+                      },
+                      hasTeeGreenPaint: displayed === 'ready',
+                      paintKnown: displayed === 'ready' || displayed === 'miss',
+                    }) ? (
+                      <BigButton
+                        label={COPY.requestThisCourse}
+                        variant="ghost"
+                        onPress={() =>
+                          router.push({
+                            pathname: '/request-course',
+                            params: {
+                              name: course.name,
+                              city: course.city ?? '',
+                              courseId: course.id,
+                            },
+                          })
+                        }
+                      />
+                    ) : null}
                   </View>
-                  {showDownload ? (
-                    <BigButton
-                      label={COPY.downloadForOffline}
-                      variant="secondary"
-                      disabled={busyId === course.id || displayed === 'downloading'}
-                      onPress={() => download(course)}
-                    />
-                  ) : null}
-                  {requestThisCourseVisible({
-                    course: {
-                      courseKey: course.id,
-                      courseApiId: course.id,
-                      name: course.name,
-                      city: course.city,
-                      state: course.state,
-                      location: course.location,
-                    },
-                    hasTeeGreenPaint: displayed === 'ready',
-                    paintKnown: displayed === 'ready' || displayed === 'miss',
-                  }) ? (
-                    <BigButton
-                      label={COPY.requestThisCourse}
-                      variant="ghost"
-                      onPress={() =>
-                        router.push({
-                          pathname: '/request-course',
-                          params: {
-                            name: course.name,
-                            city: course.city ?? '',
-                            courseId: course.id,
-                          },
-                        })
-                      }
-                    />
-                  ) : null}
-                </View>
-              );
-            })
-          )}
-        </ScrollView>
-        <View style={styles.homeSwipeEdge} {...swipeHome.panHandlers} />
-      </View>
-    </Screen>
+                );
+              })
+            )}
+          </ScrollView>
+          <View style={styles.homeSwipeEdge} {...swipeHome.panHandlers} />
+        </View>
+      </Screen>
+    </TabSwipe>
   );
 }
 
