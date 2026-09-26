@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
   COPY,
+  osmOverlayCreditLabel,
   csvExportSheetTitle,
   restoreFailureCopy,
   finishPuttsChip,
@@ -203,10 +205,27 @@ test('player copy uses words, never ? or SI jargon dump', () => {
 });
 
 test('player copy never mentions API, OSM, invent, centroid, or meters', () => {
-  const { courseDataCredits, ...player } = COPY;
+  const { courseDataCredits, osmOverlayCredit, ...player } = COPY;
   const blob = JSON.stringify(player);
   assert.doesNotMatch(blob, /API|OSM|invent|centroid|Pro green|lat\/lng|accuracy/i);
   assert.match(courseDataCredits, /OpenStreetMap contributors/);
+  assert.equal(osmOverlayCredit, '© OpenStreetMap contributors');
+});
+
+test('hole map credits OpenStreetMap only while overlay features are drawn', () => {
+  assert.equal(COPY.osmOverlayCredit, '© OpenStreetMap contributors');
+  assert.equal(osmOverlayCreditLabel(0), null);
+  assert.equal(osmOverlayCreditLabel(-1), null);
+  assert.equal(osmOverlayCreditLabel(Number.NaN), null);
+  assert.equal(osmOverlayCreditLabel(1), '© OpenStreetMap contributors');
+  assert.equal(osmOverlayCreditLabel(4), COPY.osmOverlayCredit);
+  const map = readFileSync(new URL('../ui/HoleMap.tsx', import.meta.url), 'utf8');
+  assert.match(map, /osmOverlayCreditLabel\(osmFeatures\.length\)/);
+  assert.match(map, /\{mapCanPaint && osmCredit \?/);
+  const fallback = map.slice(map.indexOf('function TrailFallback'), map.indexOf('function NativeHoleMap'));
+  assert.doesNotMatch(fallback, /osmOverlayCredit|osmCredit/);
+  const web = readFileSync(new URL('../ui/HoleMap.web.tsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(web, /osmOverlayCredit/);
 });
 
 test('yards to green is a big number or — plus waiting copy', () => {

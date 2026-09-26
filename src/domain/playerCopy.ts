@@ -139,6 +139,7 @@ export const COPY = {
   settings: 'Settings',
   credits: 'Credits',
   courseDataCredits: 'Hole maps © OpenStreetMap contributors and OpenGolf (ODbL).',
+  osmOverlayCredit: '© OpenStreetMap contributors',
   courseDistance: 'Course distance',
   courseDistanceSetting: 'Course distance: Miles / Kilometers',
   colorTheme: 'Color theme',
@@ -479,6 +480,12 @@ export function waitingOnLocationWhenYardsShown(): false {
 /** Lock-frame miss is a missing course tee/green. Never a GPS wait. */
 export function lockFrameEmptyStateWaitsForPhone(): false {
   return false;
+}
+
+/** Hole-map credit. Hidden when this hole is not drawing OSM overlay features. */
+export function osmOverlayCreditLabel(featureCount: number): string | null {
+  if (!Number.isFinite(featureCount) || featureCount <= 0) return null;
+  return COPY.osmOverlayCredit;
 }
 
 export function yardsAreOnTheCard(result: { yards: number | null; quality?: string } | null | undefined): boolean {

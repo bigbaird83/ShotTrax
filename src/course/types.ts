@@ -98,7 +98,13 @@ export type OsmOverlay = {
 
 export type OsmOverlayQuery = {
   courseId?: string | null;
+  /** Direct Overpass center. A hole green is fine here. */
   location?: LatLng | null;
+  /**
+   * Catalog course pin (favorite, round, or course card). Worker requests use
+   * only this, rounded to 4 decimals, so every hole shares one cache entry.
+   */
+  courseLocation?: LatLng | null;
   holeNumber?: number;
   /** Search radius in meters. Default depends on whether a hole pin is used. */
   radiusM?: number;

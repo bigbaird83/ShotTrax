@@ -163,6 +163,8 @@ test('Start Round paints hole 1 immediately and caches 2–18 in the background'
     holeCount: 18,
     fetchOverlay: async (query) => {
       fetched.push(query.holeNumber);
+      assert.equal(query.radiusM, 1800);
+      assert.equal(query.courseId, 'prefetch-course');
       return null;
     },
   });
@@ -171,8 +173,8 @@ test('Start Round paints hole 1 immediately and caches 2–18 in the background'
     backgroundHoleNumbers(18),
   );
   assert.equal(fetched.includes(1), false);
-  assert.equal(fetched[0], 2);
-  assert.equal(fetched.at(-1), 18);
+  assert.equal(fetched.length, 1);
+  assert.equal(fetched[0], undefined);
 
   const home = readFileSync(new URL('../../app/(tabs)/index.tsx', import.meta.url), 'utf8');
   const apply = home.slice(home.indexOf('const applyPickedCourse'), home.indexOf('const commitPick'));
@@ -263,6 +265,7 @@ test('Favorites offline states never mark HARD-MISS Ready', async () => {
   assert.ok(hills);
   const ready = await downloadFavoriteForOffline(hills, store, {
     now: () => '2026-09-22T01:00:00.000Z',
+    fetchOverlay: async () => null,
     resolve: (match) =>
       resolveCoursePaint(match, {
         cache,
@@ -324,6 +327,7 @@ test('OSM miss + GCA paint makes the offline download Ready and skips golfapi', 
   const status = await downloadFavoriteForOffline(course, store, {
     now: () => '2026-09-22T01:05:00.000Z',
     cache: createMemoryCoursePaintCache(),
+    fetchOverlay: async () => null,
     getBaseUrl: () => 'https://share.test/gca/v1',
     fetch: async (input) => {
       const url = String(input);

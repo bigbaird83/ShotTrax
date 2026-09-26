@@ -99,6 +99,7 @@ export default function ReviewShotsScreen() {
       .fetchOsmOverlay({
         courseId: round.courseApiId,
         location: { lat: round.courseLat, lng: round.courseLng },
+        courseLocation: { lat: round.courseLat, lng: round.courseLng },
       })
       .then((overlay) => {
         if (live) setOsmOverlay(overlay);

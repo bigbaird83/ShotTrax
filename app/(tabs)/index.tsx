@@ -12,7 +12,7 @@ import {
 import { catalogEntryById } from '@/src/course/catalog';
 import { applyCourseHydrateToLayout } from '@/src/course/hydrate';
 import { layoutFromTee } from '@/src/course/layout';
-import { downloadFavoriteForOffline } from '@/src/course/offlineFavorite';
+import { backfillReadyFavoriteOverlays, downloadFavoriteForOffline } from '@/src/course/offlineFavorite';
 import { prefetchCourseCardInBackground, rememberLayoutHoles } from '@/src/course/prefetch';
 import type { CourseDetail, CourseSummary, TeeSet } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
@@ -299,6 +299,11 @@ export default function HomeScreen() {
       const pending = takePendingCoursePick();
       if (pending) void commitRef.current(pending);
     }, []),
+  );
+  useFocusEffect(
+    useCallback(() => {
+      void backfillReadyFavoriteOverlays(favoriteStore);
+    }, [favoriteStore]),
   );
   const pickedHardMiss = picked
     ? courseIsHardMiss({

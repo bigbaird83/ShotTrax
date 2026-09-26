@@ -1,7 +1,7 @@
-import { router, useNavigation } from 'expo-router';
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { router, useFocusEffect, useNavigation } from 'expo-router';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { downloadFavoriteForOffline } from '@/src/course/offlineFavorite';
+import { backfillReadyFavoriteOverlays, downloadFavoriteForOffline } from '@/src/course/offlineFavorite';
 import { layoutForFavoriteStart, favoriteStartHoleCount } from '@/src/course/startRoundEntry';
 import { prefetchCourseCardInBackground, rememberLayoutHoles } from '@/src/course/prefetch';
 import { useDb } from '@/src/db/DbProvider';
@@ -43,6 +43,11 @@ export default function FavoritesScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const store = useMemo(() => readSettingStore(db), [db]);
   const favorites = useMemo(() => listFavorites(store), [store, revision]);
+  useFocusEffect(
+    useCallback(() => {
+      void backfillReadyFavoriteOverlays(store);
+    }, [store]),
+  );
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const goHome = () => {

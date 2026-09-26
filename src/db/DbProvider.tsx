@@ -4,15 +4,21 @@ import { ActivityIndicator, Text, View } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import * as SQLite from 'expo-sqlite';
 import { attachGolfApiCachePersist } from '../course/golfapi';
+import { backfillReadyFavoriteOverlays } from '../course/offlineFavorite';
+import { hydrateOsmOverlayMemory } from '../course/osmOverlay';
+import { attachCourseOsmOverlayPersist } from '../course/osmOverlayStore';
 import { attachCoursePaintCachePersist } from '../course/paintCache';
 import { hydrateYardTestCourseFromSettings } from '../course/yardTestCourse';
 import { startPurchases } from '../services/purchases';
 import { migrate } from './schema';
 import {
+  getCourseOsmOverlay,
   getCoursePaintCache,
   getGolfApiHydrateCache,
   getSetting,
   purgeYardTestCourseSaved,
+  readSettingStore,
+  setCourseOsmOverlay,
   setCoursePaintCache,
   setGolfApiHydrateCache,
 } from './repo';
@@ -43,9 +49,15 @@ export function DbProvider({ children }: { children: ReactNode }) {
         load: () => getCoursePaintCache(opened),
         save: (json) => setCoursePaintCache(opened, json),
       });
+      attachCourseOsmOverlayPersist({
+        load: () => getCourseOsmOverlay(opened),
+        save: (json) => setCourseOsmOverlay(opened, json),
+      });
+      hydrateOsmOverlayMemory();
       // TEMP yard test course switch. Ignored unless the build gate and geometry pass.
       hydrateYardTestCourseFromSettings((key) => getSetting(opened, key));
       purgeYardTestCourseSaved(opened);
+      void backfillReadyFavoriteOverlays(readSettingStore(opened));
       // Hydrates the Pro cache before the first screen, then refreshes from RevenueCat.
       startPurchases(opened);
       setDb(opened);
