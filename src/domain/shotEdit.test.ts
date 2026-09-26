@@ -729,6 +729,7 @@ test('saved club and spot round-trip, and putts, score, and penalty order stay p
   assert.equal(holeAfter?.score, 5);
   const penalties = listPenaltiesForHole(db, hole.id);
   assert.equal(penalties.length, 1);
+  if (penalty.replay === 'deleted') throw new Error('penalty was treated as deleted');
   assert.equal(penalties[0]?.id, penalty.penalty.id);
   assert.equal(penalties[0]?.afterShotId, 's1');
   assert.equal(penalties[0]?.afterShotSeq, 1);

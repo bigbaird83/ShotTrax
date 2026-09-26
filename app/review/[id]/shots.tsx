@@ -1,15 +1,28 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { getCourseDataClient } from '@/src/course/client';
 import { teePointForHole, teePointFromHoleFeature } from '@/src/course/osmOverlay';
 import type { OsmOverlay } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
-import { getClubMap, getRound, listClubAverages, listClubs, listHoles, listShotsForHole } from '@/src/db/repo';
+import {
+  deletePenalty,
+  getClubMap,
+  getRound,
+  listClubAverages,
+  listClubs,
+  listHoles,
+  listPenaltiesForHole,
+  listShotsForHole,
+  updatePenaltyReason,
+} from '@/src/db/repo';
 import { formatClubStripLabel, planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
 import { isPutterClubId } from '@/src/domain/defaultBag';
 import { resolveHoleTee, shotPinsForHoleCamera } from '@/src/domain/holeCamera';
 import { isValidLatLng, type LatLng } from '@/src/domain/latLng';
+import { PENALTY_REASONS } from '@/src/domain/penalty';
+import { penaltyNoteForSave, penaltyStepActionSheet } from '@/src/domain/penaltyEdit';
+import { orderHoleSteps, type OrderedHoleStep } from '@/src/domain/penaltySteps';
 import { COPY } from '@/src/domain/playerCopy';
 import { deleteShotPrompt } from '@/src/domain/deleteShot';
 import { frameMapCenter, moveSpotDraftOrigin, shotStoredPosition } from '@/src/domain/shotEdit';
@@ -23,7 +36,7 @@ import {
   shotReviewPuttLines,
   shotReviewShotListWindow,
 } from '@/src/domain/shotReviewLayout';
-import type { Club, Shot } from '@/src/domain/types';
+import type { Club, PenaltyReason, Shot } from '@/src/domain/types';
 import { changeShotClub, deleteHoleShot, moveShotSpot } from '@/src/services/shotActions';
 import { getCurrentFix } from '@/src/services/location';
 import { BigButton } from '@/src/ui/BigButton';
@@ -63,6 +76,9 @@ export default function ReviewShotsScreen() {
   const [movingSpot, setMovingSpot] = useState(false);
   const [moveDraft, setMoveDraft] = useState<LatLng | null>(null);
   const [moveDropped, setMoveDropped] = useState(false);
+  const [changePenaltyId, setChangePenaltyId] = useState<string | null>(null);
+  const [changeReason, setChangeReason] = useState<PenaltyReason>('water');
+  const [changeNote, setChangeNote] = useState('');
   const round = useMemo(() => getRound(db, id), [db, id, revision]);
   const holes = useMemo(() => (round ? listHoles(db, round.id) : []), [db, round, revision]);
   const clubs = useMemo(() => getClubMap(db), [db, revision]);
@@ -70,6 +86,8 @@ export default function ReviewShotsScreen() {
   const averages = useMemo(() => listClubAverages(db), [db, revision]);
   const hole = holes[Math.min(index, Math.max(0, holes.length - 1))] ?? null;
   const shots = useMemo(() => (hole ? listShotsForHole(db, hole.id) : []), [db, hole, revision]);
+  const penalties = useMemo(() => (hole ? listPenaltiesForHole(db, hole.id) : []), [db, hole, revision]);
+  const holeSteps = useMemo(() => orderHoleSteps(shots, penalties), [shots, penalties]);
 
   useEffect(() => {
     if (!round || round.courseLat == null || round.courseLng == null) {
@@ -218,6 +236,43 @@ export default function ReviewShotsScreen() {
     bump();
   };
 
+  const beginChangePenalty = (penaltyId: string) => {
+    const penalty = penalties.find((row) => row.id === penaltyId);
+    if (!penalty) return;
+    setChangeReason(penalty.reason);
+    setChangeNote(penalty.note ?? '');
+    setChangePenaltyId(penalty.id);
+  };
+
+  const onSavePenaltyReason = () => {
+    if (!changePenaltyId) return;
+    const result = updatePenaltyReason(db, {
+      penaltyId: changePenaltyId,
+      reason: changeReason,
+      note: penaltyNoteForSave(changeReason, changeNote),
+    });
+    if (result.status !== 'updated') return;
+    setChangePenaltyId(null);
+    bump();
+  };
+
+  const onDeletePenalty = (penaltyId: string) => {
+    const result = deletePenalty(db, penaltyId);
+    if (result.status !== 'deleted') return;
+    if (changePenaltyId === penaltyId) setChangePenaltyId(null);
+    bump();
+  };
+
+  const openPenaltyActions = (penaltyId: string) => {
+    if (movingSpot) return;
+    const actions = penaltyStepActionSheet();
+    Alert.alert(actions.title, '', [
+      { text: actions.options[0], onPress: () => beginChangePenalty(penaltyId) },
+      { text: actions.options[1], style: 'destructive', onPress: () => onDeletePenalty(penaltyId) },
+      { text: actions.cancel, style: 'cancel' },
+    ]);
+  };
+
   const onDeleteShot = (shotId: string) => {
     if (!hole) return;
     const prompt = deleteShotPrompt();
@@ -255,7 +310,10 @@ export default function ReviewShotsScreen() {
             accessibilityRole="button"
             accessibilityLabel={`Hole ${row.number}`}
             testID={`shot-review-hole-${row.number}`}
-            onPress={() => setIndex(i)}
+            onPress={() => {
+              setChangePenaltyId(null);
+              setIndex(i);
+            }}
             style={[styles.chip, hole?.id === row.id && styles.chipOn]}>
             <Text style={[styles.chipText, hole?.id === row.id && styles.chipTextOn]}>{row.number}</Text>
           </Pressable>
@@ -314,16 +372,18 @@ export default function ReviewShotsScreen() {
       </View>
 
       <View style={styles.bottom} testID="shot-review-bottom">
-        {hole && (shots.length > 0 || puttLines.length > 0) ? (
+        {hole && (shots.length > 0 || penalties.length > 0 || puttLines.length > 0) ? (
           <ReviewShotList
             key={hole.id}
             shots={shots}
+            steps={holeSteps}
             puttLines={puttLines}
             clubs={clubs}
             textStyle={styles.muted}
             listStyle={styles.shotList}
             contentStyle={styles.shotListContent}
             onShotPress={movingSpot ? undefined : openEdit}
+            onPenaltyPress={movingSpot ? undefined : openPenaltyActions}
           />
         ) : null}
         {movingSpot ? (
@@ -423,26 +483,56 @@ export default function ReviewShotsScreen() {
           ) : null}
         </ScrollView>
       </FullSheet>
+
+      <FullSheet
+        visible={changePenaltyId != null}
+        title={COPY.changePenalty}
+        onClose={() => setChangePenaltyId(null)}>
+        <ScrollView contentContainerStyle={styles.sheetPad}>
+          <View style={styles.reasonRow}>
+            {PENALTY_REASONS.map((item) => (
+              <Pressable
+                key={item.reason}
+                onPress={() => setChangeReason(item.reason)}
+                style={[styles.reasonChip, changeReason === item.reason && styles.reasonOn]}>
+                <Text style={styles.reasonText}>{item.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <TextInput
+            placeholder={COPY.penaltyNote}
+            placeholderTextColor={colors.muted}
+            value={changeNote}
+            onChangeText={setChangeNote}
+            style={styles.note}
+          />
+          <BigButton label={COPY.savePenaltyReason} onPress={onSavePenaltyReason} />
+        </ScrollView>
+      </FullSheet>
     </Screen>
   );
 }
 
 function ReviewShotList({
   shots,
+  steps,
   puttLines,
   clubs,
   textStyle,
   listStyle,
   contentStyle,
   onShotPress,
+  onPenaltyPress,
 }: {
   shots: Shot[];
+  steps: OrderedHoleStep[];
   puttLines: string[];
   clubs: Record<string, Club>;
   textStyle: StyleProp<TextStyle>;
   listStyle: StyleProp<ViewStyle>;
   contentStyle: StyleProp<ViewStyle>;
   onShotPress?: (shotId: string) => void;
+  onPenaltyPress?: (penaltyId: string) => void;
 }) {
   const [contentHeight, setContentHeight] = useState(0);
   const windowHeight = shotReviewShotListWindow(contentHeight);
@@ -456,17 +546,32 @@ function ReviewShotList({
       onContentSizeChange={(_width, height) => {
         setContentHeight((prev) => (prev === height ? prev : height));
       }}>
-      {shots.map((shot) => (
-        <Pressable
-          key={shot.id}
-          accessibilityRole="button"
-          onPress={() => onShotPress?.(shot.id)}>
-          <Text style={textStyle}>
-            {shot.seq}. {shot.clubId ? (clubs[shot.clubId]?.name ?? 'Club') : '—'}
-            {shot.distanceYards != null ? ` · ${Math.round(shot.distanceYards)} yd` : ''}
-          </Text>
-        </Pressable>
-      ))}
+      {steps.map((step) => {
+        if (step.kind === 'penalty') {
+          return (
+            <Pressable
+              key={step.id}
+              accessibilityRole="button"
+              accessibilityLabel={step.label}
+              onPress={() => onPenaltyPress?.(step.id)}>
+              <Text style={textStyle}>{step.label}</Text>
+            </Pressable>
+          );
+        }
+        const shot = shots[step.sourceIndex];
+        if (!shot) return null;
+        return (
+          <Pressable
+            key={shot.id}
+            accessibilityRole="button"
+            onPress={() => onShotPress?.(shot.id)}>
+            <Text style={textStyle}>
+              {shot.seq}. {shot.clubId ? (clubs[shot.clubId]?.name ?? 'Club') : '—'}
+              {shot.distanceYards != null ? ` · ${Math.round(shot.distanceYards)} yd` : ''}
+            </Text>
+          </Pressable>
+        );
+      })}
       {puttLines.map((line, i) => (
         <Text key={`putt-${i}`} style={textStyle}>
           {line}
@@ -516,5 +621,28 @@ function makeStyles(colors: ColorPalette) {
     navBtn: { flex: 1 },
     sheetPad: { gap: 12, padding: 16 },
     placeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    reasonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    reasonChip: {
+      minHeight: 48,
+      paddingHorizontal: 12,
+      borderRadius: 12,
+      borderWidth: 2,
+      borderColor: colors.line,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.bg,
+    },
+    reasonOn: { borderColor: colors.cream, backgroundColor: colors.accentWash },
+    reasonText: { color: colors.cream, fontSize: 16, fontWeight: '800' },
+    note: {
+      minHeight: 52,
+      borderWidth: 1,
+      borderColor: colors.line,
+      borderRadius: 12,
+      paddingHorizontal: 12,
+      color: colors.cream,
+      fontSize: 16,
+      backgroundColor: colors.bgElevated,
+    },
   });
 }

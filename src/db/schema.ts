@@ -206,6 +206,13 @@ export function migrate(db: SQLiteDatabase): void {
       FOREIGN KEY (hole_id) REFERENCES holes(id) ON DELETE CASCADE
     );
 
+    -- Phone-local ids of penalties the golfer deleted. A delayed Watch
+    -- penaltyPick with the same id must not insert again. Not exported.
+    CREATE TABLE IF NOT EXISTS deleted_penalty_ids (
+      id TEXT PRIMARY KEY NOT NULL,
+      deleted_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY NOT NULL,
       value TEXT NOT NULL

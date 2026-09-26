@@ -445,7 +445,9 @@ async function handlePickNow(token: string, json: string): Promise<void> {
 
 /**
  * Phone writes the penalty row. Same id (Watch retry, sendMessage, and
- * transferUserInfo) inserts once. No GPS and no club mark.
+ * transferUserInfo) inserts once and does not overwrite a reason edited on
+ * the phone. A deleted id is already handled: no stroke, and the Watch still
+ * gets ok. No GPS and no club mark.
  */
 async function applyWatchPenalty(
   token: string,
@@ -471,7 +473,7 @@ async function applyWatchPenalty(
     shots: listShotsForHole(ctx.db, hole.id),
   });
   try {
-    insertPenalty(ctx.db, {
+    const saved = insertPenalty(ctx.db, {
       id: planned.id,
       holeId: hole.id,
       par: hole.par,
@@ -483,12 +485,16 @@ async function applyWatchPenalty(
       afterShotId: planned.afterShotId,
       afterShotSeq: planned.afterShotSeq,
     });
+    // Existing row and tombstone both mean the id is done. Reply ok either way.
+    if (saved.replay === 'deleted' || saved.replay === 'existing' || saved.replay === 'inserted') {
+      ctx.bump();
+      await replyToken(token, { ok: true, feedback: formatWatchPenaltyFeedback(pick.reason) });
+      return;
+    }
   } catch {
     await replyToken(token, { ok: false, feedback: WATCH_PENALTY_SAVE_FAILED });
     return;
   }
-  ctx.bump();
-  await replyToken(token, { ok: true, feedback: formatWatchPenaltyFeedback(pick.reason) });
 }
 
 async function flushPendingPenalties(): Promise<void> {

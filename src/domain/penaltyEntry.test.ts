@@ -161,6 +161,7 @@ test('menu penalty and in-transaction drop write both commit', needsSqlite, () =
     note: 'lateral',
     kind: 'penalty',
   });
+  if (menu.replay === 'deleted') throw new Error('menu penalty was treated as deleted');
   assert.equal(menu.penalty.kind, 'penalty');
   assert.equal(menu.score, scoreAfterPenalty(hole.score, hole.par, 1));
   assert.equal(getHole(db, round.id, hole.number)?.score, menu.score);
@@ -294,6 +295,7 @@ test('a stored after-shot survives save, delete, and a json round-trip', needsSq
     note: null,
     kind: 'penalty',
   });
+  if (beforeShots.replay === 'deleted') throw new Error('penalty was treated as deleted');
   assert.equal(beforeShots.penalty.afterShotId, null);
   assert.equal(beforeShots.penalty.afterShotSeq, null);
   assert.deepEqual(
@@ -314,6 +316,7 @@ test('a stored after-shot survives save, delete, and a json round-trip', needsSq
     afterShotId: 'shot-8i',
     afterShotSeq: 1,
   });
+  if (attached.replay === 'deleted') throw new Error('attached penalty was treated as deleted');
   assert.equal(attached.penalty.afterShotId, 'shot-8i');
   assert.equal(attached.penalty.afterShotSeq, 1);
   const shots = listShotsForHole(db, hole.id);
