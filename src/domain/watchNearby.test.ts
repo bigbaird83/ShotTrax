@@ -308,7 +308,7 @@ test('a live round opens that hole; a different round lives under Home', () => {
 
   const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
   assert.match(watchUi, /session\.showsNearby/);
-  assert.match(watchUi, /session\.hasLiveHole/);
+  assert.match(watchUi, /session\.canContinueRound/);
   assert.match(watchUi, /dismissNearbyToHole/);
   assert.match(watchUi, /Text\("Select course"\)/);
   assert.match(watchUi, /session\.pickHoleCount\(9\)/);

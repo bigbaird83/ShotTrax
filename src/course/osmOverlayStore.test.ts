@@ -14,6 +14,7 @@ import {
   COURSE_OSM_OVERLAY_RADIUS_M,
   cachedOsmOverlay,
   fetchOsmOverlay,
+  OSM_BUSY_BACKOFF_MS,
 } from './osmOverlay';
 import { ensureHoleTeeGreen } from './prefetch';
 import {
@@ -556,6 +557,99 @@ describe('backfill overlays for Ready favorites', { concurrency: 1 }, () => {
     assert.equal(loadCourseOsmOverlay(tb.id), null);
     assert.equal(offlinePackFor(store, missed.id)?.status, 'miss');
     assert.equal(offlinePackFor(store, tb.id)?.status, 'ready');
+  });
+
+  test('backfill retries a busy course later in the same session', async () => {
+    resetCourseOsmOverlayForTests();
+    resetFavoriteOverlayBackfillForTests();
+    const busyId = 'backfill-busy';
+    const nextId = 'backfill-after-busy';
+    dropCourseOverlayMemory(busyId);
+    dropCourseOverlayMemory(nextId);
+    const store = memoryStore();
+    const busy = favorite(busyId, GREEN_1);
+    const next = favorite(nextId, GREEN_2);
+    readyFavorite(store, next);
+    readyFavorite(store, busy);
+    let now = 1_700_000_000_000;
+    const nowMs = () => now;
+    let busyCalls = 0;
+    let nextCalls = 0;
+    const bodyFor = (lat: number, lng: number) => ({
+      elements: [
+        {
+          type: 'way',
+          tags: { golf: 'green', ref: '1' },
+          geometry: [
+            { lat, lon: lng },
+            { lat: lat + 0.0002, lon: lng },
+          ],
+        },
+      ],
+    });
+    const fetchOverlay = (query: OsmOverlayQuery) =>
+      fetchOsmOverlay(query, {
+        retryDelayMs: 0,
+        nowMs,
+        getBaseUrl: () => 'https://share.test',
+        fetch: async (input) => {
+          const courseId = new URL(String(input)).searchParams.get('courseId');
+          if (courseId === busyId) {
+            busyCalls += 1;
+            if (busyCalls <= 2) {
+              return new Response(JSON.stringify({ error: 'upstream_busy' }), {
+                status: 503,
+                headers: { 'Content-Type': 'application/json' },
+              });
+            }
+            return new Response(JSON.stringify(bodyFor(GREEN_1.lat, GREEN_1.lng)), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            });
+          }
+          nextCalls += 1;
+          return new Response(JSON.stringify(bodyFor(GREEN_2.lat, GREEN_2.lng)), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        },
+      });
+    try {
+      await backfillReadyFavoriteOverlays(store, {
+        nowMs,
+        fetchOverlay,
+        now: () => '2026-09-26T16:00:00.000Z',
+      });
+      assert.equal(busyCalls, 2);
+      assert.equal(nextCalls, 1);
+      assert.equal(loadCourseOsmOverlay(busyId), null);
+      assert.equal(loadCourseOsmOverlay(nextId)?.features.length, 1);
+      assert.equal(offlinePackFor(store, busyId)?.status, 'ready');
+      assert.equal(offlinePackFor(store, busyId)?.updatedAt, FETCHED_AT);
+      assert.equal(offlinePackFor(store, nextId)?.updatedAt, FETCHED_AT);
+
+      await backfillReadyFavoriteOverlays(store, { nowMs, fetchOverlay });
+      assert.equal(busyCalls, 2);
+      assert.equal(nextCalls, 1);
+      assert.equal(loadCourseOsmOverlay(busyId), null);
+
+      now += OSM_BUSY_BACKOFF_MS[0];
+      await backfillReadyFavoriteOverlays(store, {
+        nowMs,
+        fetchOverlay,
+        now: () => '2026-09-26T16:01:00.000Z',
+      });
+      assert.equal(busyCalls, 3);
+      assert.equal(nextCalls, 1);
+      assert.equal(loadCourseOsmOverlay(busyId)?.source, 'osm');
+      assert.equal(loadCourseOsmOverlay(busyId)?.features.length, 1);
+      assert.equal(loadCourseOsmOverlay(busyId)?.features[0]?.coordinates[0]?.lat, GREEN_1.lat);
+      assert.equal(offlinePackFor(store, busyId)?.status, 'ready');
+      assert.equal(offlinePackFor(store, busyId)?.updatedAt, FETCHED_AT);
+    } finally {
+      dropCourseOverlayMemory(busyId);
+      dropCourseOverlayMemory(nextId);
+    }
   });
 
   test('Worker upstream_busy stores nothing and leaves Ready alone', async () => {

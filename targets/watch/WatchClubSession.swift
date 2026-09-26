@@ -282,6 +282,9 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   /// Collapse the launch burst (activate + Search nearby appear) into one transfer.
   private let homeRequestCoalesce: TimeInterval = 2
   private var receivedClubList = false
+  /// Live clubList (`roundLive`, not complete) from WatchConnectivity this process.
+  /// Loading the saved app-group club list does not set this.
+  private var receivedLiveListThisLaunch = false
   /// Last complication snapshot written to the app group. Reload only when it changes.
   private var complicationStamp = ""
   /// Watch Back/Cancel on the putt sheet. Blocks phone keep-alive from reopening.
@@ -292,6 +295,12 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
 
   var hasLiveHole: Bool {
     receivedClubList || !list.bag.isEmpty
+  }
+
+  /// Watch Home Continue. A finished or stale list still has a bag, so this is
+  /// stricter than `hasLiveHole`. Home/Back does not hide it.
+  var canContinueRound: Bool {
+    list.roundLive && !list.roundComplete && hasLiveHole && roundIsFresh
   }
 
   var showsNearby: Bool {
@@ -310,6 +319,10 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   private let pendingQueueKey = "pendingWatchQueue"
   private var golfWorkout: HKWorkoutSession?
   private var endingGolfWorkout = false
+  /// `handleActiveWorkoutRecovery` is in flight. Do not create another session.
+  private var recoveringGolfWorkout = false
+  private var loggedBlockedGolfStart = false
+  private var loggedStaleRoundSkip = false
   private var golfAuthInFlight = false
   /// Bumped when a stuck request is discarded so its callback cannot clear a newer sheet.
   private var golfAuthTicket = 0
@@ -345,6 +358,11 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   private var locationUpdatesStarted = false
   /// Avoid asking again while a When In Use sheet from this active scene is up.
   private var locationAuthRequestInFlight = false
+  /// Launch splash is covering the UI. When In Use waits so it does not cover the clip.
+  private var splashShowing = false
+  /// Logo cover while watchOS takes the launch snapshot. The view ignores this
+  /// once the scene is active and the clip is not due.
+  @Published var snapshotCover = false
   /// Walking filter once the wrist is down. Wrist-up stays unfiltered so a
   /// stationary club mark still has a fix younger than 3 seconds.
   private static let liveDistanceFilterM: CLLocationDistance = 3
@@ -1656,7 +1674,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     nearby = next
   }
 
-  private func applyClubList(_ message: [String: Any]) {
+  private func applyClubList(_ message: [String: Any], fromPhone: Bool = false) {
     let type = message["type"] as? String
     // Application context carries the latest Watch Home next to clubList.
     if let nested = message["watchHome"] as? [String: Any] {
@@ -1680,12 +1698,24 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
     guard type == "clubList" else { return }
     let incomingSeq = Self.complicationInt(message["listSeq"]) ?? 0
+    let incomingLive = (message["roundLive"] as? Bool) ?? true
+    let incomingComplete = (message["roundComplete"] as? Bool) ?? false
     // A late Hole Out placeholder or complication transfer must not rewind the
-    // hole or clear the last shot the phone already named.
+    // hole or clear the last shot the phone already named. A round end still
+    // applies when this launch has not accepted a live list, so a phone
+    // relaunch (its listSeq starts over) can clear a saved round.
     if list.listSeq > 0 && incomingSeq < list.listSeq {
-      return
+      let endsRound = !incomingLive && incomingComplete
+      if !(endsRound && !receivedLiveListThisLaunch) {
+        return
+      }
+      workoutLog.info("round end applied despite older listSeq; no live list this launch")
     }
     receivedClubList = true
+    if fromPhone && incomingLive && !incomingComplete {
+      receivedLiveListThisLaunch = true
+      workoutLog.info("live club list received this launch; round is fresh")
+    }
     if !nearbyFromHome {
       nearby.active = false
     }
@@ -2212,8 +2242,33 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
   }
 
+  /// Saved phone `complicationAt` this recent still counts as a live round.
+  /// Mirrors `WATCH_ROUND_FRESH_MS`.
+  private static let roundFreshWindow: TimeInterval = 30 * 60
+
+  /// Live hole or open putt sheet, before the freshness gate.
+  private var roundLooksLive: Bool {
+    !userLeftApp && list.roundLive && ((hasLiveHole && !list.roundComplete) || putt.open)
+  }
+
+  /// Saved flags alone are not a live round. Fresh only when this launch
+  /// received a live club list, or `liveAtMs` is inside `roundFreshWindow`.
+  private var roundIsFresh: Bool {
+    if receivedLiveListThisLaunch { return true }
+    guard list.liveAtMs > 0 else { return false }
+    let ageMs = Date().timeIntervalSince1970 * 1000 - list.liveAtMs
+    return ageMs <= Self.roundFreshWindow * 1000
+  }
+
+  private func logStaleRoundSkipIfNeeded() {
+    guard roundLooksLive, !roundIsFresh else { return }
+    guard !loggedStaleRoundSkip else { return }
+    loggedStaleRoundSkip = true
+    workoutLog.info("round stay skipped; saved round is not fresh")
+  }
+
   private func syncRoundStay() {
-    let next = !userLeftApp && list.roundLive && ((hasLiveHole && !list.roundComplete) || putt.open)
+    let next = roundLooksLive && roundIsFresh
     if next && !wantsStay {
       suppressGolfStart = false
       loggedGolfDenial = false
@@ -2223,6 +2278,11 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       if sceneIsActive {
         locationAuthRequestInFlight = false
       }
+    }
+    if next {
+      loggedStaleRoundSkip = false
+    } else {
+      logStaleRoundSkipIfNeeded()
     }
     wantsStay = next
     if wantsStay {
@@ -2304,10 +2364,10 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     return next.holeNumber == 1 && holeAtHomePick != 1
   }
 
-  /// True while a golf workout exists and has not ended, or while end() is in flight.
-  /// A second start is ignored so two sessions are never created.
+  /// True while a golf workout exists and has not ended, while end() is in flight,
+  /// or while an active session is being recovered. A second start is ignored.
   private var golfWorkoutOccupied: Bool {
-    if endingGolfWorkout { return true }
+    if recoveringGolfWorkout || endingGolfWorkout { return true }
     guard let golfWorkout else { return false }
     switch golfWorkout.state {
     case .ended:
@@ -2318,7 +2378,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   private func startRoundStay() {
-    guard wantsStay else { return }
+    guard wantsStay, roundIsFresh else { return }
     if golfWorkout?.state == .ended {
       golfWorkout = nil
       endingGolfWorkout = false
@@ -2327,6 +2387,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       if golfWorkout?.state == .running {
         enableWorkoutBackgroundLocation()
       }
+      beginGolfWorkoutSession()
       return
     }
     guard HKHealthStore.isHealthDataAvailable() else {
@@ -2423,7 +2484,22 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   private func beginGolfWorkoutSession() {
-    if golfWorkoutOccupied || suppressGolfStart { return }
+    if recoveringGolfWorkout {
+      if !loggedBlockedGolfStart {
+        loggedBlockedGolfStart = true
+        workoutLog.info("golf workout not started; recoverActiveWorkoutSession in progress")
+      }
+      return
+    }
+    if golfWorkoutOccupied {
+      if !loggedBlockedGolfStart {
+        loggedBlockedGolfStart = true
+        workoutLog.info("golf workout not started; a session is already running")
+      }
+      return
+    }
+    if suppressGolfStart { return }
+    loggedBlockedGolfStart = false
     let configuration = HKWorkoutConfiguration()
     configuration.activityType = .golf
     configuration.locationType = .outdoor
@@ -2502,7 +2578,54 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
   }
 
+  /// Called from `handleActiveWorkoutRecovery` before `recoverActiveWorkoutSession`.
+  func beginGolfWorkoutRecovery() {
+    recoveringGolfWorkout = true
+    loggedBlockedGolfStart = false
+    workoutLog.info("recoverActiveWorkoutSession requested")
+  }
+
+  /// Store the system's session as the current one. End it when the round is
+  /// not fresh. This app does not use a workout builder.
+  func finishGolfWorkoutRecovery(_ session: HKWorkoutSession?, error: Error?) {
+    recoveringGolfWorkout = false
+    if let error {
+      workoutLog.info("recoverActiveWorkoutSession failed: \(error.localizedDescription, privacy: .public)")
+      syncRoundStay()
+      return
+    }
+    guard let session else {
+      workoutLog.info("recoverActiveWorkoutSession returned no session")
+      syncRoundStay()
+      return
+    }
+    if session.state == .ended {
+      workoutLog.info("recoverActiveWorkoutSession returned an ended session")
+      syncRoundStay()
+      return
+    }
+    if let created = golfWorkout, created !== session, created.state != .ended {
+      workoutLog.info("recovered golf workout; ending the session started this launch")
+      created.end()
+    }
+    // No workout builder is used. Reattach the delegate only.
+    session.delegate = self
+    golfWorkout = session
+    workoutLog.info("recovered golf workout; delegate reattached; no builder")
+    if roundIsFresh {
+      endingGolfWorkout = false
+      // The kept session is not a blocked start. Don't log "already running" for it.
+      loggedBlockedGolfStart = true
+      workoutLog.info("recovered golf workout kept; round is fresh")
+    } else {
+      workoutLog.info("recovered golf workout ended; round is not fresh")
+    }
+    // Fresh: the stored session blocks a second start. Stale: this ends it.
+    syncRoundStay()
+  }
+
   func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
+    // Last context from any launch. Not a receive during this process.
     applyClubList(session.receivedApplicationContext)
     if activationState == .activated {
       flushPending()
@@ -2521,21 +2644,21 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
 
   func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
     DispatchQueue.main.async {
-      self.applyClubList(applicationContext)
+      self.applyClubList(applicationContext, fromPhone: true)
     }
   }
 
   func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
     DispatchQueue.main.async {
       if self.applyWatchAck(message) { return }
-      self.applyClubList(message)
+      self.applyClubList(message, fromPhone: true)
     }
   }
 
   func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
     DispatchQueue.main.async {
       if self.applyWatchAck(userInfo) { return }
-      self.applyClubList(userInfo)
+      self.applyClubList(userInfo, fromPhone: true)
     }
   }
 
@@ -2548,10 +2671,12 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
   }
 
-  /// Same gate as the golf round stay: wrist-down is still a live hole.
-  /// The launch splash is skipped while this is true so a shot is one tap away.
+  /// Same gate as the golf round stay, including freshness. Wrist-down is still
+  /// a live hole when the round is fresh, so the launch splash is skipped.
+  /// A stale saved round is not: the clip plays, and wrist-down location stops.
+  /// An active scene still starts foreground location through `syncLiveLocation`.
   var liveHoleInProgress: Bool {
-    !userLeftApp && list.roundLive && ((hasLiveHole && !list.roundComplete) || putt.open)
+    roundLooksLive && roundIsFresh
   }
 
   private func locationAuthLabel(_ status: CLAuthorizationStatus) -> String {
@@ -2663,13 +2788,45 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
   }
 
+  /// The splash will cover the first open. Set before any scene callback.
+  func prepareLaunchSplash() {
+    splashShowing = true
+  }
+
+  /// Put the logo still up for the system snapshot. A fresh live round keeps the hole.
+  func raiseSnapshotCover() {
+    guard !liveHoleInProgress else { return }
+    guard !snapshotCover else { return }
+    snapshotCover = true
+    WatchSplashClip.splashLog.info("snapshot cover")
+  }
+
+  /// Warm resume. The clip is not replayed; Home shows on the active frame.
+  func lowerSnapshotCover() {
+    guard snapshotCover else { return }
+    snapshotCover = false
+  }
+
+  /// Splash left the screen. Ask for When In Use when the scene is active.
+  func splashDidFinish() {
+    guard splashShowing else { return }
+    splashShowing = false
+    requestLiveLocationAuthorizationIfNeeded()
+  }
+
   /// Mirrors `watchShouldRequestLocationAuthorization`. Only an active scene
   /// can present the sheet. The next active scene asks again if status is
   /// still notDetermined (`locationAuthRequestInFlight` clears on wrist-down).
+  /// The launch splash holds the sheet until the clip is gone. A fresh live
+  /// round never sets `splashShowing`, so yards are not delayed.
   private func requestLiveLocationAuthorizationIfNeeded() {
     guard sceneIsActive else { return }
     guard location.authorizationStatus == .notDetermined else {
       locationAuthRequestInFlight = false
+      return
+    }
+    guard !splashShowing else {
+      liveYardsLog.info("requestWhenInUseAuthorization waits; splash showing")
       return
     }
     guard !locationAuthRequestInFlight else { return }
@@ -2786,7 +2943,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       }
       let phaseLabel = phase
       workoutLog.info("scene \(phaseLabel, privacy: .public); requestAuthorization waits until active")
-      if !userLeftApp && list.roundLive && ((hasLiveHole && !list.roundComplete) || putt.open) {
+      logStaleRoundSkipIfNeeded()
+      if roundLooksLive && roundIsFresh {
         startRoundStay()
       }
       noteLocationScene(active: false)

@@ -7,7 +7,7 @@ import {
   listPenaltiesForHole,
   listShotsForHole,
   listStatRounds,
-  listStrokesGainedHoles,
+  listStrokesGainedHolesBatched,
 } from '@/src/db/repo';
 import { totalPenaltyStrokes } from '@/src/domain/penalty';
 import { COPY } from '@/src/domain/playerCopy';
@@ -19,7 +19,6 @@ import {
   SG_CATEGORIES,
   SG_CATEGORY_LABELS,
   weakestCategory,
-  type SgRound,
 } from '@/src/domain/strokesGained';
 import {
   formatTrendChange,
@@ -78,14 +77,15 @@ export default function TrendsScreen() {
       }));
   }, [db, revision]);
 
-  /** Newest first, same order as `rounds`. */
-  const sgRounds = useMemo<(SgRound | null)[]>(
-    () => rounds.map((round) => roundStrokesGained(listStrokesGainedHoles(db, round.id))),
-    [db, rounds],
-  );
+  /** Newest first, same order as `rounds`, and only the selected window. */
   const sgAverage = useMemo(
-    () => averageStrokesGainedPer18(sgRounds.slice(0, windowSize)),
-    [sgRounds, windowSize],
+    () =>
+      averageStrokesGainedPer18(
+        rounds
+          .slice(0, windowSize)
+          .map((round) => roundStrokesGained(listStrokesGainedHolesBatched(db, round.id))),
+      ),
+    [db, rounds, windowSize],
   );
 
   const clubs = useMemo(() => trendClubs(rounds, windowSize), [rounds, windowSize]);
@@ -183,6 +183,7 @@ function StrokesGainedCard({
     <View style={styles.card} testID="trend-strokes-gained">
       <Text style={styles.section}>{COPY.strokesGained}</Text>
       <Text style={styles.hint}>{COPY.trendsStrokesGainedHint}</Text>
+      <Text style={styles.hint}>{COPY.trendsStrokesGainedShort}</Text>
       {average ? (
         <>
           <View style={styles.headline}>

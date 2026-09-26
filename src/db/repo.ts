@@ -1685,9 +1685,12 @@ export function fillAutoShotLies(
   return written;
 }
 
-/** One round's holes, shots, and penalties in the shape strokes gained reads. */
-export function listStrokesGainedHoles(db: SQLiteDatabase, roundId: string): SgHoleIn[] {
-  return listHoles(db, roundId).map((hole) => ({
+function strokesGainedHole(
+  hole: Hole,
+  shots: readonly Shot[],
+  penalties: readonly HolePenalty[],
+): SgHoleIn {
+  return {
     number: hole.number,
     par: hole.par,
     score: hole.score,
@@ -1697,9 +1700,58 @@ export function listStrokesGainedHoles(db: SQLiteDatabase, roundId: string): SgH
     putts: hole.putts,
     puttLengths: hole.puttLengths,
     puttsDone: hole.puttsDone,
-    shots: listShotsForHole(db, hole.id),
-    penalties: listPenaltiesForHole(db, hole.id),
-  }));
+    shots,
+    penalties,
+  };
+}
+
+function groupByHole<T extends { holeId: string }>(rows: readonly T[]): Map<string, T[]> {
+  const grouped = new Map<string, T[]>();
+  for (const row of rows) {
+    const list = grouped.get(row.holeId);
+    if (list) list.push(row);
+    else grouped.set(row.holeId, [row]);
+  }
+  return grouped;
+}
+
+/** One round's holes, shots, and penalties in the shape strokes gained reads. */
+export function listStrokesGainedHoles(db: SQLiteDatabase, roundId: string): SgHoleIn[] {
+  return listHoles(db, roundId).map((hole) =>
+    strokesGainedHole(hole, listShotsForHole(db, hole.id), listPenaltiesForHole(db, hole.id)),
+  );
+}
+
+/**
+ * Same rows as `listStrokesGainedHoles`. Shots and penalties are each one join
+ * for the round, instead of a query per hole.
+ */
+export function listStrokesGainedHolesBatched(db: SQLiteDatabase, roundId: string): SgHoleIn[] {
+  const holes = listHoles(db, roundId);
+  if (holes.length === 0) return [];
+  const shots = db
+    .getAllSync<ShotRow>(
+      `SELECT shots.* FROM shots
+       INNER JOIN holes ON holes.id = shots.hole_id
+       WHERE holes.round_id = ?
+       ORDER BY holes.number ASC, shots.seq ASC`,
+      [roundId],
+    )
+    .map(mapShot);
+  const penalties = db
+    .getAllSync<PenaltyRow>(
+      `SELECT hole_penalties.* FROM hole_penalties
+       INNER JOIN holes ON holes.id = hole_penalties.hole_id
+       WHERE holes.round_id = ?
+       ORDER BY holes.number ASC, hole_penalties.created_at ASC`,
+      [roundId],
+    )
+    .map(mapPenalty);
+  const shotsByHole = groupByHole(shots);
+  const penaltiesByHole = groupByHole(penalties);
+  return holes.map((hole) =>
+    strokesGainedHole(hole, shotsByHole.get(hole.id) ?? [], penaltiesByHole.get(hole.id) ?? []),
+  );
 }
 
 export function listShotsForHole(db: SQLiteDatabase, holeId: string): Shot[] {

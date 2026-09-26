@@ -133,7 +133,7 @@ struct ContentView: View {
       }
       .buttonStyle(.plain)
 
-      if session.hasLiveHole {
+      if session.canContinueRound {
         Button(action: { session.dismissNearbyToHole() }) {
           tileChrome(
             HStack(spacing: 6) {

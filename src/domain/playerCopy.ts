@@ -275,6 +275,7 @@ export const COPY = {
   trendsNoData: 'Nothing saved for this yet.',
   trendsCarry: 'Carry by club',
   trendsStrokesGainedHint: 'Average per 18 holes · vs a tour pro · higher is better',
+  trendsStrokesGainedShort: 'Rounds under 9 holes aren’t counted',
   hcpIndex: 'Handicap index',
   handicapLede: 'World Handicap System math on your saved rounds with a rated tee.',
   handicapLimits:

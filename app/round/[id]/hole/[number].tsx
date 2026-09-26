@@ -17,7 +17,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { catalogEntryById } from '@/src/course/catalog';
 import { prefetchCourseHydrateOnce, resolveHydrateTeeGreen } from '@/src/course/hydrate';
-import { ensureHoleTeeGreen } from '@/src/course/prefetch';
+import { ensureHoleTeeGreen, scheduleOpenHoleOverlayRetry } from '@/src/course/prefetch';
 import {
   cachedOsmOverlay,
   cachedResolvedTee,
@@ -511,6 +511,7 @@ function HoleScreenBody() {
     const greenPin = isCourseCardLatLng(greenCandidate) ? greenCandidate : null;
     const courseTee = isCourseCardLatLng(teeCandidate) ? teeCandidate : null;
     let live = true;
+    let cancelOverlayRetry: () => void = () => {};
     const storedOverlay = cachedOsmOverlay({
       courseId: round?.courseApiId,
       holeNumber,
@@ -521,13 +522,14 @@ function HoleScreenBody() {
       round?.courseLat != null && round.courseLng != null
         ? { lat: round.courseLat, lng: round.courseLng }
         : null;
+    const catalogPin = isCourseCardLatLng(courseLocation) ? courseLocation : null;
     void ensureHoleTeeGreen({
       courseId: round?.courseApiId,
       holeNumber,
       tee: courseTee,
       green: greenPin,
       location: greenPin ?? courseTee,
-      courseLocation: isCourseCardLatLng(courseLocation) ? courseLocation : null,
+      courseLocation: catalogPin,
     })
       .then((frame) => {
         if (!live) return;
@@ -538,12 +540,30 @@ function HoleScreenBody() {
         });
         if (overlay) setOsmOverlay(overlay);
         if (frame.fetched) setPlayFrameNonce((nonce) => nonce + 1);
+        if (overlay) return;
+        cancelOverlayRetry = scheduleOpenHoleOverlayRetry(
+          {
+            courseId: round?.courseApiId,
+            holeNumber,
+            tee: frame.tee,
+            green: frame.green,
+            location: frame.green ?? courseTee,
+            courseLocation: catalogPin,
+          },
+          {
+            onOverlay: (next) => {
+              if (!live) return;
+              setOsmOverlay(next);
+            },
+          },
+        );
       })
       .catch(() => {
         // Keep the last overlay. Do not fall back to the clubhouse / phone.
       });
     return () => {
       live = false;
+      cancelOverlayRetry();
     };
   }, [
     marksOnly,

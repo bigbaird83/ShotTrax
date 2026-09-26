@@ -39,7 +39,8 @@ import {
   queueWatchPuttPickEvent,
   watchPuttPickShouldApply,
 } from '../domain/watchPuttSync';
-import { getHole, insertPenalty, listShotsForHole, undoLastShot } from '../db/repo';
+import { getActiveRound, getHole, insertPenalty, listShotsForHole, undoLastShot } from '../db/repo';
+import { nextStaleWatchRoundClear, watchRoundEndedClubList } from '../domain/watchRoundFresh';
 import {
   drainWatchShotUndoQueue,
   planWatchShotUndo,
@@ -109,6 +110,7 @@ export function setWatchClubContext(next: WatchClubContext | null): void {
     endedRoundId = null;
   }
   context = next;
+  if (next && !next.readOnly) staleWatchClearSent = false;
   if (next) {
     void flushPendingClubPicks(next.holeNumber);
     void flushPendingPuttPicks();
@@ -141,20 +143,7 @@ export function endWatchRound(roundId: string): void {
   const base = lastClubList;
   const msg: ClubListMessage = base
     ? { ...base, roundComplete: true, roundLive: false }
-    : {
-        type: 'clubList',
-        top3: [],
-        bag: [],
-        labels: {},
-        holeNumber: 1,
-        yardsToGreen: null,
-        yardsQuality: 'none',
-        roundComplete: true,
-        roundLive: false,
-        shotCount: 0,
-        lastShotId: '',
-        lastShotClubId: '',
-      };
+    : watchRoundEndedClubList();
   void pushWatchClubList(msg);
 }
 
@@ -776,6 +765,45 @@ async function flushPendingClubPicks(holeNumber: number): Promise<void> {
   }
 }
 
+/** Database for the idle-round clear. Set from the root startup hook. */
+let watchRoundDb: SQLiteDatabase | null = null;
+/** One end-of-round push per idle stretch. Reset when a round is active. */
+let staleWatchClearSent = false;
+let staleWatchClearLaunchNoted = false;
+
+export function noteWatchClubDatabase(db: SQLiteDatabase): void {
+  watchRoundDb = db;
+  if (staleWatchClearLaunchNoted) return;
+  staleWatchClearLaunchNoted = true;
+  requestStaleWatchRoundClear('launch');
+}
+
+function requestStaleWatchRoundClear(event: 'launch' | 'foreground'): void {
+  const db = watchRoundDb;
+  if (!db) return;
+  const decision = nextStaleWatchRoundClear({
+    sentWhileIdle: staleWatchClearSent,
+    activeRound: getActiveRound(db) != null,
+    holeContextMounted: context != null,
+    event,
+  });
+  staleWatchClearSent = decision.sentWhileIdle;
+  if (!decision.send) return;
+  void enqueueClubList(() => deliverStaleWatchRoundClear());
+}
+
+async function deliverStaleWatchRoundClear(): Promise<void> {
+  const db = watchRoundDb;
+  const activeRound = db != null && getActiveRound(db) != null;
+  const liveHole = context != null && !context.readOnly;
+  if (db == null || context != null || activeRound) {
+    if (activeRound || liveHole) staleWatchClearSent = false;
+    return;
+  }
+  // A live club list queued after this still goes out. This push does not latch a round.
+  await deliverClubList(watchRoundEndedClubList(), null);
+}
+
 let puttPickTail: Promise<void> = Promise.resolve();
 
 function enqueuePuttPick(work: () => Promise<void>): Promise<void> {
@@ -858,7 +886,10 @@ export function startWatchClubBridge(): void {
     if (event?.reachable === true) void republishWatchHoleShots();
   });
   AppState.addEventListener('change', (next) => {
-    if (next === 'active') void republishWatchHoleShots();
+    if (next === 'active') {
+      void republishWatchHoleShots();
+      requestStaleWatchRoundClear('foreground');
+    }
   });
 }
 

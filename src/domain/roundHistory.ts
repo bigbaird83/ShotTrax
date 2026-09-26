@@ -106,6 +106,14 @@ export function historySwipeRestOffset(open: boolean): number {
 }
 
 /**
+ * An in-progress row swipe keeps the touch.
+ * HistorySwipeRow answers onPanResponderTerminationRequest with false.
+ */
+export function historySwipeRefusesTermination(): true {
+  return true;
+}
+
+/**
  * Release always snaps fully open or fully closed.
  * A short left swipe opens both actions. It does not bounce shut on the delete sliver.
  */
