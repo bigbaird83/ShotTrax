@@ -84,7 +84,7 @@ const rows = planScorecard(
 
 test('share image plan mirrors the in-app scorecard: Hole, Par, Score, Putts, mark', () => {
   const plan = planScorecardImage({ courseName: '  Magnolia  ', holes: rows });
-  assert.equal(plan.brand, 'ShotTraxx');
+  assert.equal(plan.brand, 'ShotTraxx™');
   assert.equal(plan.courseName, 'Magnolia');
   assert.equal(plan.total, '25');
   // To-par only counts holes with a known par: -1, 0, +1, +2, -2 → E.
