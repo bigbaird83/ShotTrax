@@ -13,7 +13,7 @@ module.exports = (config) => ({
     muted: '#8A9A8E',
     bg: '#0B1A12',
   },
-  frameworks: ['WatchConnectivity', 'CoreLocation', 'WidgetKit', 'HealthKit'],
+  frameworks: ['WatchConnectivity', 'CoreLocation', 'WidgetKit', 'HealthKit', 'AVFoundation', 'AVKit'],
   entitlements: {
     'com.apple.security.application-groups': ['group.com.shottrax.app'],
     'com.apple.developer.healthkit': true,
