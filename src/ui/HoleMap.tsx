@@ -55,6 +55,10 @@ import { isValidLatLng } from '@/src/domain/latLng';
 import { hasClosedGpsTrail, hasGpsStart } from '@/src/domain/shotSource';
 import { clubMarkGpsConfidence } from '@/src/domain/gpsConfidence';
 import { planDistanceRings } from '@/src/domain/distanceRings';
+import {
+  phoneHoleMapYardageOverlaysHidden,
+  yardageOverlayFixFreshUntilMs,
+} from '@/src/domain/yardageOverlayVisibility';
 import { planShotTrail, shotTrailDash } from '@/src/domain/shotTrail';
 import { QualityBadge } from './Badge';
 import { CLUB_MARK_CONFIDENCE_LIFT_PX, GpsConfidenceChip } from './GpsConfidenceChip';
@@ -103,6 +107,12 @@ type Props = {
   onFrameReady?: (ready: boolean) => void;
   /** Play may show a phone pin. Add shot never does. */
   showPhonePin?: boolean;
+  /**
+   * Live phone GPS for hiding yardage overlays. Play passes the same fix
+   * the yards card measures, including while Add shot hides the phone dot.
+   * Omit to use `userFix`.
+   */
+  liveFix?: GpsFix | null;
   /** Play / edit may reveal Legal and compass after a tap. Add shot never does. */
   allowMapsChrome?: boolean;
   /** HARD-MISS / need-pins copy. Default is the generic tee+green miss. */
@@ -276,15 +286,18 @@ type LatLng = { lat: number; lng: number };
 function LiveDragGeometry({
   dragLines,
   pinVisible,
+  hideYardageOverlays,
 }: {
   dragLines: ReturnType<typeof planDragShotLines>;
   pinVisible: boolean;
+  /** Live GPS inside the hysteresis band. Lines and yard chips only. */
+  hideYardageOverlays: boolean;
 }) {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <>
-      {dragLines.shot ? (
+      {!hideYardageOverlays && dragLines.shot ? (
         <Polyline
           coordinates={[
             toCoord(dragLines.shot.from.lat, dragLines.shot.from.lng),
@@ -304,7 +317,7 @@ function LiveDragGeometry({
           <View pointerEvents="none" testID="shot-path-dot" style={styles.pathDot} />
         </Marker>
       ) : null}
-      {dragLines.toGreen ? (
+      {!hideYardageOverlays && dragLines.toGreen ? (
         <Polyline
           coordinates={[
             toCoord(dragLines.toGreen.from.lat, dragLines.toGreen.from.lng),
@@ -315,7 +328,7 @@ function LiveDragGeometry({
           lineDashPattern={[8, 6]}
         />
       ) : null}
-      {dragLines.shot ? (
+      {!hideYardageOverlays && dragLines.shot ? (
         <Marker
           coordinate={toCoord(dragLines.shot.mid.lat, dragLines.shot.mid.lng)}
           anchor={{ x: 0.5, y: 0.5 }}
@@ -326,7 +339,7 @@ function LiveDragGeometry({
           </View>
         </Marker>
       ) : null}
-      {dragLines.toGreen ? (
+      {!hideYardageOverlays && dragLines.toGreen ? (
         <Marker
           coordinate={toCoord(dragLines.toGreen.mid.lat, dragLines.toGreen.mid.lng)}
           anchor={{ x: 0.5, y: 0.5 }}
@@ -369,6 +382,7 @@ function NativeHoleMap({
   hideYardsOverlay,
   onFrameReady,
   showPhonePin,
+  liveFix,
   allowMapsChrome = true,
   missCopy,
   paintNotice,
@@ -433,6 +447,30 @@ function NativeHoleMap({
       }),
     [userFix?.lat, userFix?.lng, green?.lat, green?.lng, yardsToGreen.yards, yardsToGreen.quality],
   );
+  // Add shot clears userFix so the phone dot stays off. The yards card still
+  // measures `liveFix`, and that is the only distance that may hide overlays.
+  const overlayFix = liveFix !== undefined ? liveFix : userFix;
+  const [overlayNowMs, setOverlayNowMs] = useState(() => Date.now());
+  const [yardageOverlaysHidden, setYardageOverlaysHidden] = useState(false);
+  const [yardageOverlayHole, setYardageOverlayHole] = useState(holeNumber);
+  const overlayFreshUntil = yardageOverlayFixFreshUntilMs(overlayFix);
+  useEffect(() => {
+    const now = Date.now();
+    setOverlayNowMs(now);
+    if (overlayFreshUntil == null) return undefined;
+    const remainingMs = overlayFreshUntil - now;
+    if (remainingMs <= 0) return undefined;
+    const id = setTimeout(() => setOverlayNowMs(Date.now()), remainingMs + 1);
+    return () => clearTimeout(id);
+  }, [overlayFreshUntil]);
+  if (yardageOverlayHole !== holeNumber) setYardageOverlayHole(holeNumber);
+  const hideYardageOverlays = phoneHoleMapYardageOverlaysHidden({
+    fix: overlayFix,
+    green,
+    nowMs: overlayNowMs,
+    hidden: yardageOverlayHole === holeNumber ? yardageOverlaysHidden : false,
+  });
+  if (hideYardageOverlays !== yardageOverlaysHidden) setYardageOverlaysHidden(hideYardageOverlays);
   const closed = useMemo(() => shots.filter(hasClosedGpsTrail), [shots]);
   const osmFeatures = useMemo(
     () => overlayFeatures(osmOverlay ?? null, holeNumber),
@@ -756,7 +794,7 @@ function NativeHoleMap({
             />
           );
         })}
-        {distanceRings.map((ring) => (
+        {hideYardageOverlays ? null : distanceRings.map((ring) => (
           <Polyline
             key={`distance-ring-${ring.yards}`}
             coordinates={ring.points.map((point) => toCoord(point.lat, point.lng))}
@@ -765,7 +803,7 @@ function NativeHoleMap({
             geodesic
           />
         ))}
-        {distanceRings.map((ring) => (
+        {hideYardageOverlays ? null : distanceRings.map((ring) => (
           <Marker
             key={`distance-ring-label-${ring.yards}`}
             coordinate={toCoord(ring.labelAt.lat, ring.labelAt.lng)}
@@ -970,7 +1008,11 @@ function NativeHoleMap({
             <View pointerEvents="none" style={styles.userDot} />
           </Marker>
         ) : null}
-        <LiveDragGeometry dragLines={dragLines} pinVisible={toPinMapCoordinate != null} />
+        <LiveDragGeometry
+          dragLines={dragLines}
+          pinVisible={toPinMapCoordinate != null}
+          hideYardageOverlays={hideYardageOverlays}
+        />
       </MapView>
       ) : null}
       {showMapCover ? (

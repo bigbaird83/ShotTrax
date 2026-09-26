@@ -14,6 +14,8 @@ type Props = {
   holeNumber: number;
   shots: Shot[];
   userFix: GpsFix | null;
+  /** Same live sample the native map uses to hide yardage overlays. Web draws none. */
+  liveFix?: GpsFix | null;
   green: { lat: number; lng: number } | null;
   yardsToGreen: YardsToGreenResult;
   fmb?: { f: string; m: string; b: string } | null;

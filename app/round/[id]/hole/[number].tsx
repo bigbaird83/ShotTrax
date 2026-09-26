@@ -1576,6 +1576,7 @@ function HoleScreenBody() {
           holeNumber={hole.number}
           shots={shots}
           userFix={catchUpFullScreen ? null : fix}
+          liveFix={fix}
           green={green}
           yardsToGreen={{
             yards: playHeaderYards.yards,
