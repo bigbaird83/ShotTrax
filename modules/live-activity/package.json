@@ -1,0 +1,10 @@
+{
+  "name": "live-activity",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Round Live Activity: Lock Screen and Dynamic Island yards, score, last shot, and group.",
+  "main": "index.ts",
+  "license": "UNLICENSED",
+  "homepage": "https://github.com/bigbaird83/ShotTraxx",
+  "author": "ShotTraxx"
+}

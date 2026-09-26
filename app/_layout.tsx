@@ -5,6 +5,7 @@ import { View } from 'react-native';
 import { DbProvider } from '@/src/db/DbProvider';
 import { startWatchClubBridge } from '@/src/services/watchClub';
 import { useWatchNearbyStart } from '@/src/services/useWatchNearbyStart';
+import { useEndLiveActivityWithoutRound } from '@/src/services/liveActivity';
 import { shouldPlaySplash } from '@/src/domain/splashDismiss';
 import { BrandedSplash } from '@/src/ui/BrandedSplash';
 import { ColorThemeProvider, useColors, useColorTheme } from '@/src/ui/ColorThemeProvider';
@@ -16,6 +17,7 @@ export { ErrorBoundary } from 'expo-router';
 
 function WatchNearbyHost() {
   useWatchNearbyStart();
+  useEndLiveActivityWithoutRound();
   return null;
 }
 

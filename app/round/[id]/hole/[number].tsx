@@ -166,6 +166,15 @@ import { resolveStickyClub, selectClubForMark } from '@/src/domain/stickyClub';
 import type { Club, PenaltyReason } from '@/src/domain/types';
 import { courseTeeYards, lastLandingMark, markToGreen, planLiveGpsToPin, planPlayHeaderYards, toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
 import { watchClubCarry, watchGreenFields } from '@/src/domain/watchLive';
+import { loadGroup } from '@/src/db/groupRepo';
+import { planGroupGames } from '@/src/domain/groupGames';
+import {
+  formatLiveGroupLine,
+  formatLiveLastShot,
+  liveActivityPayloadKey,
+  planLiveActivityPayload,
+} from '@/src/domain/liveActivity';
+import { syncRoundLiveActivity } from '@/src/services/liveActivity';
 import { yardsToGreen } from '@/src/sensing/yardsToGreen';
 import { describeGpsSource } from '@/src/services/location';
 import { formatPaintSourceChip } from '@/src/domain/courseCard';
@@ -631,6 +640,44 @@ function HoleScreenBody() {
     ),
     depthYards: hole?.greenDepthYards ?? sheetOnGreen?.greenDepthYards ?? null,
   };
+  // Lock Screen / Dynamic Island: this hole, the running score, the last shot, and the group.
+  const liveGroupLine = useMemo(() => {
+    if (!round) return null;
+    const group = loadGroup(db, round.id);
+    if (group.players.length < 2) return null;
+    return formatLiveGroupLine(
+      planGroupGames({ holes: group.holes, players: group.players, settings: group.settings }),
+      group.players.length,
+    );
+  }, [db, round, revision]);
+  const livePayload =
+    round && hole && round.finishedAt == null && !marksOnly
+      ? planLiveActivityPayload({
+          roundId: round.id,
+          courseName: round.courseName,
+          hole: { number: hole.number, par: hole.par },
+          pins: { front: pins.front, middle: green, back: pins.back },
+          runningPar: planRunningParBadge({
+            holes: holes.map((row) => ({
+              number: row.number,
+              par: row.par,
+              score: row.score,
+              puttsDone: row.puttsDone,
+              shotCount: listShotsForHole(db, row.id).length,
+              putts: row.putts,
+              penaltyStrokes: totalPenaltyStrokes(listPenaltiesForHole(db, row.id)),
+            })),
+          }),
+          lastShot: formatLiveLastShot(shots, (clubId) => clubMap[clubId]?.name ?? null),
+          groupLine: liveGroupLine,
+        })
+      : null;
+  const livePayloadKey = liveActivityPayloadKey(livePayload);
+  useEffect(() => {
+    // Only a round in progress drives it; the root host ends it once no round is active.
+    if (livePayload) syncRoundLiveActivity(livePayload);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [livePayloadKey]);
   const toGreenDisplay = toGreenDisplayFromHole({
     courseYards: hole?.yards ?? tbHole?.whiteYards ?? null,
     green,
