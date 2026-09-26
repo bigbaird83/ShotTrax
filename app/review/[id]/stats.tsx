@@ -1,7 +1,8 @@
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
+import { listGroupPlayers } from '@/src/db/groupRepo';
 import {
   getClubMap,
   getRound,
@@ -24,6 +25,7 @@ import {
   SG_CATEGORY_LABELS,
   weakestCategory,
 } from '@/src/domain/strokesGained';
+import { BigButton } from '@/src/ui/BigButton';
 import { Screen } from '@/src/ui/Screen';
 import { useColors } from '@/src/ui/ColorThemeProvider';
 import { type ColorPalette } from '@/src/ui/theme';
@@ -64,6 +66,8 @@ export default function ReviewStatsScreen() {
     [db, round, revision],
   );
 
+  const hasGroup = useMemo(() => (round ? listGroupPlayers(db, round.id).length > 1 : false), [db, round, revision]);
+
   const differential = useMemo(
     () => (round ? roundDifferential(planHandicap(listHandicapRounds(db)), round.id) : null),
     [db, round, revision],
@@ -84,6 +88,9 @@ export default function ReviewStatsScreen() {
   return (
     <Screen>
       <Text style={styles.title}>{round.courseName ?? 'Round'}</Text>
+      {hasGroup ? (
+        <BigButton label={COPY.group} variant="secondary" onPress={() => router.push(`/round/${round.id}/group`)} />
+      ) : null}
 
       <View style={styles.block}>
         <Row styles={styles} label={COPY.score} value={stats.score ?? '—'} />

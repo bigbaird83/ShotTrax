@@ -31,6 +31,8 @@ export default function RoundLayout() {
       <Stack.Screen name="club-pick" options={{ title: 'Pick a club', presentation: 'fullScreenModal' }} />
       <Stack.Screen name="summary" options={{ title: 'Round summary' }} />
       <Stack.Screen name="board" options={{ title: 'Live board' }} />
+      <Stack.Screen name="group" options={{ title: 'Group' }} />
+      <Stack.Screen name="group-card" options={{ title: 'Group scorecard' }} />
     </Stack>
   );
 }

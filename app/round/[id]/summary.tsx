@@ -194,6 +194,11 @@ export default function RoundSummaryScreen() {
         onPress={() => router.push({ pathname: '/nerd-out', params: { roundId: id } })}
       />
       <BigButton
+        label={COPY.group}
+        variant="secondary"
+        onPress={() => router.push(`/round/${id}/group`)}
+      />
+      <BigButton
         label={COPY.liveBoard}
         variant="secondary"
         onPress={() => router.push(`/round/${id}/board`)}
