@@ -6,6 +6,7 @@ import {
   formatToPar,
   netAvailable,
   netBlockReason,
+  parCoverage,
   parseGroupGameSettings,
   parseGroupHandicap,
   planGroupGames,
@@ -287,4 +288,48 @@ test('settings and handicap parsing', () => {
   assert.equal(formatToPar(0), 'E');
   assert.equal(formatToPar(3), '+3');
   assert.equal(formatToPar(-2), '−2');
+});
+
+test('stroke play ranks by to-par over holes with a par; holes without one do not count', () => {
+  // Hole 1 has no par. A: 9 there (not ranked) + par on hole 2 → E. B: bogey on hole 2 → +1. C: only hole 1.
+  const course: GroupHoleIn[] = [
+    { number: 1, par: null, strokeIndex: 1 },
+    { number: 2, par: 4, strokeIndex: 2 },
+  ];
+  const r = planGroupGames({
+    holes: course,
+    players: [player('a', [9, 4]), player('b', [null, 5]), player('c', [3, null])],
+    settings: DEFAULT_GROUP_GAMES,
+  });
+  assert.deepEqual(
+    r.strokePlay.map((row) => [row.playerId, row.ranked, row.ranked ? row.place : null, row.toPar, row.gross]),
+    [
+      ['a', true, 1, 0, 13],
+      ['b', true, 2, 1, 5],
+      ['c', false, null, null, 3],
+    ],
+  );
+  assert.equal(parCoverage(course), 'some');
+});
+
+test('a course with no pars ranks by total strokes', () => {
+  const course: GroupHoleIn[] = [
+    { number: 1, par: null, strokeIndex: 1 },
+    { number: 2, par: null, strokeIndex: 2 },
+  ];
+  assert.equal(parCoverage(course), 'none');
+  const r = planGroupGames({
+    holes: course,
+    players: [player('a', [5, 5]), player('b', [4, 5]), player('c', [])],
+    settings: DEFAULT_GROUP_GAMES,
+  });
+  assert.deepEqual(
+    r.strokePlay.map((row) => [row.playerId, row.ranked, row.gross]),
+    [
+      ['b', true, 9],
+      ['a', true, 10],
+      ['c', false, 0],
+    ],
+  );
+  assert.equal(parCoverage(holes(3)), 'all');
 });

@@ -3,7 +3,8 @@
  *
  * The number starts at par (4 when par is unknown). Before Save, − / + move an
  * unsaved draft; Save stores what is shown. Once saved, − / + change the saved
- * score directly, and tapping Saved clears it. Scores stay within 1–20.
+ * score directly. A plain tap on Saved does nothing, so a stray tap never wipes
+ * a score; clearing is a separate, confirmed action. Scores stay within 1–20.
  */
 
 export const STEPPER_MIN = 1;
@@ -22,7 +23,8 @@ export function stepperShown(saved: number | null, draft: number | null | undefi
 export type StepperAction =
   | { kind: 'draft'; value: number }
   | { kind: 'save'; value: number }
-  | { kind: 'clear' };
+  | { kind: 'clear' }
+  | { kind: 'none' };
 
 /** What a − or + tap does. */
 export function stepperStep(
@@ -35,7 +37,12 @@ export function stepperStep(
   return saved != null ? { kind: 'save', value } : { kind: 'draft', value };
 }
 
-/** What a Save / Saved tap does. */
+/** What a plain tap on Save / Saved does: saves the shown number, or nothing once saved. */
 export function stepperToggle(saved: number | null, draft: number | null | undefined, par: number | null): StepperAction {
-  return saved != null ? { kind: 'clear' } : { kind: 'save', value: clampStepperScore(stepperShown(saved, draft, par)) };
+  return saved != null ? { kind: 'none' } : { kind: 'save', value: clampStepperScore(stepperShown(saved, draft, par)) };
+}
+
+/** The deliberate clear (press and hold Saved, then confirm). Nothing to clear before Save. */
+export function stepperClear(saved: number | null): StepperAction {
+  return saved != null ? { kind: 'clear' } : { kind: 'none' };
 }

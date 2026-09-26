@@ -1,6 +1,16 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+  type AccessibilityActionEvent,
+} from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
 import {
   addGroupPlayer,
@@ -17,6 +27,7 @@ import {
   formatToPar,
   GROUP_MAX_PLAYERS,
   matchPair,
+  parCoverage,
   parseGroupHandicap,
   planGroupGames,
   type GroupGameSettings,
@@ -27,7 +38,7 @@ import {
   type GroupGameId,
   type GroupRulesContext,
 } from '@/src/domain/groupRules';
-import { stepperShown, stepperStep, stepperToggle, type StepperAction } from '@/src/domain/groupStepper';
+import { stepperClear, stepperShown, stepperStep, stepperToggle, type StepperAction } from '@/src/domain/groupStepper';
 import { COPY } from '@/src/domain/playerCopy';
 import { BigButton } from '@/src/ui/BigButton';
 import { Screen } from '@/src/ui/Screen';
@@ -77,8 +88,18 @@ export default function RoundGroupScreen() {
   const hole = group.holes.find((h) => h.number === holeNumber) ?? group.holes[0] ?? null;
   const partners = group.players.filter((p) => !p.isMe);
   const settings = group.settings;
+  /** Press and hold Saved (or the VoiceOver action): confirm, then clear that score. */
+  const confirmClear = (playerId: string, playerName: string, holeNo: number, saved: number | null) => {
+    const action = stepperClear(saved);
+    if (action.kind !== 'clear') return;
+    Alert.alert(`${COPY.groupClearTitle} ${playerName} · Hole ${holeNo}`, COPY.groupClearBody, [
+      { text: COPY.cancel, style: 'cancel' },
+      { text: COPY.groupClearConfirm, style: 'destructive', onPress: () => applyStepper(playerId, holeNo, action) },
+    ]);
+  };
   const applyStepper = (playerId: string, holeNo: number, action: StepperAction) => {
     const key = `${playerId}:${holeNo}`;
+    if (action.kind === 'none') return;
     if (action.kind === 'draft') {
       setDrafts((prev) => ({ ...prev, [key]: action.value }));
       return;
@@ -95,6 +116,7 @@ export default function RoundGroupScreen() {
   const rulesCtx: GroupRulesContext = {
     net: result.net,
     holeCount: group.holes.length,
+    parCoverage: parCoverage(group.holes),
     playerCount: group.players.length,
     matchNames: pair ? [nameOf(pair[0]), nameOf(pair[1])] : null,
   };
@@ -235,10 +257,16 @@ export default function RoundGroupScreen() {
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={saved ? `${player.name} ${COPY.groupSaved}, ${COPY.groupTapToClear}` : `${COPY.groupSave} ${player.name} ${shown}`}
+                  accessibilityLabel={saved ? `${player.name} ${shown} ${COPY.groupSaved}` : `${COPY.groupSave} ${player.name} ${shown}`}
+                  accessibilityHint={saved ? COPY.groupHoldToClear : undefined}
                   accessibilityState={{ selected: saved }}
+                  accessibilityActions={saved ? [{ name: 'clear', label: COPY.groupClearConfirm }] : undefined}
+                  onAccessibilityAction={(event: AccessibilityActionEvent) => {
+                    if (event.nativeEvent.actionName === 'clear') confirmClear(player.id, player.name, hole.number, score);
+                  }}
                   testID={`group-score-${player.id}-save`}
                   onPress={() => applyStepper(player.id, hole.number, stepperToggle(score, draft, hole.par))}
+                  onLongPress={() => confirmClear(player.id, player.name, hole.number, score)}
                   style={[styles.saveButton, saved && styles.chipOn]}>
                   <Text style={[styles.saveText, saved && styles.chipTextOn]}>{saved ? COPY.groupSaved : COPY.groupSave}</Text>
                 </Pressable>
@@ -252,11 +280,15 @@ export default function RoundGroupScreen() {
       {partners.length > 0 ? (
         <View style={styles.block} testID="group-leaderboard">
           <Text style={styles.section}>{result.net ? COPY.groupLeaderboardNet : COPY.groupLeaderboard}</Text>
-          {result.net ? <Text style={styles.note}>{COPY.groupNetToParLabel}</Text> : null}
+          {result.net ? (
+            <Text style={styles.note}>
+              {rulesCtx.parCoverage === 'none' ? COPY.groupNetTotalLabel : COPY.groupNetToParLabel}
+            </Text>
+          ) : null}
           {result.strokePlay.map((row) => (
             <View key={row.playerId} style={styles.row}>
               <Text style={styles.label}>
-                {row.thru > 0 ? `${row.place}. ` : ''}
+                {row.ranked ? `${row.place}. ` : ''}
                 {row.name}
                 {row.thru > 0 ? ` · thru ${row.thru}` : ''}
               </Text>

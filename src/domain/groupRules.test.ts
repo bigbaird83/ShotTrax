@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { describeGroupGame, describeGroupGameShort, type GroupRulesContext } from './groupRules';
 
-const gross: GroupRulesContext = { net: false, holeCount: 18, playerCount: 2, matchNames: ['You', 'Sam'] };
+const gross: GroupRulesContext = { net: false, holeCount: 18, parCoverage: 'all', playerCount: 2, matchNames: ['You', 'Sam'] };
 const net: GroupRulesContext = { ...gross, net: true };
 const carry = { skinsCarry: true };
 const noCarry = { skinsCarry: false };
@@ -61,4 +61,22 @@ test('one-line switch text follows the settings', () => {
   for (const id of ['strokePlay', 'skins', 'stableford', 'matchPlay', 'nassau'] as const) {
     assert.ok(describeGroupGameShort(id, carry, net).length < 90, id);
   }
+});
+
+test('stroke-play text says how holes without a par are ranked', () => {
+  assert.doesNotMatch(describeGroupGame('strokePlay', carry, gross), /without a par|no pars/);
+  assert.match(describeGroupGame('strokePlay', carry, { ...gross, parCoverage: 'some' }), /Holes without a par don't count toward the ranking/);
+  assert.match(describeGroupGame('strokePlay', carry, { ...gross, parCoverage: 'none' }), /no pars, so the leaderboard ranks by total strokes/);
+  assert.match(describeGroupGame('strokePlay', carry, { ...net, parCoverage: 'none' }), /ranks by total net strokes/);
+  assert.equal(describeGroupGameShort('strokePlay', carry, { ...gross, parCoverage: 'none' }), 'Lowest total leads.');
+});
+
+test('stroke placement follows the real hole count', () => {
+  const twelve = { ...net, holeCount: 12 };
+  for (const id of ['strokePlay', 'stableford', 'matchPlay'] as const) {
+    assert.match(describeGroupGame(id, carry, twelve), /more than 12\b/, id);
+    assert.doesNotMatch(describeGroupGame(id, carry, twelve), /more than 18|strokes are halved/, id);
+  }
+  assert.match(describeGroupGame('strokePlay', carry, { ...net, holeCount: 9 }), /more than 9\b.*strokes are halved/);
+  assert.match(describeGroupGame('strokePlay', carry, net), /more than 18\b/);
 });

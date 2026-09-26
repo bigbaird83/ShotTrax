@@ -1,4 +1,4 @@
-import type { GroupGameSettings } from './groupGames';
+import type { GroupGameSettings, ParCoverage } from './groupGames';
 
 /**
  * Plain "how it's scored" text for each group game, built from the same rules
@@ -12,8 +12,10 @@ export type GroupGameId = 'strokePlay' | 'skins' | 'stableford' | 'matchPlay' | 
 export type GroupRulesContext = {
   /** Net is actually being scored (on, and not blocked). */
   net: boolean;
-  /** Holes in the round (9 halves handicap strokes). */
+  /** Holes in the round: strokes are spread over this many (9 also halves them). */
   holeCount: number;
+  /** Whether the holes have a par: all, some, or none (changes how stroke play ranks). */
+  parCoverage: ParCoverage;
   playerCount: number;
   /** Names of the two match players, when there is a pair. */
   matchNames: readonly [string, string] | null;
@@ -36,16 +38,23 @@ export function describeGroupGame(
   settings: Pick<GroupGameSettings, 'skinsCarry'>,
   ctx: GroupRulesContext,
 ): string {
-  const holes = ctx.holeCount === 9 ? 9 : 18;
+  const holes = ctx.holeCount;
   switch (id) {
-    case 'strokePlay':
+    case 'strokePlay': {
+      const netWord = ctx.net ? 'net ' : '';
+      const ranking =
+        ctx.parCoverage === 'none'
+          ? `This course has no pars, so the leaderboard ranks by total ${netWord}strokes. Ties share a place.`
+          : `The leaderboard ranks by ${netWord}score to par over the holes each player has finished, so ` +
+            'players on different holes compare fairly.' +
+            (ctx.parCoverage === 'some' ? " Holes without a par don't count toward the ranking." : '') +
+            ' Ties share a place.';
       return ctx.net
         ? 'Every stroke counts, then handicap strokes come off. The lowest handicap in the group plays off ' +
             'scratch, so their net score is the same as their gross. Everyone else gets their handicap minus ' +
-            `the lowest: ${placement(holes)}. The leaderboard ranks by net score to par over the holes each ` +
-            `player has finished, so players on different holes compare fairly. Ties share a place.${halving(ctx)}`
-        : 'Every stroke counts. The leaderboard ranks by score to par over the holes each player has ' +
-            'finished, so players on different holes compare fairly. Ties share a place.';
+            `the lowest: ${placement(holes)}. ${ranking}${halving(ctx)}`
+        : `Every stroke counts. ${ranking}`;
+    }
     case 'skins': {
       const tie = settings.skinsCarry
         ? 'If two or more players tie for the lowest, no one wins it and the skin carries over, so the next ' +
@@ -104,8 +113,10 @@ export function describeGroupGameShort(
 ): string {
   const pair = ctx.matchNames ? `${ctx.matchNames[0]} vs ${ctx.matchNames[1]}` : null;
   switch (id) {
-    case 'strokePlay':
-      return ctx.net ? 'Lowest net score to par leads, strokes off the lowest handicap.' : 'Lowest score to par leads.';
+    case 'strokePlay': {
+      const lead = ctx.parCoverage === 'none' ? 'Lowest total' : 'Lowest score to par';
+      return ctx.net ? `${lead} leads, net, strokes off the lowest handicap.` : `${lead} leads.`;
+    }
     case 'skins':
       return (
         (settings.skinsCarry ? 'Lowest score wins the hole; ties carry over.' : 'Lowest score wins the hole; ties win nothing.') +

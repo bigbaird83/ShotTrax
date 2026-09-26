@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { stepperShown, stepperStep, stepperToggle } from './groupStepper';
+import { stepperClear, stepperShown, stepperStep, stepperToggle } from './groupStepper';
 
 test('starts at par, or 4 when par is unknown', () => {
   assert.equal(stepperShown(null, null, 3), 3);
@@ -16,9 +16,15 @@ test('before Save, − / + move a draft; Save stores what is shown', () => {
   assert.deepEqual(stepperToggle(null, null, 4), { kind: 'save', value: 4 });
 });
 
-test('after Save, − / + change the saved score; tapping Saved clears it', () => {
+test('after Save, − / + change the saved score; a plain tap on Saved does nothing', () => {
   assert.deepEqual(stepperStep(5, null, 4, -1), { kind: 'save', value: 4 });
-  assert.deepEqual(stepperToggle(5, null, 4), { kind: 'clear' });
+  assert.deepEqual(stepperToggle(5, null, 4), { kind: 'none' });
+  assert.deepEqual(stepperToggle(5, 7, 4), { kind: 'none' });
+});
+
+test('clearing is its own action, and only clears a saved score', () => {
+  assert.deepEqual(stepperClear(5), { kind: 'clear' });
+  assert.deepEqual(stepperClear(null), { kind: 'none' });
 });
 
 test('any score from 1 to 20: an ace and a 9 on a par 4', () => {

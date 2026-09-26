@@ -191,9 +191,19 @@ export type StrokePlayRow = {
   /** Gross vs par over scored holes with a par. Null when none. */
   toPar: number | null;
   netToPar: number | null;
-  /** 1-based, ties share a place. By net when net is on, else gross, then to-par. */
+  /** 1-based, ties share a place. See `strokePlay` for the ranking. */
   place: number;
+  /** False until the player has a hole that counts toward the ranking. */
+  ranked: boolean;
 };
+
+export type ParCoverage = 'all' | 'some' | 'none';
+
+/** Whether the course's holes have a par: every hole, some of them, or none. */
+export function parCoverage(holes: readonly GroupHoleIn[]): ParCoverage {
+  const withPar = holes.filter((h) => validPar(h.par)).length;
+  return withPar === 0 ? 'none' : withPar === holes.length ? 'all' : 'some';
+}
 
 export type SkinsResult = {
   /** Skins won per player id. */
@@ -268,17 +278,13 @@ function strokePlay(
       place: 0,
     };
   });
-  // Compare to par when everyone has one (fair across different "thru"), else raw strokes.
-  const allToPar = rows.every((r) => r.toPar != null || r.thru === 0);
-  return placeRows(rows, (r) =>
-    r.thru === 0
-      ? Number.MAX_SAFE_INTEGER
-      : allToPar
-        ? ((useNet ? r.netToPar : r.toPar) ?? 0)
-        : useNet
-          ? r.net
-          : r.gross,
-  );
+  // Rank by score to par over holes that have a par; holes with no par don't count.
+  // Only when the course has no pars at all does it rank by total strokes.
+  const byStrokes = parCoverage(holes) === 'none';
+  const key = (r: Omit<StrokePlayRow, 'place' | 'ranked'>): number | null =>
+    byStrokes ? (r.thru > 0 ? (useNet ? r.net : r.gross) : null) : useNet ? r.netToPar : r.toPar;
+  const ranked = rows.map((r) => ({ ...r, ranked: key(r) != null }));
+  return placeRows(ranked, (r) => key(r) ?? Number.MAX_SAFE_INTEGER);
 }
 
 function skins(
