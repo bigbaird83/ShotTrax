@@ -80,11 +80,12 @@ import {
   PHONE_UNAVAILABLE,
   penaltyPickPayload,
   puttPickPayload,
+  shotClubChangePayload,
   shotUndoPayload,
   type PenaltyPickMessage,
   type PuttPickMessage,
 } from '../domain/watchMessages';
-import { clearWatchUnconfirmed, watchRowBMiddleSlot, type WatchUnconfirmed } from '../domain/watchPendingConfirm';
+import { clearWatchUnconfirmed, watchRowBMiddleSlot, WATCH_EDIT_SHOT_LABEL, type WatchUnconfirmed } from '../domain/watchPendingConfirm';
 import { watchLastShotId } from '../domain/watchShotUndo';
 import { layoutForPlayedHoles, resolveCourseNumHoles } from '../domain/nineByTwo';
 
@@ -976,7 +977,7 @@ async function watchPenaltyRound(shotsApi: ShotActions, watchApi: WatchClub): Pr
     await settle();
   }
 
-  function confirmsFor(id: string, kind: 'penalty' | 'undo'): number {
+  function confirmsFor(id: string, kind: 'penalty' | 'undo' | 'club'): number {
     return watchPushedMessages.filter((row) => row.type === 'watchConfirm' && row.kind === kind && row.id === id && row.ok === true).length;
   }
 
@@ -1022,7 +1023,7 @@ async function watchPenaltyRound(shotsApi: ShotActions, watchApi: WatchClub): Pr
   for (const reason of reasons) {
     watchQueue = clearWatchUnconfirmed(watchQueue, { kind: 'penalty', id: `round-flow-${reason}`, ok: true });
   }
-  if (watchRowBMiddleSlot(watchQueue) !== 'Undo') {
+  if (watchRowBMiddleSlot(watchQueue) !== WATCH_EDIT_SHOT_LABEL) {
     throw new Error('confirmed penalties should put Undo back in the middle slot');
   }
 
@@ -1071,7 +1072,7 @@ async function watchPenaltyRound(shotsApi: ShotActions, watchApi: WatchClub): Pr
     id: 'round-flow-water',
     ok: true,
   });
-  if (watchRowBMiddleSlot(duplicateCleared) !== 'Undo') {
+  if (watchRowBMiddleSlot(duplicateCleared) !== WATCH_EDIT_SHOT_LABEL) {
     throw new Error('a confirmed duplicate penalty id should clear Retry');
   }
 
@@ -1182,7 +1183,7 @@ async function watchPenaltyRound(shotsApi: ShotActions, watchApi: WatchClub): Pr
   if (confirmsFor(queued.id, 'penalty') < 1 || replyOk('penalty-queued') !== true) {
     throw new Error('queued penalty was saved but the phone did not confirm the id');
   }
-  if (watchRowBMiddleSlot(clearWatchUnconfirmed([{ type: 'penaltyPick', id: queued.id }], { kind: 'penalty', id: queued.id, ok: true })) !== 'Undo') {
+  if (watchRowBMiddleSlot(clearWatchUnconfirmed([{ type: 'penaltyPick', id: queued.id }], { kind: 'penalty', id: queued.id, ok: true })) !== WATCH_EDIT_SHOT_LABEL) {
     throw new Error('confirming a queued penalty should show Undo');
   }
   if (confirmsFor('round-flow-water', 'penalty') < waterConfirmsWhileQueued + 1 || replyOk('penalty-queued-deleted') !== true) {
@@ -1240,6 +1241,55 @@ async function watchPenaltyRound(shotsApi: ShotActions, watchApi: WatchClub): Pr
   }
 
   watchApi.setWatchClubContext(context);
+  const clubShot = listShotsForHole(db, before.id).reduce((best, shot) => (shot.seq >= best.seq ? shot : best));
+  const otherClub = clubShot.clubId === clubA.id ? clubB.id : clubA.id;
+  const clubChange = shotClubChangePayload({
+    id: 'round-flow-club',
+    shotId: clubShot.id,
+    clubId: otherClub,
+    at: '2026-09-26T15:25:00.000Z',
+    holeNumber: 1,
+  });
+  const pins = { startLat: clubShot.startLat, endLat: clubShot.endLat, distanceYards: clubShot.distanceYards };
+  listener?.({ token: 'club-1', json: JSON.stringify(clubChange) });
+  await settle();
+  const moved = listShotsForHole(db, before.id).find((shot) => shot.id === clubShot.id);
+  if (!moved || moved.clubId !== otherClub || moved.startLat !== pins.startLat || moved.distanceYards !== pins.distanceYards) {
+    throw new Error(`club change did not keep the shot and move only its club: ${JSON.stringify(moved ?? null)}`);
+  }
+  if (replyOk('club-1') !== true || confirmsFor(clubChange.id, 'club') < 1) {
+    throw new Error('confirmed club change did not ack the id');
+  }
+  if (
+    watchRowBMiddleSlot(clearWatchUnconfirmed([{ type: 'shotClubChange', id: clubChange.id }], { kind: 'club', id: clubChange.id, ok: true })) !==
+    WATCH_EDIT_SHOT_LABEL
+  ) {
+    throw new Error('a confirmed club change should clear Retry');
+  }
+  listener?.({ token: 'club-1-dup', json: JSON.stringify(clubChange) });
+  await settle();
+  if (listShotsForHole(db, before.id).find((shot) => shot.id === clubShot.id)?.clubId !== otherClub) {
+    throw new Error('duplicate club change moved the shot again');
+  }
+  if (replyOk('club-1-dup') !== true || confirmsFor(clubChange.id, 'club') < 2) {
+    throw new Error('duplicate club change id was not confirmed ok');
+  }
+  const staleClub = shotClubChangePayload({
+    id: 'round-flow-club-stale',
+    shotId: clubShot.id,
+    clubId: clubShot.clubId ?? clubA.id,
+    at: '2026-09-26T15:26:00.000Z',
+    holeNumber: 2,
+  });
+  listener?.({ token: 'club-other-hole', json: JSON.stringify(staleClub) });
+  await settle();
+  if (listShotsForHole(db, before.id).find((shot) => shot.id === clubShot.id)?.clubId !== otherClub) {
+    throw new Error('a club change for another hole edited the current hole');
+  }
+  if (replyOk('club-other-hole') !== true) {
+    throw new Error('a club change for another hole should still reply ok');
+  }
+
   const undoShotId = watchLastShotId(listShotsForHole(db, before.id));
   if (!undoShotId) throw new Error('expected a last shot to undo');
   const undo = shotUndoPayload({
@@ -1258,7 +1308,7 @@ async function watchPenaltyRound(shotsApi: ShotActions, watchApi: WatchClub): Pr
   if (replyOk('undo-1') !== true || confirmsFor(undo.id, 'undo') < 1) {
     throw new Error('confirmed undo did not ack the id');
   }
-  if (watchRowBMiddleSlot(clearWatchUnconfirmed([{ type: 'shotUndo', id: undo.id }], { kind: 'undo', id: undo.id, ok: true })) !== 'Undo') {
+  if (watchRowBMiddleSlot(clearWatchUnconfirmed([{ type: 'shotUndo', id: undo.id }], { kind: 'undo', id: undo.id, ok: true })) !== WATCH_EDIT_SHOT_LABEL) {
     throw new Error('a confirmed undo should clear Retry');
   }
   listener?.({ token: 'undo-1-dup', json: JSON.stringify(undo) });

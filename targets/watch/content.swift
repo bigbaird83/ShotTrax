@@ -1,5 +1,8 @@
 import SwiftUI
 
+/// Row B's middle button. Change this one string to put "Undo" back.
+private let watchEditShotLabel = "Edit shot"
+
 /// Pushed off Watch Home. Appending this never starts or continues a round.
 private enum WatchHomePush: Hashable {
   case searchNearby
@@ -10,6 +13,8 @@ struct ContentView: View {
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.isLuminanceReduced) private var isLuminanceReduced
   @State private var showAllClubs = false
+  @State private var showEditShot = false
+  @State private var showChangeClub = false
   /// Search nearby is a push on this stack so Back pops and Home stays mounted.
   @State private var homePath = NavigationPath()
 
@@ -68,6 +73,10 @@ struct ContentView: View {
         .padding(.horizontal, 4)
       } else if session.penaltyChoicesOpen {
         penaltyMenu
+      } else if showChangeClub {
+        changeClubList
+      } else if showEditShot {
+        editShotMenu
       } else if showAllClubs {
         allClubsList
       } else {
@@ -92,8 +101,10 @@ struct ContentView: View {
       session.noteLuminanceReduced(reduced)
     }
     .onChange(of: session.list.holeNumber) { _ in
-      // A new hole starts on the hole face, not a bag list left open.
+      // A new hole starts on the hole face, not a bag list or edit screen left open.
       showAllClubs = false
+      showEditShot = false
+      showChangeClub = false
     }
     .onChange(of: session.showsHome) { showing in
       // Leaving Home (hole, or holes/tees) drops the push. Search → Back does not.
@@ -684,7 +695,7 @@ struct ContentView: View {
       .font(.system(size: 16, weight: .heavy, design: .rounded))
       .foregroundStyle(tileInk(tone))
       .lineLimit(1)
-      .minimumScaleFactor(0.65)
+      .minimumScaleFactor(title == watchEditShotLabel ? 0.5 : 0.65)
       // Fills its row: 44pt, less only on a short face (see clubPick).
       .frame(maxWidth: .infinity, maxHeight: .infinity)
       .background(tileBackground(tone))
@@ -908,28 +919,36 @@ struct ContentView: View {
 
         VStack(alignment: .leading, spacing: 6) {
           // Hole Out keeps the same pill and column as Penalty. The middle slot is
-          // Undo (last shot on this hole). Retry takes it while a penalty or an
-          // undo is unconfirmed — penalty first — and Undo comes back once it
-          // clears. The last slot holds All clubs (overlay below).
+          // Edit shot (last shot on this hole). Retry takes it only while a
+          // penalty, undo, or club change is unconfirmed, and clears once the
+          // phone confirms that id. The last slot holds All clubs (overlay below).
           HStack(spacing: 8) {
             Button(action: { session.madeIt() }) {
               actionPill("Hole Out")
             }
             .buttonStyle(.plain)
-            if session.penaltyRetry || session.undoRetry {
-              Button(action: { session.penaltyRetry ? session.retryPenalty() : session.retryUndo() }) {
+            if session.penaltyRetry || session.undoRetry || session.clubChangeRetry {
+              Button(action: {
+                if session.penaltyRetry {
+                  session.retryPenalty()
+                } else if session.undoRetry {
+                  session.retryUndo()
+                } else {
+                  session.retryClubChange()
+                }
+              }) {
                 actionPill("Retry")
               }
               .buttonStyle(.plain)
             } else {
-              // Dim with no shot on this hole, or while this shot's undo is on the way.
-              Button(action: { session.undoLastShot() }) {
-                actionPill("Undo")
+              // Dim with no shot on this hole. Opening the screen is not a swing.
+              Button(action: { showEditShot = true }) {
+                actionPill(watchEditShotLabel)
               }
               .buttonStyle(.plain)
-              .allowsHitTesting(session.canUndoShot)
-              .opacity(session.canUndoShot ? 1 : 0.4)
-              .accessibilityLabel(Text("Undo last shot"))
+              .allowsHitTesting(session.canEditShot)
+              .opacity(session.canEditShot ? 1 : 0.4)
+              .accessibilityLabel(Text(watchEditShotLabel))
             }
             emptyPillSlot
           }
@@ -999,6 +1018,75 @@ struct ContentView: View {
         .frame(minHeight: controlHeight, alignment: .top)
       }
     }
+    .padding(.horizontal, 4)
+  }
+
+  /// Edit the most recent shot on this hole. Back, Change club, and Delete shot
+  /// are not swings: they do not start the 30-second yardage hold.
+  @ViewBuilder
+  private var editShotMenu: some View {
+    GeometryReader { geo in
+      let backHeight: CGFloat = 28
+      let rowHeight = max(0, min(44, (geo.size.height - backHeight - 6 * 3 - 8) / 2))
+      VStack(alignment: .leading, spacing: 6) {
+        Button(action: { showEditShot = false }) {
+          capsuleBack(Text("Back"), height: backHeight)
+        }
+        .buttonStyle(.plain)
+        Button(action: { showChangeClub = true }) {
+          actionPill("Change club")
+            .frame(height: rowHeight)
+        }
+        .buttonStyle(.plain)
+        Button(action: {
+          session.undoLastShot()
+          showEditShot = false
+        }) {
+          actionPill("Delete shot")
+            .frame(height: rowHeight)
+        }
+        .buttonStyle(.plain)
+      }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .padding(.horizontal, 4)
+  }
+
+  /// Same scrolling bag as All clubs. Picking a row reassigns this shot's club.
+  /// It does not mark a new shot and does not start the yardage hold.
+  @ViewBuilder
+  private var changeClubList: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      Button(action: { showChangeClub = false }) {
+        capsuleBack(Text("Back"), height: 28)
+      }
+      .buttonStyle(.plain)
+      ScrollView {
+        VStack(spacing: 4) {
+          ForEach(moreClubs, id: \.self) { clubId in
+            let current = clubId == session.list.lastShotClubId
+            Button(action: {
+              session.changeShotClub(clubId)
+              showChangeClub = false
+              showEditShot = false
+            }) {
+              tileChrome(
+                Text(session.list.label(for: clubId))
+                  .font(.system(size: 15, weight: .heavy, design: .rounded))
+                  .foregroundStyle(tileInk(current ? .selected : .plain))
+                  .frame(maxWidth: .infinity, alignment: .leading)
+                  .padding(.horizontal, 10)
+                  .frame(minHeight: 38),
+                tone: current ? .selected : .plain,
+                radius: 10
+              )
+            }
+            .buttonStyle(.plain)
+          }
+        }
+      }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     .padding(.horizontal, 4)
   }
 

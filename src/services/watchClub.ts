@@ -21,9 +21,10 @@ import {
   type PuttPickMessage,
   type PuttPickReply,
   type PuttSheetMessage,
+  type ShotClubChangeMessage,
   type ShotUndoMessage,
 } from '../domain/watchMessages';
-import type { PuttLengthId } from '../domain/putts';
+import { holeAfterDone, type PuttLengthId } from '../domain/putts';
 import {
   drainWatchClubPickQueueForHole,
   gateWatchClubPick,
@@ -45,7 +46,17 @@ import {
   queueWatchShotUndoEvent,
   WATCH_SHOT_UNDO_FAILED,
   WATCH_SHOT_UNDO_SKIPPED,
+  watchNamedLastShot,
 } from '../domain/watchShotUndo';
+import {
+  drainWatchShotClubChangeQueue,
+  planWatchShotClubChange,
+  queueWatchShotClubChangeEvent,
+  rememberWatchClubChange,
+  WATCH_CLUB_CHANGE_FAILED,
+  WATCH_CLUB_CHANGE_UNCHANGED,
+  watchClubChangeAlreadyApplied,
+} from '../domain/watchShotClubChange';
 import {
   drainWatchPenaltyQueue,
   formatWatchPenaltyFeedback,
@@ -54,7 +65,7 @@ import {
   WATCH_PENALTY_SAVE_FAILED,
 } from '../domain/watchPenalty';
 import { hapticMark, hapticSelect, hapticWarn } from '../ui/haptics';
-import { markShotWithClub, promptForPlan } from './shotActions';
+import { changeShotClub, markShotWithClub, promptForPlan } from './shotActions';
 import { handleWatchHomeJson, isWatchHomeJson } from './watchHome';
 import { handleWatchNearbyJson, isWatchNearbyJson } from './watchNearby';
 
@@ -103,6 +114,7 @@ export function setWatchClubContext(next: WatchClubContext | null): void {
     void flushPendingPuttPicks();
     void flushPendingPenalties();
     void flushPendingShotUndos();
+    void flushPendingShotClubChanges();
   }
 }
 
@@ -153,10 +165,12 @@ async function deliverClubList(msg: ClubListMessage, queuedForRound: string | nu
   if (json === lastJson) return;
   const mod = native();
   if (!mod) return;
+  const stamped = { ...msg, listSeq: clubListSeq + 1 };
   try {
-    await mod.pushClubListJson(json);
+    await mod.pushClubListJson(JSON.stringify(stamped));
+    clubListSeq += 1;
     lastJson = json;
-    lastClubList = msg;
+    lastClubList = stamped;
   } catch {
     // Watch is best-effort on Simulator / Android / web.
   }
@@ -190,10 +204,27 @@ export async function pushWatchPuttSheet(args: {
  * the wrist to Hole N+1 (or Round complete) right away. The next hole screen
  * pushes its own clubList with real yards after it mounts.
  */
+/** Last shot already on the hole Hole Out is moving to. Empty when that hole has none. */
+export function watchAdvanceNamedShot(
+  db: SQLiteDatabase,
+  roundId: string,
+  finishedHole: number,
+  holeCount: number,
+): { lastShotId: string | null; lastShotClubId: string | null } {
+  const dest = holeAfterDone(finishedHole, holeCount);
+  if (dest.kind !== 'hole') return { lastShotId: null, lastShotClubId: null };
+  const row = getHole(db, roundId, dest.holeNumber);
+  if (!row) return { lastShotId: null, lastShotClubId: null };
+  return watchNamedLastShot(listShotsForHole(db, row.id));
+}
+
 export async function pushWatchMadeItAdvance(args: {
   holeNumber: number;
   holeCount: number;
   lengths: PuttLengthId[];
+  /** Last shot already stored on the hole the wrist is moving to. */
+  lastShotId?: string | null;
+  lastShotClubId?: string | null;
 }): Promise<void> {
   const plan = planWatchMadeItAdvance({ ...args, last: lastClubList });
   if (plan.clubList.roundComplete === true && context?.roundId) {
@@ -249,8 +280,10 @@ export function buildClubList(args: {
   /** Course cup from `watchGreenFields`. Null means the Watch must not invent yards. */
   green?: WatchGreenFields | null;
   clubCarry?: Record<string, number | null | undefined> | null;
-  /** Shot the phone's Undo last shot would remove on this hole. Null dims the Watch Undo. */
+  /** Shot Edit shot would change or delete on this hole. Null sends an explicit empty id. */
   lastShotId?: string | null;
+  /** Club on that shot, so Change club can highlight it after a hole change. */
+  lastShotClubId?: string | null;
 }): ClubListMessage {
   const labels: Record<string, string> = {};
   // Phone bag is source of truth. Full enabled bag — never a pre-trimmed top-3.
@@ -274,7 +307,9 @@ export function buildClubList(args: {
     ...(args.teeLengthYards != null ? { teeLengthYards: args.teeLengthYards } : {}),
     ...(args.green ? { green: clubListGreen(args.green) } : {}),
     ...(args.clubCarry ? { clubCarry: args.clubCarry } : {}),
-    ...(args.lastShotId ? { lastShotId: args.lastShotId } : {}),
+    lastShotId: args.lastShotId ?? null,
+    lastShotClubId: args.lastShotClubId ?? null,
+    nameLastShot: true,
   });
   if (args.roundLive === false) msg.roundLive = false;
   return msg;
@@ -285,18 +320,6 @@ export function buildClubList(args: {
  * can drop it even when the sendMessage reply never arrives. A duplicate id
  * still confirms: the phone did not insert a second stroke.
  */
-async function pushWatchConfirm(kind: 'penalty' | 'undo', id: string): Promise<void> {
-  const message = watchConfirmPayload(kind, id);
-  if (!message) return;
-  const mod = native();
-  if (!mod || typeof mod.pushWatchMessageJson !== 'function') return;
-  try {
-    await mod.pushWatchMessageJson(JSON.stringify(message));
-  } catch {
-    // The sendMessage reply is the other confirm path.
-  }
-}
-
 async function replyToken(token: string, payload: ClubPickReply | PuttPickReply): Promise<void> {
   const mod = native();
   if (!mod) return;
@@ -307,7 +330,24 @@ async function replyToken(token: string, payload: ClubPickReply | PuttPickReply)
   }
 }
 
+let clubListSeq = 0;
 let clubPickTail: Promise<void> = Promise.resolve();
+
+async function pushWatchConfirm(
+  kind: 'penalty' | 'undo' | 'club',
+  id: string,
+  feedback?: string,
+): Promise<void> {
+  const message = watchConfirmPayload(kind, id, feedback);
+  if (!message) return;
+  const mod = native();
+  if (!mod || typeof mod.pushWatchMessageJson !== 'function') return;
+  try {
+    await mod.pushWatchMessageJson(JSON.stringify(message));
+  } catch {
+    // The sendMessage reply is the other confirm path.
+  }
+}
 
 function enqueueClubPick(work: () => Promise<void>): Promise<void> {
   const run = clubPickTail.then(work, work);
@@ -373,6 +413,14 @@ async function handlePickNow(token: string, json: string): Promise<void> {
       await replyToken(token, { ok: false, feedback: WATCH_SHOT_UNDO_FAILED });
       return;
     }
+    if (intent.kind === 'shotClub') {
+      if (!ctx) {
+        queueWatchShotClubChangeEvent({ token, json, id: intent.change.id });
+        return;
+      }
+      await replyToken(token, { ok: false, feedback: WATCH_CLUB_CHANGE_FAILED });
+      return;
+    }
     await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
     return;
   }
@@ -406,6 +454,11 @@ async function handlePickNow(token: string, json: string): Promise<void> {
 
   if (intent.kind === 'undo') {
     await applyWatchShotUndo(token, intent.undo);
+    return;
+  }
+
+  if (intent.kind === 'shotClub') {
+    await applyWatchShotClubChange(token, intent.change);
     return;
   }
 
@@ -565,7 +618,7 @@ async function applyWatchShotUndo(token: string, undo: ShotUndoMessage): Promise
     shots: hole ? listShotsForHole(ctx.db, hole.id) : [],
   });
   if (decision.action !== 'undo') {
-    await pushWatchConfirm('undo', undo.id);
+    await pushWatchConfirm('undo', undo.id, decision.feedback);
     await replyToken(token, { ok: true, feedback: decision.feedback });
     return;
   }
@@ -573,7 +626,7 @@ async function applyWatchShotUndo(token: string, undo: ShotUndoMessage): Promise
     const result = undoLastShot(ctx.db, ctx.roundId, undo.holeNumber, undo.shotId);
     if (!result.ok) {
       // Checked again inside the repo: the shot is no longer the last one. Remove nothing.
-      await pushWatchConfirm('undo', undo.id);
+      await pushWatchConfirm('undo', undo.id, WATCH_SHOT_UNDO_SKIPPED);
       await replyToken(token, { ok: true, feedback: WATCH_SHOT_UNDO_SKIPPED });
       return;
     }
@@ -581,7 +634,7 @@ async function applyWatchShotUndo(token: string, undo: ShotUndoMessage): Promise
     lastClubMark = null;
     hapticSelect();
     ctx.bump();
-    await pushWatchConfirm('undo', undo.id);
+    await pushWatchConfirm('undo', undo.id, decision.feedback);
     await replyToken(token, { ok: true, feedback: decision.feedback });
   } catch {
     await replyToken(token, { ok: false, feedback: WATCH_SHOT_UNDO_FAILED });
@@ -590,6 +643,60 @@ async function applyWatchShotUndo(token: string, undo: ShotUndoMessage): Promise
 
 async function flushPendingShotUndos(): Promise<void> {
   const rows = drainWatchShotUndoQueue();
+  for (const row of rows) {
+    await handlePick(row.token, row.json);
+  }
+}
+
+/**
+ * Change club on the last shot only. Same id (Retry, sendMessage, and
+ * transferUserInfo) applies once. A shot that is no longer last, another hole,
+ * or the putter replies ok and changes nothing. Coordinates stay. No shot hold.
+ */
+async function applyWatchShotClubChange(token: string, change: ShotClubChangeMessage): Promise<void> {
+  const ctx = context;
+  if (!ctx) {
+    queueWatchShotClubChangeEvent({ token, json: JSON.stringify(change), id: change.id });
+    return;
+  }
+  if (ctx.readOnly) {
+    await replyToken(token, { ok: false, feedback: WATCH_CLUB_CHANGE_FAILED });
+    return;
+  }
+  const hole = getHole(ctx.db, ctx.roundId, change.holeNumber);
+  const shots = hole ? listShotsForHole(ctx.db, hole.id) : [];
+  const decision = planWatchShotClubChange({
+    id: change.id,
+    shotId: change.shotId,
+    clubId: change.clubId,
+    holeNumber: change.holeNumber,
+    currentHole: ctx.holeNumber,
+    shots,
+    alreadyApplied: watchClubChangeAlreadyApplied(change.id),
+  });
+  if (decision.action !== 'apply') {
+    await pushWatchConfirm('club', change.id, decision.feedback);
+    await replyToken(token, { ok: true, feedback: decision.feedback });
+    return;
+  }
+  try {
+    const saved = changeShotClub(ctx.db, { roundId: ctx.roundId, shotId: change.shotId, clubId: change.clubId });
+    if (saved.status !== 'commit') {
+      await pushWatchConfirm('club', change.id, WATCH_CLUB_CHANGE_UNCHANGED);
+      await replyToken(token, { ok: true, feedback: WATCH_CLUB_CHANGE_UNCHANGED });
+      return;
+    }
+    rememberWatchClubChange(change.id);
+    ctx.bump();
+    await pushWatchConfirm('club', change.id, decision.feedback);
+    await replyToken(token, { ok: true, feedback: decision.feedback });
+  } catch {
+    await replyToken(token, { ok: false, feedback: WATCH_CLUB_CHANGE_FAILED });
+  }
+}
+
+async function flushPendingShotClubChanges(): Promise<void> {
+  const rows = drainWatchShotClubChangeQueue();
   for (const row of rows) {
     await handlePick(row.token, row.json);
   }

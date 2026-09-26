@@ -123,6 +123,13 @@ export function planWatchMadeItAdvance(args: {
   holeCount: number;
   lengths: PuttLengthId[];
   last: ClubListMessage | null;
+  /**
+   * Last shot already on the destination hole. Null (the default) sends an
+   * explicit empty id so the Watch does not keep hole N's shot, and does not
+   * gray Edit shot when hole N+1 already has shots.
+   */
+  nextLastShotId?: string | null;
+  nextLastShotClubId?: string | null;
 }): WatchMadeItAdvance {
   const puttSheet = puttSheetPayload({
     open: false,
@@ -131,6 +138,8 @@ export function planWatchMadeItAdvance(args: {
     done: true,
   });
   const dest = holeAfterDone(args.holeNumber, args.holeCount);
+  const nextLastShotId = args.nextLastShotId?.trim() ?? '';
+  const nextLastShotClubId = args.nextLastShotClubId?.trim() ?? '';
   const base: ClubListMessage = {
     type: 'clubList',
     top3: args.last?.top3 ?? [],
@@ -141,6 +150,8 @@ export function planWatchMadeItAdvance(args: {
     yardsQuality: 'none',
     complicationYards: null,
     complicationQuality: 'none',
+    lastShotId: nextLastShotId,
+    lastShotClubId: nextLastShotClubId,
   };
   if (dest.kind === 'summary') base.roundComplete = true;
   return { puttSheet, clubList: base };

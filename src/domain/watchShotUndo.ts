@@ -11,8 +11,10 @@
 import { planUndoLastShot, type UndoPlan } from './undoLastShot';
 import type { Shot } from './types';
 
-/** Success flash on the Watch. The ✓ shows it in lime like a club mark. */
-export const WATCH_SHOT_UNDONE = 'Shot undone ✓';
+/** Success flash on the Watch after Delete shot. The ✓ shows it in lime like a club mark. */
+export const WATCH_SHOT_DELETED = 'Shot deleted ✓';
+/** Same flash. Delete shot is the Watch's undo of the last shot. */
+export const WATCH_SHOT_UNDONE = WATCH_SHOT_DELETED;
 /** The shot was already removed (an earlier delivery, or deleted on the phone). */
 export const WATCH_SHOT_ALREADY_UNDONE = 'Already undone ✓';
 /** A newer shot or another hole is in the way. Nothing is removed. */
@@ -23,6 +25,48 @@ export const WATCH_SHOT_UNDO_FAILED = 'Couldn’t undo';
 /** The shot the phone's Undo last shot would remove. The Watch sends it back on Undo. */
 export function watchLastShotId(shots: readonly Shot[] | null | undefined): string | null {
   return shots && shots.length > 0 ? (planUndoLastShot([...shots])?.deleteShotId ?? null) : null;
+}
+
+/** Last shot plus the club Change club should highlight. */
+export function watchNamedLastShot(shots: readonly Shot[] | null | undefined): {
+  lastShotId: string | null;
+  lastShotClubId: string | null;
+} {
+  const lastShotId = watchLastShotId(shots);
+  if (!lastShotId || !shots) return { lastShotId: null, lastShotClubId: null };
+  const shot = shots.find((row) => row.id === lastShotId);
+  return { lastShotId, lastShotClubId: shot?.clubId ?? null };
+}
+
+/**
+ * How the Watch applies `lastShotId` / `lastShotClubId`.
+ * A named id wins. An explicit empty string means this hole has no shot.
+ * A missing key keeps the shot on the same hole (a yard refresh must not gray
+ * Edit shot) and clears it when the hole number changes, so hole N's shot is
+ * never left armed on hole N+1.
+ */
+export function resolveWatchLastShotId(args: {
+  previousHole: number;
+  previousId: string | null;
+  nextHole: number;
+  /** undefined = key omitted. null or '' = the phone says there is no shot. */
+  incoming: string | null | undefined;
+}): string | null {
+  if (args.incoming === undefined) {
+    const holeChanged = args.previousHole > 0 && args.nextHole !== args.previousHole;
+    return holeChanged ? null : args.previousId;
+  }
+  const named = (args.incoming ?? '').trim();
+  return named || null;
+}
+
+/**
+ * A club list with a lower generation than the one already on the Watch is a
+ * late Hole Out placeholder or complication transfer. Applying it rewinds the
+ * hole and drops the last shot.
+ */
+export function watchClubListIsStale(args: { currentSeq: number; incomingSeq: number }): boolean {
+  return args.currentSeq > 0 && args.incomingSeq < args.currentSeq;
 }
 
 export type WatchShotUndoDecision =

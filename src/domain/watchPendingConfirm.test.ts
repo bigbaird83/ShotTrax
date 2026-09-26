@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { parseWatchConfirm, watchConfirmPayload } from './watchMessages';
-import { clearWatchUnconfirmed, watchRowBMiddleSlot, type WatchUnconfirmed } from './watchPendingConfirm';
+import { clearWatchUnconfirmed, watchRowBMiddleSlot, WATCH_EDIT_SHOT_LABEL, type WatchUnconfirmed } from './watchPendingConfirm';
 
 const penalty = (id: string): WatchUnconfirmed => ({ type: 'penaltyPick', id });
 const undo = (id: string): WatchUnconfirmed => ({ type: 'shotUndo', id });
@@ -15,7 +15,7 @@ test('a penalty the phone confirmed clears Retry so Undo shows', () => {
   assert.deepEqual(parseWatchConfirm(ack), ack);
   const cleared = clearWatchUnconfirmed(queued, { kind: 'penalty', id: 'pen-water', ok: true });
   assert.deepEqual(cleared, []);
-  assert.equal(watchRowBMiddleSlot(cleared), 'Undo');
+  assert.equal(watchRowBMiddleSlot(cleared), WATCH_EDIT_SHOT_LABEL);
 });
 
 test('a confirmed duplicate penalty id also clears Retry', () => {
@@ -23,7 +23,7 @@ test('a confirmed duplicate penalty id also clears Retry', () => {
   const once = clearWatchUnconfirmed(queued, { kind: 'penalty', id: 'pen-water', ok: true });
   const twice = clearWatchUnconfirmed(once, { kind: 'penalty', id: 'pen-water', ok: true });
   assert.deepEqual(twice, []);
-  assert.equal(watchRowBMiddleSlot(twice), 'Undo');
+  assert.equal(watchRowBMiddleSlot(twice), WATCH_EDIT_SHOT_LABEL);
   // The other queued row is a different id and stays.
   const other = clearWatchUnconfirmed([penalty('pen-water'), penalty('pen-ob')], {
     kind: 'penalty',
@@ -39,13 +39,32 @@ test('a confirmed undo clears undoRetry so Undo shows', () => {
   assert.equal(watchRowBMiddleSlot(queued), 'Retry');
   const cleared = clearWatchUnconfirmed(queued, { kind: 'undo', id: 'undo-1', ok: true });
   assert.deepEqual(cleared, []);
-  assert.equal(watchRowBMiddleSlot(cleared), 'Undo');
+  assert.equal(watchRowBMiddleSlot(cleared), WATCH_EDIT_SHOT_LABEL);
   // A penalty confirm does not drop an undo, and the reverse is also true.
   const both = [penalty('pen-water'), undo('undo-1')];
   const penaltyOnly = clearWatchUnconfirmed(both, { kind: 'penalty', id: 'pen-water', ok: true });
   assert.deepEqual(penaltyOnly, [undo('undo-1')]);
   assert.equal(watchRowBMiddleSlot(penaltyOnly), 'Retry');
-  assert.equal(watchRowBMiddleSlot(clearWatchUnconfirmed(penaltyOnly, { kind: 'undo', id: 'undo-1', ok: true })), 'Undo');
+  assert.equal(watchRowBMiddleSlot(clearWatchUnconfirmed(penaltyOnly, { kind: 'undo', id: 'undo-1', ok: true })), WATCH_EDIT_SHOT_LABEL);
+});
+
+test('a confirmed club change clears Retry, and a failed one keeps it', () => {
+  const queued: WatchUnconfirmed[] = [{ type: 'shotClubChange', id: 'club-1' }];
+  assert.equal(watchRowBMiddleSlot(queued), 'Retry');
+  const cleared = clearWatchUnconfirmed(queued, { kind: 'club', id: 'club-1', ok: true });
+  assert.deepEqual(cleared, []);
+  assert.equal(watchRowBMiddleSlot(cleared), WATCH_EDIT_SHOT_LABEL);
+  const failed = clearWatchUnconfirmed(queued, { kind: 'club', id: 'club-1', ok: false });
+  assert.equal(watchRowBMiddleSlot(failed), 'Retry');
+  const mixed: WatchUnconfirmed[] = [
+    { type: 'penaltyPick', id: 'pen' },
+    { type: 'shotUndo', id: 'undo' },
+    { type: 'shotClubChange', id: 'club-1' },
+  ];
+  assert.equal(watchRowBMiddleSlot(clearWatchUnconfirmed(mixed, { kind: 'club', id: 'club-1', ok: true })), 'Retry');
+  const noPenalty = clearWatchUnconfirmed(mixed, { kind: 'penalty', id: 'pen', ok: true });
+  const noUndo = clearWatchUnconfirmed(noPenalty, { kind: 'undo', id: 'undo', ok: true });
+  assert.equal(watchRowBMiddleSlot(clearWatchUnconfirmed(noUndo, { kind: 'club', id: 'club-1', ok: true })), WATCH_EDIT_SHOT_LABEL);
 });
 
 test('a failed or still-queued penalty keeps Retry', () => {
@@ -68,6 +87,9 @@ test('Watch clears a confirmed id from the phone ack, not only on the next hole'
   assert.match(ack, /finishPenaltySend\(\)/);
   assert.match(ack, /kind == "undo"/);
   assert.match(ack, /finishUndoSend\(shotId: shotId\)/);
+  assert.match(ack, /kind == "club"/);
+  assert.match(ack, /acceptConfirmed\(kind: "club", id: id\)/);
+  assert.match(ack, /finishClubChangeSend/);
   assert.ok(ack.indexOf('acceptConfirmed(kind: "penalty"') < ack.indexOf('finishPenaltySend()'));
   assert.ok(ack.indexOf('acceptConfirmed(kind: "undo"') < ack.indexOf('finishUndoSend'));
   const penaltySend = session.slice(
@@ -87,7 +109,7 @@ test('Watch clears a confirmed id from the phone ack, not only on the next hole'
   assert.match(penalty, /pushWatchConfirm\('penalty', pick\.id\)/);
   assert.ok(penalty.indexOf("saved.replay === 'deleted'") < penalty.indexOf("pushWatchConfirm('penalty'"));
   const shotUndo = service.slice(service.indexOf('async function applyWatchShotUndo'), service.indexOf('async function flushPendingShotUndos'));
-  assert.match(shotUndo, /pushWatchConfirm\('undo', undo\.id\)/);
+  assert.match(shotUndo, /pushWatchConfirm\('undo', undo\.id/);
   const undoFailed = shotUndo.slice(shotUndo.indexOf('} catch'));
   assert.doesNotMatch(undoFailed, /pushWatchConfirm/);
   const penaltyFailed = penalty.slice(penalty.indexOf('} catch'));

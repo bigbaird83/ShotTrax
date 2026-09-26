@@ -24,6 +24,8 @@ import {
   watchPayloadRunsAcceptFix,
 } from './watchMessages';
 import {
+  resolveWatchLastShotId,
+  watchClubListIsStale,
   planWatchShotUndo,
   WATCH_SHOT_ALREADY_UNDONE,
   WATCH_SHOT_UNDO_SKIPPED,
@@ -95,6 +97,39 @@ test('clubList carries lastShotId so the Watch can dim Undo and name the shot', 
   assert.notEqual(clubListPushKey(withShot), clubListPushKey(empty));
   assert.equal(watchLastShotId([]), null);
   assert.equal(watchLastShotId([shot({ id: 'a', seq: 1 }), shot({ id: 'b', seq: 2 })]), 'b');
+});
+
+test('Hole Out and a hole change do not drop a last shot the phone still has', () => {
+  // Same hole, key omitted: a yard refresh must not gray Edit shot.
+  assert.equal(
+    resolveWatchLastShotId({ previousHole: 1, previousId: 'shot-a', nextHole: 1, incoming: undefined }),
+    'shot-a',
+  );
+  // Explicit empty: the phone says this hole has no shot.
+  assert.equal(resolveWatchLastShotId({ previousHole: 1, previousId: 'shot-a', nextHole: 1, incoming: '' }), null);
+  // Hole change with the key omitted does not carry hole N's shot onto hole N+1.
+  assert.equal(
+    resolveWatchLastShotId({ previousHole: 1, previousId: 'shot-a', nextHole: 2, incoming: undefined }),
+    null,
+  );
+  // Hole Out names the destination hole's shot, including a hole that already has one.
+  assert.equal(
+    resolveWatchLastShotId({ previousHole: 1, previousId: 'shot-a', nextHole: 2, incoming: 'shot-on-2' }),
+    'shot-on-2',
+  );
+  assert.equal(resolveWatchLastShotId({ previousHole: 1, previousId: 'shot-a', nextHole: 2, incoming: '' }), null);
+  // A late Hole Out / complication list is older than the list already on the Watch.
+  assert.equal(watchClubListIsStale({ currentSeq: 4, incomingSeq: 2 }), true);
+  assert.equal(watchClubListIsStale({ currentSeq: 4, incomingSeq: 4 }), false);
+  assert.equal(watchClubListIsStale({ currentSeq: 0, incomingSeq: 0 }), false);
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+  const apply = session.slice(session.indexOf('private func applyClubList'), session.indexOf('private func applyPuttSheet'));
+  assert.match(apply, /incomingSeq < list\.listSeq/);
+  assert.match(apply, /message\["lastShotId"\] != nil/);
+  assert.match(apply, /next\.lastShotId = list\.lastShotId/);
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  assert.match(hole, /watchAdvanceNamedShot\(db, id, targetHole, round\.holeCount\)/);
+  assert.match(hole, /lastShotId: advance\.lastShotId/);
 });
 
 test('undo removes only the named shot, only while it is last, only on the current hole', () => {
@@ -234,7 +269,7 @@ test('phone handler applies Watch Undo through the planner and the phone undo, n
   assert.doesNotMatch(fn, /insertPenalty|updateHolePutts|markShotWithClub|acceptFix/);
   assert.match(service, /queueWatchShotUndoEvent/);
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
-  assert.match(hole, /lastShotId: readOnly \? null : watchLastShotId\(shots\)/);
+  assert.match(hole, /lastShotId: readOnly \? null : watchNamedLastShot\(shots\)\.lastShotId/);
 });
 
 test('Watch Undo: stable id, same queue as Penalty, no shot hold, never putts or penalties', () => {
@@ -270,18 +305,21 @@ test('Watch Undo: stable id, same queue as Penalty, no shot hold, never putts or
   assert.match(can, /pendingQueue\.contains \{ isClubPick\(\$0\)/);
 });
 
-test('Watch Row B: Undo in the middle slot; Retry takes it while a penalty or undo is pending', () => {
+test('Watch Row B: Edit shot in the middle slot; Retry takes it while a penalty, undo, or club change is pending', () => {
   const ui = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
-  const pick = ui.slice(ui.indexOf('private var clubPick'), ui.indexOf('private var moreClubs'));
+  const pick = ui.slice(ui.indexOf('private var clubPick'), ui.indexOf('private var editShotMenu'));
   const rowB = pick.slice(pick.indexOf('actionPill("Hole Out")'), pick.indexOf('GeometryReader { wheelGeo'));
   const retryAt = rowB.indexOf('actionPill("Retry")');
-  const undoAt = rowB.indexOf('actionPill("Undo")');
-  assert.ok(retryAt > 0 && undoAt > retryAt, 'Retry wins the slot, Undo is the else branch');
-  assert.match(rowB, /if session\.penaltyRetry \|\| session\.undoRetry \{/);
-  assert.match(rowB, /session\.penaltyRetry \? session\.retryPenalty\(\) : session\.retryUndo\(\)/);
-  assert.match(rowB, /session\.undoLastShot\(\)/);
-  assert.match(rowB, /\.allowsHitTesting\(session\.canUndoShot\)/);
-  assert.match(rowB, /\.opacity\(session\.canUndoShot \? 1 : 0\.4\)/);
-  // Undo sits before the last slot (All clubs); the row is still three slots.
-  assert.ok(undoAt < rowB.indexOf('emptyPillSlot'));
+  const editAt = rowB.indexOf('actionPill(watchEditShotLabel)');
+  assert.ok(retryAt > 0 && editAt > retryAt, 'Retry wins the slot, Edit shot is the else branch');
+  assert.match(rowB, /if session\.penaltyRetry \|\| session\.undoRetry \|\| session\.clubChangeRetry \{/);
+  assert.match(rowB, /session\.retryPenalty\(\)/);
+  assert.match(rowB, /session\.retryUndo\(\)/);
+  assert.match(rowB, /session\.retryClubChange\(\)/);
+  assert.match(ui, /private let watchEditShotLabel = "Edit shot"/);
+  assert.match(rowB, /showEditShot = true/);
+  assert.doesNotMatch(rowB, /beginShotHold|undoLastShot|changeShotClub/);
+  assert.match(rowB, /\.allowsHitTesting\(session\.canEditShot\)/);
+  assert.match(rowB, /\.opacity\(session\.canEditShot \? 1 : 0\.4\)/);
+  assert.ok(editAt < rowB.indexOf('emptyPillSlot'));
 });
