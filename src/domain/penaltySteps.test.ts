@@ -316,7 +316,8 @@ test('round screen and summary render ordered penalty steps and keep insert on s
   assert.match(overlay, /isHoleOutShot\(shot\)/);
   const penaltyChip = overlay.slice(overlay.indexOf("step.kind === 'penalty'"), overlay.indexOf('const shot = shots.find'));
   assert.match(penaltyChip, /step\.label/);
-  assert.doesNotMatch(penaltyChip, /onPress|openEdit|shotLinePlus|distanceYards/);
+  assert.match(penaltyChip, /openPenaltyActions\(step\.id\)/);
+  assert.doesNotMatch(penaltyChip, /openEdit|shotLinePlus|distanceYards|changeClub|moveSpot/);
   assert.match(hole, /finishedMini\.vsPar/);
   assert.match(hole, /finishedMini\.penaltyLabel/);
   const liveHeader = hole.slice(hole.indexOf('playLayout.shotLine'), hole.indexOf('testID="finished-hole-chip"'));
