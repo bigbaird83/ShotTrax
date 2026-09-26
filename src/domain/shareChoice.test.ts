@@ -2,7 +2,13 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { COPY } from './playerCopy';
-import { planScorecardAudienceChoices, planShareChoices, shareKindOrScorecard, shareTapOpensChoice } from './shareChoice';
+import {
+  planScorecardAudienceChoices,
+  planShareChoices,
+  shareAudienceForPublish,
+  shareKindOrScorecard,
+  shareTapOpensChoice,
+} from './shareChoice';
 
 test('Share opens a pick: Share scorecard or Share live round', () => {
   assert.equal(shareTapOpensChoice(), true);
@@ -83,4 +89,14 @@ test('Whole group / Just me is asked only when the round has a partner', () => {
   assert.ok(snapshot.indexOf('publishExplicitRoundShare') < snapshot.indexOf('loadGroup'));
   assert.doesNotMatch(snapshot, /buildRoundSpectatorPayload/);
   assert.doesNotMatch(live, /loadGroup|planGroupScorecard|planScorecardAudienceChoices|audience/);
+});
+
+test('publish follows an explicit choice, then the stored one, and defaults to Whole group once partners exist', () => {
+  assert.equal(shareAudienceForPublish({ explicit: 'me', stored: 'group', partnerCount: 3 }), 'me');
+  assert.equal(shareAudienceForPublish({ explicit: 'group', stored: 'me', partnerCount: 1 }), 'group');
+  assert.equal(shareAudienceForPublish({ explicit: 'group', partnerCount: 0 }), 'me');
+  assert.equal(shareAudienceForPublish({ stored: 'me', partnerCount: 2 }), 'me');
+  assert.equal(shareAudienceForPublish({ stored: 'group', partnerCount: 0 }), 'me');
+  assert.equal(shareAudienceForPublish({ stored: null, partnerCount: 1 }), 'group');
+  assert.equal(shareAudienceForPublish({ partnerCount: 0 }), 'me');
 });

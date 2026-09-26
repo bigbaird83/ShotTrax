@@ -75,7 +75,7 @@ export async function shareRoundSnapshot(
 ): Promise<boolean | string> {
   const planned = planRoundShare(db, roundId, args);
   if (!planned) return false;
-  // Spectator upload stays the owner's card. Partner names are not part of it.
+  // Whole group uploads the group card. Just me replaces that board with the owner's card only.
   publishExplicitRoundShare(db, roundId, args);
   let imageUrl: string | null = null;
   try {
@@ -88,7 +88,7 @@ export async function shareRoundSnapshot(
     if (args?.audience === 'group') {
       const group = loadGroup(db, roundId);
       if (group.players.some((player) => !player.isMe)) {
-        // Whole group is drawn into the local PNG only. Nothing here is uploaded.
+        // Same Whole group rows as the link page. The PNG stays on this phone.
         image = planScorecardImage({
           courseName: planned.payload.courseName,
           holes: planned.scorecard,

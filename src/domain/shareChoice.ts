@@ -25,7 +25,7 @@ export function shareKindOrScorecard(kind: ShareKind | null | undefined): ShareK
   return kind === 'live' ? 'live' : 'scorecard';
 }
 
-/** Whose card the scorecard image shows. Whole group is local to the PNG. */
+/** Whose card the scorecard share shows, on the image and on the link page. */
 export type ScorecardAudience = 'group' | 'me';
 
 export type ScorecardAudienceChoice = {
@@ -46,4 +46,22 @@ export function planScorecardAudienceChoices(partnerCount: number): ScorecardAud
     { audience: 'group', label: COPY.shareWholeGroup, default: true },
     { audience: 'me', label: COPY.shareJustMe, default: false },
   ];
+}
+
+/**
+ * What the next scoreboard publish should upload.
+ * An explicit Just me / Whole group wins. Otherwise the stored choice wins.
+ * With nothing stored, partners default to Whole group; a solo round stays Just me.
+ */
+export function shareAudienceForPublish(args: {
+  explicit?: ScorecardAudience | null;
+  stored?: ScorecardAudience | null;
+  partnerCount: number;
+}): ScorecardAudience {
+  const partners = Number.isInteger(args.partnerCount) && args.partnerCount > 0;
+  if (args.explicit === 'me') return 'me';
+  if (args.explicit === 'group') return partners ? 'group' : 'me';
+  if (args.stored === 'me') return 'me';
+  if (args.stored === 'group') return partners ? 'group' : 'me';
+  return partners ? 'group' : 'me';
 }

@@ -2,17 +2,23 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import type { SQLiteDatabase } from 'expo-sqlite';
+import { addGroupPlayer, setGroupGames, setPlayerHoleScore, updateGroupPlayer } from '../db/groupRepo';
+import { DEFAULT_GROUP_GAMES } from './groupGames';
 import {
   finishHoleOut,
   finishHolePutts,
   getHole,
+  getRoundShareAudience,
   getRoundSharedAt,
   getRoundShareToken,
+  getShareBoard,
   isRoundShared,
+  listHoles,
   markHoleStarted,
   markRoundShared,
   restoreRoundHistory,
   startRound,
+  updateHoleScore,
 } from '../db/repo';
 import { migrate } from '../db/schema';
 import { putSharedBoard } from './shareBoardSync';
@@ -304,4 +310,135 @@ test('hole and board screens publish only through the shared gate; Share taps se
   assert.match(uploader, /putSharedPayload/);
   assert.match(schema, /ensureColumn\(db, 'rounds', 'shared_at', 'TEXT'\)/);
   assert.doesNotMatch(schema, /UPDATE rounds SET shared_at/);
+  assert.doesNotMatch(publish, /setRoundShareAudience/);
+  assert.match(explicit, /setRoundShareAudience/);
+  assert.ok(explicit.indexOf('setRoundShareAudience') < explicit.indexOf('publishRoundScoreboard'));
+});
+
+function storedBoardJson(db: SQLiteDatabase, token: string): string {
+  const row = db.getFirstSync<{ payload_json: string }>('SELECT payload_json FROM share_boards WHERE token = ?', [
+    token,
+  ]);
+  assert.ok(row?.payload_json);
+  return row.payload_json;
+}
+
+test('a round with no partners publishes today payload and no group', needsSqlite, async () => {
+  const db = memoryDb();
+  const round = startRound(db, 18, 'Magnolia');
+  const hole = getHole(db, round.id, 1);
+  assert.ok(hole);
+  updateHoleScore(db, hole.id, 4);
+  const { upload, puts } = mockPutSharedPayload();
+  const published = publishExplicitRoundShare(db, round.id, { audience: 'group', upload });
+  await flushPuts();
+  assert.ok(published);
+  assert.equal('group' in published, false);
+  assert.equal(published.holes.find((row) => row.hole === 1)?.score, 4);
+  assert.doesNotMatch(JSON.stringify(published), /PartnerSam|"group"/);
+  assert.equal(getShareBoard(db, published.token)?.group, undefined);
+  assert.equal(puts.at(-1)?.payload.group, undefined);
+  assert.doesNotMatch(storedBoardJson(db, published.token), /"group"/);
+});
+
+test('whole group publishes the card, Just me clears it, and a later scoreboard publish stays clear', needsSqlite, async () => {
+  const db = memoryDb();
+  const round = startRound(db, 18, 'Magnolia');
+  const hole = getHole(db, round.id, 1);
+  assert.ok(hole);
+  updateHoleScore(db, hole.id, 4);
+  const added = addGroupPlayer(db, round.id, { name: 'PartnerSam', handicap: null });
+  assert.equal(added.status, 'added');
+  if (added.status !== 'added') return;
+  setPlayerHoleScore(db, added.player.id, 1, 5);
+  const { upload, puts } = mockPutSharedPayload();
+
+  const grouped = publishExplicitRoundShare(db, round.id, { audience: 'group', upload });
+  await flushPuts();
+  assert.ok(grouped?.group);
+  assert.equal(grouped.group.players[0].name, 'You');
+  assert.equal(grouped.group.players[0].holes.find((cell) => cell.hole === 1)?.score, 4);
+  assert.equal(grouped.group.players[1].name, 'PartnerSam');
+  assert.equal(grouped.group.players[1].holes.find((cell) => cell.hole === 1)?.score, 5);
+  assert.equal('handicap' in grouped.group.players[0], false);
+  assert.equal('handicap' in grouped.group.players[1], false);
+  assert.match(storedBoardJson(db, grouped.token), /PartnerSam/);
+  assert.equal(getRoundShareAudience(db, round.id), 'group');
+
+  const mine = publishExplicitRoundShare(db, round.id, { audience: 'me', upload });
+  await flushPuts();
+  assert.ok(mine);
+  assert.equal('group' in mine, false);
+  assert.equal(mine.group, undefined);
+  assert.doesNotMatch(JSON.stringify(mine), /PartnerSam/);
+  assert.doesNotMatch(storedBoardJson(db, mine.token), /PartnerSam|"group"/);
+  assert.equal(getShareBoard(db, mine.token)?.group, undefined);
+  assert.equal(puts.at(-1)?.payload.group, undefined);
+  assert.equal(getRoundShareAudience(db, round.id), 'me');
+
+  const again = publishRoundScoreboard(db, round.id, { currentHoleNumber: 2, upload });
+  await flushPuts();
+  assert.ok(again);
+  assert.equal('group' in again, false);
+  assert.doesNotMatch(JSON.stringify(again), /PartnerSam/);
+  assert.doesNotMatch(storedBoardJson(db, again.token), /PartnerSam|"group"/);
+  assert.equal(getShareBoard(db, again.token)?.group, undefined);
+});
+
+test('with partners and no stored choice, the background scoreboard publishes the whole group', needsSqlite, async () => {
+  const db = memoryDb();
+  const round = startRound(db, 9, 'Magnolia');
+  const added = addGroupPlayer(db, round.id, { name: 'PartnerSam', handicap: 10 });
+  assert.equal(added.status, 'added');
+  markRoundShared(db, round.id);
+  assert.equal(getRoundShareAudience(db, round.id), null);
+  const { upload } = mockPutSharedPayload();
+  const published = publishRoundScoreboard(db, round.id, { upload });
+  await flushPuts();
+  assert.ok(published?.group);
+  assert.equal(published.group.players[0].name, 'You');
+  assert.equal(published.group.players[1].name, 'PartnerSam');
+  assert.equal(published.group.players[0].out, null);
+  assert.equal(published.group.players[0].in, null);
+  assert.match(storedBoardJson(db, published.token), /PartnerSam/);
+});
+
+test('handicap is uploaded only while net is on, and a blank handicap is never 0', needsSqlite, async () => {
+  const db = memoryDb();
+  const round = startRound(db, 18, 'Magnolia');
+  for (const hole of listHoles(db, round.id)) {
+    db.runSync('UPDATE holes SET par = 4, handicap = ? WHERE id = ?', [hole.number, hole.id]);
+  }
+  const hole = getHole(db, round.id, 1);
+  assert.ok(hole);
+  updateHoleScore(db, hole.id, 4);
+  const added = addGroupPlayer(db, round.id, { name: 'PartnerSam', handicap: 12 });
+  assert.equal(added.status, 'added');
+  if (added.status !== 'added') return;
+  const owner = db.getFirstSync<{ id: string }>('SELECT id FROM round_players WHERE round_id = ? AND is_me = 1', [
+    round.id,
+  ]);
+  assert.ok(owner);
+  updateGroupPlayer(db, owner.id, { handicap: 0 });
+  setGroupGames(db, round.id, {
+    ...DEFAULT_GROUP_GAMES,
+    net: true,
+    skins: false,
+    stableford: false,
+    matchPlay: false,
+    nassau: false,
+  });
+  const { upload } = mockPutSharedPayload();
+  const net = publishExplicitRoundShare(db, round.id, { audience: 'group', upload });
+  await flushPuts();
+  assert.equal(net?.group?.players[0].handicap, 0);
+  assert.equal(net?.group?.players[1].handicap, 12);
+
+  updateGroupPlayer(db, added.player.id, { handicap: null });
+  const blocked = publishExplicitRoundShare(db, round.id, { audience: 'group', upload });
+  await flushPuts();
+  assert.ok(blocked?.group);
+  assert.equal('handicap' in blocked.group.players[0], false);
+  assert.equal('handicap' in blocked.group.players[1], false);
+  assert.doesNotMatch(storedBoardJson(db, blocked.token), /"handicap"/);
 });

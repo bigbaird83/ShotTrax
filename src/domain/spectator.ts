@@ -26,6 +26,31 @@ export type SpectatorHoleRow = {
   completedAt: string | null;
 };
 
+/** One posted hole on the shared group card. Null is unscored — never a filled-in 0. */
+export type SpectatorGroupHole = { hole: number; score: number | null };
+
+/**
+ * Compact group card for the link page. Handicap is present only when a net
+ * game is actually on and this player has one. A blank handicap is omitted,
+ * never uploaded as 0.
+ */
+export type SpectatorGroupPlayer = {
+  name: string;
+  holes: SpectatorGroupHole[];
+  out: number | null;
+  in: number | null;
+  total: number | null;
+  handicap?: number;
+};
+
+/** Same standings lines the in-app group results use. Omitted when no side game is on. */
+export type SpectatorGroupResult = { title: string; lines: string[] };
+
+export type SpectatorGroup = {
+  players: SpectatorGroupPlayer[];
+  results?: SpectatorGroupResult[];
+};
+
 export type SpectatorPayload = {
   v: typeof SPECTATOR_PAYLOAD_VERSION;
   token: string;
@@ -35,6 +60,11 @@ export type SpectatorPayload = {
   holes: SpectatorHoleRow[];
   /** ISO time the player's phone last published this board. */
   updatedAt: string | null;
+  /**
+   * Whole-group link page. Absent on Just me and on rounds with no partners.
+   * Version stays 1: older builds ignore this field and still render `holes`.
+   */
+  group?: SpectatorGroup;
 };
 
 export type SpectatorShotInput = {
@@ -439,7 +469,7 @@ export function parseSpectatorPayload(raw: unknown): SpectatorPayload | null {
       completedAt: asIsoTime(row.completedAt),
     });
   }
-  return {
+  const parsed: SpectatorPayload = {
     v: SPECTATOR_PAYLOAD_VERSION,
     token,
     courseName: asString(rec.courseName),
@@ -448,6 +478,86 @@ export function parseSpectatorPayload(raw: unknown): SpectatorPayload | null {
     holes,
     updatedAt: asIsoTime(rec.updatedAt),
   };
+  // Unknown keys are dropped. A bad `group` is dropped too, so the owner card still parses.
+  const group = parseSpectatorGroup(rec.group);
+  if (group) parsed.group = group;
+  return parsed;
+}
+
+function asHoleScore(value: unknown): number | null {
+  const score = asFiniteInt(value);
+  return score != null && score >= 1 ? score : null;
+}
+
+function asTotalStrokes(value: unknown): number | null {
+  const total = asFiniteInt(value);
+  return total != null && total >= 1 ? total : null;
+}
+
+function parseSpectatorGroup(raw: unknown): SpectatorGroup | undefined {
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const rec = raw as Record<string, unknown>;
+  if (!Array.isArray(rec.players)) return undefined;
+  const players: SpectatorGroupPlayer[] = [];
+  for (const item of rec.players) {
+    if (item == null || typeof item !== 'object' || Array.isArray(item)) continue;
+    const row = item as Record<string, unknown>;
+    const name = asString(row.name);
+    if (!name) continue;
+    const holes: SpectatorGroupHole[] = [];
+    if (Array.isArray(row.holes)) {
+      for (const holeItem of row.holes) {
+        if (holeItem == null || typeof holeItem !== 'object' || Array.isArray(holeItem)) continue;
+        const holeRow = holeItem as Record<string, unknown>;
+        const hole = asFiniteInt(holeRow.hole);
+        if (hole == null) continue;
+        holes.push({ hole, score: asHoleScore(holeRow.score) });
+      }
+    }
+    const player: SpectatorGroupPlayer = {
+      name,
+      holes,
+      out: asTotalStrokes(row.out),
+      in: asTotalStrokes(row.in),
+      total: asTotalStrokes(row.total),
+    };
+    const handicap = asFiniteInt(row.handicap);
+    if (handicap != null && handicap >= 0 && handicap <= 54) player.handicap = handicap;
+    players.push(player);
+  }
+  if (!players.length) return undefined;
+  const group: SpectatorGroup = { players };
+  const results = parseSpectatorGroupResults(rec.results);
+  if (results) group.results = results;
+  return group;
+}
+
+function parseSpectatorGroupResults(raw: unknown): SpectatorGroupResult[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const blocks: SpectatorGroupResult[] = [];
+  for (const item of raw) {
+    if (item == null || typeof item !== 'object' || Array.isArray(item)) continue;
+    const row = item as Record<string, unknown>;
+    const title = asString(row.title);
+    if (!title) continue;
+    const lines = Array.isArray(row.lines) ? row.lines.filter((line): line is string => typeof line === 'string') : [];
+    blocks.push({ title, lines });
+  }
+  return blocks.length ? blocks : undefined;
+}
+
+/** Columns the link page shows. Out / In appear only when the payload has them — a 9-hole card has no fake In. */
+export function planSpectatorGroupColumns(group: SpectatorGroup): {
+  holes: number[];
+  out: boolean;
+  inn: boolean;
+} {
+  const holes = [...new Set(group.players.flatMap((player) => player.holes.map((hole) => hole.hole)))].sort(
+    (a, b) => a - b,
+  );
+  // 18 hole columns get Out and In even when a nine is still blank. A 9-hole card does not.
+  const full = holes.length >= 18;
+  return { holes, out: full, inn: full };
 }
 
 export function formatSpectatorHoleLine(row: SpectatorHoleRow): string {

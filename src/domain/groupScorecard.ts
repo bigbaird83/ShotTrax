@@ -2,12 +2,15 @@ import { COPY } from './playerCopy';
 import {
   formatMatchLine,
   formatToPar,
+  planGroupGames,
   strokesByHole,
   strokesOffLow,
+  type GroupGameSettings,
   type GroupHoleIn,
   type GroupPlayerIn,
   type GroupResult,
 } from './groupGames';
+import type { SpectatorGroup, SpectatorGroupPlayer } from './spectator';
 
 /**
  * Hole-by-hole group scorecard: every player's score on each hole, the net
@@ -185,4 +188,44 @@ export function formatGroupResultBlocks(
   }
 
   return blocks;
+}
+
+function totalStrokes(card: GroupCard, label: GroupCardTotal['label'], playerId: string): number | null {
+  const strokes = card.totals.find((row) => row.label === label)?.cells.find((cell) => cell.playerId === playerId)?.strokes;
+  return strokes != null && strokes >= 1 ? strokes : null;
+}
+
+/**
+ * Link-page group card. Same rows, totals, and result wording as the group
+ * scorecard. Null when there is nobody besides the owner. Handicap is attached
+ * only while net is actually on and that player has one — a blank is omitted,
+ * never sent as 0.
+ */
+export function planSpectatorGroup(args: {
+  holes: readonly GroupHoleIn[];
+  players: readonly GroupPlayerIn[];
+  settings: GroupGameSettings;
+}): SpectatorGroup | null {
+  if (args.players.length < 2) return null;
+  const result = planGroupGames(args);
+  const card = planGroupScorecard({ holes: args.holes, players: args.players, result });
+  const rows = [...card.front, ...card.back];
+  const players: SpectatorGroupPlayer[] = card.players.map((player) => {
+    const row: SpectatorGroupPlayer = {
+      name: player.name,
+      holes: rows.map((hole) => ({
+        hole: hole.number,
+        score: hole.cells.find((cell) => cell.playerId === player.id)?.score ?? null,
+      })),
+      out: totalStrokes(card, 'Out', player.id),
+      in: totalStrokes(card, 'In', player.id),
+      total: totalStrokes(card, 'Total', player.id),
+    };
+    if (result.net && player.handicap != null) row.handicap = player.handicap;
+    return row;
+  });
+  const group: SpectatorGroup = { players };
+  const blocks = formatGroupResultBlocks(card.players, result, rows.length);
+  if (blocks) group.results = blocks;
+  return group;
 }

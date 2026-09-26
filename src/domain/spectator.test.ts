@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import { DEFAULT_GROUP_GAMES } from './groupGames';
+import { planGroupScorecard, planSpectatorGroup } from './groupScorecard';
 import { COPY } from './playerCopy';
 import {
   approximateFromFixQuality,
@@ -11,9 +13,11 @@ import {
   lastClosedClubYards,
   parseSpectatorPayload,
   pinToPinYardsFromShots,
+  planSpectatorGroupColumns,
   planSpectatorHoleRow,
   planSpectatorLive,
   planSpectatorPayload,
+  SPECTATOR_PAYLOAD_VERSION,
   androidImageUrlShareBlock,
   MENU_SHARE_FALLBACK_MS,
   menuShareMustWaitForDismiss,
@@ -486,4 +490,204 @@ test('hole start / finish ride the PUT, falling back to shot times', () => {
   });
   assert.equal(open.startedAt, '2026-09-24T14:25:00.000Z');
   assert.equal(open.completedAt, null);
+});
+
+test('payload version stays 1, and a payload that includes group still parses the owner holes', () => {
+  assert.equal(SPECTATOR_PAYLOAD_VERSION, 1);
+  const owner = planSpectatorPayload({
+    token: 'tok_round',
+    courseName: 'Cypress',
+    finished: false,
+    currentHoleNumber: 1,
+    updatedAt: '2026-09-26T18:00:00.000Z',
+    holes: [
+      {
+        number: 1,
+        score: 4,
+        par: 4,
+        putts: 2,
+        startedAt: '2026-09-26T14:00:00.000Z',
+        completedAt: '2026-09-26T14:12:00.000Z',
+        shots: [
+          {
+            clubShortName: '7i',
+            distanceYards: 155,
+            startedAt: '2026-09-26T14:01:00.000Z',
+            endedAt: '2026-09-26T14:02:00.000Z',
+            source: 'gps',
+            fixQuality: 'good',
+          },
+        ],
+      },
+    ],
+  });
+  const withGroup = {
+    ...owner,
+    v: 1,
+    futureField: { ignored: true },
+    group: {
+      players: [
+        {
+          name: 'You',
+          holes: [{ hole: 1, score: 4 }, { hole: 2, score: 0 }],
+          out: 4,
+          in: null,
+          total: 4,
+          handicap: 8,
+        },
+        { name: 'Pat', holes: [{ hole: 1, score: 5 }], out: null, in: 0, total: 5 },
+      ],
+      results: [{ title: 'Skins', lines: ['You  1', 'Pat  0'] }],
+    },
+  };
+  const parsed = parseSpectatorPayload(withGroup);
+  const plain = parseSpectatorPayload(owner);
+  assert.ok(parsed);
+  assert.ok(plain);
+  const { group, ...rest } = parsed;
+  assert.deepEqual(rest, plain);
+  assert.equal(parsed.holes[0].score, 4);
+  assert.equal(parsed.holes[0].club, '7i');
+  assert.equal(parsed.holes[0].pinToPinYards, 155);
+  assert.equal(group?.players[0].name, 'You');
+  assert.equal(group?.players[0].holes[1].score, null);
+  assert.equal(group?.players[0].handicap, 8);
+  assert.equal(group?.players[1].in, null);
+  assert.equal('handicap' in (group?.players[1] ?? {}), false);
+  assert.equal(group?.results?.[0].title, 'Skins');
+
+  const dropped = parseSpectatorPayload({ ...owner, group: 'nope' });
+  assert.equal(dropped?.holes[0].score, 4);
+  assert.equal(dropped?.group, undefined);
+  const empty = parseSpectatorPayload({ ...owner, group: { players: [] } });
+  assert.equal(empty?.holes[0].score, 4);
+  assert.equal(empty?.group, undefined);
+  assert.deepEqual(decodeSpectatorPayload(encodeSpectatorPayload({ ...owner, group: group! })), { ...owner, group });
+});
+
+test('group card matches the scorecard totals and omits a blank handicap', () => {
+  const nine = Array.from({ length: 9 }, (_, i) => ({ number: i + 1, par: 4, strokeIndex: i + 1 }));
+  const you = { id: 'you', name: 'You', handicap: null as number | null, scores: { 1: 0, 2: 4 } as Record<number, number> };
+  const pat = { id: 'pat', name: 'Pat', handicap: null as number | null, scores: { 1: 5 } as Record<number, number> };
+  const gross = planSpectatorGroup({
+    holes: nine,
+    players: [you, pat],
+    settings: { ...DEFAULT_GROUP_GAMES, net: true, skins: false },
+  });
+  assert.ok(gross);
+  assert.equal(gross.players[0].name, 'You');
+  assert.equal(gross.players[0].holes[0].score, null);
+  assert.equal(gross.players[0].holes[1].score, 4);
+  assert.equal(gross.players[0].out, null);
+  assert.equal(gross.players[0].in, null);
+  assert.equal(gross.players[0].total, 4);
+  assert.equal('handicap' in gross.players[0], false);
+  assert.equal('handicap' in gross.players[1], false);
+  assert.doesNotMatch(JSON.stringify(gross), /"handicap"/);
+  assert.equal(gross.results, undefined);
+  const card = planGroupScorecard({
+    holes: nine,
+    players: [you, pat],
+    result: { net: false, skins: null },
+  });
+  assert.equal(gross.players[0].holes[1].score, card.front[1].cells[0].score);
+  assert.equal(gross.players[1].holes[0].score, card.front[0].cells[1].score);
+  assert.equal(planSpectatorGroupColumns(gross).out, false);
+  assert.equal(planSpectatorGroupColumns(gross).inn, false);
+
+  const eighteen = Array.from({ length: 18 }, (_, i) => ({ number: i + 1, par: 4, strokeIndex: i + 1 }));
+  const net = planSpectatorGroup({
+    holes: eighteen,
+    players: [
+      { id: 'you', name: 'You', handicap: 0, scores: { 1: 4 } },
+      { id: 'pat', name: 'Pat', handicap: 12, scores: { 1: 5 } },
+    ],
+    settings: { ...DEFAULT_GROUP_GAMES, net: true, skins: true, stableford: true, matchPlay: true, nassau: true, matchPlayerIds: ['you', 'pat'] },
+  });
+  assert.ok(net);
+  assert.equal(net.players[0].handicap, 0);
+  assert.equal(net.players[1].handicap, 12);
+  assert.equal(net.players[0].out, 4);
+  assert.equal(net.players[0].in, null);
+  assert.ok(net.results && net.results.length > 0);
+  assert.equal(planSpectatorGroupColumns(net).holes.length, 18);
+  assert.equal(planSpectatorGroupColumns(net).out, true);
+  assert.equal(planSpectatorGroupColumns(net).inn, true);
+  assert.equal(planSpectatorGroup({ holes: nine, players: [you], settings: DEFAULT_GROUP_GAMES }), null);
+});
+
+test('a 4-player 18-hole group payload with owner shot rows stays under 20000 bytes', () => {
+  const holes = Array.from({ length: 18 }, (_, i) => {
+    const minute = String(i).padStart(2, '0');
+    return {
+      number: i + 1,
+      score: 4,
+      cardYards: 420,
+      par: i % 3 === 0 ? 3 : i % 5 === 0 ? 5 : 4,
+      putts: 2,
+      startedAt: `2026-09-26T14:${minute}:00.000Z`,
+      completedAt: `2026-09-26T14:${minute}:12.000Z`,
+      shots: [
+        {
+          clubShortName: '7i',
+          distanceYards: 155,
+          startedAt: `2026-09-26T14:${minute}:01.000Z`,
+          endedAt: `2026-09-26T14:${minute}:02.000Z`,
+          source: 'gps' as const,
+          fixQuality: 'good' as const,
+        },
+      ],
+    };
+  });
+  const payload = planSpectatorPayload({
+    token: 'AB12CD',
+    courseName: 'SAMPLE DATA',
+    finished: false,
+    currentHoleNumber: 18,
+    holes,
+    updatedAt: '2026-09-26T18:00:00.000Z',
+  });
+  const players = ['You', 'Sample Pat', 'Sample Sam', 'Sample Dee'].map((name, index) => ({
+    id: ['you', 'pat', 'sam', 'dee'][index],
+    name,
+    handicap: [8, 12, 18, 4][index],
+    scores: Object.fromEntries(Array.from({ length: 18 }, (_, hole) => [hole + 1, 3 + ((hole + index) % 4)])),
+  }));
+  const group = planSpectatorGroup({
+    holes: Array.from({ length: 18 }, (_, i) => ({
+      number: i + 1,
+      par: i % 3 === 0 ? 3 : i % 5 === 0 ? 5 : 4,
+      strokeIndex: i + 1,
+    })),
+    players,
+    settings: {
+      net: true,
+      skins: true,
+      skinsCarry: true,
+      stableford: true,
+      matchPlay: true,
+      nassau: true,
+      matchPlayerIds: ['you', 'pat'],
+    },
+  });
+  assert.ok(group);
+  payload.group = group;
+  const json = JSON.stringify(payload);
+  const putBody = JSON.stringify({ ...payload, token: payload.token });
+  console.log(`SPECTATOR_GROUP_PAYLOAD_BYTES ${json.length}`);
+  console.log(`SPECTATOR_GROUP_PUT_BYTES ${putBody.length}`);
+  assert.equal(payload.holes.length, 18);
+  assert.equal(payload.holes[0].club, '7i');
+  assert.equal(payload.holes[0].pinToPinYards, 155);
+  assert.equal(payload.holes[0].par, 3);
+  assert.equal(payload.holes[0].putts, 2);
+  assert.ok(payload.holes[0].startedAt);
+  assert.equal(payload.group.players.length, 4);
+  assert.ok(json.length < 20000, `payload JSON is ${json.length} bytes`);
+  assert.ok(putBody.length < 20000, `worker PUT body is ${putBody.length} bytes`);
+
+  const screen = readFileSync(new URL('../../app/s/[token].tsx', import.meta.url), 'utf8');
+  assert.match(screen, /testID="spectator-group"/);
+  assert.match(screen, /planSpectatorGroupColumns/);
+  assert.match(screen, /payload\.group \? /);
 });
