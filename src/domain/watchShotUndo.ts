@@ -38,26 +38,67 @@ export function watchNamedLastShot(shots: readonly Shot[] | null | undefined): {
   return { lastShotId, lastShotClubId: shot?.clubId ?? null };
 }
 
+/** Shot count and last shot the Watch is showing for one hole. */
+export type WatchHoleShotLocal = {
+  holeNumber: number;
+  shotCount: number;
+  lastShotId: string | null;
+  lastShotClubId: string | null;
+};
+
+/** Edit shot follows the phone: a shot on this hole, named by lastShotId. */
+export function watchEditShotEnabled(state: { shotCount: number; lastShotId: string | null }): boolean {
+  return state.shotCount > 0 && Boolean(state.lastShotId);
+}
+
 /**
- * How the Watch applies `lastShotId` / `lastShotClubId`.
- * A named id wins. An explicit empty string means this hole has no shot.
- * A missing key keeps the shot on the same hole (a yard refresh must not gray
- * Edit shot) and clears it when the hole number changes, so hole N's shot is
- * never left armed on hole N+1.
+ * The phone's club list is the shot count and the last shot.
+ * A push that names them replaces whatever the Watch had, including a stale id
+ * and a local clear. A push that omits them does not clear the Watch.
  */
-export function resolveWatchLastShotId(args: {
-  previousHole: number;
-  previousId: string | null;
-  nextHole: number;
-  /** undefined = key omitted. null or '' = the phone says there is no shot. */
-  incoming: string | null | undefined;
-}): string | null {
-  if (args.incoming === undefined) {
-    const holeChanged = args.previousHole > 0 && args.nextHole !== args.previousHole;
-    return holeChanged ? null : args.previousId;
+export function applyPhoneHoleShotPush(args: {
+  local: WatchHoleShotLocal;
+  push: {
+    holeNumber: number;
+    /** undefined = this push did not name the hole's shots. */
+    shotCount?: number | null;
+    /** undefined = key omitted. null or '' = the phone says there is no shot. */
+    lastShotId?: string | null;
+    lastShotClubId?: string | null;
+  };
+}): WatchHoleShotLocal & { editShotEnabled: boolean } {
+  const hasCount = args.push.shotCount != null && Number.isFinite(args.push.shotCount);
+  const hasId = args.push.lastShotId !== undefined;
+  if (!hasCount && !hasId) {
+    return {
+      ...args.local,
+      holeNumber: args.push.holeNumber,
+      editShotEnabled: watchEditShotEnabled(args.local),
+    };
   }
-  const named = (args.incoming ?? '').trim();
-  return named || null;
+  if (hasCount) {
+    const shotCount = Math.max(0, Math.round(args.push.shotCount ?? 0));
+    const rawId = (args.push.lastShotId ?? '').trim();
+    const lastShotId = shotCount > 0 && rawId ? rawId : null;
+    const rawClub = (args.push.lastShotClubId ?? '').trim();
+    const next: WatchHoleShotLocal = {
+      holeNumber: args.push.holeNumber,
+      shotCount,
+      lastShotId,
+      lastShotClubId: lastShotId && rawClub ? rawClub : null,
+    };
+    return { ...next, editShotEnabled: watchEditShotEnabled(next) };
+  }
+  const rawId = (args.push.lastShotId ?? '').trim();
+  const lastShotId = rawId || null;
+  const rawClub = (args.push.lastShotClubId ?? '').trim();
+  const next: WatchHoleShotLocal = {
+    holeNumber: args.push.holeNumber,
+    shotCount: lastShotId ? Math.max(args.local.shotCount, 1) : 0,
+    lastShotId,
+    lastShotClubId: lastShotId && rawClub ? rawClub : null,
+  };
+  return { ...next, editShotEnabled: watchEditShotEnabled(next) };
 }
 
 /**

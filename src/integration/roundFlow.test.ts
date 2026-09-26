@@ -126,6 +126,11 @@ mock.module('react', {
 mock.module('react-native', {
   namedExports: {
     Alert: { alert() {} },
+    AppState: {
+      addEventListener() {
+        return { remove() {} };
+      },
+    },
   },
 });
 

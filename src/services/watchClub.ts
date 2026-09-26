@@ -1,4 +1,4 @@
-import { Alert } from 'react-native';
+import { Alert, AppState } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getWatchBridgeNative } from '@/modules/watch-bridge';
 import { COPY } from '../domain/playerCopy';
@@ -118,17 +118,18 @@ export function setWatchClubContext(next: WatchClubContext | null): void {
   }
 }
 
-export function pushWatchClubList(msg: ClubListMessage): Promise<void> {
-  const queuedForRound = context?.roundId ?? endedRoundId;
-  const run = clubListChain.then(
-    () => deliverClubList(msg, queuedForRound),
-    () => deliverClubList(msg, queuedForRound),
-  );
+function enqueueClubList(work: () => Promise<void>): Promise<void> {
+  const run = clubListChain.then(work, work);
   clubListChain = run.then(
     () => undefined,
     () => undefined,
   );
   return run;
+}
+
+export function pushWatchClubList(msg: ClubListMessage): Promise<void> {
+  const queuedForRound = context?.roundId ?? endedRoundId;
+  return enqueueClubList(() => deliverClubList(msg, queuedForRound));
 }
 
 /**
@@ -150,11 +151,18 @@ export function endWatchRound(roundId: string): void {
         yardsQuality: 'none',
         roundComplete: true,
         roundLive: false,
+        shotCount: 0,
+        lastShotId: '',
+        lastShotClubId: '',
       };
   void pushWatchClubList(msg);
 }
 
-async function deliverClubList(msg: ClubListMessage, queuedForRound: string | null): Promise<void> {
+async function deliverClubList(
+  msg: ClubListMessage,
+  queuedForRound: string | null,
+  opts?: { force?: boolean },
+): Promise<void> {
   const roundId = context?.roundId ?? null;
   if (msg.roundComplete !== true && endedRoundId && (queuedForRound == null || queuedForRound === endedRoundId)) {
     if (roundId == null || roundId === endedRoundId) return;
@@ -162,7 +170,9 @@ async function deliverClubList(msg: ClubListMessage, queuedForRound: string | nu
   if (msg.roundComplete === true && roundId && queuedForRound && roundId !== queuedForRound) return;
   if (msg.roundComplete === true && queuedForRound) endedRoundId = queuedForRound;
   const json = JSON.stringify(msg);
-  if (json === lastJson) return;
+  // A repeat of the same list still goes out when the Watch may have cleared
+  // its own copy. Foreground, reachability, and a confirm all force that.
+  if (!opts?.force && json === lastJson) return;
   const mod = native();
   if (!mod) return;
   const stamped = { ...msg, listSeq: clubListSeq + 1 };
@@ -204,29 +214,62 @@ export async function pushWatchPuttSheet(args: {
  * the wrist to Hole N+1 (or Round complete) right away. The next hole screen
  * pushes its own clubList with real yards after it mounts.
  */
-/** Last shot already on the hole Hole Out is moving to. Empty when that hole has none. */
+/** Shots already on the hole Hole Out is moving to. Zero when that hole has none. */
 export function watchAdvanceNamedShot(
   db: SQLiteDatabase,
   roundId: string,
   finishedHole: number,
   holeCount: number,
-): { lastShotId: string | null; lastShotClubId: string | null } {
+): { lastShotId: string | null; lastShotClubId: string | null; shotCount: number } {
   const dest = holeAfterDone(finishedHole, holeCount);
-  if (dest.kind !== 'hole') return { lastShotId: null, lastShotClubId: null };
+  if (dest.kind !== 'hole') return { lastShotId: null, lastShotClubId: null, shotCount: 0 };
   const row = getHole(db, roundId, dest.holeNumber);
-  if (!row) return { lastShotId: null, lastShotClubId: null };
-  return watchNamedLastShot(listShotsForHole(db, row.id));
+  if (!row) return { lastShotId: null, lastShotClubId: null, shotCount: 0 };
+  const shots = listShotsForHole(db, row.id);
+  return { ...watchNamedLastShot(shots), shotCount: shots.length };
+}
+
+/**
+ * Send the phone's current hole shot count and last shot again.
+ * Used after a confirm, on foreground, and when the Watch becomes reachable,
+ * so a local clear on the Watch cannot outlive the phone's rows.
+ */
+export async function republishWatchHoleShots(): Promise<void> {
+  const ctx = context;
+  const base = lastClubList;
+  if (!ctx || ctx.readOnly || !base) return;
+  if (endedRoundId && endedRoundId === ctx.roundId) return;
+  const hole = getHole(ctx.db, ctx.roundId, ctx.holeNumber);
+  const shots = hole ? listShotsForHole(ctx.db, hole.id) : [];
+  const named = watchNamedLastShot(shots);
+  const { listSeq: _listSeq, roundComplete: _roundComplete, ...rest } = base;
+  const msg: ClubListMessage = {
+    ...rest,
+    holeNumber: ctx.holeNumber,
+    roundLive: true,
+    shotCount: shots.length,
+    lastShotId: named.lastShotId ?? '',
+    lastShotClubId: named.lastShotClubId ?? '',
+  };
+  await enqueueClubList(() => deliverClubList(msg, ctx.roundId, { force: true }));
 }
 
 export async function pushWatchMadeItAdvance(args: {
   holeNumber: number;
   holeCount: number;
   lengths: PuttLengthId[];
-  /** Last shot already stored on the hole the wrist is moving to. */
+  /** Shots already stored on the hole the wrist is moving to. */
+  shotCount?: number | null;
   lastShotId?: string | null;
   lastShotClubId?: string | null;
 }): Promise<void> {
-  const plan = planWatchMadeItAdvance({ ...args, last: lastClubList });
+  const plan = planWatchMadeItAdvance({
+    ...args,
+    last: lastClubList,
+    nextShotCount: args.shotCount,
+    nextLastShotId: args.lastShotId,
+    nextLastShotClubId: args.lastShotClubId,
+  });
   if (plan.clubList.roundComplete === true && context?.roundId) {
     endedRoundId = context.roundId;
   }
@@ -280,6 +323,8 @@ export function buildClubList(args: {
   /** Course cup from `watchGreenFields`. Null means the Watch must not invent yards. */
   green?: WatchGreenFields | null;
   clubCarry?: Record<string, number | null | undefined> | null;
+  /** Shots on this hole. The Watch copies this count; it does not infer one. */
+  shotCount?: number | null;
   /** Shot Edit shot would change or delete on this hole. Null sends an explicit empty id. */
   lastShotId?: string | null;
   /** Club on that shot, so Change club can highlight it after a hole change. */
@@ -307,9 +352,9 @@ export function buildClubList(args: {
     ...(args.teeLengthYards != null ? { teeLengthYards: args.teeLengthYards } : {}),
     ...(args.green ? { green: clubListGreen(args.green) } : {}),
     ...(args.clubCarry ? { clubCarry: args.clubCarry } : {}),
+    shotCount: args.shotCount ?? 0,
     lastShotId: args.lastShotId ?? null,
     lastShotClubId: args.lastShotClubId ?? null,
-    nameLastShot: true,
   });
   if (args.roundLive === false) msg.roundLive = false;
   return msg;
@@ -584,6 +629,7 @@ async function applyWatchPenalty(
     // Existing row and tombstone both mean the id is done. Reply ok either way.
     if (saved.replay === 'deleted' || saved.replay === 'existing' || saved.replay === 'inserted') {
       ctx.bump();
+      await republishWatchHoleShots();
       await pushWatchConfirm('penalty', pick.id);
       await replyToken(token, { ok: true, feedback: formatWatchPenaltyFeedback(pick.reason) });
       return;
@@ -618,6 +664,7 @@ async function applyWatchShotUndo(token: string, undo: ShotUndoMessage): Promise
     shots: hole ? listShotsForHole(ctx.db, hole.id) : [],
   });
   if (decision.action !== 'undo') {
+    await republishWatchHoleShots();
     await pushWatchConfirm('undo', undo.id, decision.feedback);
     await replyToken(token, { ok: true, feedback: decision.feedback });
     return;
@@ -626,6 +673,7 @@ async function applyWatchShotUndo(token: string, undo: ShotUndoMessage): Promise
     const result = undoLastShot(ctx.db, ctx.roundId, undo.holeNumber, undo.shotId);
     if (!result.ok) {
       // Checked again inside the repo: the shot is no longer the last one. Remove nothing.
+      await republishWatchHoleShots();
       await pushWatchConfirm('undo', undo.id, WATCH_SHOT_UNDO_SKIPPED);
       await replyToken(token, { ok: true, feedback: WATCH_SHOT_UNDO_SKIPPED });
       return;
@@ -634,6 +682,7 @@ async function applyWatchShotUndo(token: string, undo: ShotUndoMessage): Promise
     lastClubMark = null;
     hapticSelect();
     ctx.bump();
+    await republishWatchHoleShots();
     await pushWatchConfirm('undo', undo.id, decision.feedback);
     await replyToken(token, { ok: true, feedback: decision.feedback });
   } catch {
@@ -675,6 +724,7 @@ async function applyWatchShotClubChange(token: string, change: ShotClubChangeMes
     alreadyApplied: watchClubChangeAlreadyApplied(change.id),
   });
   if (decision.action !== 'apply') {
+    await republishWatchHoleShots();
     await pushWatchConfirm('club', change.id, decision.feedback);
     await replyToken(token, { ok: true, feedback: decision.feedback });
     return;
@@ -682,12 +732,14 @@ async function applyWatchShotClubChange(token: string, change: ShotClubChangeMes
   try {
     const saved = changeShotClub(ctx.db, { roundId: ctx.roundId, shotId: change.shotId, clubId: change.clubId });
     if (saved.status !== 'commit') {
+      await republishWatchHoleShots();
       await pushWatchConfirm('club', change.id, WATCH_CLUB_CHANGE_UNCHANGED);
       await replyToken(token, { ok: true, feedback: WATCH_CLUB_CHANGE_UNCHANGED });
       return;
     }
     rememberWatchClubChange(change.id);
     ctx.bump();
+    await republishWatchHoleShots();
     await pushWatchConfirm('club', change.id, decision.feedback);
     await replyToken(token, { ok: true, feedback: decision.feedback });
   } catch {
@@ -801,6 +853,12 @@ export function startWatchClubBridge(): void {
   mod.addListener('onPuttPick', (event) => {
     if (!event?.json || !event.token) return;
     void handlePuttPick(event.token, event.json);
+  });
+  mod.addListener('onReachabilityChange', (event) => {
+    if (event?.reachable === true) void republishWatchHoleShots();
+  });
+  AppState.addEventListener('change', (next) => {
+    if (next === 'active') void republishWatchHoleShots();
   });
 }
 

@@ -891,6 +891,7 @@ function HoleScreenBody() {
         holeNumber: targetHole,
         holeCount: round.holeCount,
         lengths,
+        shotCount: advance.shotCount,
         lastShotId: advance.lastShotId,
         lastShotClubId: advance.lastShotClubId,
       });
@@ -1027,6 +1028,7 @@ function HoleScreenBody() {
           holeNumber: target,
           holeCount: rnd.holeCount,
           lengths: row.puttLengths.filter(isPuttLengthId),
+          shotCount: advance.shotCount,
           lastShotId: advance.lastShotId,
           lastShotClubId: advance.lastShotClubId,
         });
@@ -1098,7 +1100,8 @@ function HoleScreenBody() {
       teeLengthYards: courseTeeYards(hole?.yards),
       green: watchGreenFields({ green, front: pins.front, back: pins.back }),
       clubCarry: watchClubCarry(stripPlan.carries),
-      // Watch Edit shot names this shot, so a late resend never edits a second one.
+      // Watch Edit shot copies this hole's shots from the phone. A late resend names the same shot.
+      shotCount: readOnly ? 0 : shots.length,
       lastShotId: readOnly ? null : watchNamedLastShot(shots).lastShotId,
       lastShotClubId: readOnly ? null : watchNamedLastShot(shots).lastShotClubId,
     },

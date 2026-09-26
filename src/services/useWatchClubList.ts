@@ -40,6 +40,8 @@ export function useWatchClubList(
     teeLengthYards?: number | null;
     green?: WatchGreenFields | null;
     clubCarry?: Record<string, number | null | undefined> | null;
+    /** Shots on this hole. Every push names the count, including zero. */
+    shotCount?: number | null;
     /** Shot Edit shot would change or delete. Null sends an explicit empty id. */
     lastShotId?: string | null;
     /** Club on that shot. Change club highlights it after a hole change. */

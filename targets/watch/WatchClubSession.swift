@@ -41,6 +41,8 @@ struct ClubListState {
   var roundComplete: Bool = false
   /// False when the phone is showing a finished round. Missing on the wire means live.
   var roundLive: Bool = true
+  /// Shots on this hole, copied from the phone. Zero dims Edit shot.
+  var shotCount: Int = 0
   /// Shot Edit shot would change or delete on this hole. Nil → the button is dim.
   var lastShotId: String? = nil
   /// Club on that shot. Change club highlights this, not the strip selection.
@@ -820,7 +822,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   var canEditShot: Bool { canUndoShot }
 
   var canUndoShot: Bool {
-    guard list.roundLive, !list.roundComplete, let shotId = list.lastShotId else { return false }
+    guard list.roundLive, !list.roundComplete, list.shotCount > 0, let shotId = list.lastShotId, !shotId.isEmpty else { return false }
     if undoPendingShotIds.contains(shotId) { return false }
     return !pendingQueue.contains { isClubPick($0) && ($0["clubId"] as? String) != "club_putter" }
   }
@@ -1233,14 +1235,9 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     haptic(notice == "Queued · will sync" ? .click : .failure)
   }
 
-  /// The phone answered for this shot. Edit shot stays dim until the phone names the
-  /// next last shot, so a second tap never races the first.
-  private func finishUndoSend(shotId: String?) {
-    if let shotId, list.lastShotId == shotId {
-      list.lastShotId = nil
-      list.lastShotClubId = nil
-      persist(list)
-    }
+  /// The phone answered for this undo id. Shot count and lastShotId stay as the
+  /// last club list left them. The next phone push overwrites both.
+  private func finishUndoSend(shotId _: String?) {
     syncUndoPending()
   }
 
@@ -1804,26 +1801,37 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     next.roundLive = message["roundLive"] as? Bool ?? true
     next.listSeq = incomingSeq > 0 ? incomingSeq : list.listSeq
     let holeChanged = list.holeNumber > 0 && next.holeNumber != list.holeNumber
-    // Explicit id names the shot. Explicit empty clears it. A missing key keeps
-    // the shot on the same hole and drops it when the hole number changes, so
-    // hole N's shot is never left armed on the next hole.
-    if let shotId = message["lastShotId"] as? String, !shotId.isEmpty {
-      next.lastShotId = shotId
+    // Shot count and last shot come from this push. A push that names them
+    // replaces the Watch's copy, including a stale id. A push that omits them
+    // does not clear what the phone last sent.
+    if let count = Self.complicationInt(message["shotCount"]) {
+      let shotId = (message["lastShotId"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      if count > 0, !shotId.isEmpty {
+        next.shotCount = count
+        next.lastShotId = shotId
+        let clubId = (message["lastShotClubId"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        next.lastShotClubId = clubId.isEmpty ? nil : clubId
+      } else {
+        next.shotCount = max(0, count)
+        next.lastShotId = nil
+        next.lastShotClubId = nil
+      }
     } else if message["lastShotId"] != nil {
-      next.lastShotId = nil
-    } else if !holeChanged {
+      let shotId = (message["lastShotId"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      if shotId.isEmpty {
+        next.shotCount = 0
+        next.lastShotId = nil
+        next.lastShotClubId = nil
+      } else {
+        next.shotCount = max(list.shotCount, 1)
+        next.lastShotId = shotId
+        let clubId = (message["lastShotClubId"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        next.lastShotClubId = clubId.isEmpty ? list.lastShotClubId : clubId
+      }
+    } else {
+      next.shotCount = list.shotCount
       next.lastShotId = list.lastShotId
-    } else {
-      next.lastShotId = nil
-    }
-    if let clubId = message["lastShotClubId"] as? String, !clubId.isEmpty {
-      next.lastShotClubId = clubId
-    } else if message["lastShotClubId"] != nil {
-      next.lastShotClubId = nil
-    } else if !holeChanged {
       next.lastShotClubId = list.lastShotClubId
-    } else {
-      next.lastShotClubId = nil
     }
     if holeChanged {
       // Cypress H10→H11: leftover 56° must not stay armed on the new hole.
@@ -2070,6 +2078,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     if let selected = state.selectedClubId { obj["selectedClubId"] = selected }
     if state.roundComplete { obj["roundComplete"] = true }
     if !state.roundLive { obj["roundLive"] = false }
+    obj["shotCount"] = state.shotCount
     if let shotId = state.lastShotId { obj["lastShotId"] = shotId }
     if let clubId = state.lastShotClubId { obj["lastShotClubId"] = clubId }
     if state.listSeq > 0 { obj["listSeq"] = state.listSeq }

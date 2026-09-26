@@ -85,10 +85,14 @@ export type ClubListMessage = {
   /** False while the phone is showing a finished round. Omitted means the round is live. */
   roundLive?: boolean;
   /**
+   * Shots on this hole, from the phone. Every club list names it.
+   * Zero means Edit shot is dim. The Watch copies this; it does not count shots itself.
+   */
+  shotCount?: number;
+  /**
    * Id of the shot Edit shot would change or delete on this hole.
-   * An empty string means the phone says this hole has no shot (clear the Watch).
-   * Omitted means the phone did not name one: the Watch keeps its shot on the
-   * same hole and clears it when the hole number changes.
+   * An empty string means the phone says this hole has no shot.
+   * The Watch copies this from the push. It does not keep or clear an id on its own.
    */
   lastShotId?: string;
   /** Club on that shot. Change club highlights this, not the strip selection. */
@@ -108,6 +112,9 @@ export const CLUB_LIST_KEYS = [
   'holeNumber',
   'yardsToGreen',
   'yardsQuality',
+  'shotCount',
+  'lastShotId',
+  'lastShotClubId',
 ] as const;
 
 /** Watch wheel tap. Selects only — never a mark. */
@@ -235,6 +242,9 @@ export function parseClubList(raw: unknown): ClubListMessage | null {
   if (row.roundLive === false) msg.roundLive = false;
   const teeLength = optionalPositiveYards(row.teeLengthYards);
   if (teeLength != null) msg.teeLengthYards = teeLength;
+  if ('shotCount' in row && typeof row.shotCount === 'number' && Number.isFinite(row.shotCount)) {
+    msg.shotCount = Math.max(0, Math.round(row.shotCount));
+  }
   if ('lastShotId' in row) {
     const lastShotId = watchShotId(row.lastShotId);
     if (lastShotId) msg.lastShotId = lastShotId;
@@ -680,17 +690,21 @@ export function clubListPayload(args: {
     back?: { lat: number; lng: number } | null;
   } | null;
   clubCarry?: Record<string, number | null | undefined> | null;
+  /** Shots on this hole. Omit only when an id is set and the count is unknown. */
+  shotCount?: number | null;
   lastShotId?: string | null;
   /** Club on that shot. Empty when the hole has no shot. */
   lastShotClubId?: string | null;
-  /**
-   * When true, always send lastShotId / lastShotClubId (empty string = none).
-   * When false, omit a missing id so an older Watch can keep its previous shot.
-   */
-  nameLastShot?: boolean;
 }): ClubListMessage {
-  const lastShotId = watchShotId(args.lastShotId);
-  const lastShotClubId = watchShotId(args.lastShotClubId);
+  const namedShotId = watchShotId(args.lastShotId);
+  const shotCount =
+    args.shotCount == null || !Number.isFinite(args.shotCount)
+      ? namedShotId
+        ? 1
+        : 0
+      : Math.max(0, Math.round(args.shotCount));
+  const lastShotId = shotCount > 0 ? (namedShotId ?? '') : '';
+  const lastShotClubId = lastShotId ? (watchShotId(args.lastShotClubId) ?? '') : '';
   const yardsToGreen =
     args.yardsQuality === 'none' ||
     args.yardsToGreen == null ||
@@ -729,12 +743,9 @@ export function clubListPayload(args: {
     ...(front ? { greenFrontLat: front.lat, greenFrontLng: front.lng } : {}),
     ...(back ? { greenBackLat: back.lat, greenBackLng: back.lng } : {}),
     ...(Object.keys(carry).length > 0 ? { clubCarry: carry } : {}),
-    ...(args.nameLastShot
-      ? { lastShotId: lastShotId ?? '', lastShotClubId: lastShotClubId ?? '' }
-      : {
-          ...(lastShotId ? { lastShotId } : {}),
-          ...(lastShotClubId ? { lastShotClubId } : {}),
-        }),
+    shotCount,
+    lastShotId,
+    lastShotClubId,
   };
 }
 
@@ -789,6 +800,7 @@ export function clubListPushKey(msg: ClubListMessage): string {
     clubCarry: msg.clubCarry ?? null,
     roundComplete: msg.roundComplete === true,
     roundLive: msg.roundLive !== false,
+    shotCount: msg.shotCount ?? 0,
     lastShotId: msg.lastShotId ?? null,
     lastShotClubId: msg.lastShotClubId ?? null,
   });

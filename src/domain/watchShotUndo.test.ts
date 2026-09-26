@@ -23,13 +23,15 @@ import {
   shotUndoPayload,
   watchPayloadRunsAcceptFix,
 } from './watchMessages';
+import { planWatchMadeItAdvance } from './watchPuttSync';
 import {
-  resolveWatchLastShotId,
+  applyPhoneHoleShotPush,
   watchClubListIsStale,
   planWatchShotUndo,
   WATCH_SHOT_ALREADY_UNDONE,
   WATCH_SHOT_UNDO_SKIPPED,
   WATCH_SHOT_UNDONE,
+  watchEditShotEnabled,
   watchLastShotId,
   watchShotUndoStartsShotHold,
   watchShotUndoTouchesPuttsOrPenalties,
@@ -87,49 +89,115 @@ test('clubList carries lastShotId so the Watch can dim Undo and name the shot', 
     yardsToGreen: 150,
     yardsQuality: 'good' as const,
   };
-  const withShot = clubListPayload({ ...base, lastShotId: 'shot-b' });
+  const withShot = clubListPayload({ ...base, shotCount: 2, lastShotId: 'shot-b', lastShotClubId: 'club_7i' });
+  assert.equal(withShot.shotCount, 2);
   assert.equal(withShot.lastShotId, 'shot-b');
   assert.equal(parseClubList(withShot)?.lastShotId, 'shot-b');
-  const empty = clubListPayload({ ...base, lastShotId: null });
-  assert.equal('lastShotId' in empty, false);
-  assert.equal(parseClubList(empty)?.lastShotId, undefined);
+  assert.equal(parseClubList(withShot)?.shotCount, 2);
+  const empty = clubListPayload({ ...base, shotCount: 0, lastShotId: null });
+  assert.equal(empty.shotCount, 0);
+  assert.equal(empty.lastShotId, '');
+  assert.equal(parseClubList(empty)?.shotCount, 0);
+  assert.equal(parseClubList(empty)?.lastShotId, '');
   // An undo that changes the last shot pushes a fresh list to the Watch.
   assert.notEqual(clubListPushKey(withShot), clubListPushKey(empty));
   assert.equal(watchLastShotId([]), null);
   assert.equal(watchLastShotId([shot({ id: 'a', seq: 1 }), shot({ id: 'b', seq: 2 })]), 'b');
 });
 
-test('Hole Out and a hole change do not drop a last shot the phone still has', () => {
-  // Same hole, key omitted: a yard refresh must not gray Edit shot.
-  assert.equal(
-    resolveWatchLastShotId({ previousHole: 1, previousId: 'shot-a', nextHole: 1, incoming: undefined }),
-    'shot-a',
-  );
-  // Explicit empty: the phone says this hole has no shot.
-  assert.equal(resolveWatchLastShotId({ previousHole: 1, previousId: 'shot-a', nextHole: 1, incoming: '' }), null);
-  // Hole change with the key omitted does not carry hole N's shot onto hole N+1.
-  assert.equal(
-    resolveWatchLastShotId({ previousHole: 1, previousId: 'shot-a', nextHole: 2, incoming: undefined }),
-    null,
-  );
-  // Hole Out names the destination hole's shot, including a hole that already has one.
-  assert.equal(
-    resolveWatchLastShotId({ previousHole: 1, previousId: 'shot-a', nextHole: 2, incoming: 'shot-on-2' }),
-    'shot-on-2',
-  );
-  assert.equal(resolveWatchLastShotId({ previousHole: 1, previousId: 'shot-a', nextHole: 2, incoming: '' }), null);
-  // A late Hole Out / complication list is older than the list already on the Watch.
+test('phone push is the Watch shot count and lastShotId', () => {
+  const cleared = { holeNumber: 1, shotCount: 0, lastShotId: null, lastShotClubId: null };
+  // (a) After Hole Out the Watch has no shot. The phone's current hole still has shots.
+  const resynced = applyPhoneHoleShotPush({
+    local: cleared,
+    push: { holeNumber: 1, shotCount: 2, lastShotId: 'shot-b', lastShotClubId: 'club_7i' },
+  });
+  assert.equal(resynced.holeNumber, 1);
+  assert.equal(resynced.shotCount, 2);
+  assert.equal(resynced.lastShotId, 'shot-b');
+  assert.equal(resynced.editShotEnabled, true);
+  assert.equal(watchEditShotEnabled(resynced), true);
+  const holeOut = planWatchMadeItAdvance({
+    holeNumber: 1,
+    holeCount: 18,
+    lengths: [],
+    last: null,
+    nextShotCount: 2,
+    nextLastShotId: 'shot-b',
+    nextLastShotClubId: 'club_7i',
+  });
+  const afterHoleOut = applyPhoneHoleShotPush({
+    local: cleared,
+    push: {
+      holeNumber: holeOut.clubList.holeNumber,
+      shotCount: holeOut.clubList.shotCount,
+      lastShotId: holeOut.clubList.lastShotId,
+      lastShotClubId: holeOut.clubList.lastShotClubId,
+    },
+  });
+  assert.equal(afterHoleOut.holeNumber, 2);
+  assert.equal(afterHoleOut.lastShotId, 'shot-b');
+  assert.equal(afterHoleOut.shotCount, 2);
+  assert.equal(afterHoleOut.editShotEnabled, true);
+
+  // (b) A stale Watch id is replaced by the phone's on the next push.
+  const replaced = applyPhoneHoleShotPush({
+    local: { holeNumber: 1, shotCount: 1, lastShotId: 'stale-id', lastShotClubId: 'club_pw' },
+    push: { holeNumber: 1, shotCount: 2, lastShotId: 'shot-b', lastShotClubId: 'club_7i' },
+  });
+  assert.equal(replaced.lastShotId, 'shot-b');
+  assert.equal(replaced.lastShotClubId, 'club_7i');
+  assert.equal(replaced.shotCount, 2);
+  assert.equal(replaced.editShotEnabled, true);
+
+  // (c) A phone push with zero shots on the current hole dims Edit shot.
+  const empty = applyPhoneHoleShotPush({
+    local: { holeNumber: 1, shotCount: 2, lastShotId: 'shot-b', lastShotClubId: 'club_7i' },
+    push: { holeNumber: 1, shotCount: 0, lastShotId: '', lastShotClubId: '' },
+  });
+  assert.equal(empty.shotCount, 0);
+  assert.equal(empty.lastShotId, null);
+  assert.equal(empty.editShotEnabled, false);
+
+  // A push that does not name shots does not clear them on its own.
+  const unnamed = applyPhoneHoleShotPush({
+    local: { holeNumber: 1, shotCount: 2, lastShotId: 'shot-b', lastShotClubId: 'club_7i' },
+    push: { holeNumber: 1 },
+  });
+  assert.equal(unnamed.lastShotId, 'shot-b');
+  assert.equal(unnamed.shotCount, 2);
+  assert.equal(unnamed.editShotEnabled, true);
+
   assert.equal(watchClubListIsStale({ currentSeq: 4, incomingSeq: 2 }), true);
   assert.equal(watchClubListIsStale({ currentSeq: 4, incomingSeq: 4 }), false);
   assert.equal(watchClubListIsStale({ currentSeq: 0, incomingSeq: 0 }), false);
+
   const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
   const apply = session.slice(session.indexOf('private func applyClubList'), session.indexOf('private func applyPuttSheet'));
   assert.match(apply, /incomingSeq < list\.listSeq/);
-  assert.match(apply, /message\["lastShotId"\] != nil/);
-  assert.match(apply, /next\.lastShotId = list\.lastShotId/);
+  assert.match(apply, /message\["shotCount"\]/);
+  assert.match(apply, /next\.shotCount = count/);
+  assert.match(apply, /next\.lastShotId = shotId/);
+  const finish = session.slice(session.indexOf('private func finishUndoSend'), session.indexOf('private func sendClubChangeReliable'));
+  assert.doesNotMatch(finish, /lastShotId = nil/);
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
-  assert.match(hole, /watchAdvanceNamedShot\(db, id, targetHole, round\.holeCount\)/);
+  assert.match(hole, /shotCount: readOnly \? 0 : shots\.length/);
+  assert.match(hole, /shotCount: advance\.shotCount/);
   assert.match(hole, /lastShotId: advance\.lastShotId/);
+  const service = readFileSync(new URL('../services/watchClub.ts', import.meta.url), 'utf8');
+  const republish = service.slice(service.indexOf('export async function republishWatchHoleShots'), service.indexOf('export async function pushWatchMadeItAdvance'));
+  assert.match(republish, /shotCount: shots\.length/);
+  assert.match(republish, /force: true/);
+  const undo = service.slice(service.indexOf('async function applyWatchShotUndo'), service.indexOf('async function flushPendingShotUndos'));
+  assert.match(undo, /republishWatchHoleShots\(\)/);
+  const club = service.slice(service.indexOf('async function applyWatchShotClubChange'), service.indexOf('async function flushPendingShotClubChanges'));
+  assert.match(club, /republishWatchHoleShots\(\)/);
+  const penalty = service.slice(service.indexOf('async function applyWatchPenalty'), service.indexOf('async function applyWatchShotUndo'));
+  assert.match(penalty, /republishWatchHoleShots\(\)/);
+  const bridge = service.slice(service.indexOf('export function startWatchClubBridge'), service.indexOf('export { MADE_IT_FEEDBACK'));
+  assert.match(bridge, /onReachabilityChange/);
+  assert.match(bridge, /AppState\.addEventListener/);
+  assert.match(bridge, /republishWatchHoleShots\(\)/);
 });
 
 test('undo removes only the named shot, only while it is last, only on the current hole', () => {
@@ -269,6 +337,7 @@ test('phone handler applies Watch Undo through the planner and the phone undo, n
   assert.doesNotMatch(fn, /insertPenalty|updateHolePutts|markShotWithClub|acceptFix/);
   assert.match(service, /queueWatchShotUndoEvent/);
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  assert.match(hole, /shotCount: readOnly \? 0 : shots\.length/);
   assert.match(hole, /lastShotId: readOnly \? null : watchNamedLastShot\(shots\)\.lastShotId/);
 });
 
@@ -299,6 +368,7 @@ test('Watch Undo: stable id, same queue as Penalty, no shot hold, never putts or
   assert.match(drop, /isShotUndo\(payload\)/);
   // Dim while there is no shot, or this shot's undo is on the way.
   const can = session.slice(session.indexOf('var canUndoShot: Bool'), session.indexOf('func undoLastShot()'));
+  assert.match(can, /list\.shotCount > 0/);
   assert.match(can, /list\.lastShotId/);
   assert.match(can, /undoPendingShotIds\.contains\(shotId\)/);
   // A queued club tap would make the phone's last shot stale: Undo waits for it.

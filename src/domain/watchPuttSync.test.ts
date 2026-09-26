@@ -120,8 +120,8 @@ test('puttPick made on hole 7 → next clubList.holeNumber === 8 and puttSheet.o
   assert.equal(plan.clubList.teeLengthYards, undefined);
   assert.equal(plan.clubList.greenLat, undefined);
   assert.equal(plan.clubList.clubCarry, undefined);
-  // Hole Out names the destination shot. Empty means that hole has none, so the
-  // Watch does not keep hole 7's shot and does not invent one.
+  // Hole Out names the destination hole's shot count. Zero means that hole has none.
+  assert.equal(plan.clubList.shotCount, 0);
   assert.equal(plan.clubList.lastShotId, '');
   assert.equal(plan.clubList.lastShotClubId, '');
   const named = planWatchMadeItAdvance({
@@ -133,6 +133,7 @@ test('puttPick made on hole 7 → next clubList.holeNumber === 8 and puttSheet.o
     nextLastShotClubId: 'club_8i',
   });
   assert.equal(named.clubList.holeNumber, 8);
+  assert.equal(named.clubList.shotCount, 1);
   assert.equal(named.clubList.lastShotId, 'shot-on-8');
   assert.equal(named.clubList.lastShotClubId, 'club_8i');
   assert.ok(parseClubList(plan.clubList));
