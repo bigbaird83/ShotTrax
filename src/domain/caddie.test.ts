@@ -47,7 +47,7 @@ test('no hazards: the club closest to the yards left, with its spread', () => {
   assert.equal(a.longer?.clubId, '6 Iron');
   assert.equal(a.reasons[0], 'From your 10 measured shots — 3 long of the middle.');
   assert.ok(a.reasons.includes('No mapped hazards in play from here.'));
-  assert.equal(formatCaddieChip(a), 'Caddie · 7 Iron');
+  assert.equal(formatCaddieChip(a), 'Caddie · 7 Iron · 150');
 });
 
 test('water in line where the closest club finishes: clubs to one that stays short of it', () => {

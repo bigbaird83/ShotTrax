@@ -2092,7 +2092,7 @@ function HoleScreenBody() {
           {caddie && !catchUpFullScreen ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`${formatCaddieChip(caddie)}, ${caddie.yardsLeft} yards left. Opens the reasons.`}
+              accessibilityLabel={`Caddie: ${caddie.pick.name}, ${caddie.pick.carry} yards. ${caddie.yardsLeft} yards left. Opens the reasons.`}
               testID="caddie-chip"
               onPress={() => setCaddieOpen(true)}
               style={styles.caddieBadge}>

@@ -82,7 +82,7 @@ A round in progress shows on the Lock Screen and in the Dynamic Island (iOS 16.2
 
 ## Caddie
 
-During a round, a **Caddie · 8 Iron** chip sits under the yards badge. Tap it for the reasons (`src/domain/caddie.ts`):
+During a round, a **Caddie · 8 Iron · 139** chip sits under the yards badge: the pick and the same distance the wheel shows for that club. Tap it for the reasons (`src/domain/caddie.ts`):
 
 - Distance: the same carry the club wheel uses (your average once live, else your bag number, an estimate, or a typical distance — the sheet says which). Distances are where the ball finished.
 - Spread: the middle 80% of your measured shots with that club (Dispersion), once there are at least 5; fewer → no spread is claimed.

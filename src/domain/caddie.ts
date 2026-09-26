@@ -202,7 +202,7 @@ export function planCaddie(args: {
   };
 }
 
-/** Chip text: "Caddie · 7 Iron". */
+/** Chip text: "Caddie · 7 Iron · 150" — the pick and the same distance the wheel shows for it. */
 export function formatCaddieChip(advice: CaddieAdvice): string {
-  return `Caddie · ${advice.pick.name}`;
+  return `Caddie · ${advice.pick.name} · ${advice.pick.carry}`;
 }
