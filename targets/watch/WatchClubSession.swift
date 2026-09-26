@@ -352,6 +352,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   private var locationUpdatesStarted = false
   /// Avoid asking again while a When In Use sheet from this active scene is up.
   private var locationAuthRequestInFlight = false
+  /// Launch splash is covering the UI. When In Use waits so it does not cover the clip.
+  private var splashShowing = false
   /// Walking filter once the wrist is down. Wrist-up stays unfiltered so a
   /// stationary club mark still has a fix younger than 3 seconds.
   private static let liveDistanceFilterM: CLLocationDistance = 3
@@ -2777,13 +2779,31 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
   }
 
+  /// The splash will cover the first open. Set before any scene callback.
+  func prepareLaunchSplash() {
+    splashShowing = true
+  }
+
+  /// Splash left the screen. Ask for When In Use when the scene is active.
+  func splashDidFinish() {
+    guard splashShowing else { return }
+    splashShowing = false
+    requestLiveLocationAuthorizationIfNeeded()
+  }
+
   /// Mirrors `watchShouldRequestLocationAuthorization`. Only an active scene
   /// can present the sheet. The next active scene asks again if status is
   /// still notDetermined (`locationAuthRequestInFlight` clears on wrist-down).
+  /// The launch splash holds the sheet until the clip is gone. A fresh live
+  /// round never sets `splashShowing`, so yards are not delayed.
   private func requestLiveLocationAuthorizationIfNeeded() {
     guard sceneIsActive else { return }
     guard location.authorizationStatus == .notDetermined else {
       locationAuthRequestInFlight = false
+      return
+    }
+    guard !splashShowing else {
+      liveYardsLog.info("requestWhenInUseAuthorization waits; splash showing")
       return
     }
     guard !locationAuthRequestInFlight else { return }
