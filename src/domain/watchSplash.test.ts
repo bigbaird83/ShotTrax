@@ -6,8 +6,11 @@ import {
   watchLocationAuthorizationWaitsForSplash,
   watchSplashPlayGate,
   watchSplashPlayback,
+  WATCH_SPLASH_SAFETY_NS,
+  WATCH_SPLASH_STALL_NS,
   watchSplashSafetyStarts,
   watchSplashShouldReplay,
+  watchSplashStallCeilingStarts,
 } from './watchSplash';
 
 const root = new URL('../../', import.meta.url);
@@ -236,6 +239,52 @@ test('play() waits for a ready item and an active scene; safety starts when the 
   assert.equal(watchSplashSafetyStarts('playing', true), false);
   assert.equal(watchSplashSafetyStarts('paused', false), false);
   assert.equal(watchSplashSafetyStarts('waiting', false), false);
+  assert.equal(WATCH_SPLASH_SAFETY_NS, 5_000_000_000);
+  assert.equal(WATCH_SPLASH_STALL_NS, 6_000_000_000);
+  assert.ok(WATCH_SPLASH_STALL_NS > WATCH_SPLASH_SAFETY_NS);
+});
+
+test('a clip that never plays still dismisses on the stall ceiling', () => {
+  assert.equal(
+    watchSplashStallCeilingStarts({ scene: 'active', playbackStarted: true, reduceMotion: false, dismissing: false }),
+    true,
+  );
+  assert.equal(
+    watchSplashStallCeilingStarts({ scene: 'background', playbackStarted: false, reduceMotion: false, dismissing: false }),
+    false,
+  );
+  assert.equal(
+    watchSplashStallCeilingStarts({ scene: 'inactive', playbackStarted: false, reduceMotion: false, dismissing: false }),
+    false,
+  );
+  assert.equal(
+    watchSplashStallCeilingStarts({ scene: 'active', playbackStarted: false, reduceMotion: false, dismissing: false }),
+    false,
+  );
+  assert.equal(
+    watchSplashStallCeilingStarts({ scene: 'active', playbackStarted: true, reduceMotion: true, dismissing: false }),
+    false,
+  );
+  assert.equal(
+    watchSplashStallCeilingStarts({ scene: 'active', playbackStarted: true, reduceMotion: false, dismissing: true }),
+    false,
+  );
+
+  const splash = read('targets/watch/WatchSplash.swift');
+  assert.match(splash, /stallNanoseconds: UInt64 = 6_000_000_000/);
+  assert.match(splash, /reason: "stall"/);
+  const reduce = splash.slice(splash.indexOf('if reduceMotion'), splash.indexOf('startStallCeiling()'));
+  assert.doesNotMatch(reduce, /stallNanoseconds/);
+  const stall = splash.slice(splash.indexOf('private func startStallCeiling'), splash.indexOf('private func startSafety'));
+  assert.match(stall, /stallNanoseconds/);
+  assert.match(stall, /guard !dismissing else \{ return \}/);
+  assert.match(stall, /dismiss\(fade: false, reason: "stall"/);
+  assert.match(stall, /timeControlStatus/);
+  assert.match(stall, /playbackDetail/);
+  const detail = splash.slice(splash.indexOf('private func playbackDetail'), splash.indexOf('private func dismiss'));
+  assert.match(detail, /status=/);
+  assert.match(detail, /timeControlStatus=/);
+  assert.match(detail, /reasonForWaitingToPlay=/);
 });
 
 test('Watch target links the video frameworks the splash imports', () => {

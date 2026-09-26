@@ -16,8 +16,10 @@ enum WatchSplashClip {
   static let background = Color(red: 0, green: 1.0 / 255, blue: 1.0 / 255)
   /// Fade after the clip ends or a tap.
   static let fadeNanoseconds: UInt64 = 200_000_000
-  /// Hard stop so a stalled video cannot leave the splash up.
+  /// 5 s ceiling once the clip is actually playing.
   static let safetyNanoseconds: UInt64 = 5_000_000_000
+  /// 6 s ceiling from the first active playback attempt, even if the item never plays.
+  static let stallNanoseconds: UInt64 = 6_000_000_000
   /// Reduce Motion holds the first-frame still this long instead of playing.
   static let reduceMotionNanoseconds: UInt64 = 1_200_000_000
 
@@ -213,6 +215,7 @@ struct WatchSplash: View {
       dismiss(fade: true, reason: "ended")
       return
     }
+    startStallCeiling()
     guard let url = Bundle.main.url(
       forResource: WatchSplashClip.resource,
       withExtension: WatchSplashClip.fileExtension
@@ -271,6 +274,20 @@ struct WatchSplash: View {
     }
   }
 
+  /// 6 s from the first active `run()`, independent of item status. Ignored once dismissed.
+  /// Reduce Motion returns before this. A background launch never reaches `run()`.
+  private func startStallCeiling() {
+    Task { @MainActor in
+      try? await Task.sleep(nanoseconds: WatchSplashClip.stallNanoseconds)
+      guard !dismissing else { return }
+      let status = playbackBox?.item.status ?? .unknown
+      let control = playbackBox?.player.timeControlStatus ?? .paused
+      let waiting = playbackBox.map { SplashPlaybackBox.waitingText($0.player) } ?? ""
+      let detail = playbackDetail(status: status, control: control, waiting: waiting, error: playbackBox.map { SplashPlaybackBox.errorText($0.item) } ?? "")
+      dismiss(fade: false, reason: "stall", detail: detail)
+    }
+  }
+
   /// 5 s ceiling from the moment the clip is actually moving, not from view creation.
   private func startSafety(_ box: SplashPlaybackBox) {
     guard !box.safetyStarted else { return }
@@ -284,6 +301,11 @@ struct WatchSplash: View {
   }
 
   private func logPlayback(status: AVPlayerItem.Status, control: AVPlayer.TimeControlStatus, waiting: String, error: String) {
+    let detailLabel = playbackDetail(status: status, control: control, waiting: waiting, error: error)
+    WatchSplashClip.splashLog.info("\(detailLabel, privacy: .public)")
+  }
+
+  private func playbackDetail(status: AVPlayerItem.Status, control: AVPlayer.TimeControlStatus, waiting: String, error: String) -> String {
     let statusLabel: String
     switch status {
     case .unknown: statusLabel = "unknown"
@@ -298,16 +320,20 @@ struct WatchSplash: View {
     case .playing: controlLabel = "playing"
     @unknown default: controlLabel = "paused"
     }
-    let errorLabel = error
     let waitingLabel = waiting.isEmpty ? "none" : waiting
-    WatchSplashClip.splashLog.info("status=\(statusLabel, privacy: .public) timeControlStatus=\(controlLabel, privacy: .public) reasonForWaitingToPlay=\(waitingLabel, privacy: .public) error=\(errorLabel, privacy: .public)")
+    return "status=\(statusLabel) timeControlStatus=\(controlLabel) reasonForWaitingToPlay=\(waitingLabel) error=\(error)"
   }
 
-  private func dismiss(fade: Bool, reason: String) {
+  private func dismiss(fade: Bool, reason: String, detail: String = "") {
     guard !dismissing else { return }
     dismissing = true
     let reasonLabel = reason
-    WatchSplashClip.splashLog.info("dismissed (reason: \(reasonLabel, privacy: .public))")
+    if detail.isEmpty {
+      WatchSplashClip.splashLog.info("dismissed (reason: \(reasonLabel, privacy: .public))")
+    } else {
+      let detailLabel = detail
+      WatchSplashClip.splashLog.info("dismissed (reason: \(reasonLabel, privacy: .public)) \(detailLabel, privacy: .public)")
+    }
     player?.pause()
     guard fade else {
       onDone()

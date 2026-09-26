@@ -64,9 +64,29 @@ export function watchSplashShouldReplay(args: {
   return args.timeControlStatus !== 'playing';
 }
 
-/** The 5 s safety clock starts when the clip is actually moving. */
+/** The 5 s safety clock starts when the clip is actually moving. Mirrors `safetyNanoseconds`. */
+export const WATCH_SPLASH_SAFETY_NS = 5_000_000_000;
+
 export function watchSplashSafetyStarts(timeControlStatus: WatchTimeControlStatus, safetyStarted: boolean): boolean {
   return timeControlStatus === 'playing' && !safetyStarted;
+}
+
+/**
+ * Hard ceiling from the first active playback attempt. Mirrors `stallNanoseconds`.
+ * Independent of item status. Does not start in the background or for Reduce Motion.
+ * Once dismissing, the timer is ignored.
+ */
+export const WATCH_SPLASH_STALL_NS = 6_000_000_000;
+
+export function watchSplashStallCeilingStarts(args: {
+  scene: WatchSplashScene;
+  /** `run()` has begun. That only happens after the first active scene. */
+  playbackStarted: boolean;
+  reduceMotion: boolean;
+  dismissing: boolean;
+}): boolean {
+  if (!args.playbackStarted || args.reduceMotion || args.dismissing) return false;
+  return args.scene === 'active';
 }
 
 /**
