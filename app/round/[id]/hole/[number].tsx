@@ -100,7 +100,7 @@ import {
   playMapFrameEpoch,
   resolvePlayHoleTee,
 } from '@/src/domain/holeCamera';
-import { isCourseCardLatLng } from '@/src/domain/latLng';
+import { isCourseCardLatLng, isValidLatLng } from '@/src/domain/latLng';
 import { deleteShotPrompt } from '@/src/domain/deleteShot';
 import { planInsertSlots } from '@/src/domain/insertShot';
 import { confirmUndoIsLive, planConfirmUndo, type ConfirmUndoWindow } from '@/src/domain/confirmUndo';
@@ -144,7 +144,14 @@ import {
   type PuttDraft,
   type PuttLengthId,
 } from '@/src/domain/putts';
-import { canMoveFromPin, canMoveToPin, type ShotEditSnapshot } from '@/src/domain/shotEdit';
+import {
+  canMoveFromPin,
+  canMoveToPin,
+  frameMapCenter,
+  moveSpotDraftOrigin,
+  shotStoredPosition,
+  type ShotEditSnapshot,
+} from '@/src/domain/shotEdit';
 import { addShotSheetRankYards, addShotSuggestYardsLeft, clubToRankInput, lastClosedShotYards, rankDistanceYards, rankTopClubs, resolveAddShotSuggestTarget, resolveLiveSuggestTarget, resolveNextShotDistanceTarget, type LiveSuggestHold } from '@/src/domain/rankClubs';
 import { planFinishedHoleMiniSummary } from '@/src/domain/finishedHoleSummary';
 import { formatHazardCarry, hazardCarryAccessibilityLabel, planHazardCarries } from '@/src/domain/hazardCarry';
@@ -165,7 +172,7 @@ import { thunderbirdCupOnGreen, thunderbirdDailyPin, thunderbirdPinHoleFor } fro
 import { MENU_SHARE_FALLBACK_MS, toastFromShareAttempt } from '@/src/domain/spectator';
 import { publishRoundScoreboard, shareLiveBoard, shareRoundSnapshot } from '@/src/services/shareRound';
 import { shareKindOrScorecard, type ShareKind } from '@/src/domain/shareChoice';
-import { endOpenShot, markShotWithClub, promptForPlan, undoLastShot, undoLastSoftGpsClubMark, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, undoShotEdit, deleteHoleShot } from '@/src/services/shotActions';
+import { endOpenShot, markShotWithClub, promptForPlan, undoLastShot, undoLastSoftGpsClubMark, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, moveShotSpot, undoShotEdit, deleteHoleShot } from '@/src/services/shotActions';
 import { useLiveFix } from '@/src/services/useLiveFix';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
 import { endWatchRound, pushWatchMadeItAdvance, pushWatchPuttSheet } from '@/src/services/watchClub';
@@ -238,7 +245,8 @@ export default function HoleScreen() {
   const [placeTo, setPlaceTo] = useState<LatLng | null>(null);
   const [placeToDraft, setPlaceToDraft] = useState<LatLng | null>(null);
   const [placeClubOpen, setPlaceClubOpen] = useState(false);
-  const [placeMode, setPlaceMode] = useState<'off' | 'from' | 'to' | 'edit-from' | 'edit-to'>('off');
+  const [placeMode, setPlaceMode] = useState<'off' | 'from' | 'to' | 'edit-from' | 'edit-to' | 'move-spot'>('off');
+  const [moveSpotDropped, setMoveSpotDropped] = useState(false);
   const [insertSeq, setInsertSeq] = useState<number | null>(null);
   const [editShotId, setEditShotId] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -341,6 +349,7 @@ export default function HoleScreen() {
     setInsertSeq(cancel.insertSeq);
     setEditClubOpen(false);
     setShowAllClubs(false);
+    setMoveSpotDropped(false);
   };
 
   const startCatchUp = (seq: number | null) => {
@@ -362,7 +371,8 @@ export default function HoleScreen() {
     setEditClubOpen(false);
     setEditShotId(null);
     setShowAllClubs(false);
-    if (placeMode === 'edit-from' || placeMode === 'edit-to') setPlaceMode('off');
+    setMoveSpotDropped(false);
+    if (placeMode === 'edit-from' || placeMode === 'edit-to' || placeMode === 'move-spot') setPlaceMode('off');
   };
 
   const openEdit = (shotId: string) => {
@@ -1337,6 +1347,48 @@ export default function HoleScreen() {
     bump();
   };
 
+  const beginMoveSpot = () => {
+    if (!editingShot) return;
+    const stored = shotStoredPosition(editingShot);
+    const device = isValidLatLng(fix) ? { lat: fix.lat, lng: fix.lng } : null;
+    const framed =
+      courseCardPaint.mount && courseCardFrame.ok && courseCamera ? courseCamera.points : [holeTee, green];
+    const origin = moveSpotDraftOrigin({
+      stored,
+      device,
+      mapCenter: frameMapCenter(framed),
+    });
+    if (!origin) return;
+    setMoveSpotDropped(false);
+    setPlaceFrom(null);
+    setPlaceTo(null);
+    setPlaceToDraft(origin.point);
+    setEditOpen(false);
+    setPlaceMode('move-spot');
+  };
+
+  const commitMoveSpot = (point: LatLng) => {
+    if (!editShotId || !moveSpotDropped) return;
+    const result = moveShotSpot(db, {
+      roundId: round.id,
+      holeNumber,
+      shotId: editShotId,
+      point,
+      dropped: true,
+      confirmed: true,
+    });
+    if (result.status !== 'commit') {
+      hapticWarn();
+      return;
+    }
+    hapticMark();
+    setMoveSpotDropped(false);
+    setPlaceToDraft(null);
+    setPlaceMode('off');
+    setEditOpen(true);
+    bump();
+  };
+
   const onUndoEdit = () => {
     if (readOnly || !editUndo) return;
     const ok = undoShotEdit(db, editUndo);
@@ -1432,7 +1484,9 @@ export default function HoleScreen() {
     setFirstLaunchTipDismissed(true);
   };
   const placeHint =
-    placeMode === 'edit-from'
+    placeMode === 'move-spot'
+      ? COPY.moveSpotHint
+      : placeMode === 'edit-from'
       ? COPY.editFromHint
       : placeMode === 'edit-to'
         ? COPY.editToHint
@@ -1445,7 +1499,7 @@ export default function HoleScreen() {
           : null;
 
   const onCancelPlace = () => {
-    const editing = placeMode === 'edit-from' || placeMode === 'edit-to' || editClubOpen;
+    const editing = placeMode === 'edit-from' || placeMode === 'edit-to' || placeMode === 'move-spot' || editClubOpen;
     resetPlace();
     if (editing && editShotId) setEditOpen(true);
   };
@@ -1469,14 +1523,23 @@ export default function HoleScreen() {
           paintNotice={paintBanner}
           paintSourceChip={paintSourceChip}
           requestCourse={requestCourse}
-          placedFrom={placeMode === 'edit-from' || placeMode === 'edit-to' ? placeFrom : addShotFrom}
+          placedFrom={
+            placeMode === 'move-spot'
+              ? null
+              : placeMode === 'edit-from' || placeMode === 'edit-to'
+                ? placeFrom
+                : addShotFrom
+          }
           placedTo={placeToDraft ?? placeTo}
-          lineFrom={placeMode === 'edit-from' || placeMode === 'edit-to' ? placeFrom : addShotFrom}
+          lineFrom={placeMode === 'edit-from' || placeMode === 'edit-to' ? placeFrom : placeMode === 'move-spot' ? null : addShotFrom}
           lineGreen={courseGreen}
           freezePan={placeMode === 'to' || placeMode === 'edit-to'}
           onPlaceToDrag={
-            placeMode === 'to' || placeMode === 'edit-to'
-              ? (point) => setPlaceToDraft(point)
+            placeMode === 'to' || placeMode === 'edit-to' || placeMode === 'move-spot'
+              ? (point) => {
+                  setPlaceToDraft(point);
+                  if (placeMode === 'move-spot') setMoveSpotDropped(true);
+                }
               : undefined
           }
           lockFrame
@@ -1836,7 +1899,7 @@ export default function HoleScreen() {
           ) : null}
         </View>
         {catchUpFullScreen &&
-        (placeMode === 'to' || placeMode === 'edit-to') &&
+        ((placeMode === 'to' || placeMode === 'edit-to') || (placeMode === 'move-spot' && moveSpotDropped)) &&
         placeToDraft &&
         !placeClubOpen ? (
           <View
@@ -1845,6 +1908,10 @@ export default function HoleScreen() {
             <BigButton
               label={COPY.confirmPlace}
               onPress={() => {
+                if (placeMode === 'move-spot') {
+                  commitMoveSpot(placeToDraft);
+                  return;
+                }
                 if (placeMode === 'edit-to') {
                   commitMovePin(placeToDraft, 'to');
                   return;
@@ -2260,11 +2327,15 @@ export default function HoleScreen() {
                 />
                 <BigButton
                   label={COPY.changeClub}
-                  disabled={readOnly}
                   onPress={() => {
                     setShowAllClubs(false);
                     setEditClubOpen(true);
                   }}
+                />
+                <BigButton
+                  label={COPY.moveSpot}
+                  variant="secondary"
+                  onPress={beginMoveSpot}
                 />
                 {editUndo?.id === editingShot.id ? (
                   <BigButton label={COPY.undoEdit} variant="ghost" onPress={onUndoEdit} />

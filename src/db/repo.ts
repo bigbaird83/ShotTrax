@@ -90,7 +90,7 @@ import {
   serializePuttLengths,
   type PuttLengthId,
 } from '../domain/putts';
-import type { ShotEditSnapshot } from '../domain/shotEdit';
+import { applyMoveShotSpot, type ShotEditSnapshot } from '../domain/shotEdit';
 import {
   confirmUndoAverageEligibleAt,
   confirmUndoShotEntersAverage,
@@ -1786,6 +1786,93 @@ export function restoreShotSnapshot(db: SQLiteDatabase, snap: ShotEditSnapshot):
       snap.id,
     ],
   );
+}
+
+function writeShotSpot(db: SQLiteDatabase, shot: Shot): void {
+  db.runSync(
+    `UPDATE shots SET
+      start_lat = ?, start_lng = ?, start_accuracy_m = ?, start_fix_quality = ?,
+      end_lat = ?, end_lng = ?, end_accuracy_m = ?, end_fix_quality = ?,
+      distance_yards = ?, typed_yards = ?, fix_quality = ?,
+      impossible_jump = ?, source = ?, suggested = ?
+     WHERE id = ?`,
+    [
+      shot.startLat,
+      shot.startLng,
+      shot.startAccuracyM,
+      shot.startFixQuality,
+      shot.endLat,
+      shot.endLng,
+      shot.endAccuracyM,
+      shot.endFixQuality,
+      shot.distanceYards,
+      shot.typedYards,
+      shot.fixQuality,
+      shot.impossibleJump ? 1 : 0,
+      shot.source,
+      shot.suggested ? 1 : 0,
+      shot.id,
+    ],
+  );
+}
+
+/**
+ * Move one shot's spot to the dropped pin and recompute yardages from the
+ * stored rows. Does not renumber, reopen a neighbor, or touch putts, score,
+ * or penalty order. Cancel and a pin that was never dropped write nothing.
+ */
+export function moveShotSpotOnHole(
+  db: SQLiteDatabase,
+  args: {
+    roundId: string;
+    holeNumber: number;
+    shotId: string;
+    point: { lat: number; lng: number } | null;
+    dropped: boolean;
+    confirmed: boolean;
+  },
+): { status: 'cancel' } | { status: 'missing' } | { status: 'rejected' } | { status: 'commit' } {
+  const hole = getHole(db, args.roundId, args.holeNumber);
+  if (!hole) return args.confirmed && args.dropped ? { status: 'missing' } : { status: 'cancel' };
+  const shots = listShotsForHole(db, hole.id);
+  const planned = applyMoveShotSpot({
+    shots,
+    shotId: args.shotId,
+    point: args.point,
+    dropped: args.dropped,
+    confirmed: args.confirmed,
+  });
+  if (planned.status !== 'commit') {
+    if (planned.status === 'cancel') return { status: 'cancel' };
+    return planned.status === 'missing' ? { status: 'missing' } : { status: 'rejected' };
+  }
+  const before = new Map(shots.map((shot) => [shot.id, shot]));
+  db.withTransactionSync(() => {
+    for (const shot of planned.shots) {
+      const prev = before.get(shot.id);
+      if (!prev) continue;
+      if (
+        prev.startLat === shot.startLat &&
+        prev.startLng === shot.startLng &&
+        prev.endLat === shot.endLat &&
+        prev.endLng === shot.endLng &&
+        prev.distanceYards === shot.distanceYards &&
+        prev.source === shot.source &&
+        prev.fixQuality === shot.fixQuality &&
+        prev.startFixQuality === shot.startFixQuality &&
+        prev.endFixQuality === shot.endFixQuality &&
+        prev.startAccuracyM === shot.startAccuracyM &&
+        prev.endAccuracyM === shot.endAccuracyM &&
+        prev.impossibleJump === shot.impossibleJump &&
+        prev.typedYards === shot.typedYards &&
+        prev.suggested === shot.suggested
+      ) {
+        continue;
+      }
+      writeShotSpot(db, shot);
+    }
+  });
+  return { status: 'commit' };
 }
 
 export function reopenShot(db: SQLiteDatabase, shotId: string): void {

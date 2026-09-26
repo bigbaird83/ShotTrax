@@ -18,6 +18,7 @@ import {
   undoLastShot as undoLastShotInRepo,
   undoLastSoftGpsClubMark as undoLastSoftGpsClubMarkInRepo,
   deleteShotOnHole as deleteShotOnHoleInRepo,
+  moveShotSpotOnHole,
   updateShotClub,
 } from '../db/repo';
 import { planDrop } from '../domain/drop';
@@ -384,6 +385,21 @@ export function undoShotEdit(db: SQLiteDatabase, snapshot: ShotEditSnapshot): bo
   if (!shot) return false;
   restoreShotSnapshot(db, snapshot);
   return true;
+}
+
+/** Dropped pin only. Cancel, or a pin that was never dropped, leaves the shot. */
+export function moveShotSpot(
+  db: SQLiteDatabase,
+  args: {
+    roundId: string;
+    holeNumber: number;
+    shotId: string;
+    point: LatLng;
+    dropped: boolean;
+    confirmed: boolean;
+  },
+): { status: 'cancel' } | { status: 'missing' } | { status: 'rejected' } | { status: 'commit' } {
+  return moveShotSpotOnHole(db, args);
 }
 
 export async function takeDrop(
