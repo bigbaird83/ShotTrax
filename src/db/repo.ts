@@ -813,8 +813,11 @@ export function restoreRoundHistory(
       const sharedAt = getRoundSharedAt(db, id);
       // Read before delete. Unknown lists are copied whole. An explicit list keeps phone rows newer than exportedAt.
       const carried = phonePenaltiesByHole(db, id);
+      // Group players and their scores are not in the file yet; keep the phone's.
+      const group = readGroupRows(db, id);
       deleteRoundRows(db, id);
       insertTransferredRound(db, round, clubs, id, carried, plan.exportedAt);
+      writeGroupRows(db, id, group);
       if (token) db.runSync('UPDATE rounds SET share_token = ? WHERE id = ?', [token, id]);
       if (sharedAt) db.runSync('UPDATE rounds SET shared_at = ? WHERE id = ?', [sharedAt, id]);
     }
@@ -1248,6 +1251,54 @@ export function deleteRound(db: SQLiteDatabase, id: string): void {
   db.withTransactionSync(() => deleteRoundRows(db, id));
 }
 
+type GroupPlayerRow = {
+  id: string;
+  round_id: string;
+  name: string;
+  handicap: number | null;
+  is_me: number;
+  sort_order: number;
+};
+
+export type GroupRows = {
+  players: GroupPlayerRow[];
+  scores: { player_id: string; hole_number: number; strokes: number }[];
+  games: string | null;
+};
+
+/** Raw group rows for one round, read before a restore replaces it. */
+export function readGroupRows(db: SQLiteDatabase, roundId: string): GroupRows {
+  return {
+    players: db.getAllSync<GroupPlayerRow>('SELECT * FROM round_players WHERE round_id = ?', [roundId]),
+    scores: db.getAllSync<{ player_id: string; hole_number: number; strokes: number }>(
+      `SELECT s.player_id, s.hole_number, s.strokes FROM player_hole_scores s
+       INNER JOIN round_players p ON p.id = s.player_id WHERE p.round_id = ?`,
+      [roundId],
+    ),
+    games:
+      db.getFirstSync<{ group_games: string | null }>('SELECT group_games FROM rounds WHERE id = ?', [roundId])
+        ?.group_games ?? null,
+  };
+}
+
+/** Puts rows from `readGroupRows` back after the round was re-inserted. Caller owns the transaction. */
+export function writeGroupRows(db: SQLiteDatabase, roundId: string, rows: GroupRows): void {
+  for (const p of rows.players) {
+    db.runSync(
+      'INSERT OR REPLACE INTO round_players (id, round_id, name, handicap, is_me, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
+      [p.id, roundId, p.name, p.handicap, p.is_me, p.sort_order],
+    );
+  }
+  for (const s of rows.scores) {
+    db.runSync('INSERT OR REPLACE INTO player_hole_scores (player_id, hole_number, strokes) VALUES (?, ?, ?)', [
+      s.player_id,
+      s.hole_number,
+      s.strokes,
+    ]);
+  }
+  if (rows.games) db.runSync('UPDATE rounds SET group_games = ? WHERE id = ?', [rows.games, roundId]);
+}
+
 /** Caller owns the transaction. */
 function deleteRoundRows(db: SQLiteDatabase, id: string): void {
   const holes = db.getAllSync<{ id: string }>('SELECT id FROM holes WHERE round_id = ?', [id]);
@@ -1256,6 +1307,11 @@ function deleteRoundRows(db: SQLiteDatabase, id: string): void {
     db.runSync('DELETE FROM hole_penalties WHERE hole_id = ?', [hole.id]);
   }
   db.runSync('DELETE FROM holes WHERE round_id = ?', [id]);
+  db.runSync(
+    'DELETE FROM player_hole_scores WHERE player_id IN (SELECT id FROM round_players WHERE round_id = ?)',
+    [id],
+  );
+  db.runSync('DELETE FROM round_players WHERE round_id = ?', [id]);
   db.runSync('DELETE FROM rounds WHERE id = ?', [id]);
 }
 

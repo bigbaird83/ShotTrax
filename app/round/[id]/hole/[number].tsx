@@ -2224,6 +2224,14 @@ function HoleScreenBody() {
             }}
           />
           <BigButton
+            label={COPY.group}
+            variant="ghost"
+            onPress={() => {
+              setMenuOpen(false);
+              router.push(`/round/${id}/group?hole=${holeNumber}`);
+            }}
+          />
+          <BigButton
             label={COPY.nerdOut}
             variant="ghost"
             onPress={() => {

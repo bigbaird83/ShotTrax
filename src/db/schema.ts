@@ -223,6 +223,26 @@ export function migrate(db: SQLiteDatabase): void {
       payload_json TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    -- Group scoring. The owner row (is_me = 1) reads its scores from holes;
+    -- other players' strokes live in player_hole_scores.
+    CREATE TABLE IF NOT EXISTS round_players (
+      id TEXT PRIMARY KEY NOT NULL,
+      round_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      handicap INTEGER,
+      is_me INTEGER NOT NULL DEFAULT 0,
+      sort_order INTEGER NOT NULL,
+      FOREIGN KEY (round_id) REFERENCES rounds(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS player_hole_scores (
+      player_id TEXT NOT NULL,
+      hole_number INTEGER NOT NULL,
+      strokes INTEGER NOT NULL,
+      PRIMARY KEY (player_id, hole_number),
+      FOREIGN KEY (player_id) REFERENCES round_players(id) ON DELETE CASCADE
+    );
   `);
 
   ensureColumn(db, 'holes', 'green_lat', 'REAL');
@@ -246,6 +266,8 @@ export function migrate(db: SQLiteDatabase): void {
   ensureColumn(db, 'rounds', 'is_test', 'INTEGER NOT NULL DEFAULT 0');
   // Null until the golfer taps Share. Not copied from share_token — that code was minted without a tap.
   ensureColumn(db, 'rounds', 'shared_at', 'TEXT');
+  // JSON GroupGameSettings. Null until the group picks games.
+  ensureColumn(db, 'rounds', 'group_games', 'TEXT');
   ensureColumn(db, 'holes', 'green_front_lat', 'REAL');
   ensureColumn(db, 'holes', 'green_front_lng', 'REAL');
   ensureColumn(db, 'holes', 'green_back_lat', 'REAL');
