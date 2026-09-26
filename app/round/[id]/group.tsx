@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
@@ -154,6 +154,13 @@ export default function RoundGroupScreen() {
     <Screen>
       <Text style={styles.title}>{round.courseName ?? 'Round'}</Text>
       <Text style={styles.muted}>{COPY.groupLede}</Text>
+      {partners.length > 0 ? (
+        <BigButton
+          label={COPY.groupCard}
+          variant="secondary"
+          onPress={() => router.push(`/round/${round.id}/group-card`)}
+        />
+      ) : null}
 
       {partners.length > 0 && hole ? (
         <View style={styles.block} testID="group-score-entry">
