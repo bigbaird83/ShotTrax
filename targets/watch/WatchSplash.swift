@@ -6,10 +6,10 @@ import UIKit
 
 /// Watch open splash. Same brand clip as the phone, bundled in this target.
 enum WatchSplashClip {
-  /// 3.0s, portrait 392×584, H.264 Main, yuv420p, 24 fps. No audio, no cover art.
+  /// 3.0s, portrait 392×584, H.264 Main, yuv420p, 24 fps, about 1 Mbps. No audio, no cover art.
   static let resource = "WatchSplash"
   static let fileExtension = "mov"
-  /// Frame 0 of the clip. Shown under the player and for Reduce Motion.
+  /// Frame 0 of the original full-resolution clip. Shown under the player and for Reduce Motion.
   static let firstFrame = "WatchSplashFirstFrame"
   static let aspectRatio = 392.0 / 584.0
   /// Field behind the contained clip — the clip's own near-black edge.
@@ -49,7 +49,7 @@ struct WatchSplashCover: View {
 
 private enum SplashPlayEvent {
   case status(Int, String)
-  case control(Int)
+  case control(Int, String)
   case sceneActive
 }
 
@@ -65,6 +65,7 @@ private final class SplashPlaybackBox {
   private let continuation: AsyncStream<SplashPlayEvent>.Continuation
   private var statusObs: NSKeyValueObservation?
   private var controlObs: NSKeyValueObservation?
+  private var waitingObs: NSKeyValueObservation?
 
   init(url: URL) {
     let item = AVPlayerItem(url: url)
@@ -84,8 +85,15 @@ private final class SplashPlaybackBox {
       self?.continuation.yield(.status(item.status.rawValue, Self.errorText(item)))
     }
     controlObs = player.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] player, _ in
-      self?.continuation.yield(.control(player.timeControlStatus.rawValue))
+      self?.continuation.yield(.control(player.timeControlStatus.rawValue, Self.waitingText(player)))
     }
+    waitingObs = player.observe(\.reasonForWaitingToPlay, options: [.new]) { [weak self] player, _ in
+      self?.continuation.yield(.control(player.timeControlStatus.rawValue, Self.waitingText(player)))
+    }
+  }
+
+  static func waitingText(_ player: AVPlayer) -> String {
+    player.reasonForWaitingToPlay?.rawValue ?? ""
   }
 
   func setSceneActive(_ active: Bool) {
@@ -104,6 +112,7 @@ private final class SplashPlaybackBox {
   deinit {
     statusObs?.invalidate()
     controlObs?.invalidate()
+    waitingObs?.invalidate()
     continuation.finish()
   }
 }
@@ -224,15 +233,15 @@ struct WatchSplash: View {
       switch event {
       case .status(let raw, let error):
         let status = AVPlayerItem.Status(rawValue: raw) ?? .unknown
-        logPlayback(status: status, control: box.player.timeControlStatus, error: error)
+        logPlayback(status: status, control: box.player.timeControlStatus, waiting: SplashPlaybackBox.waitingText(box.player), error: error)
         if status == .failed {
           dismiss(fade: false, reason: "failed")
           return
         }
         tryStart(box)
-      case .control(let raw):
+      case .control(let raw, let waiting):
         let control = AVPlayer.TimeControlStatus(rawValue: raw) ?? .paused
-        logPlayback(status: box.item.status, control: control, error: SplashPlaybackBox.errorText(box.item))
+        logPlayback(status: box.item.status, control: control, waiting: waiting, error: SplashPlaybackBox.errorText(box.item))
         if control == .playing {
           startSafety(box)
         }
@@ -250,14 +259,14 @@ struct WatchSplash: View {
     guard !box.playCalled else { return }
     box.playCalled = true
     box.player.play()
-    logPlayback(status: box.item.status, control: box.player.timeControlStatus, error: SplashPlaybackBox.errorText(box.item))
+    logPlayback(status: box.item.status, control: box.player.timeControlStatus, waiting: SplashPlaybackBox.waitingText(box.player), error: SplashPlaybackBox.errorText(box.item))
     Task { @MainActor in
-      try? await Task.sleep(nanoseconds: 500_000_000)
+      try? await Task.sleep(nanoseconds: 300_000_000)
       guard !dismissing, !box.retried else { return }
       if box.player.timeControlStatus != .playing {
         box.retried = true
         box.player.play()
-        logPlayback(status: box.item.status, control: box.player.timeControlStatus, error: SplashPlaybackBox.errorText(box.item))
+        logPlayback(status: box.item.status, control: box.player.timeControlStatus, waiting: SplashPlaybackBox.waitingText(box.player), error: SplashPlaybackBox.errorText(box.item))
       }
     }
   }
@@ -274,7 +283,7 @@ struct WatchSplash: View {
     }
   }
 
-  private func logPlayback(status: AVPlayerItem.Status, control: AVPlayer.TimeControlStatus, error: String) {
+  private func logPlayback(status: AVPlayerItem.Status, control: AVPlayer.TimeControlStatus, waiting: String, error: String) {
     let statusLabel: String
     switch status {
     case .unknown: statusLabel = "unknown"
@@ -290,7 +299,8 @@ struct WatchSplash: View {
     @unknown default: controlLabel = "paused"
     }
     let errorLabel = error
-    WatchSplashClip.splashLog.info("status=\(statusLabel, privacy: .public) timeControlStatus=\(controlLabel, privacy: .public) error=\(errorLabel, privacy: .public)")
+    let waitingLabel = waiting.isEmpty ? "none" : waiting
+    WatchSplashClip.splashLog.info("status=\(statusLabel, privacy: .public) timeControlStatus=\(controlLabel, privacy: .public) reasonForWaitingToPlay=\(waitingLabel, privacy: .public) error=\(errorLabel, privacy: .public)")
   }
 
   private func dismiss(fade: Bool, reason: String) {

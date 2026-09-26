@@ -82,7 +82,7 @@ test('Watch splash plays over the app on cold start and never blocks it', () => 
   assert.match(tryStart, /guard box\.item\.status == \.readyToPlay else \{ return \}/);
   assert.ok(tryStart.indexOf('sceneActive') < tryStart.indexOf('player.play()'));
   assert.ok(tryStart.indexOf('readyToPlay') < tryStart.indexOf('player.play()'));
-  assert.match(tryStart, /500_000_000/);
+  assert.match(tryStart, /300_000_000/);
   assert.match(tryStart, /timeControlStatus != \.playing/);
   const safety = splash.slice(splash.indexOf('private func startSafety'), splash.indexOf('private func logPlayback'));
   assert.match(safety, /playback started/);
@@ -90,6 +90,7 @@ test('Watch splash plays over the app on cold start and never blocks it', () => 
   assert.ok(safety.indexOf('playback started') < safety.indexOf('safetyNanoseconds'));
   assert.match(splash, /status=/);
   assert.match(splash, /timeControlStatus=/);
+  assert.match(splash, /reasonForWaitingToPlay/);
   assert.match(splash, /item\.error/);
   assert.match(splash, /392×584/);
   assert.match(splash, /392\.0 \/ 584\.0/);
@@ -216,8 +217,8 @@ test('a fresh live round skips the splash and does not hold the location prompt'
   assert.match(finish, /requestLiveLocationAuthorizationIfNeeded\(\)/);
   const png = readFileSync(new URL('targets/watch/WatchSplashFirstFrame.png', root));
   assert.equal(png.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
-  assert.equal(png.readUInt32BE(16), 392);
-  assert.equal(png.readUInt32BE(20), 584);
+  assert.equal(png.readUInt32BE(16), 784);
+  assert.equal(png.readUInt32BE(20), 1168);
 });
 
 test('play() waits for a ready item and an active scene; safety starts when the clip is moving', () => {
