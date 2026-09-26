@@ -198,3 +198,29 @@ test('swipe-away: remembered per round, no new activity or location for it; a ne
   const workflow = read('../../.github/workflows/watch-compile.yml');
   assert.match(workflow, /live-round-policy-tests\/main\.swift/);
 });
+
+test('an adopted activity (app relaunched mid-round) is watched too, so a swipe-away still sticks', () => {
+  const swift = read('../../modules/live-activity/ios/RoundLiveActivity.swift');
+  const sync = swift.slice(swift.indexOf('func sync(json: String)'), swift.indexOf('func end()'));
+  const adopt = sync.indexOf('Activity<ShotTraxxRoundAttributes>.activities.first');
+  const request = sync.indexOf('Activity.request');
+  const watch = sync.indexOf('LiveRoundPolicy.needsWatch(activityId: activity?.id, watchedActivityId: watchedActivityId)');
+  assert.ok(adopt > 0 && request > 0 && watch > 0);
+  // One watch check after both the adopt and the request paths, not inside the request branch only.
+  assert.ok(watch > adopt && watch > request);
+  assert.equal((sync.match(/watchState\(\)/g) ?? []).length, 1);
+  assert.match(sync, /if LiveRoundPolicy\.needsWatch\([^)]*\) \{\n      watchState\(\)/);
+  // A held activity from another round is re-selected (and then ended as "other").
+  assert.match(sync, /activity\?\.attributes\.roundId != next\.roundId/);
+  // watchState records which activity it follows; end() and a finished watch clear it.
+  const watchFn = swift.slice(swift.indexOf('private func watchState()'), swift.indexOf('private func staleDate()'));
+  assert.match(watchFn, /watchedActivityId = activityId/);
+  // A replaced or cancelled watch stands down; only the current activity's watch stops location.
+  assert.match(watchFn, /guard let self, !Task\.isCancelled, self\.watchedActivityId == activityId else \{ return \}/);
+  assert.match(watchFn, /if self\.activity == nil \|\| self\.activity\?\.id == activityId \{\n            self\.stopLocation\(\)/);
+  assert.match(watchFn, /self\.saveDismissed\(remembered\)\n          self\.watchedActivityId = nil/);
+  assert.match(swift.slice(swift.indexOf('func end()'), swift.indexOf('private func endActivity')), /watchedActivityId = nil/);
+  const policy = read('../../modules/live-activity/ios/LiveRoundPolicy.swift');
+  assert.match(policy, /static func needsWatch\(activityId: String\?, watchedActivityId: String\?\) -> Bool/);
+  assert.match(read('../../.github/scripts/live-round-policy-tests/main.swift'), /adopted after relaunch/);
+});

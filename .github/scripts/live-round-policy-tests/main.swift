@@ -57,6 +57,12 @@ dismissed = LiveRoundPolicy.dismissedRoundId(afterSyncOf: "r2", current: dismiss
 check(dismissed == nil, "a different round clears it")
 check(LiveRoundPolicy.mayStart(roundId: "r2", dismissedRoundId: dismissed), "a different round starts")
 
+// Watching the activity (so a swipe-away is seen)
+check(LiveRoundPolicy.needsWatch(activityId: "a1", watchedActivityId: nil), "adopted after relaunch: nothing watched yet, watch it")
+check(LiveRoundPolicy.needsWatch(activityId: "a2", watchedActivityId: "a1"), "a different activity: watch the new one")
+check(!LiveRoundPolicy.needsWatch(activityId: "a1", watchedActivityId: "a1"), "already watched: no second watch")
+check(!LiveRoundPolicy.needsWatch(activityId: nil, watchedActivityId: nil), "no activity: nothing to watch")
+
 if failures > 0 {
   print("\(failures) failed")
   exit(1)

@@ -35,6 +35,14 @@ enum LiveRoundPolicy {
     roundId != dismissedRoundId
   }
 
+  /// The current activity needs a state watch: it is set and is not the one
+  /// already watched. Covers an activity adopted from `Activity.activities`
+  /// (app relaunched mid-round) as well as a newly requested one.
+  static func needsWatch(activityId: String?, watchedActivityId: String?) -> Bool {
+    guard let activityId else { return false }
+    return activityId != watchedActivityId
+  }
+
   /// After an activity leaves `.active`: remember its round only when the
   /// golfer dismissed it, not when the app ended it (round over, new round).
   static func dismissedRoundId(

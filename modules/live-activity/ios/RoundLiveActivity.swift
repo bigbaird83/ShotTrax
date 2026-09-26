@@ -114,6 +114,8 @@ final class RoundLiveActivity: NSObject, CLLocationManagerDelegate {
   private var tracking = false
   private var flushScheduled = false
   private var stateWatch: Task<Void, Never>?
+  /// The activity `stateWatch` follows. Any other activity in `activity` still needs watching.
+  private var watchedActivityId: String?
   private var lastSentStaleDate: Date?
   /// Activities the app itself ended; their `.dismissed` is not a swipe-away.
   private var endedByApp = Set<String>()
@@ -148,7 +150,8 @@ final class RoundLiveActivity: NSObject, CLLocationManagerDelegate {
       return false
     }
     payload = next
-    if activity == nil || activity?.activityState != .active {
+    if activity?.activityState != .active || activity?.attributes.roundId != next.roundId {
+      // Adopt this round's activity if one is up (e.g. the app relaunched mid-round).
       activity = Activity<ShotTraxxRoundAttributes>.activities.first {
         $0.activityState == .active && $0.attributes.roundId == next.roundId
       }
@@ -172,6 +175,9 @@ final class RoundLiveActivity: NSObject, CLLocationManagerDelegate {
       } catch {
         return false
       }
+    }
+    // Adopted or newly requested: watch it, so a swipe-away is remembered and stops location.
+    if LiveRoundPolicy.needsWatch(activityId: activity?.id, watchedActivityId: watchedActivityId) {
       watchState()
     }
     startLocation()
@@ -187,6 +193,7 @@ final class RoundLiveActivity: NSObject, CLLocationManagerDelegate {
     lastSentStaleDate = nil
     stateWatch?.cancel()
     stateWatch = nil
+    watchedActivityId = nil
     for item in Activity<ShotTraxxRoundAttributes>.activities {
       endActivity(item)
     }
@@ -210,14 +217,21 @@ final class RoundLiveActivity: NSObject, CLLocationManagerDelegate {
   /// (dismissed without the app ending it) is remembered for that round.
   private func watchState() {
     stateWatch?.cancel()
+    stateWatch = nil
+    watchedActivityId = nil
     guard let current = activity else { return }
     let roundId = current.attributes.roundId
     let activityId = current.id
+    watchedActivityId = activityId
     stateWatch = Task { [weak self] in
       for await next in current.activityStateUpdates where next != .active {
         await MainActor.run {
-          guard let self else { return }
-          self.stopLocation()
+          // A watch that was replaced (a newer activity, or end()) stands down, so a
+          // late event from an old activity never stops location for the current one.
+          guard let self, !Task.isCancelled, self.watchedActivityId == activityId else { return }
+          if self.activity == nil || self.activity?.id == activityId {
+            self.stopLocation()
+          }
           let remembered = LiveRoundPolicy.dismissedRoundId(
             afterLeaving: roundId,
             userDismissed: next == .dismissed,
@@ -225,6 +239,7 @@ final class RoundLiveActivity: NSObject, CLLocationManagerDelegate {
             current: self.defaults.string(forKey: Self.dismissedRoundKey)
           )
           self.saveDismissed(remembered)
+          self.watchedActivityId = nil
           if self.activity?.id == activityId {
             self.activity = nil
             self.payload = nil
