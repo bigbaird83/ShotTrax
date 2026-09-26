@@ -591,6 +591,47 @@ describe('backfill overlays for Ready favorites', { concurrency: 1 }, () => {
     dropCourseOverlayMemory(course.id);
   });
 
+  test('a Worker timeout does not store an overlay', async () => {
+    resetCourseOsmOverlayForTests();
+    resetFavoriteOverlayBackfillForTests();
+    dropCourseOverlayMemory('overlay-worker-timeout');
+    const store = memoryStore();
+    const course = favorite('overlay-worker-timeout', GREEN_1);
+    const urls: string[] = [];
+    const status = await downloadFavoriteForOffline(course, store, {
+      now: () => FETCHED_AT,
+      resolve: async () => readyPaint(),
+      fetchOverlay: (query) =>
+        fetchOsmOverlay(query, {
+          retryDelayMs: 0,
+          workerTimeoutMs: 30,
+          getBaseUrl: () => 'https://share.test',
+          fetch: async (input, init) => {
+            const url = String(input);
+            urls.push(url);
+            if (url.includes('/osm/v1/overlay')) {
+              assert.equal(new URL(url).searchParams.get('lat'), GREEN_1.lat.toFixed(4));
+              assert.equal(new URL(url).searchParams.get('lng'), GREEN_1.lng.toFixed(4));
+              assert.equal(new URL(url).searchParams.get('radius'), '1800');
+              await new Promise((_resolve, reject) => {
+                const onAbort = () => reject(new DOMException('aborted', 'AbortError'));
+                if (init?.signal?.aborted) onAbort();
+                else init?.signal?.addEventListener('abort', onAbort, { once: true });
+              });
+            }
+            return new Response('no', { status: 500 });
+          },
+        }),
+    });
+    assert.equal(status, 'ready');
+    assert.equal(offlinePackFor(store, course.id)?.status, 'ready');
+    assert.equal(offlinePackFor(store, course.id)?.updatedAt, FETCHED_AT);
+    assert.equal(loadCourseOsmOverlay(course.id), null);
+    assert.equal(urls.some((url) => url.includes('/osm/v1/overlay?')), true);
+    assert.equal(urls.some((url) => url.includes('overpass')), true);
+    dropCourseOverlayMemory(course.id);
+  });
+
   test('no query center does not spend the session attempt', async () => {
     resetCourseOsmOverlayForTests();
     resetFavoriteOverlayBackfillForTests();

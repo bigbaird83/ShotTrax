@@ -160,12 +160,17 @@ export default function ClubPickScreen() {
       return;
     }
     let live = true;
+    const courseLocation =
+      round?.courseLat != null && round.courseLng != null
+        ? { lat: round.courseLat, lng: round.courseLng }
+        : null;
     void ensureHoleTeeGreen({
       courseId: round?.courseApiId,
       holeNumber,
       tee: courseTeeFromHole(holeRow),
       green,
       location,
+      courseLocation,
     })
       .then((frame) => {
         if (!live) return;

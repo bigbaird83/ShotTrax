@@ -68,7 +68,12 @@ export function satelliteTilesBulkDownload(): false {
  * Does not invent tee, green, or geometry.
  */
 async function rememberOverlayAroundGreen(
-  args: { courseId?: string | null; holeNumber: number; green: LatLng },
+  args: {
+    courseId?: string | null;
+    holeNumber: number;
+    green: LatLng;
+    courseLocation?: LatLng | null;
+  },
   deps?: PrefetchDeps,
 ): Promise<void> {
   if (!isValidLatLng(args.green)) return;
@@ -78,6 +83,7 @@ async function rememberOverlayAroundGreen(
       holeNumber: args.holeNumber,
       green: args.green,
       location: args.green,
+      courseLocation: args.courseLocation,
     },
     { fetchOverlay: deps?.fetchOverlay },
   );
@@ -144,6 +150,8 @@ export async function ensureHoleTeeGreen(
     tee: LatLng | null;
     green: LatLng | null;
     location?: LatLng | null;
+    /** Catalog course pin. Shared by every hole's Worker overlay request. */
+    courseLocation?: LatLng | null;
   },
   deps?: PrefetchDeps,
 ): Promise<PrefetchHoleFrame> {
@@ -164,7 +172,12 @@ export async function ensureHoleTeeGreen(
     // Await so hole/[number].tsx can read cachedOsmOverlay when this resolves.
     // Tee and green stay the card values. Start Round does not await this.
     await rememberOverlayAroundGreen(
-      { courseId: args.courseId, holeNumber: args.holeNumber, green: diagnosis.green },
+      {
+        courseId: args.courseId,
+        holeNumber: args.holeNumber,
+        green: diagnosis.green,
+        courseLocation: args.courseLocation,
+      },
       deps,
     );
     return {
@@ -195,6 +208,7 @@ export async function ensureHoleTeeGreen(
       holeNumber: args.holeNumber,
       green,
       location,
+      courseLocation: args.courseLocation,
     },
     { fetchOverlay: deps?.fetchOverlay },
   );
@@ -257,6 +271,7 @@ export async function prefetchCourseCard(
         tee,
         green,
         location: green ?? (isValidLatLng(hydrated.location) ? hydrated.location : null),
+        courseLocation: isValidLatLng(hydrated.location) ? hydrated.location : null,
       },
       deps,
     );
@@ -313,6 +328,7 @@ export async function cacheHolesAfterFirst(
         tee,
         green,
         location: green ?? (isValidLatLng(hydrated.location) ? hydrated.location : null),
+        courseLocation: isValidLatLng(hydrated.location) ? hydrated.location : null,
       },
       deps,
     );

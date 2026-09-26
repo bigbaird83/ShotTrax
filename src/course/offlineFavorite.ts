@@ -107,6 +107,7 @@ async function persistFavoriteOverlay(
   const overlay = await fetchOverlay({
     courseId: course.id,
     location,
+    courseLocation: isValidLatLng(course.location) ? course.location : null,
     radiusM: COURSE_OSM_OVERLAY_RADIUS_M,
   });
   if (!overlay || overlay.source !== 'osm' || overlay.features.length === 0) return;
@@ -242,7 +243,13 @@ async function backfillOneFavorite(
       cached ??
       (await (async () => {
         await loadCachedOrFetchCourseOverlay(
-          { courseId: course.id, holeNumber: 1, green: center, location: center },
+          {
+            courseId: course.id,
+            holeNumber: 1,
+            green: center,
+            location: center,
+            courseLocation: isValidLatLng(course.location) ? course.location : null,
+          },
           { fetchOverlay },
         );
         return courseWideOsmOverlay(course.id);

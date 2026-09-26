@@ -511,12 +511,17 @@ function HoleScreenBody() {
       green: greenPin,
     });
     if (storedOverlay) setOsmOverlay(storedOverlay);
+    const courseLocation =
+      round?.courseLat != null && round.courseLng != null
+        ? { lat: round.courseLat, lng: round.courseLng }
+        : null;
     void ensureHoleTeeGreen({
       courseId: round?.courseApiId,
       holeNumber,
       tee: courseTee,
       green: greenPin,
       location: greenPin ?? courseTee,
+      courseLocation: isCourseCardLatLng(courseLocation) ? courseLocation : null,
     })
       .then((frame) => {
         if (!live) return;
@@ -534,7 +539,17 @@ function HoleScreenBody() {
     return () => {
       live = false;
     };
-  }, [marksOnly, round?.courseApiId, hole?.greenLat, hole?.greenLng, hole?.teeLat, hole?.teeLng, holeNumber]);
+  }, [
+    marksOnly,
+    round?.courseApiId,
+    round?.courseLat,
+    round?.courseLng,
+    hole?.greenLat,
+    hole?.greenLng,
+    hole?.teeLat,
+    hole?.teeLng,
+    holeNumber,
+  ]);
 
   const greenCandidate =
     hole?.greenLat != null && hole.greenLng != null

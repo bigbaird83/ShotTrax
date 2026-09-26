@@ -3,9 +3,12 @@ import { test } from 'node:test';
 import {
   cachedOsmOverlay,
   cachedResolvedTee,
+  dropCourseOverlayMemory,
   featuresForHole,
   fetchOsmOverlay,
   fillLayoutTeesFromOsm,
+  loadCachedOrFetchCourseOverlay,
+  WORKER_OVERLAY_TIMEOUT_MS,
   osmFeatureRendersAsLine,
   parseOverpassOverlay,
   rememberOsmOverlay,
@@ -629,12 +632,14 @@ const WORKER_GREEN = {
 
 test('fetchOsmOverlay uses the Worker overlay route when a base is configured', async () => {
   const calls: { url: string; method: string | undefined }[] = [];
+  const catalog = { lat: 33.26741, lng: -93.23916 };
   const overlay = await fetchOsmOverlay(
     {
-      courseId: 'magnolia',
-      location: { lat: 33.267, lng: -93.239 },
+      courseId: 'magnolia-worker',
+      location: { lat: 33.28, lng: -93.22 },
+      courseLocation: catalog,
       holeNumber: 1,
-      radiusM: 1800,
+      radiusM: 900,
     },
     {
       retryDelayMs: 0,
@@ -652,17 +657,23 @@ test('fetchOsmOverlay uses the Worker overlay route when a base is configured', 
   assert.equal(calls[0]?.method, 'GET');
   const url = new URL(calls[0]?.url ?? '');
   assert.equal(url.origin + url.pathname, `${WORKER}/osm/v1/overlay`);
-  assert.equal(url.searchParams.get('courseId'), 'magnolia');
-  assert.equal(url.searchParams.get('lat'), '33.267');
-  assert.equal(url.searchParams.get('lng'), '-93.239');
+  assert.equal(url.searchParams.get('courseId'), 'magnolia-worker');
+  assert.equal(url.searchParams.get('lat'), catalog.lat.toFixed(4));
+  assert.equal(url.searchParams.get('lng'), catalog.lng.toFixed(4));
   assert.equal(url.searchParams.get('radius'), '1800');
+  assert.notEqual(url.searchParams.get('lat'), '33.2800');
   assert.equal(overlay?.features.some((feature) => feature.kind === 'green' && feature.holeNumber === 1), true);
   assert.equal(overlay?.features.some((feature) => feature.kind === 'bunker'), true);
   assert.equal(overlay?.features.some((feature) => feature.holeNumber === 2), false);
 
   const wide: string[] = [];
   await fetchOsmOverlay(
-    { courseId: 'wide', location: { lat: 33.267, lng: -93.239 }, radiusM: 50 },
+    {
+      courseId: 'wide-worker',
+      location: { lat: 33.267, lng: -93.239 },
+      courseLocation: catalog,
+      radiusM: 50,
+    },
     {
       getBaseUrl: () => `${WORKER}/`,
       fetch: async (input) => {
@@ -671,13 +682,21 @@ test('fetchOsmOverlay uses the Worker overlay route when a base is configured', 
       },
     },
   );
-  assert.equal(new URL(wide[0] ?? '').searchParams.get('radius'), '200');
+  assert.equal(new URL(wide[0] ?? '').searchParams.get('radius'), '1800');
+  assert.equal(new URL(wide[0] ?? '').searchParams.get('lat'), catalog.lat.toFixed(4));
+  dropCourseOverlayMemory('magnolia-worker');
+  dropCourseOverlayMemory('wide-worker');
 });
 
 test('Worker no_overlay returns null and does not ask Overpass', async () => {
   const calls: string[] = [];
   const overlay = await fetchOsmOverlay(
-    { courseId: 'empty-course', location: { lat: 33.267, lng: -93.239 }, radiusM: 1800 },
+    {
+      courseId: 'empty-course',
+      location: { lat: 33.28, lng: -93.22 },
+      courseLocation: { lat: 33.26741, lng: -93.23916 },
+      radiusM: 1800,
+    },
     {
       retryDelayMs: 0,
       getBaseUrl: () => WORKER,
@@ -712,7 +731,13 @@ test('a missing Worker overlay route falls back to Overpass', async () => {
     });
   };
   const overlay = await fetchOsmOverlay(
-    { courseId: 'not-deployed', location: { lat: 33.267, lng: -93.239 }, holeNumber: 2, radiusM: 1800 },
+    {
+      courseId: 'not-deployed',
+      location: { lat: 33.28, lng: -93.22 },
+      courseLocation: { lat: 33.26741, lng: -93.23916 },
+      holeNumber: 2,
+      radiusM: 1800,
+    },
     { retryDelayMs: 0, getBaseUrl: () => WORKER, fetch: fetchImpl },
   );
   assert.equal(calls.length, 2);
@@ -725,7 +750,12 @@ test('a missing Worker overlay route falls back to Overpass', async () => {
 
   calls.length = 0;
   const fromHtmlBusy = await fetchOsmOverlay(
-    { courseId: 'cf-503', location: { lat: 33.267, lng: -93.239 }, radiusM: 1200 },
+    {
+      courseId: 'cf-503',
+      location: { lat: 33.28, lng: -93.22 },
+      courseLocation: { lat: 33.26741, lng: -93.23916 },
+      radiusM: 1200,
+    },
     {
       retryDelayMs: 0,
       getBaseUrl: () => WORKER,
@@ -746,7 +776,12 @@ test('a missing Worker overlay route falls back to Overpass', async () => {
 test('Worker upstream_busy returns null, retries once, and does not ask Overpass', async () => {
   const calls: string[] = [];
   const overlay = await fetchOsmOverlay(
-    { courseId: 'busy-course', location: { lat: 33.267, lng: -93.239 }, radiusM: 1800 },
+    {
+      courseId: 'busy-course',
+      location: { lat: 33.28, lng: -93.22 },
+      courseLocation: { lat: 33.26741, lng: -93.23916 },
+      radiusM: 1800,
+    },
     {
       retryDelayMs: 0,
       getBaseUrl: () => WORKER,
@@ -765,7 +800,12 @@ test('Worker upstream_busy returns null, retries once, and does not ask Overpass
 
   let tries = 0;
   const recovered = await fetchOsmOverlay(
-    { courseId: 'busy-then-ok', location: { lat: 33.267, lng: -93.239 }, radiusM: 1800 },
+    {
+      courseId: 'busy-then-ok',
+      location: { lat: 33.28, lng: -93.22 },
+      courseLocation: { lat: 33.26741, lng: -93.23916 },
+      radiusM: 1800,
+    },
     {
       retryDelayMs: 0,
       getBaseUrl: () => WORKER,
@@ -799,6 +839,127 @@ test('no Worker base keeps the direct Overpass request', async () => {
   assert.equal(method, 'POST');
   assert.match(url, /overpass/);
   assert.equal(overlay?.features.length, 3);
+});
+
+test('a Worker base without a catalog pin stays on direct Overpass', async () => {
+  const calls: string[] = [];
+  const overlay = await fetchOsmOverlay(
+    { courseId: 'no-catalog', location: { lat: 33.271, lng: -93.233 }, holeNumber: 2, radiusM: 1000 },
+    {
+      getBaseUrl: () => WORKER,
+      retryDelayMs: 0,
+      fetch: async (input, init) => {
+        calls.push(`${init?.method ?? ''} ${String(input)}`);
+        return new Response(JSON.stringify(WORKER_GREEN), { status: 200 });
+      },
+    },
+  );
+  assert.equal(calls.length, 1);
+  assert.match(calls[0] ?? '', /^POST /);
+  assert.match(calls[0] ?? '', /overpass/);
+  assert.equal(overlay?.features.some((feature) => feature.holeNumber === 2), true);
+});
+
+test('every hole shares one Worker URL at the catalog pin and later holes do not fetch', async () => {
+  assert.equal(WORKER_OVERLAY_TIMEOUT_MS, 30_000);
+  const courseId = 'stable-worker-course';
+  dropCourseOverlayMemory(courseId);
+  const catalog = { lat: 33.26741, lng: -93.23916 };
+  const calls: string[] = [];
+  const fetchImpl: typeof fetch = async (input) => {
+    calls.push(String(input));
+    return new Response(JSON.stringify(WORKER_GREEN), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', 'X-Overlay-Cache': 'MISS' },
+    });
+  };
+  const deps = {
+    getBaseUrl: () => WORKER,
+    retryDelayMs: 0,
+    fetch: fetchImpl,
+  };
+  for (let hole = 1; hole <= 18; hole += 1) {
+    const green = { lat: 33.3 + hole * 0.01, lng: -93.1 - hole * 0.01 };
+    const overlay = await loadCachedOrFetchCourseOverlay(
+      {
+        courseId,
+        holeNumber: hole,
+        green,
+        location: green,
+        courseLocation: catalog,
+      },
+      { fetchOverlay: (query) => fetchOsmOverlay(query, deps) },
+    );
+    if (hole === 1) {
+      assert.equal(overlay?.features.some((feature) => feature.holeNumber === 1), true);
+    }
+    if (hole === 2) {
+      assert.equal(overlay?.features.some((feature) => feature.kind === 'green' && feature.holeNumber === 2), true);
+      assert.equal(overlay?.features.some((feature) => feature.holeNumber === 1), false);
+    }
+  }
+  assert.equal(calls.length, 1);
+  const url = new URL(calls[0] ?? '');
+  assert.equal(url.pathname, '/osm/v1/overlay');
+  assert.equal(url.searchParams.get('courseId'), courseId);
+  assert.equal(url.searchParams.get('lat'), catalog.lat.toFixed(4));
+  assert.equal(url.searchParams.get('lng'), catalog.lng.toFixed(4));
+  assert.equal(url.searchParams.get('radius'), '1800');
+  assert.notEqual(url.searchParams.get('lat'), (33.3 + 0.01).toFixed(4));
+  dropCourseOverlayMemory(courseId);
+});
+
+test('a Worker timeout stores nothing and falls back to Overpass once', async () => {
+  const courseId = 'worker-timeout-course';
+  dropCourseOverlayMemory(courseId);
+  const catalog = { lat: 33.26741, lng: -93.23916 };
+  const calls: string[] = [];
+  let aborted = false;
+  const fetchImpl: typeof fetch = async (input, init) => {
+    const url = String(input);
+    calls.push(url);
+    if (url.includes('/osm/v1/overlay')) {
+      await new Promise((_resolve, reject) => {
+        const onAbort = () => {
+          aborted = true;
+          reject(new DOMException('aborted', 'AbortError'));
+        };
+        if (init?.signal?.aborted) onAbort();
+        else init?.signal?.addEventListener('abort', onAbort, { once: true });
+      });
+    }
+    return new Response('no', { status: 500 });
+  };
+  const deps = {
+    getBaseUrl: () => WORKER,
+    retryDelayMs: 0,
+    workerTimeoutMs: 30,
+    fetch: fetchImpl,
+  };
+  const overlay = await fetchOsmOverlay(
+    {
+      courseId,
+      location: { lat: 33.4, lng: -93.4 },
+      courseLocation: catalog,
+      holeNumber: 1,
+    },
+    deps,
+  );
+  assert.equal(overlay, null);
+  assert.equal(aborted, true);
+  assert.equal(calls.length, 2);
+  assert.match(calls[0] ?? '', /\/osm\/v1\/overlay\?/);
+  assert.match(calls[1] ?? '', /overpass/);
+  const again = await fetchOsmOverlay(
+    { courseId, location: { lat: 33.5, lng: -93.5 }, courseLocation: catalog, holeNumber: 4 },
+    { ...deps, fetch: async () => {
+      calls.push('again');
+      return new Response(JSON.stringify(WORKER_GREEN), { status: 200 });
+    } },
+  );
+  assert.equal(again, null);
+  assert.equal(calls.includes('again'), false);
+  dropCourseOverlayMemory(courseId);
 });
 
 test('fillLayoutTeesFromOsm keeps API tees and fills missing tees from the hole line', async () => {
