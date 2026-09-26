@@ -15,7 +15,9 @@ import { useDb } from '@/src/db/DbProvider';
 import {
   addGroupPlayer,
   loadGroup,
+  recentPartnersForRound,
   removeGroupPlayer,
+  removeRecentPlayer,
   setGroupGames,
   setPlayerHoleScore,
   updateGroupPlayer,
@@ -57,6 +59,7 @@ export default function RoundGroupScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const round = useMemo(() => getRound(db, id), [db, id, revision]);
   const group = useMemo<GroupSnapshot | null>(() => (round ? loadGroup(db, round.id) : null), [db, round, revision]);
+  const recent = useMemo(() => (round ? recentPartnersForRound(db, round.id) : []), [db, round, revision]);
   const [holeNumber, setHoleNumber] = useState(() => {
     const n = Number(holeParam);
     return Number.isInteger(n) && n >= 1 ? n : 1;
@@ -161,6 +164,32 @@ export default function RoundGroupScreen() {
       setNewHcp('');
       bump();
     }
+  };
+
+  const onAddRecent = (player: { name: string; handicap: number | null }) => {
+    const outcome = addGroupPlayer(db, round.id, { name: player.name, handicap: player.handicap });
+    if (outcome.status === 'full') setNote(COPY.groupFull);
+    else if (outcome.status === 'no_name') setNote(COPY.groupNeedsName);
+    else {
+      setNote(null);
+      setNewName('');
+      setNewHcp('');
+      bump();
+    }
+  };
+
+  const confirmRemoveRecent = (player: { id: string; name: string }) => {
+    Alert.alert(`${COPY.groupRemoveRecentTitle} ${player.name}`, COPY.groupRemoveRecentBody, [
+      { text: COPY.cancel, style: 'cancel' },
+      {
+        text: COPY.groupRemoveRecent,
+        style: 'destructive',
+        onPress: () => {
+          removeRecentPlayer(db, player.id);
+          bump();
+        },
+      },
+    ]);
   };
 
   const beginEdit = (playerId: string) => {
@@ -424,6 +453,35 @@ export default function RoundGroupScreen() {
         )}
         {group.players.length < GROUP_MAX_PLAYERS ? (
           <View style={styles.entry}>
+            {recent.length > 0 ? (
+              <View style={styles.recent} testID="group-recent">
+                <Text style={styles.note}>{COPY.groupRecent}</Text>
+                {recent.map((player) => {
+                  const hcp = player.handicap != null ? `${COPY.groupHcpShort} ${player.handicap}` : null;
+                  const label = hcp ? `${player.name}, ${hcp}` : player.name;
+                  return (
+                    <Pressable
+                      key={player.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${COPY.groupAddPlayer} ${label}`}
+                      accessibilityHint={COPY.groupHoldToRemoveRecent}
+                      accessibilityActions={[{ name: 'Remove from recent', label: COPY.groupRemoveRecent }]}
+                      onAccessibilityAction={(event: AccessibilityActionEvent) => {
+                        if (event.nativeEvent.actionName === 'Remove from recent') confirmRemoveRecent(player);
+                      }}
+                      testID={`group-recent-${player.id}`}
+                      onPress={() => onAddRecent(player)}
+                      onLongPress={() => confirmRemoveRecent(player)}
+                      style={styles.recentRow}>
+                      <Text style={styles.label} numberOfLines={1}>
+                        {player.name}
+                      </Text>
+                      {hcp ? <Text style={styles.muted}>{hcp}</Text> : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
             <TextInput
               value={newName}
               onChangeText={setNewName}
@@ -563,6 +621,19 @@ function makeStyles(colors: ColorPalette) {
     block: { gap: 10, backgroundColor: colors.bgElevated, padding: 14, borderRadius: 16 },
     row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, minHeight: 36 },
     entry: { gap: 8 },
+    recent: { gap: 8 },
+    recentRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: 12,
+      minHeight: tapTarget,
+      paddingHorizontal: 12,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.line,
+      backgroundColor: colors.bg,
+    },
     label: { color: colors.cream, fontSize: 16, fontWeight: '800', flexShrink: 1 },
     value: { color: colors.cream, fontSize: 18, fontWeight: '900' },
     chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
