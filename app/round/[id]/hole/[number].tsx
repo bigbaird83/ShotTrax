@@ -178,7 +178,7 @@ import { shareKindOrScorecard, type ShareKind } from '@/src/domain/shareChoice';
 import { endOpenShot, markShotWithClub, promptForPlan, undoLastShot, undoLastSoftGpsClubMark, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, moveShotSpot, undoShotEdit, deleteHoleShot } from '@/src/services/shotActions';
 import { useLiveFix } from '@/src/services/useLiveFix';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
-import { endWatchRound, pushWatchMadeItAdvance, pushWatchPuttSheet } from '@/src/services/watchClub';
+import { endWatchRound, pushWatchMadeItAdvance, pushWatchPuttSheet, watchAdvanceNamedShot } from '@/src/services/watchClub';
 import { MADE_IT_FEEDBACK, PHONE_UNAVAILABLE } from '@/src/domain/watchMessages';
 import { HoleOutBadge, QualityBadge } from '@/src/ui/Badge';
 import { BigButton } from '@/src/ui/BigButton';
@@ -200,7 +200,7 @@ import { ScorecardBody } from '@/src/ui/ScorecardBody';
 import { FairwayPicker } from '@/src/ui/FairwayPicker';
 import { ShareChoice } from '@/src/ui/ShareChoice';
 import { YardsToGreenBadge } from '@/src/ui/YardsToGreenBadge';
-import { watchLastShotId } from '@/src/domain/watchShotUndo';
+import { watchNamedLastShot } from '@/src/domain/watchShotUndo';
 import { tapTarget, type, type ColorPalette } from '@/src/ui/theme';
 
 /** Play may flip to high contrast in bright sun. The whole subtree — map chips,
@@ -885,7 +885,16 @@ function HoleScreenBody() {
         return true;
       }
       // Watch leaves the putt sheet now and shows Hole N+1 (or Round complete).
-      void pushWatchMadeItAdvance({ holeNumber: targetHole, holeCount: round.holeCount, lengths });
+      // Name the destination hole's last shot so Edit shot does not go gray.
+      const advance = watchAdvanceNamedShot(db, id, targetHole, round.holeCount);
+      void pushWatchMadeItAdvance({
+        holeNumber: targetHole,
+        holeCount: round.holeCount,
+        lengths,
+        shotCount: advance.shotCount,
+        lastShotId: advance.lastShotId,
+        lastShotClubId: advance.lastShotClubId,
+      });
       const dest = holeAfterDone(targetHole, round.holeCount);
       if (dest.kind === 'summary') {
         router.replace(`/round/${id}/summary`);
@@ -1014,7 +1023,15 @@ function HoleScreenBody() {
         bump();
         clearPuttDraft();
         celebrateHoleOut();
-        void pushWatchMadeItAdvance({ holeNumber: target, holeCount: rnd.holeCount, lengths: row.puttLengths.filter(isPuttLengthId) });
+        const advance = watchAdvanceNamedShot(db, id, target, rnd.holeCount);
+        void pushWatchMadeItAdvance({
+          holeNumber: target,
+          holeCount: rnd.holeCount,
+          lengths: row.puttLengths.filter(isPuttLengthId),
+          shotCount: advance.shotCount,
+          lastShotId: advance.lastShotId,
+          lastShotClubId: advance.lastShotClubId,
+        });
         const dest = holeAfterDone(target, rnd.holeCount);
         if (dest.kind === 'summary') router.replace(`/round/${id}/summary`);
         else router.replace(playHrefAfterHoleChange(id, dest.holeNumber));
@@ -1083,8 +1100,10 @@ function HoleScreenBody() {
       teeLengthYards: courseTeeYards(hole?.yards),
       green: watchGreenFields({ green, front: pins.front, back: pins.back }),
       clubCarry: watchClubCarry(stripPlan.carries),
-      // Watch Undo names this shot, so a late resend never removes a second one.
-      lastShotId: readOnly ? null : watchLastShotId(shots),
+      // Watch Edit shot copies this hole's shots from the phone. A late resend names the same shot.
+      shotCount: readOnly ? 0 : shots.length,
+      lastShotId: readOnly ? null : watchNamedLastShot(shots).lastShotId,
+      lastShotClubId: readOnly ? null : watchNamedLastShot(shots).lastShotClubId,
     },
   );
 

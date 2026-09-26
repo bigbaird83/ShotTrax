@@ -40,8 +40,12 @@ export function useWatchClubList(
     teeLengthYards?: number | null;
     green?: WatchGreenFields | null;
     clubCarry?: Record<string, number | null | undefined> | null;
-    /** Shot the phone's Undo last shot would remove. Null dims the Watch Undo. */
+    /** Shots on this hole. Every push names the count, including zero. */
+    shotCount?: number | null;
+    /** Shot Edit shot would change or delete. Null sends an explicit empty id. */
     lastShotId?: string | null;
+    /** Club on that shot. Change club highlights it after a hole change. */
+    lastShotClubId?: string | null;
   },
 ): void {
   const ctxRef = useRef(ctx);

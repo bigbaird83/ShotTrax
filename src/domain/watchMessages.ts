@@ -30,6 +30,8 @@ export const WATCH_MESSAGE_TYPES = [
   'puttPick',
   'penaltyPick',
   'shotUndo',
+  'shotClubChange',
+  'watchConfirm',
   'clubNav',
   'nearbyCourses',
   'nearbyTees',
@@ -83,10 +85,23 @@ export type ClubListMessage = {
   /** False while the phone is showing a finished round. Omitted means the round is live. */
   roundLive?: boolean;
   /**
-   * Id of the shot the phone's Undo last shot would remove on this hole.
-   * Omitted when the hole has no shots, so the Watch Undo is dim.
+   * Shots on this hole, from the phone. Every club list names it.
+   * Zero means Edit shot is dim. The Watch copies this; it does not count shots itself.
+   */
+  shotCount?: number;
+  /**
+   * Id of the shot Edit shot would change or delete on this hole.
+   * An empty string means the phone says this hole has no shot.
+   * The Watch copies this from the push. It does not keep or clear an id on its own.
    */
   lastShotId?: string;
+  /** Club on that shot. Change club highlights this, not the strip selection. */
+  lastShotClubId?: string;
+  /**
+   * Monotonic club-list generation. A late Hole Out or complication delivery
+   * with a lower number must not rewind the hole or clear the last shot.
+   */
+  listSeq?: number;
 };
 
 export const CLUB_LIST_KEYS = [
@@ -97,6 +112,9 @@ export const CLUB_LIST_KEYS = [
   'holeNumber',
   'yardsToGreen',
   'yardsQuality',
+  'shotCount',
+  'lastShotId',
+  'lastShotClubId',
 ] as const;
 
 /** Watch wheel tap. Selects only — never a mark. */
@@ -224,8 +242,22 @@ export function parseClubList(raw: unknown): ClubListMessage | null {
   if (row.roundLive === false) msg.roundLive = false;
   const teeLength = optionalPositiveYards(row.teeLengthYards);
   if (teeLength != null) msg.teeLengthYards = teeLength;
-  const lastShotId = watchShotId(row.lastShotId);
-  if (lastShotId) msg.lastShotId = lastShotId;
+  if ('shotCount' in row && typeof row.shotCount === 'number' && Number.isFinite(row.shotCount)) {
+    msg.shotCount = Math.max(0, Math.round(row.shotCount));
+  }
+  if ('lastShotId' in row) {
+    const lastShotId = watchShotId(row.lastShotId);
+    if (lastShotId) msg.lastShotId = lastShotId;
+    else msg.lastShotId = '';
+  }
+  if ('lastShotClubId' in row) {
+    const lastShotClubId = watchShotId(row.lastShotClubId);
+    if (lastShotClubId) msg.lastShotClubId = lastShotClubId;
+    else msg.lastShotClubId = '';
+  }
+  if (typeof row.listSeq === 'number' && Number.isFinite(row.listSeq) && row.listSeq > 0) {
+    msg.listSeq = Math.round(row.listSeq);
+  }
   const at = optionalEpochMs(row.complicationAt);
   if (at != null) msg.complicationAt = at;
   const green = parseGreenPair(row.greenLat, row.greenLng);
@@ -400,6 +432,95 @@ export function shotUndoPayload(args: {
   };
 }
 
+/**
+ * Watch → Phone. Reassign the club on the last shot of this hole.
+ * shotId is the phone's lastShotId at tap time. Location and distance stay.
+ * A resend uses the same id and must not change a different shot.
+ */
+export type ShotClubChangeMessage = {
+  type: 'shotClubChange';
+  id: string;
+  shotId: string;
+  clubId: string;
+  at: string;
+  holeNumber: number;
+};
+
+export function parseShotClubChange(raw: unknown): ShotClubChangeMessage | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as Record<string, unknown>;
+  if (row.type !== 'shotClubChange') return null;
+  const id = watchShotId(row.id);
+  const shotId = watchShotId(row.shotId);
+  const clubId = watchShotId(row.clubId);
+  if (!id || !shotId || !clubId) return null;
+  if (typeof row.at !== 'string' || !isIso8601(row.at)) return null;
+  const holeNumber = watchPenaltyHoleNumber(row.holeNumber);
+  if (holeNumber == null) return null;
+  return { type: 'shotClubChange', id, shotId, clubId, at: row.at, holeNumber };
+}
+
+export function shotClubChangePayload(args: {
+  id: string;
+  shotId: string;
+  clubId: string;
+  at?: string;
+  holeNumber: number;
+}): ShotClubChangeMessage {
+  return {
+    type: 'shotClubChange',
+    id: args.id.trim(),
+    shotId: args.shotId.trim(),
+    clubId: args.clubId.trim(),
+    at: args.at ?? new Date().toISOString(),
+    holeNumber: Math.round(args.holeNumber),
+  };
+}
+
+/**
+ * Phone → Watch. The id was accepted.
+ * sendMessage can reply directly. transferUserInfo cannot, so the phone also
+ * pushes this. A duplicate id (already saved, or already undone) is still ok.
+ * A failed save does not send one: Retry stays up while the row is queued.
+ */
+export type WatchConfirmKind = 'penalty' | 'undo' | 'club';
+
+export type WatchConfirmMessage = {
+  type: 'watchConfirm';
+  kind: WatchConfirmKind;
+  id: string;
+  ok: true;
+  /** Flash the Watch should show once this id is confirmed. */
+  feedback?: string;
+};
+
+export function parseWatchConfirm(raw: unknown): WatchConfirmMessage | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as Record<string, unknown>;
+  if (row.type !== 'watchConfirm') return null;
+  if (row.kind !== 'penalty' && row.kind !== 'undo' && row.kind !== 'club') return null;
+  if (row.ok !== true) return null;
+  if (typeof row.id !== 'string') return null;
+  const id = row.id.trim();
+  if (!id || id.length > 80 || /\s/.test(id)) return null;
+  const feedback = typeof row.feedback === 'string' && row.feedback.trim() ? row.feedback : undefined;
+  return { type: 'watchConfirm', kind: row.kind, id, ok: true, ...(feedback ? { feedback } : {}) };
+}
+
+export function watchConfirmPayload(
+  kind: WatchConfirmKind,
+  id: string,
+  feedback?: string,
+): WatchConfirmMessage | null {
+  return parseWatchConfirm({
+    type: 'watchConfirm',
+    kind,
+    id,
+    ok: true,
+    ...(feedback && feedback.trim() ? { feedback } : {}),
+  });
+}
+
 export function parseClubPick(raw: unknown): ClubPickMessage | null {
   if (!raw || typeof raw !== 'object') return null;
   const row = raw as Record<string, unknown>;
@@ -468,6 +589,13 @@ export type WatchInboundIntent =
       closesPendingShot: false;
     }
   | {
+      kind: 'shotClub';
+      change: ShotClubChangeMessage;
+      runsAcceptFix: false;
+      savesGps: false;
+      closesPendingShot: false;
+    }
+  | {
       kind: 'club';
       pick: ClubPickMessage;
       runsAcceptFix: true;
@@ -514,6 +642,16 @@ export function parseWatchInboundIntent(raw: unknown): WatchInboundIntent | null
       closesPendingShot: false,
     };
   }
+  const shotClub = parseShotClubChange(raw);
+  if (shotClub) {
+    return {
+      kind: 'shotClub',
+      change: shotClub,
+      runsAcceptFix: false,
+      savesGps: false,
+      closesPendingShot: false,
+    };
+  }
   const pick = parseClubPick(raw);
   if (!pick) return null;
   if (isPutterClubId(pick.clubId)) {
@@ -552,9 +690,21 @@ export function clubListPayload(args: {
     back?: { lat: number; lng: number } | null;
   } | null;
   clubCarry?: Record<string, number | null | undefined> | null;
+  /** Shots on this hole. Omit only when an id is set and the count is unknown. */
+  shotCount?: number | null;
   lastShotId?: string | null;
+  /** Club on that shot. Empty when the hole has no shot. */
+  lastShotClubId?: string | null;
 }): ClubListMessage {
-  const lastShotId = watchShotId(args.lastShotId);
+  const namedShotId = watchShotId(args.lastShotId);
+  const shotCount =
+    args.shotCount == null || !Number.isFinite(args.shotCount)
+      ? namedShotId
+        ? 1
+        : 0
+      : Math.max(0, Math.round(args.shotCount));
+  const lastShotId = shotCount > 0 ? (namedShotId ?? '') : '';
+  const lastShotClubId = lastShotId ? (watchShotId(args.lastShotClubId) ?? '') : '';
   const yardsToGreen =
     args.yardsQuality === 'none' ||
     args.yardsToGreen == null ||
@@ -593,7 +743,9 @@ export function clubListPayload(args: {
     ...(front ? { greenFrontLat: front.lat, greenFrontLng: front.lng } : {}),
     ...(back ? { greenBackLat: back.lat, greenBackLng: back.lng } : {}),
     ...(Object.keys(carry).length > 0 ? { clubCarry: carry } : {}),
-    ...(lastShotId ? { lastShotId } : {}),
+    shotCount,
+    lastShotId,
+    lastShotClubId,
   };
 }
 
@@ -648,7 +800,9 @@ export function clubListPushKey(msg: ClubListMessage): string {
     clubCarry: msg.clubCarry ?? null,
     roundComplete: msg.roundComplete === true,
     roundLive: msg.roundLive !== false,
+    shotCount: msg.shotCount ?? 0,
     lastShotId: msg.lastShotId ?? null,
+    lastShotClubId: msg.lastShotClubId ?? null,
   });
 }
 

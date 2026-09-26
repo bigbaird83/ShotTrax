@@ -10,9 +10,13 @@ import {
   watchHoleHeaderFrames,
   WATCH_PENALTY_BOTTOM_CLEARANCE,
   WATCH_PUTT_HEADER_HEIGHT,
+  watchChangeClubFrames,
+  watchEditShotFrames,
+  watchEditShotLabelFits,
   watchHoleFrames,
   watchPenaltyMenuFrames,
   watchPuttSheetFrames,
+  WATCH_EDIT_SHOT_LABEL,
   type WatchFrame,
 } from './watchLayout';
 
@@ -21,7 +25,9 @@ import {
 const FACES = [
   { name: '40mm', width: 162, heights: [160, 170] },
   { name: '41mm', width: 176, heights: [170, 185, 200] },
+  { name: '44mm', width: 184, heights: [184, 200, 216] },
   { name: '45mm', width: 198, heights: [190, 205, 215] },
+  { name: '46mm', width: 208, heights: [200, 224, 242] },
   { name: 'Ultra 49mm', width: 205, heights: [200, 210, 220, 251] },
 ];
 const EPS = 1e-9;
@@ -59,7 +65,7 @@ test('Watch hole: every button is on screen from 40mm to Ultra; Penalty | Home |
       assert.equal(f.home.minY, f.penalty.minY, label);
       assert.equal(f.putt.minY, f.penalty.minY, label);
       assert.equal(f.allClubs.minY, f.holeOut.minY, label);
-      // Undo sits in Row B's middle slot, between Hole Out and All clubs.
+      // Edit shot sits in Row B's middle slot, between Hole Out and All clubs.
       assert.equal(f.undo.minY, f.holeOut.minY, label);
       assert.ok(f.holeOut.maxX < f.undo.minX && f.undo.maxX < f.allClubs.minX, label);
       assert.deepEqual(f.retry, f.undo, label);
@@ -226,4 +232,46 @@ test('Watch hole + penalty menu source match the layout model', () => {
   assert.match(tile, /lineLimit\(1\)/);
   assert.match(tile, /minimumScaleFactor\(0\.5\)/);
   assert.match(tile, /cornerRadius: 10/);
+});
+
+test('Watch Edit shot screen and Change club list fit 40mm through Ultra', () => {
+  assert.equal(WATCH_EDIT_SHOT_LABEL, 'Undo');
+  const edit = watchUi.slice(watchUi.indexOf('private var editShotMenu'), watchUi.indexOf('private var changeClubList'));
+  assert.match(edit, /let backHeight: CGFloat = 28/);
+  assert.match(edit, /let rowHeight = max\(0, min\(44, \(geo\.size\.height - backHeight - 6 \* 3 - 8\) \/ 2\)\)/);
+  assert.match(edit, /actionPill\("Change club"\)/);
+  assert.match(edit, /actionPill\("Delete shot"\)/);
+  assert.match(edit, /session\.deleteEditedShot\(\)/);
+  assert.doesNotMatch(edit, /beginShotHold|session\.pick\(|attachWatchFix/);
+  const change = watchUi.slice(watchUi.indexOf('private var changeClubList'), watchUi.indexOf('private var allClubsList'));
+  assert.match(change, /capsuleBack\(Text\("Back"\), height: 28\)/);
+  assert.match(change, /ScrollView/);
+  assert.match(change, /session\.list\.lastShotClubId/);
+  assert.match(change, /session\.pickEditClub\(clubId\)/);
+  assert.match(change, /frame\(minHeight: 38\)/);
+  assert.doesNotMatch(change, /beginShotHold|session\.pick\(|attachWatchFix/);
+  // Opening Edit shot, Back, and Change club are not swings.
+  const open = watchUi.slice(watchUi.indexOf('actionPill(watchEditShotLabel)'), watchUi.indexOf('emptyPillSlot'));
+  assert.doesNotMatch(open, /beginShotHold|undoLastShot|changeShotClub/);
+  for (const face of FACES) {
+    assert.equal(watchEditShotLabelFits(face.width), true, face.name);
+    for (const height of face.heights) {
+      const menu = watchEditShotFrames(face.width, height);
+      const label = `${face.name} @ ${height}`;
+      assert.ok(menu.rowHeight >= 32 && menu.rowHeight <= 44, label);
+      assert.ok(menu.back.maxY <= menu.changeClub.minY, label);
+      assert.ok(menu.changeClub.maxY <= menu.deleteShot.minY, label);
+      assert.ok(menu.deleteShot.maxY <= height - 8 + EPS, label);
+      for (const r of [menu.back, menu.changeClub, menu.deleteShot]) onScreen(r, face.width, height, label);
+      const clubs = watchChangeClubFrames(face.width, height, 14);
+      onScreen(clubs.back, face.width, height, `${label} back`);
+      assert.ok(clubs.rows[0].minY >= clubs.back.maxY, label);
+      onScreen(clubs.rows[0], face.width, height, `${label} first club`);
+      assert.equal(clubs.rows[0].maxY - clubs.rows[0].minY, 38, label);
+      assert.equal(clubs.scrolls, true, label);
+      const short = watchChangeClubFrames(face.width, height, 1);
+      onScreen(short.rows[0], face.width, height, `${label} one club`);
+      assert.equal(short.scrolls, false, label);
+    }
+  }
 });

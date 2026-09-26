@@ -4,6 +4,10 @@
  * Dedicated Putt shares the Back/Home row (same pill as Back / Home) so the top-3 strip stays on-screen.
  */
 
+import { WATCH_EDIT_SHOT_LABEL } from './watchPendingConfirm';
+
+export { WATCH_EDIT_SHOT_LABEL };
+
 export const WATCH_MAP_RATIO = 0.6;
 export const WATCH_CONTROL_RATIO = 0.4;
 
@@ -182,8 +186,8 @@ export type WatchFrame = { minX: number; maxX: number; minY: number; maxY: numbe
 /**
  * Mirror of the Watch hole screen (content.swift clubPick) in safe-area points.
  * Header at the top. Row A at the bottom of the top area: [Penalty] [Home] [Putt].
- * Row B: [Hole Out] under Penalty, [Undo] (or [Retry] while a penalty or undo is
- * unconfirmed), [All clubs] last; then the club pills. The top area is 60% but never taller than
+ * Row B: [Hole Out] under Penalty, [Undo] (or [Retry] while a penalty, undo,
+ * or club change is unconfirmed), [All clubs] last; then the club pills. The top area is 60% but never taller than
  * safeHeight minus Row B + club pills, so those stay on screen.
  */
 export function watchHoleFrames(safeWidth: number, safeHeight: number): {
@@ -192,7 +196,7 @@ export function watchHoleFrames(safeWidth: number, safeHeight: number): {
   home: WatchFrame;
   putt: WatchFrame;
   holeOut: WatchFrame;
-  /** Undo last shot. Retry takes this slot while a penalty or undo is unconfirmed. */
+  /** Undo. Retry takes this slot while a penalty, undo, or club change is unconfirmed. */
   undo: WatchFrame;
   retry: WatchFrame;
   allClubs: WatchFrame;
@@ -284,4 +288,69 @@ export function watchPenaltyMenuFrames(
     tiles.push({ minX, maxX: minX + tileWidth, minY, maxY: minY + tileHeight });
   }
   return { back: { minY: 0, maxY: WATCH_PENALTY_BACK_HEIGHT }, tiles, tileHeight };
+}
+
+/**
+ * Edit shot screen: Back, then Change club and Delete shot, each a full-width
+ * row. Both options stay on screen — this screen does not scroll.
+ * Mirrors content.swift editShotMenu.
+ */
+export function watchEditShotFrames(safeWidth: number, safeHeight: number): {
+  back: WatchFrame;
+  changeClub: WatchFrame;
+  deleteShot: WatchFrame;
+  rowHeight: number;
+} {
+  const width = safeWidth - 8;
+  const backHeight = WATCH_PENALTY_BACK_HEIGHT;
+  const gap = 6;
+  const rowHeight = Math.max(0, Math.min(44, (safeHeight - backHeight - gap * 3 - WATCH_PENALTY_BOTTOM_CLEARANCE) / 2));
+  const changeTop = backHeight + gap;
+  const deleteTop = changeTop + rowHeight + gap;
+  return {
+    back: { minX: 4, maxX: 4 + 72, minY: 0, maxY: backHeight },
+    changeClub: { minX: 4, maxX: 4 + width, minY: changeTop, maxY: changeTop + rowHeight },
+    deleteShot: { minX: 4, maxX: 4 + width, minY: deleteTop, maxY: deleteTop + rowHeight },
+    rowHeight,
+  };
+}
+
+/** Change club rows match All clubs: 38pt, 4pt apart, under a 28pt Back. */
+export const WATCH_CHANGE_CLUB_ROW_HEIGHT = 38;
+export const WATCH_CHANGE_CLUB_ROW_GAP = 4;
+
+/**
+ * Change club list: Back, then a scrolling bag. The first row is always on
+ * screen; a long bag scrolls instead of shrinking the rows off the face.
+ * Mirrors content.swift changeClubList.
+ */
+export function watchChangeClubFrames(
+  safeWidth: number,
+  safeHeight: number,
+  count: number,
+): { back: WatchFrame; rows: WatchFrame[]; scrolls: boolean } {
+  const width = safeWidth - 8;
+  const top = WATCH_PENALTY_BACK_HEIGHT + 6;
+  const rows: WatchFrame[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const minY = top + i * (WATCH_CHANGE_CLUB_ROW_HEIGHT + WATCH_CHANGE_CLUB_ROW_GAP);
+    rows.push({
+      minX: 4,
+      maxX: 4 + width,
+      minY,
+      maxY: minY + WATCH_CHANGE_CLUB_ROW_HEIGHT,
+    });
+  }
+  const contentMaxY = rows.length > 0 ? rows[rows.length - 1].maxY : top;
+  return {
+    back: { minX: 4, maxX: 4 + 72, minY: 0, maxY: WATCH_PENALTY_BACK_HEIGHT },
+    rows,
+    scrolls: contentMaxY > safeHeight,
+  };
+}
+
+/** Middle-slot label fits the pill at the Undo minimum scale (0.5). */
+export function watchEditShotLabelFits(safeWidth: number): boolean {
+  const slot = (safeWidth - 8 - 2 * WATCH_ACTION_ROW_GAP) / 3;
+  return watchTextWidth(WATCH_EDIT_SHOT_LABEL, 16) * 0.5 <= slot;
 }

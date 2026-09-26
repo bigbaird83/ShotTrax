@@ -120,6 +120,22 @@ test('puttPick made on hole 7 → next clubList.holeNumber === 8 and puttSheet.o
   assert.equal(plan.clubList.teeLengthYards, undefined);
   assert.equal(plan.clubList.greenLat, undefined);
   assert.equal(plan.clubList.clubCarry, undefined);
+  // Hole Out names the destination hole's shot count. Zero means that hole has none.
+  assert.equal(plan.clubList.shotCount, 0);
+  assert.equal(plan.clubList.lastShotId, '');
+  assert.equal(plan.clubList.lastShotClubId, '');
+  const named = planWatchMadeItAdvance({
+    holeNumber: 7,
+    holeCount: 18,
+    lengths: ['3_to_10'],
+    last,
+    nextLastShotId: 'shot-on-8',
+    nextLastShotClubId: 'club_8i',
+  });
+  assert.equal(named.clubList.holeNumber, 8);
+  assert.equal(named.clubList.shotCount, 1);
+  assert.equal(named.clubList.lastShotId, 'shot-on-8');
+  assert.equal(named.clubList.lastShotClubId, 'club_8i');
   assert.ok(parseClubList(plan.clubList));
   assert.equal(parsePuttSheet(plan.puttSheet)?.open, false);
 });
@@ -137,7 +153,7 @@ test('Made it on the last hole → Round complete, not the Hole 18 putt sheet', 
 test('phone Made it pushes the Watch advance; Watch closes the sheet on done / new hole', () => {
   const hole = readFileSync('app/round/[id]/hole/[number].tsx', 'utf8');
   const apply = hole.slice(hole.indexOf('const applyMadeIt'), hole.indexOf('const onAttachFinishedPuttLength'));
-  assert.match(apply, /pushWatchMadeItAdvance\(\{ holeNumber: targetHole, holeCount: round\.holeCount/);
+  assert.match(apply, /pushWatchMadeItAdvance\(\{[\s\S]*holeNumber: targetHole,\s*holeCount: round\.holeCount/);
   const watchFn = hole.slice(hole.indexOf('const onWatchPuttPick'), hole.indexOf('useWatchClubList(', hole.indexOf('const onWatchPuttPick')));
   assert.match(watchFn, /finishHoleOut\(db, row\.id\);[\s\S]*pushWatchMadeItAdvance/);
   const swift = readFileSync('targets/watch/WatchClubSession.swift', 'utf8');

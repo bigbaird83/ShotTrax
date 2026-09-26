@@ -215,6 +215,8 @@ test('Watch Connectivity this cut is clubList, clubPick, puttSheet, puttPick, cl
       'puttPick',
       'penaltyPick',
       'shotUndo',
+      'shotClubChange',
+      'watchConfirm',
       'clubNav',
       'nearbyCourses',
       'nearbyTees',

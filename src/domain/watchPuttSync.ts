@@ -123,6 +123,13 @@ export function planWatchMadeItAdvance(args: {
   holeCount: number;
   lengths: PuttLengthId[];
   last: ClubListMessage | null;
+  /**
+   * Shots already on the destination hole. The phone names the count and the
+   * last shot. Zero (the default) means that hole has none.
+   */
+  nextShotCount?: number | null;
+  nextLastShotId?: string | null;
+  nextLastShotClubId?: string | null;
 }): WatchMadeItAdvance {
   const puttSheet = puttSheetPayload({
     open: false,
@@ -131,6 +138,14 @@ export function planWatchMadeItAdvance(args: {
     done: true,
   });
   const dest = holeAfterDone(args.holeNumber, args.holeCount);
+  const nextShotCount =
+    args.nextShotCount == null || !Number.isFinite(args.nextShotCount)
+      ? args.nextLastShotId?.trim()
+        ? 1
+        : 0
+      : Math.max(0, Math.round(args.nextShotCount));
+  const nextLastShotId = nextShotCount > 0 ? (args.nextLastShotId?.trim() ?? '') : '';
+  const nextLastShotClubId = nextLastShotId ? (args.nextLastShotClubId?.trim() ?? '') : '';
   const base: ClubListMessage = {
     type: 'clubList',
     top3: args.last?.top3 ?? [],
@@ -141,6 +156,9 @@ export function planWatchMadeItAdvance(args: {
     yardsQuality: 'none',
     complicationYards: null,
     complicationQuality: 'none',
+    shotCount: nextShotCount,
+    lastShotId: nextLastShotId,
+    lastShotClubId: nextLastShotClubId,
   };
   if (dest.kind === 'summary') base.roundComplete = true;
   return { puttSheet, clubList: base };
