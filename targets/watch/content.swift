@@ -608,6 +608,57 @@ struct ContentView: View {
         .frame(height: mapHeight, alignment: .topLeading)
 
         VStack(alignment: .leading, spacing: 6) {
+          if session.penaltyRetry {
+            Text(session.penaltyNotice)
+              .font(.system(size: 12, weight: .bold))
+              .foregroundStyle(Color.orange)
+              .lineLimit(2)
+              .minimumScaleFactor(0.8)
+            Button(action: { session.retryPenalty() }) {
+              actionPill("Retry")
+            }
+            .buttonStyle(.plain)
+          }
+          if session.penaltyChoicesOpen {
+            Button(action: { session.closePenaltyChoices() }) {
+              Text("Back")
+                .font(.system(size: 12, weight: .heavy))
+                .foregroundStyle(Color("cream"))
+                .lineLimit(1)
+                .padding(.horizontal, 8)
+                .frame(minHeight: 24)
+                .overlay(
+                  Capsule()
+                    .stroke(Color("cream"), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            HStack(spacing: 6) {
+              Button(action: { session.pickPenalty("water") }) {
+                actionPill("Water")
+              }
+              .buttonStyle(.plain)
+              Button(action: { session.pickPenalty("ob") }) {
+                actionPill("OB")
+              }
+              .buttonStyle(.plain)
+            }
+            HStack(spacing: 6) {
+              Button(action: { session.pickPenalty("unplayable") }) {
+                actionPill("Unplayable")
+              }
+              .buttonStyle(.plain)
+              Button(action: { session.pickPenalty("other") }) {
+                actionPill("Other")
+              }
+              .buttonStyle(.plain)
+            }
+          } else {
+            Button(action: { session.openPenaltyChoices() }) {
+              actionPill("Penalty")
+            }
+            .buttonStyle(.plain)
+          }
           HStack(spacing: 8) {
             Button(action: { session.madeIt() }) {
               actionPill("Hole Out")

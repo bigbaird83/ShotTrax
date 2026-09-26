@@ -102,6 +102,23 @@ export function watchShotMarkStartsHold(clubId: string): boolean {
   return !isPutterClubId(clubId);
 }
 
+/**
+ * A penalty is one score stroke, not a club mark. It must not start the
+ * 30 s / 10 yd hold, and it must not touch the wrist-down freeze or the
+ * complication. `WatchClubSession.pickPenalty` does not call `beginShotHold`.
+ */
+export function watchPenaltyStartsShotHold(): false {
+  return false;
+}
+
+/** Club marks use `watchShotMarkStartsHold`. A penalty never starts the hold. */
+export function watchMarkStartsShotHold(
+  mark: { kind: 'club'; clubId: string } | { kind: 'penalty' },
+): boolean {
+  if (mark.kind === 'penalty') return watchPenaltyStartsShotHold();
+  return watchShotMarkStartsHold(mark.clubId);
+}
+
 /** Background GPS during the golf workout. Must ship with allowsBackgroundLocationUpdates. */
 export function watchLiveLocationBackgroundMode(): 'location' {
   return 'location';

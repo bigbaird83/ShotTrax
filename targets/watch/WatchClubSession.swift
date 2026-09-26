@@ -239,6 +239,12 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   @Published var sending = false
   @Published var nearbyFromHome = false
   @Published var home = WatchHomeState()
+  /// Penalty reasons are showing. Not a club mark and not the putt sheet.
+  @Published var penaltyChoicesOpen = false
+  /// A penalty is still unconfirmed. Retry stays until the phone accepts the id.
+  @Published var penaltyRetry = false
+  /// Short line next to Retry. Empty once every pending penalty is confirmed.
+  @Published var penaltyNotice = ""
   /// Stars tapped on the Watch the phone has not echoed yet (id → starred, when).
   private var pendingFavorites: [String: (starred: Bool, at: Date)] = [:]
   private let homeKey = "watchHomeJSON"
@@ -350,6 +356,10 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       nearby.active = true
     }
     loadPending()
+    if pendingQueue.contains(where: { ($0["type"] as? String) == "penaltyPick" }) {
+      penaltyRetry = true
+      penaltyNotice = "Queued · will sync"
+    }
     syncRoundStay()
     syncLiveYardsReason()
     appLiveYardsFrozen = true
@@ -777,6 +787,45 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     liveYardsLog.info("shot hold started anchor=\(anchored, privacy: .public)")
   }
 
+  /// Opens Water / OB / Unplayable / Other. Does not mark a shot.
+  func openPenaltyChoices() {
+    penaltyChoicesOpen = true
+  }
+
+  /// Leave the reason list without a stroke.
+  func closePenaltyChoices() {
+    penaltyChoicesOpen = false
+  }
+
+  /// One penalty stroke after the last shot. The phone writes the row.
+  /// No shot hold, no Watch GPS, no par, no yards.
+  func pickPenalty(_ reason: String) {
+    guard reason == "water" || reason == "ob" || reason == "unplayable" || reason == "other" else { return }
+    penaltyChoicesOpen = false
+    let payload: [String: Any] = [
+      "type": "penaltyPick",
+      "id": UUID().uuidString,
+      "reason": reason,
+      "strokes": 1,
+      "holeNumber": list.holeNumber,
+      "at": uniqueClubAt(),
+    ]
+    sendPenaltyReliable(payload)
+  }
+
+  /// Resend each unconfirmed penalty with its original id. Never a new stroke.
+  func retryPenalty() {
+    let pending = pendingQueue.filter { ($0["type"] as? String) == "penaltyPick" }
+    if pending.isEmpty {
+      penaltyRetry = false
+      penaltyNotice = ""
+      return
+    }
+    for payload in pending {
+      sendPenaltyReliable(payload)
+    }
+  }
+
   private enum ShotHoldDecision { case update, hold, anchor, release }
 
   private static func shotHoldDecision(
@@ -906,6 +955,10 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       sendClubMarkReliable(payload)
       return
     }
+    if isPenaltyPick(payload) {
+      sendPenaltyReliable(payload)
+      return
+    }
     if isHomeCourseStart(payload) {
       sendHomeCourseReliable(payload)
       return
@@ -939,6 +992,62 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   /// the phone is unreachable. Never freeze on PHONE_UNAVAILABLE.
   private func sendClubMarkReliable(_ payload: [String: Any]) {
     sendReliableQueued(payload)
+  }
+
+  private func isPenaltyPick(_ payload: [String: Any]) -> Bool {
+    payload["type"] as? String == "penaltyPick"
+  }
+
+  /// Same queue as a club mark. Dequeue only after the phone confirms `ok`,
+  /// so a failed save or a retry cannot drop or double the stroke.
+  /// Does not start the shot hold.
+  private func sendPenaltyReliable(_ payload: [String: Any], transfer: Bool = true) {
+    enqueuePending(payload)
+    sending = false
+    guard WCSession.isSupported() else {
+      showPenaltyRetry("Couldn’t save")
+      return
+    }
+    let session = WCSession.default
+    if transfer {
+      session.transferUserInfo(payload)
+    }
+    if session.isReachable {
+      session.sendMessage(payload, replyHandler: { [weak self] reply in
+        DispatchQueue.main.async {
+          let ok = (reply["ok"] as? Bool) ?? false
+          if ok {
+            self?.dequeuePending(at: payload["at"] as? String)
+            self?.finishPenaltySend()
+            self?.handleReply(reply, fallbackClubId: nil, type: payload["type"] as? String)
+          } else {
+            self?.showPenaltyRetry("Couldn’t save")
+          }
+        }
+      }, errorHandler: { [weak self] _ in
+        DispatchQueue.main.async {
+          self?.showPenaltyRetry("Couldn’t save")
+        }
+      })
+    } else {
+      showPenaltyRetry("Queued · will sync")
+    }
+  }
+
+  private func showPenaltyRetry(_ notice: String) {
+    sending = false
+    penaltyRetry = true
+    penaltyNotice = notice
+    feedback = notice
+    haptic(notice == "Queued · will sync" ? .click : .failure)
+  }
+
+  private func finishPenaltySend() {
+    let stillPending = pendingQueue.contains { ($0["type"] as? String) == "penaltyPick" }
+    penaltyRetry = stillPending
+    if !stillPending {
+      penaltyNotice = ""
+    }
   }
 
   /// TF 53 D: puttPick must not depend on isReachable / one pendingClubPick slot.
@@ -1698,7 +1807,9 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     guard !batch.isEmpty else { return }
     sending = false
     for payload in batch {
-      if isPuttPick(payload) || isClubPick(payload) || isHomeCourseStart(payload) {
+      if isPenaltyPick(payload) {
+        sendPenaltyReliable(payload, transfer: false)
+      } else if isPuttPick(payload) || isClubPick(payload) || isHomeCourseStart(payload) {
         sendReliableQueued(payload, transfer: false)
       } else {
         sendPick(payload, keepPending: true)
