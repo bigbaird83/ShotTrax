@@ -248,6 +248,14 @@ export const COPY = {
   statsPenaltyStrokes: 'Penalty strokes',
   statsFairwayGir: 'Fairways & greens',
   statsDifferential: 'Score differential',
+  strokesGained: 'Strokes gained',
+  strokesGainedTotal: 'Total',
+  strokesGainedUnsplit: 'Not split',
+  strokesGainedLede: 'Against a tour pro. Negative is normal — look for the biggest loss.',
+  strokesGainedLimits:
+    'Lie is not tracked, so fairway and rough are averaged. Distance is to the saved green, not the flag. Shots with no GPS start, no green, or no first-putt length land in Not split.',
+  strokesGainedEmpty: 'Finish a hole with Made it or Hole Out to see strokes gained.',
+  strokesGainedWeakest: 'Most strokes lost:',
   handicap: 'Handicap',
   trends: 'Trends',
   dispersion: 'Dispersion',
@@ -263,6 +271,7 @@ export const COPY = {
   trendsEmpty: 'Finish two rounds to see trends.',
   trendsNoData: 'Nothing saved for this yet.',
   trendsCarry: 'Carry by club',
+  trendsStrokesGainedHint: 'Average per 18 holes · vs a tour pro · higher is better',
   hcpIndex: 'Handicap index',
   handicapLede: 'World Handicap System math on your saved rounds with a rated tee.',
   handicapLimits:
