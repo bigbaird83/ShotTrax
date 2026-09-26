@@ -18,6 +18,8 @@ import {
   dropCourseOverlayMemory,
   fetchOsmOverlay,
   loadCachedOrFetchCourseOverlay,
+  logOsmOverlayWaiting,
+  osmOverlayBusyRemainingMs,
 } from './osmOverlay';
 import { loadCourseOsmOverlay, saveCourseOsmOverlay } from './osmOverlayStore';
 import { coursePaintCacheKeys, getSharedCoursePaintCache, type CoursePaintCache } from './paintCache';
@@ -41,6 +43,8 @@ export type OfflineDownloadDeps = {
   /** Course-wide Overpass read. Default is one real query. Failures are ignored. */
   fetchOverlay?: (query: OsmOverlayQuery) => Promise<OsmOverlay | null>;
   retryDelayMs?: number;
+  /** Clock shared with the Worker busy cooldown. */
+  nowMs?: () => number;
 };
 
 function matchOf(course: FavoriteCourse): CourseHydrateMatch {
@@ -103,7 +107,7 @@ async function persistFavoriteOverlay(
   const fetchOverlay =
     deps.fetchOverlay ??
     ((query: OsmOverlayQuery) =>
-      fetchOsmOverlay(query, { fetch: deps.fetch, retryDelayMs: deps.retryDelayMs }));
+      fetchOsmOverlay(query, { fetch: deps.fetch, retryDelayMs: deps.retryDelayMs, nowMs: deps.nowMs }));
   const overlay = await fetchOverlay({
     courseId: course.id,
     location,
@@ -163,7 +167,11 @@ export async function downloadFavoriteForOffline(
   return status;
 }
 
-/** One Overpass attempt per course for this process. A miss retries on the next launch. */
+/**
+ * Definitive misses already tried this process. A miss retries on the next launch.
+ * Worker `upstream_busy` is not recorded here, so a later backfill can try again
+ * after the same cooldown the hole screen uses.
+ */
 const backfillAttempted = new Set<string>();
 let backfillChain: Promise<void> = Promise.resolve();
 
@@ -227,6 +235,13 @@ async function backfillOneFavorite(
   if (offlinePackFor(store, course.id)?.status !== 'ready') return;
   if (loadCourseOsmOverlay(course.id)) return;
 
+  const nowMs = deps.nowMs ?? Date.now;
+  const waitingMs = osmOverlayBusyRemainingMs(course.id, nowMs);
+  if (waitingMs > 0) {
+    logOsmOverlayWaiting(course.id, nowMs);
+    return;
+  }
+
   const loadCenter =
     deps.loadCenter ?? ((row: FavoriteCourse) => defaultOverlayCenter(row, deps.cache ?? getSharedCoursePaintCache()));
   const center = await loadCenter(course);
@@ -237,7 +252,7 @@ async function backfillOneFavorite(
     const fetchOverlay =
       deps.fetchOverlay ??
       ((query: OsmOverlayQuery) =>
-        fetchOsmOverlay(query, { fetch: deps.fetch, retryDelayMs: deps.retryDelayMs }));
+        fetchOsmOverlay(query, { fetch: deps.fetch, retryDelayMs: deps.retryDelayMs, nowMs }));
     const cached = courseWideOsmOverlay(course.id);
     const overlay =
       cached ??
@@ -250,11 +265,16 @@ async function backfillOneFavorite(
             location: center,
             courseLocation: isValidLatLng(course.location) ? course.location : null,
           },
-          { fetchOverlay },
+          { fetchOverlay, nowMs },
         );
         return courseWideOsmOverlay(course.id);
       })());
     rememberBackfilledOverlay(course.id, overlay, now());
+    const retryInMs = osmOverlayBusyRemainingMs(course.id, nowMs);
+    if (retryInMs > 0) {
+      backfillAttempted.delete(course.id);
+      logOsmOverlayWaiting(course.id, nowMs);
+    }
   } catch {
     // A failure stores nothing. The session attempt is already spent.
   }
@@ -278,7 +298,9 @@ async function runFavoriteOverlayBackfill(
 /**
  * Fill overlays for favorites saved before overlays were stored.
  * Ready packs with no stored overlay get one course-wide fetch. Sequential,
- * one attempt per course per app session. Pack status is never rewritten.
+ * one course at a time. A definitive miss is one attempt per session.
+ * Worker `upstream_busy` keeps the course eligible and the next backfill
+ * tries it again after the cooldown. Pack status is never rewritten.
  */
 export function backfillReadyFavoriteOverlays(
   store: JsonStore,
