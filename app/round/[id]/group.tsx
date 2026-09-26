@@ -27,32 +27,12 @@ import {
   type GroupGameId,
   type GroupRulesContext,
 } from '@/src/domain/groupRules';
+import { stepperShown, stepperStep, stepperToggle, type StepperAction } from '@/src/domain/groupStepper';
 import { COPY } from '@/src/domain/playerCopy';
 import { BigButton } from '@/src/ui/BigButton';
 import { Screen } from '@/src/ui/Screen';
 import { useColors } from '@/src/ui/ColorThemeProvider';
 import { tapTarget, type ColorPalette } from '@/src/ui/theme';
-
-const MIN_SCORE = 1;
-const MAX_SCORE = 20;
-
-/**
- * Score chips for a hole: par − 2 … par + 4 (2 … 8 when par is unknown), plus
- * the current score when − / + took it outside that range.
- */
-function scoreChoices(par: number | null, current: number | null): number[] {
-  const low = par != null ? Math.max(MIN_SCORE, par - 2) : 2;
-  const high = par != null ? par + 4 : 8;
-  const out = Array.from({ length: high - low + 1 }, (_, i) => low + i);
-  if (current != null && !out.includes(current)) out.push(current);
-  return out.sort((a, b) => a - b);
-}
-
-/** − / + from the current score, or from par (4 when unknown) when blank. */
-function stepScore(current: number | null, par: number | null, delta: -1 | 1): number {
-  const from = current ?? par ?? 4;
-  return Math.min(MAX_SCORE, Math.max(MIN_SCORE, from + delta));
-}
 
 /**
  * Group scoring for one round: your partners' scores hole by hole, a
@@ -76,6 +56,8 @@ export default function RoundGroupScreen() {
   const [editName, setEditName] = useState('');
   const [editHcp, setEditHcp] = useState('');
   const [note, setNote] = useState<string | null>(null);
+  /** Unsaved stepper numbers, keyed `playerId:hole`. */
+  const [drafts, setDrafts] = useState<Record<string, number>>({});
   const [rulesOpen, setRulesOpen] = useState<GroupGameId | null>(null);
 
   const result = useMemo(
@@ -95,6 +77,20 @@ export default function RoundGroupScreen() {
   const hole = group.holes.find((h) => h.number === holeNumber) ?? group.holes[0] ?? null;
   const partners = group.players.filter((p) => !p.isMe);
   const settings = group.settings;
+  const applyStepper = (playerId: string, holeNo: number, action: StepperAction) => {
+    const key = `${playerId}:${holeNo}`;
+    if (action.kind === 'draft') {
+      setDrafts((prev) => ({ ...prev, [key]: action.value }));
+      return;
+    }
+    setPlayerHoleScore(db, playerId, holeNo, action.kind === 'save' ? action.value : null);
+    setDrafts((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    bump();
+  };
   const pair = matchPair(group.players, settings);
   const rulesCtx: GroupRulesContext = {
     net: result.net,
@@ -208,51 +204,44 @@ export default function RoundGroupScreen() {
                 </View>
               );
             }
+            const draft = drafts[`${player.id}:${hole.number}`];
+            const shown = stepperShown(score, draft, hole.par);
+            const saved = score != null;
             return (
-              <View key={player.id} style={styles.entry}>
-                <Text style={styles.label}>{player.name}</Text>
-                <View style={styles.chips}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`${player.name} ${COPY.groupScoreDown}`}
-                    testID={`group-score-${player.id}-down`}
-                    onPress={() => {
-                      setPlayerHoleScore(db, player.id, hole.number, stepScore(score, hole.par, -1));
-                      bump();
-                    }}
-                    style={styles.scoreChip}>
-                    <Text style={styles.chipText}>−</Text>
-                  </Pressable>
-                  {scoreChoices(hole.par, score).map((n) => {
-                    const on = score === n;
-                    return (
-                      <Pressable
-                        key={n}
-                        accessibilityRole="button"
-                        accessibilityLabel={`${player.name} ${n}`}
-                        accessibilityState={{ selected: on }}
-                        testID={`group-score-${player.id}-${n}`}
-                        onPress={() => {
-                          setPlayerHoleScore(db, player.id, hole.number, on ? null : n);
-                          bump();
-                        }}
-                        style={[styles.scoreChip, n === hole.par && styles.parChip, on && styles.chipOn]}>
-                        <Text style={[styles.chipText, on && styles.chipTextOn]}>{n}</Text>
-                      </Pressable>
-                    );
-                  })}
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`${player.name} ${COPY.groupScoreUp}`}
-                    testID={`group-score-${player.id}-up`}
-                    onPress={() => {
-                      setPlayerHoleScore(db, player.id, hole.number, stepScore(score, hole.par, 1));
-                      bump();
-                    }}
-                    style={styles.scoreChip}>
-                    <Text style={styles.chipText}>+</Text>
-                  </Pressable>
-                </View>
+              <View key={player.id} style={styles.stepper} testID={`group-stepper-${player.id}`}>
+                <Text style={[styles.label, styles.stepperName]} numberOfLines={1}>
+                  {player.name}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${player.name} ${COPY.groupScoreDown}`}
+                  testID={`group-score-${player.id}-down`}
+                  onPress={() => applyStepper(player.id, hole.number, stepperStep(score, draft, hole.par, -1))}
+                  style={styles.stepButton}>
+                  <Text style={styles.chipText}>−</Text>
+                </Pressable>
+                <Text
+                  style={[styles.stepValue, !saved && styles.stepValueDraft]}
+                  accessibilityLabel={`${player.name} ${shown}${saved ? '' : `, ${COPY.groupNotSaved}`}`}>
+                  {shown}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${player.name} ${COPY.groupScoreUp}`}
+                  testID={`group-score-${player.id}-up`}
+                  onPress={() => applyStepper(player.id, hole.number, stepperStep(score, draft, hole.par, 1))}
+                  style={styles.stepButton}>
+                  <Text style={styles.chipText}>+</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={saved ? `${player.name} ${COPY.groupSaved}, ${COPY.groupTapToClear}` : `${COPY.groupSave} ${player.name} ${shown}`}
+                  accessibilityState={{ selected: saved }}
+                  testID={`group-score-${player.id}-save`}
+                  onPress={() => applyStepper(player.id, hole.number, stepperToggle(score, draft, hole.par))}
+                  style={[styles.saveButton, saved && styles.chipOn]}>
+                  <Text style={[styles.saveText, saved && styles.chipTextOn]}>{saved ? COPY.groupSaved : COPY.groupSave}</Text>
+                </Pressable>
               </View>
             );
           })}
@@ -557,9 +546,11 @@ function makeStyles(colors: ColorPalette) {
       backgroundColor: colors.bg,
     },
     holeChipDone: { borderColor: colors.lime },
-    scoreChip: {
-      minWidth: tapTarget,
-      minHeight: tapTarget,
+    stepper: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: tapTarget },
+    stepperName: { flex: 1 },
+    stepButton: {
+      width: tapTarget,
+      height: tapTarget,
       borderRadius: 12,
       borderWidth: 1,
       borderColor: colors.line,
@@ -567,7 +558,20 @@ function makeStyles(colors: ColorPalette) {
       justifyContent: 'center',
       backgroundColor: colors.bg,
     },
-    parChip: { borderColor: colors.cream, borderWidth: 2 },
+    stepValue: { color: colors.cream, fontSize: 26, fontWeight: '900', minWidth: 36, textAlign: 'center' },
+    stepValueDraft: { color: colors.muted },
+    saveButton: {
+      minWidth: 76,
+      height: tapTarget,
+      paddingHorizontal: 10,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.line,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.bg,
+    },
+    saveText: { color: colors.cream, fontSize: 15, fontWeight: '800' },
     nameChip: {
       minHeight: tapTarget,
       paddingHorizontal: 14,
