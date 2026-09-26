@@ -768,8 +768,11 @@ struct ContentView: View {
       // Retry / All clubs, and the club strip. Rows are 44pt and shrink only on a
       // short face, so every button stays on screen from 40mm to Ultra.
       // Same math as watchHoleFrames in src/domain/watchLayout.ts.
-      let headerHeight: CGFloat = 46
-      let rowHeight = max(0, min(44, (geo.size.height - headerHeight - 12) / 3))
+      let headerHeight: CGFloat = 48
+      // Fits "999" at 28pt plus "yd"; the caption scales down to it.
+      let yardsColumnWidth: CGFloat = 70
+      // 4pt under the header, then two 6pt gaps between the three rows.
+      let rowHeight = max(0, min(44, (geo.size.height - headerHeight - 16) / 3))
       let slotWidth = max(0, (geo.size.width - 16) / 3)
       // 60% top, but never so tall that the Hole Out row + club pills fall past
       // the bottom safe area on a short face.
@@ -781,13 +784,26 @@ struct ContentView: View {
           // the right. Fixed height; the workout hint covers it (tap to dismiss)
           // instead of pushing the buttons down.
           HStack(alignment: .top, spacing: 6) {
-            VStack(alignment: .leading, spacing: 2) {
-              // Left is Hole N · fixed tee length. Top-right is live yards to the green.
-              Text(session.list.statusLine)
-                .font(.system(size: 16, weight: .heavy, design: .rounded))
-                .foregroundStyle(outdoorCream)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
+            // Left: Hole N on its own line, the tee length under it, then one
+            // message line. Two short lines instead of "Hole N · 412 yd", so
+            // both stay readable next to the yards on a 40mm face.
+            VStack(alignment: .leading, spacing: 0) {
+              VStack(alignment: .leading, spacing: 0) {
+                Text("Hole \(session.list.holeNumber)")
+                  .font(.system(size: 15, weight: .heavy, design: .rounded))
+                  .foregroundStyle(outdoorCream)
+                  .lineLimit(1)
+                  .minimumScaleFactor(0.75)
+                if let tee = session.list.teeLengthLabel {
+                  Text(tee)
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color("muted"))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                }
+              }
+              .accessibilityElement(children: .ignore)
+              .accessibilityLabel(Text(session.list.statusLine))
               if session.penaltyRetry, !session.penaltyNotice.isEmpty {
                 Text(session.penaltyNotice)
                   .font(.system(size: 12, weight: .bold))
@@ -803,20 +819,28 @@ struct ContentView: View {
               }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            // Right: a fixed-width yards column, so it can never run into the
+            // hole and tee lines. Big digits, small "yd".
             VStack(alignment: .trailing, spacing: 0) {
               // The empty string is still "—", but U+2014 in SF Compact stays a
               // hairline even at heavy 28. In muted on the dark green that stroke
               // disappears on Ultra, while size-11 "to hole" in the same color
               // still reads. A filled bar cannot collapse or antialias away.
               // Trusted yards use literal lime: the named accent color vanishes outdoors.
-              if session.appLiveYardsTrusted {
-                Text(session.appLiveYardsLabel)
-                  .font(.system(size: 28, weight: .heavy, design: .rounded))
-                  // Fixed-width digits: the number counts down without jitter.
-                  .monospacedDigit()
-                  .foregroundStyle(outdoorLime)
-                  .lineLimit(1)
-                  .minimumScaleFactor(0.6)
+              if session.appLiveYardsTrusted, let yards = session.appLiveYards {
+                HStack(alignment: .firstTextBaseline, spacing: 1) {
+                  Text("\(yards)")
+                    .font(.system(size: 28, weight: .heavy, design: .rounded))
+                    // Fixed-width digits: the number counts down without jitter.
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                  Text("yd")
+                    .font(.system(size: 12, weight: .heavy, design: .rounded))
+                }
+                .foregroundStyle(outdoorLime)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(session.appLiveYardsLabel))
               } else {
                 Capsule()
                   .fill(outdoorCream)
@@ -836,7 +860,7 @@ struct ContentView: View {
               .lineLimit(1)
               .minimumScaleFactor(0.7)
             }
-            .fixedSize(horizontal: true, vertical: true)
+            .frame(width: yardsColumnWidth, alignment: .trailing)
           }
           .frame(height: headerHeight, alignment: .top)
           .overlay {
@@ -883,21 +907,29 @@ struct ContentView: View {
         .frame(height: mapHeight, alignment: .topLeading)
 
         VStack(alignment: .leading, spacing: 6) {
-          // Hole Out keeps the same pill and column as Penalty. Retry takes the
-          // next slot instead of its own row, so the club pills stay on screen.
-          // The last slot holds All clubs (overlay below).
+          // Hole Out keeps the same pill and column as Penalty. The middle slot is
+          // Undo (last shot on this hole). Retry takes it while a penalty or an
+          // undo is unconfirmed — penalty first — and Undo comes back once it
+          // clears. The last slot holds All clubs (overlay below).
           HStack(spacing: 8) {
             Button(action: { session.madeIt() }) {
               actionPill("Hole Out")
             }
             .buttonStyle(.plain)
-            if session.penaltyRetry {
-              Button(action: { session.retryPenalty() }) {
+            if session.penaltyRetry || session.undoRetry {
+              Button(action: { session.penaltyRetry ? session.retryPenalty() : session.retryUndo() }) {
                 actionPill("Retry")
               }
               .buttonStyle(.plain)
             } else {
-              emptyPillSlot
+              // Dim with no shot on this hole, or while this shot's undo is on the way.
+              Button(action: { session.undoLastShot() }) {
+                actionPill("Undo")
+              }
+              .buttonStyle(.plain)
+              .allowsHitTesting(session.canUndoShot)
+              .opacity(session.canUndoShot ? 1 : 0.4)
+              .accessibilityLabel(Text("Undo last shot"))
             }
             emptyPillSlot
           }

@@ -152,9 +152,11 @@ test('undo does not start a round and does not clear the hole unless it was the 
   assert.equal(undoLastSoftGpsClubMarkClearsHole(), false);
   assert.equal(undoLastSoftGpsClubMarkScope(), 'phone');
   assert.equal(WATCH_MESSAGE_TYPES.includes('clubPick'), true);
-  assert.equal(
-    (WATCH_MESSAGE_TYPES as readonly string[]).some((type) => type.toLowerCase().includes('undo')),
-    false,
+  // The soft-mark undo stays on the phone. The Watch only has shotUndo (the plain
+  // Undo last shot, see watchShotUndo), never a soft-mark message.
+  assert.deepEqual(
+    (WATCH_MESSAGE_TYPES as readonly string[]).filter((type) => type.toLowerCase().includes('undo')),
+    ['shotUndo'],
   );
 });
 

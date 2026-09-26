@@ -20,6 +20,7 @@ import {
   type PuttPickMessage,
   type PuttPickReply,
   type PuttSheetMessage,
+  type ShotUndoMessage,
 } from '../domain/watchMessages';
 import type { PuttLengthId } from '../domain/putts';
 import {
@@ -36,7 +37,14 @@ import {
   queueWatchPuttPickEvent,
   watchPuttPickShouldApply,
 } from '../domain/watchPuttSync';
-import { getHole, insertPenalty, listShotsForHole } from '../db/repo';
+import { getHole, insertPenalty, listShotsForHole, undoLastShot } from '../db/repo';
+import {
+  drainWatchShotUndoQueue,
+  planWatchShotUndo,
+  queueWatchShotUndoEvent,
+  WATCH_SHOT_UNDO_FAILED,
+  WATCH_SHOT_UNDO_SKIPPED,
+} from '../domain/watchShotUndo';
 import {
   drainWatchPenaltyQueue,
   formatWatchPenaltyFeedback,
@@ -93,6 +101,7 @@ export function setWatchClubContext(next: WatchClubContext | null): void {
     void flushPendingClubPicks(next.holeNumber);
     void flushPendingPuttPicks();
     void flushPendingPenalties();
+    void flushPendingShotUndos();
   }
 }
 
@@ -239,6 +248,8 @@ export function buildClubList(args: {
   /** Course cup from `watchGreenFields`. Null means the Watch must not invent yards. */
   green?: WatchGreenFields | null;
   clubCarry?: Record<string, number | null | undefined> | null;
+  /** Shot the phone's Undo last shot would remove on this hole. Null dims the Watch Undo. */
+  lastShotId?: string | null;
 }): ClubListMessage {
   const labels: Record<string, string> = {};
   // Phone bag is source of truth. Full enabled bag — never a pre-trimmed top-3.
@@ -262,6 +273,7 @@ export function buildClubList(args: {
     ...(args.teeLengthYards != null ? { teeLengthYards: args.teeLengthYards } : {}),
     ...(args.green ? { green: clubListGreen(args.green) } : {}),
     ...(args.clubCarry ? { clubCarry: args.clubCarry } : {}),
+    ...(args.lastShotId ? { lastShotId: args.lastShotId } : {}),
   });
   if (args.roundLive === false) msg.roundLive = false;
   return msg;
@@ -335,6 +347,14 @@ async function handlePickNow(token: string, json: string): Promise<void> {
       await replyToken(token, { ok: false, feedback: WATCH_PENALTY_SAVE_FAILED });
       return;
     }
+    if (intent.kind === 'undo') {
+      if (!ctx) {
+        queueWatchShotUndoEvent({ token, json, id: intent.undo.id });
+        return;
+      }
+      await replyToken(token, { ok: false, feedback: WATCH_SHOT_UNDO_FAILED });
+      return;
+    }
     await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
     return;
   }
@@ -363,6 +383,11 @@ async function handlePickNow(token: string, json: string): Promise<void> {
 
   if (intent.kind === 'penalty') {
     await applyWatchPenalty(token, intent.pick);
+    return;
+  }
+
+  if (intent.kind === 'undo') {
+    await applyWatchShotUndo(token, intent.undo);
     return;
   }
 
@@ -494,6 +519,57 @@ async function applyWatchPenalty(
   } catch {
     await replyToken(token, { ok: false, feedback: WATCH_PENALTY_SAVE_FAILED });
     return;
+  }
+}
+
+/**
+ * Watch Undo runs the phone's Undo last shot on the phone's current hole, only
+ * while the named shot is still the last one. A resend (Retry, sendMessage plus
+ * transferUserInfo) finds the shot gone and replies ok without removing another.
+ * Putts and penalties are separate rows and are never touched. No shot hold.
+ */
+async function applyWatchShotUndo(token: string, undo: ShotUndoMessage): Promise<void> {
+  const ctx = context;
+  if (!ctx) {
+    queueWatchShotUndoEvent({ token, json: JSON.stringify(undo), id: undo.id });
+    return;
+  }
+  if (ctx.readOnly) {
+    await replyToken(token, { ok: false, feedback: WATCH_SHOT_UNDO_FAILED });
+    return;
+  }
+  const hole = getHole(ctx.db, ctx.roundId, undo.holeNumber);
+  const decision = planWatchShotUndo({
+    shotId: undo.shotId,
+    holeNumber: undo.holeNumber,
+    currentHole: ctx.holeNumber,
+    shots: hole ? listShotsForHole(ctx.db, hole.id) : [],
+  });
+  if (decision.action !== 'undo') {
+    await replyToken(token, { ok: true, feedback: decision.feedback });
+    return;
+  }
+  try {
+    const result = undoLastShot(ctx.db, ctx.roundId, undo.holeNumber, undo.shotId);
+    if (!result.ok) {
+      // Checked again inside the repo: the shot is no longer the last one. Remove nothing.
+      await replyToken(token, { ok: true, feedback: WATCH_SHOT_UNDO_SKIPPED });
+      return;
+    }
+    // The same club may be marked again right away; the double-tap guard is for the undone mark.
+    lastClubMark = null;
+    hapticSelect();
+    ctx.bump();
+    await replyToken(token, { ok: true, feedback: decision.feedback });
+  } catch {
+    await replyToken(token, { ok: false, feedback: WATCH_SHOT_UNDO_FAILED });
+  }
+}
+
+async function flushPendingShotUndos(): Promise<void> {
+  const rows = drainWatchShotUndoQueue();
+  for (const row of rows) {
+    await handlePick(row.token, row.json);
   }
 }
 

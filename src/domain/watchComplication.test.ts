@@ -204,7 +204,8 @@ test('complication uses the watch widget families and the phone hole-map number'
   assert.doesNotMatch(emptyMark, /minimumScaleFactor|Color\("muted"\)|Color\("accent"\)/);
   assert.ok(clubPick.indexOf('session.list.statusLine') < clubPick.indexOf('session.appLiveYardsLabel'));
   assert.ok(clubPick.indexOf('session.appLiveYardsLabel') < clubPick.indexOf('session.madeIt()'));
-  assert.match(clubPick, /fixedSize\(horizontal: true, vertical: true\)/);
+  // The yards column has a fixed width so it is never squeezed by, or run into, the hole line.
+  assert.match(clubPick, /\.frame\(width: yardsColumnWidth, alignment: \.trailing\)/);
 
   const widget = readFileSync(new URL('../../targets/watch-widget/index.swift', import.meta.url), 'utf8');
   assert.match(widget, /kind: "ShotTraxxHoleYards"/);

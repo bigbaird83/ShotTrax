@@ -29,6 +29,7 @@ export const WATCH_MESSAGE_TYPES = [
   'puttSheet',
   'puttPick',
   'penaltyPick',
+  'shotUndo',
   'clubNav',
   'nearbyCourses',
   'nearbyTees',
@@ -81,6 +82,11 @@ export type ClubListMessage = {
   roundComplete?: boolean;
   /** False while the phone is showing a finished round. Omitted means the round is live. */
   roundLive?: boolean;
+  /**
+   * Id of the shot the phone's Undo last shot would remove on this hole.
+   * Omitted when the hole has no shots, so the Watch Undo is dim.
+   */
+  lastShotId?: string;
 };
 
 export const CLUB_LIST_KEYS = [
@@ -218,6 +224,8 @@ export function parseClubList(raw: unknown): ClubListMessage | null {
   if (row.roundLive === false) msg.roundLive = false;
   const teeLength = optionalPositiveYards(row.teeLengthYards);
   if (teeLength != null) msg.teeLengthYards = teeLength;
+  const lastShotId = watchShotId(row.lastShotId);
+  if (lastShotId) msg.lastShotId = lastShotId;
   const at = optionalEpochMs(row.complicationAt);
   if (at != null) msg.complicationAt = at;
   const green = parseGreenPair(row.greenLat, row.greenLng);
@@ -341,6 +349,57 @@ export function penaltyPickPayload(args: {
   };
 }
 
+/**
+ * Watch → Phone. Undo the last shot on this hole — the same undo as the phone's
+ * Undo last shot. shotId is the phone's `lastShotId` at tap time, so a late or
+ * repeated delivery can never remove a second shot. Never putts or penalties.
+ */
+export type ShotUndoMessage = {
+  type: 'shotUndo';
+  /** Stable id. sendMessage, transferUserInfo, and Retry all reuse it. */
+  id: string;
+  /** The shot to remove. The phone removes it only while it is still the last shot. */
+  shotId: string;
+  at: string;
+  /** Hole at tap time. Only that hole, and only while the phone is on it. */
+  holeNumber: number;
+};
+
+function watchShotId(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const id = value.trim();
+  if (!id || id.length > 80 || /\s/.test(id)) return null;
+  return id;
+}
+
+export function parseShotUndo(raw: unknown): ShotUndoMessage | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as Record<string, unknown>;
+  if (row.type !== 'shotUndo') return null;
+  const id = watchShotId(row.id);
+  const shotId = watchShotId(row.shotId);
+  if (!id || !shotId) return null;
+  if (typeof row.at !== 'string' || !isIso8601(row.at)) return null;
+  const holeNumber = watchPenaltyHoleNumber(row.holeNumber);
+  if (holeNumber == null) return null;
+  return { type: 'shotUndo', id, shotId, at: row.at, holeNumber };
+}
+
+export function shotUndoPayload(args: {
+  id: string;
+  shotId: string;
+  at?: string;
+  holeNumber: number;
+}): ShotUndoMessage {
+  return {
+    type: 'shotUndo',
+    id: args.id.trim(),
+    shotId: args.shotId.trim(),
+    at: args.at ?? new Date().toISOString(),
+    holeNumber: Math.round(args.holeNumber),
+  };
+}
+
 export function parseClubPick(raw: unknown): ClubPickMessage | null {
   if (!raw || typeof raw !== 'object') return null;
   const row = raw as Record<string, unknown>;
@@ -402,6 +461,13 @@ export type WatchInboundIntent =
       closesPendingShot: false;
     }
   | {
+      kind: 'undo';
+      undo: ShotUndoMessage;
+      runsAcceptFix: false;
+      savesGps: false;
+      closesPendingShot: false;
+    }
+  | {
       kind: 'club';
       pick: ClubPickMessage;
       runsAcceptFix: true;
@@ -433,6 +499,16 @@ export function parseWatchInboundIntent(raw: unknown): WatchInboundIntent | null
     return {
       kind: 'penalty',
       pick: penalty,
+      runsAcceptFix: false,
+      savesGps: false,
+      closesPendingShot: false,
+    };
+  }
+  const undo = parseShotUndo(raw);
+  if (undo) {
+    return {
+      kind: 'undo',
+      undo,
       runsAcceptFix: false,
       savesGps: false,
       closesPendingShot: false,
@@ -476,7 +552,9 @@ export function clubListPayload(args: {
     back?: { lat: number; lng: number } | null;
   } | null;
   clubCarry?: Record<string, number | null | undefined> | null;
+  lastShotId?: string | null;
 }): ClubListMessage {
+  const lastShotId = watchShotId(args.lastShotId);
   const yardsToGreen =
     args.yardsQuality === 'none' ||
     args.yardsToGreen == null ||
@@ -515,6 +593,7 @@ export function clubListPayload(args: {
     ...(front ? { greenFrontLat: front.lat, greenFrontLng: front.lng } : {}),
     ...(back ? { greenBackLat: back.lat, greenBackLng: back.lng } : {}),
     ...(Object.keys(carry).length > 0 ? { clubCarry: carry } : {}),
+    ...(lastShotId ? { lastShotId } : {}),
   };
 }
 
@@ -569,6 +648,7 @@ export function clubListPushKey(msg: ClubListMessage): string {
     clubCarry: msg.clubCarry ?? null,
     roundComplete: msg.roundComplete === true,
     roundLive: msg.roundLive !== false,
+    lastShotId: msg.lastShotId ?? null,
   });
 }
 

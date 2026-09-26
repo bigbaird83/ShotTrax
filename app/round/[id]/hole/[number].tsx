@@ -200,6 +200,7 @@ import { ScorecardBody } from '@/src/ui/ScorecardBody';
 import { FairwayPicker } from '@/src/ui/FairwayPicker';
 import { ShareChoice } from '@/src/ui/ShareChoice';
 import { YardsToGreenBadge } from '@/src/ui/YardsToGreenBadge';
+import { watchLastShotId } from '@/src/domain/watchShotUndo';
 import { tapTarget, type, type ColorPalette } from '@/src/ui/theme';
 
 /** Play may flip to high contrast in bright sun. The whole subtree — map chips,
@@ -1061,6 +1062,8 @@ function HoleScreenBody() {
       teeLengthYards: courseTeeYards(hole?.yards),
       green: watchGreenFields({ green, front: pins.front, back: pins.back }),
       clubCarry: watchClubCarry(stripPlan.carries),
+      // Watch Undo names this shot, so a late resend never removes a second one.
+      lastShotId: readOnly ? null : watchLastShotId(shots),
     },
   );
 

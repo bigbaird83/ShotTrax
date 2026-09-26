@@ -9,7 +9,8 @@ import WidgetKit
 #endif
 
 // Club-pick only. No motion detection, no mic, no sensor auto-mark.
-// Tap → phone club=mark GPS. Undo stays on the phone.
+// Tap → phone club=mark GPS. Undo sends shotUndo; the phone runs its own
+// Undo last shot on the shot it named (never putts, penalties, or other holes).
 
 struct ClubListState {
   var top3: [String] = []
@@ -40,10 +41,18 @@ struct ClubListState {
   var roundComplete: Bool = false
   /// False when the phone is showing a finished round. Missing on the wire means live.
   var roundLive: Bool = true
+  /// Shot the phone's Undo last shot would remove on this hole. Nil → Undo is dim.
+  var lastShotId: String? = nil
 
   /// Top-right live yards. Same gate as the phone: good/soft and a positive number, else —.
   var liveYardsTrusted: Bool {
     (complicationQuality == "good" || complicationQuality == "soft") && (complicationYards ?? 0) > 0
+  }
+
+  /// Tee length line under Hole N on the Watch face ("412 yd"). Nil when unknown.
+  var teeLengthLabel: String? {
+    guard let yards = teeLengthYards, yards > 0 else { return nil }
+    return "\(yards) yd"
   }
 
   /// Hole N · fixed tee length, or Hole N when course data has no length.
@@ -246,6 +255,10 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   @Published var penaltyRetry = false
   /// Short line next to Retry. Empty once every pending penalty is confirmed.
   @Published var penaltyNotice = ""
+  /// A shot undo is still unconfirmed. Retry resends it with the same id.
+  @Published var undoRetry = false
+  /// Shots with an undo on the way, so one tap never sends a second undo.
+  @Published var undoPendingShotIds: Set<String> = []
   /// Stars tapped on the Watch the phone has not echoed yet (id → starred, when).
   private var pendingFavorites: [String: (starred: Bool, at: Date)] = [:]
   private let homeKey = "watchHomeJSON"
@@ -361,6 +374,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       penaltyRetry = true
       penaltyNotice = "Queued · will sync"
     }
+    syncUndoPending()
     syncRoundStay()
     syncLiveYardsReason()
     appLiveYardsFrozen = true
@@ -790,6 +804,42 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     liveYardsLog.info("shot hold started anchor=\(anchored, privacy: .public)")
   }
 
+  /// Undo is live when the phone named a last shot on this hole, no undo for
+  /// that shot is already on the way, and no club tap is still queued (the
+  /// phone's last shot would be out of date until that tap lands).
+  var canUndoShot: Bool {
+    guard list.roundLive, !list.roundComplete, let shotId = list.lastShotId else { return false }
+    if undoPendingShotIds.contains(shotId) { return false }
+    return !pendingQueue.contains { isClubPick($0) && ($0["clubId"] as? String) != "club_putter" }
+  }
+
+  /// Undo the last shot on this hole. The phone runs its own Undo last shot on
+  /// the shot named here, so a resend can never remove a second shot.
+  /// Not a swing: no shot hold, no Watch GPS, no yards. Never putts or penalties.
+  func undoLastShot() {
+    guard canUndoShot, let shotId = list.lastShotId else { return }
+    let payload: [String: Any] = [
+      "type": "shotUndo",
+      "id": UUID().uuidString,
+      "shotId": shotId,
+      "holeNumber": list.holeNumber,
+      "at": uniqueClubAt(),
+    ]
+    sendUndoReliable(payload)
+  }
+
+  /// Resend each unconfirmed undo with its original id. Never a second shot.
+  func retryUndo() {
+    let pending = pendingQueue.filter { isShotUndo($0) }
+    if pending.isEmpty {
+      syncUndoPending()
+      return
+    }
+    for payload in pending {
+      sendUndoReliable(payload)
+    }
+  }
+
   /// Opens Water / OB / Unplayable / Other. Does not mark a shot.
   func openPenaltyChoices() {
     penaltyChoicesOpen = true
@@ -1035,6 +1085,71 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     } else {
       showPenaltyRetry("Queued · will sync")
     }
+  }
+
+  private func isShotUndo(_ payload: [String: Any]) -> Bool {
+    payload["type"] as? String == "shotUndo"
+  }
+
+  /// Same queue as a penalty. Dequeue only after the phone confirms `ok`, so a
+  /// failed save or a retry cannot drop the undo or remove a second shot.
+  /// Does not start the shot hold.
+  private func sendUndoReliable(_ payload: [String: Any], transfer: Bool = true) {
+    enqueuePending(payload)
+    if let shotId = payload["shotId"] as? String { undoPendingShotIds.insert(shotId) }
+    sending = false
+    guard WCSession.isSupported() else {
+      showUndoRetry("Couldn’t undo")
+      return
+    }
+    let session = WCSession.default
+    if transfer {
+      session.transferUserInfo(payload)
+    }
+    if session.isReachable {
+      session.sendMessage(payload, replyHandler: { [weak self] reply in
+        DispatchQueue.main.async {
+          let ok = (reply["ok"] as? Bool) ?? false
+          if ok {
+            self?.dequeuePending(at: payload["at"] as? String)
+            self?.finishUndoSend(shotId: payload["shotId"] as? String)
+            self?.handleReply(reply, fallbackClubId: nil, type: payload["type"] as? String)
+          } else {
+            self?.showUndoRetry("Couldn’t undo")
+          }
+        }
+      }, errorHandler: { [weak self] _ in
+        DispatchQueue.main.async {
+          self?.showUndoRetry("Couldn’t undo")
+        }
+      })
+    } else {
+      showUndoRetry("Queued · will sync")
+    }
+  }
+
+  private func showUndoRetry(_ notice: String) {
+    sending = false
+    undoRetry = true
+    feedback = notice
+    haptic(notice == "Queued · will sync" ? .click : .failure)
+  }
+
+  /// The phone answered for this shot. Undo stays dim until the phone names the
+  /// next last shot, so a second tap never races the first.
+  private func finishUndoSend(shotId: String?) {
+    if let shotId, list.lastShotId == shotId {
+      list.lastShotId = nil
+      persist(list)
+    }
+    syncUndoPending()
+  }
+
+  /// Rebuild the undo state from the saved queue (launch, confirm, dropped hole).
+  private func syncUndoPending() {
+    let pending = pendingQueue.filter { isShotUndo($0) }
+    undoPendingShotIds = Set(pending.compactMap { $0["shotId"] as? String })
+    undoRetry = !pending.isEmpty
   }
 
   private func showPenaltyRetry(_ notice: String) {
@@ -1459,6 +1574,11 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
     next.roundComplete = message["roundComplete"] as? Bool ?? false
     next.roundLive = message["roundLive"] as? Bool ?? true
+    if let shotId = message["lastShotId"] as? String, !shotId.isEmpty {
+      next.lastShotId = shotId
+    } else {
+      next.lastShotId = nil
+    }
     let holeChanged = list.holeNumber > 0 && next.holeNumber != list.holeNumber
     if holeChanged {
       // Cypress H10→H11: leftover 56° must not stay armed on the new hole.
@@ -1705,6 +1825,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     if let selected = state.selectedClubId { obj["selectedClubId"] = selected }
     if state.roundComplete { obj["roundComplete"] = true }
     if !state.roundLive { obj["roundLive"] = false }
+    if let shotId = state.lastShotId { obj["lastShotId"] = shotId }
     if let data = try? JSONSerialization.data(withJSONObject: obj),
        let text = String(data: data, encoding: .utf8) {
       defaults?.set(text, forKey: "clubListJSON")
@@ -1789,6 +1910,14 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
 
   private func dropStaleClubPicks(liveHole: Int) {
     pendingQueue.removeAll { payload in
+      // An undo is for its own hole only. Once the round moves on it never
+      // reaches back to an earlier hole.
+      if isShotUndo(payload) {
+        var hole: Int?
+        if let value = payload["holeNumber"] as? Int { hole = value }
+        else if let value = payload["holeNumber"] as? NSNumber { hole = value.intValue }
+        return hole != liveHole
+      }
       guard payload["type"] as? String == "clubPick" else { return false }
       if (payload["clubId"] as? String) == "club_putter" { return liveHole < 1 }
       var hole: Int?
@@ -1797,6 +1926,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       return hole != liveHole
     }
     savePendingQueue()
+    syncUndoPending()
   }
 
   private func flushPending() {
@@ -1812,6 +1942,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     for payload in batch {
       if isPenaltyPick(payload) {
         sendPenaltyReliable(payload, transfer: false)
+      } else if isShotUndo(payload) {
+        sendUndoReliable(payload, transfer: false)
       } else if isPuttPick(payload) || isClubPick(payload) || isHomeCourseStart(payload) {
         sendReliableQueued(payload, transfer: false)
       } else {
