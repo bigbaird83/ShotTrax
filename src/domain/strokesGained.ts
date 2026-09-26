@@ -27,9 +27,10 @@ import { isValidLatLng, type LatLng } from './latLng';
 export const ARG_MAX_YARDS = 30;
 
 /**
- * Trends average ignores shorter rounds. Scaling a 2-hole round by 9
- * would let a couple of holes swing the chart. A round's own stats screen
- * still uses every finished hole.
+ * Shared Trends cutoff. The strokes-gained average and the per-18 charts
+ * (vs par, putts, penalty strokes) ignore a round with fewer counted holes
+ * than this. Scaling those rounds up to 18 would let a couple of holes
+ * swing the chart. A round's own stats screen still uses every finished hole.
  */
 export const SG_TRENDS_MIN_HOLES = 9;
 
@@ -293,6 +294,45 @@ export type SgRound = SgTotals & {
   shotsSplit: number;
   shotsTotal: number;
 };
+
+/**
+ * Stats-screen strokes gained. The 9-hole Trends cutoff does not apply.
+ * Null only when the round is missing or no hole was counted — the screen
+ * then shows the empty line. A counted hole is returned unchanged, including
+ * a total that sits entirely in `unsplit` when no shot could be split.
+ */
+export function strokesGainedForStats(round: SgRound | null): SgRound | null {
+  if (round == null || round.holesCounted === 0) return null;
+  return round;
+}
+
+export type StrokesGainedStatsRow =
+  | { kind: 'category'; key: SgCategory; value: number }
+  | { kind: 'unsplit'; value: number }
+  | { kind: 'total'; value: number };
+
+/**
+ * Rows for one round's stats block. Category lines are measured shots, so
+ * they appear only when a shot was split. With nothing split, the whole
+ * total stays on the unsplit row. `weakest` is null in that case.
+ */
+export function strokesGainedStatsRows(round: SgRound): {
+  rows: StrokesGainedStatsRow[];
+  weakest: SgCategory | null;
+} {
+  const rows: StrokesGainedStatsRow[] = [];
+  if (round.shotsSplit > 0) {
+    for (const key of SG_CATEGORIES) rows.push({ kind: 'category', key, value: round[key] });
+  }
+  if (round.shotsSplit === 0 || Math.abs(round.unsplit) >= 0.05) {
+    rows.push({ kind: 'unsplit', value: round.unsplit });
+  }
+  rows.push({ kind: 'total', value: round.total });
+  return {
+    rows,
+    weakest: round.shotsSplit > 0 ? weakestCategory(round) : null,
+  };
+}
 
 /** Strokes gained for a round: the sum of its finished holes. Null when no hole counts. */
 export function roundStrokesGained(holes: readonly SgHoleIn[]): SgRound | null {
