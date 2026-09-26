@@ -21,7 +21,12 @@ import {
   planGroupGames,
   type GroupGameSettings,
 } from '@/src/domain/groupGames';
-import { describeGroupGame, type GroupGameId, type GroupRulesContext } from '@/src/domain/groupRules';
+import {
+  describeGroupGame,
+  describeGroupGameShort,
+  type GroupGameId,
+  type GroupRulesContext,
+} from '@/src/domain/groupRules';
 import { COPY } from '@/src/domain/playerCopy';
 import { BigButton } from '@/src/ui/BigButton';
 import { Screen } from '@/src/ui/Screen';
@@ -108,6 +113,13 @@ export default function RoundGroupScreen() {
         <Text style={styles.link}>{rulesOpen === gameId ? COPY.groupHideRules : COPY.groupHowScored}</Text>
       </Pressable>
       {rulesOpen === gameId ? <Text style={styles.note}>{rules(gameId)}</Text> : null}
+    </>
+  );
+  // Game switches: one line, with the full rules behind the same link as the results.
+  const ruleLine = (gameId: GroupGameId) => (
+    <>
+      <Text style={styles.note}>{describeGroupGameShort(gameId, settings, rulesCtx)}</Text>
+      {howLink(gameId)}
     </>
   );
   const netBlockedCopy =
@@ -425,7 +437,7 @@ export default function RoundGroupScreen() {
           </Text>
           {netBlockedCopy ? <Text style={styles.warn}>{netBlockedCopy}</Text> : null}
           <Text style={styles.label}>{COPY.groupStrokePlay}</Text>
-          <Text style={styles.note}>{rules('strokePlay')}</Text>
+          {ruleLine('strokePlay')}
           <Toggle styles={styles} colors={colors} label={COPY.groupSkins} value={settings.skins} onChange={(skins) => saveGames({ skins })} />
           {settings.skins ? (
             <Toggle
@@ -436,7 +448,7 @@ export default function RoundGroupScreen() {
               onChange={(skinsCarry) => saveGames({ skinsCarry })}
             />
           ) : null}
-          <Text style={styles.note}>{rules('skins')}</Text>
+          {ruleLine('skins')}
           <Toggle
             styles={styles}
             colors={colors}
@@ -444,7 +456,7 @@ export default function RoundGroupScreen() {
             value={settings.stableford}
             onChange={(stableford) => saveGames({ stableford })}
           />
-          <Text style={styles.note}>{rules('stableford')}</Text>
+          {ruleLine('stableford')}
           <Toggle
             styles={styles}
             colors={colors}
@@ -452,7 +464,7 @@ export default function RoundGroupScreen() {
             value={settings.matchPlay}
             onChange={(matchPlay) => saveGames({ matchPlay })}
           />
-          <Text style={styles.note}>{rules('matchPlay')}</Text>
+          {ruleLine('matchPlay')}
           {round.holeCount === 18 ? (
             <Toggle
               styles={styles}
@@ -462,7 +474,7 @@ export default function RoundGroupScreen() {
               onChange={(nassau) => saveGames({ nassau })}
             />
           ) : null}
-          {round.holeCount === 18 ? <Text style={styles.note}>{rules('nassau')}</Text> : null}
+          {round.holeCount === 18 ? ruleLine('nassau') : null}
           {(settings.matchPlay || settings.nassau) && group.players.length > 2 ? (
             <>
               <Text style={styles.label}>{COPY.groupMatchPick}</Text>

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { describeGroupGame, type GroupRulesContext } from './groupRules';
+import { describeGroupGame, describeGroupGameShort, type GroupRulesContext } from './groupRules';
 
 const gross: GroupRulesContext = { net: false, holeCount: 18, playerCount: 2, matchNames: ['You', 'Sam'] };
 const net: GroupRulesContext = { ...gross, net: true };
@@ -45,4 +45,20 @@ test('match text names the pair, or asks for one', () => {
     describeGroupGame('nassau', carry, { ...gross, playerCount: 4, matchNames: null }),
     /^Pick the two players\./,
   );
+});
+
+test('one-line switch text follows the settings', () => {
+  assert.equal(describeGroupGameShort('skins', carry, gross), 'Lowest score wins the hole; ties carry over.');
+  assert.equal(describeGroupGameShort('skins', noCarry, gross), 'Lowest score wins the hole; ties win nothing.');
+  assert.match(describeGroupGameShort('skins', carry, net), /Net, strokes off the lowest handicap\.$/);
+  assert.match(describeGroupGameShort('stableford', carry, net), /full handicaps/);
+  assert.equal(describeGroupGameShort('matchPlay', carry, gross), 'You vs Sam, hole by hole.');
+  assert.match(describeGroupGameShort('matchPlay', carry, net), /off the lower of the two/);
+  assert.equal(
+    describeGroupGameShort('nassau', carry, { ...gross, playerCount: 4, matchNames: null }),
+    'Front 9, back 9, and overall matches.',
+  );
+  for (const id of ['strokePlay', 'skins', 'stableford', 'matchPlay', 'nassau'] as const) {
+    assert.ok(describeGroupGameShort(id, carry, net).length < 90, id);
+  }
 });

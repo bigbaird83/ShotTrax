@@ -95,3 +95,33 @@ function who(ctx: GroupRulesContext): string {
   if (ctx.matchNames) return `${ctx.matchNames[0]} vs ${ctx.matchNames[1]}. `;
   return ctx.playerCount > 2 ? 'Pick the two players. ' : 'Two players. ';
 }
+
+/** One line for the game switch; the full text sits behind "How it's scored". */
+export function describeGroupGameShort(
+  id: GroupGameId,
+  settings: Pick<GroupGameSettings, 'skinsCarry'>,
+  ctx: GroupRulesContext,
+): string {
+  const pair = ctx.matchNames ? `${ctx.matchNames[0]} vs ${ctx.matchNames[1]}` : null;
+  switch (id) {
+    case 'strokePlay':
+      return ctx.net ? 'Lowest net score to par leads, strokes off the lowest handicap.' : 'Lowest score to par leads.';
+    case 'skins':
+      return (
+        (settings.skinsCarry ? 'Lowest score wins the hole; ties carry over.' : 'Lowest score wins the hole; ties win nothing.') +
+        (ctx.net ? ' Net, strokes off the lowest handicap.' : '')
+      );
+    case 'stableford':
+      return 'Points against par on every hole; most points wins.' + (ctx.net ? ' Net, full handicaps.' : '');
+    case 'matchPlay':
+      return (
+        (pair ? `${pair}, hole by hole.` : ctx.playerCount > 2 ? 'Pick two players; hole by hole.' : 'Two players, hole by hole.') +
+        (ctx.net ? ' Net, strokes off the lower of the two.' : '')
+      );
+    case 'nassau':
+      return (
+        (pair ? `${pair}: front 9, back 9, and overall.` : 'Front 9, back 9, and overall matches.') +
+        (ctx.net ? ' Net, strokes off the lower of the two.' : '')
+      );
+  }
+}
