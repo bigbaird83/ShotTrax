@@ -19,7 +19,19 @@ module.exports = (config) => ({
     'com.apple.developer.healthkit': true,
   },
   infoPlist: {
+    // UIBackgroundModes `location` must ship with allowsBackgroundLocationUpdates.
+    // Core Location reads UIBackgroundModes, not WKBackgroundModes; setting the
+    // property without it terminates the watch app. WKBackgroundModes only
+    // takes session types such as workout-processing.
+    // @bacons/apple-targets 5 does not read this object. Prebuild keeps
+    // targets/watch/Info.plist (it only writes that file when missing, and the
+    // watch template is empty) and Xcode compiles it as INFOPLIST_FILE.
+    // plugins/withWatchInfoPlist.js copies these keys into that file so they
+    // are in the built app.
+    UIBackgroundModes: ['location'],
     WKBackgroundModes: ['workout-processing'],
+    NSLocationWhenInUseUsageDescription:
+      'ShotTraxx™ uses Watch location during a round to show yards to the green and mark where you hit from.',
     NSHealthShareUsageDescription:
       'ShotTraxx™ does not read your Health data. It uses Health only to keep your round running on your Apple Watch.',
     NSHealthUpdateUsageDescription:

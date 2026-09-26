@@ -1,3 +1,5 @@
+import { SOFT_GPS_MAX_M } from '../config/sensing';
+import { haversineYards } from './haversine';
 import { isPutterClubId } from './defaultBag';
 import { isCourseCardLatLng, type LatLng } from './latLng';
 import { planLiveGpsToPin, type LiveGpsToPin } from './yardsToGreen';
@@ -13,12 +15,155 @@ import { planLiveGpsToPin, type LiveGpsToPin } from './yardsToGreen';
  *
  * `targets/watch/WatchClubSession.swift` `liveYards` / `phoneLiveShouldReplace`
  * / `reloadWidgetIfNeeded` mirror the helpers below. Do not drift the
- * thresholds (15 m / 25 m / 600 yd / 5 yd / 5 s).
+ * accuracy thresholds (15 m / 25 m / 600 yd). Complication reloads are a
+ * separate budget: ≥1 yd and at least 45 s, or an immediate hole change.
  */
 
-/** WidgetKit reload: a ≥5 yd step, or any change that has waited 5 s. */
-export const WATCH_WIDGET_RELOAD_MIN_YD = 5;
-export const WATCH_WIDGET_RELOAD_MIN_MS = 5_000;
+/**
+ * Complication reload budget. WidgetKit allows roughly 40–70 refreshes a day.
+ * Hole changes reload immediately. Any other displayed-yard change must be at
+ * least 1 yard and must wait out 45 seconds. While the Watch app is on screen
+ * the face is hidden, so only a hole change reloads; leaving the app re-checks
+ * with the normal rule. The in-app number is a separate freeze: it holds still
+ * while the wrist is down and refreshes when the app is showing again.
+ */
+export const WATCH_WIDGET_RELOAD_MIN_YD = 1;
+export const WATCH_WIDGET_RELOAD_MIN_MS = 45_000;
+
+/**
+ * After a shot is marked on the Watch, the live yards hold still: nothing
+ * updates for 30 seconds, and after that only once the Watch has moved at
+ * least 10 yards from where the shot was marked. A hole change ends the hold.
+ * The complication follows the held number.
+ * `WatchClubSession.shotHoldDecision` mirrors `watchShotHoldDecision`.
+ */
+export const WATCH_SHOT_HOLD_MS = 30_000;
+export const WATCH_SHOT_HOLD_MIN_MOVE_YD = 10;
+
+export type WatchShotHold = { hole: number; atMs: number; anchor: LatLng | null };
+
+/**
+ * `update`: no hold (or a different hole) — adopt the fix.
+ * `hold`: keep the number on screen.
+ * `anchor`: the mark had no fresh fix; this fix becomes the spot to measure
+ * 10 yards from, and the number stays held.
+ * `release`: moved far enough — clear the hold and adopt the fix.
+ */
+export function watchShotHoldDecision(args: {
+  hold: WatchShotHold | null;
+  hole: number;
+  nowMs: number;
+  fix: LatLng;
+  accuracyM: number;
+}): 'update' | 'hold' | 'anchor' | 'release' {
+  const hold = args.hold;
+  if (!hold || hold.hole !== args.hole) return 'update';
+  if (args.nowMs - hold.atMs < WATCH_SHOT_HOLD_MS) return 'hold';
+  // GPS scatter on a weak fix is not a walk, and it is no place to measure from.
+  const usable = Number.isFinite(args.accuracyM) && args.accuracyM > 0 && args.accuracyM <= SOFT_GPS_MAX_M;
+  if (!usable) return 'hold';
+  if (!hold.anchor) return 'anchor';
+  return haversineYards(hold.anchor, args.fix) >= WATCH_SHOT_HOLD_MIN_MOVE_YD ? 'release' : 'hold';
+}
+
+export type WatchAppLiveYards = { yards: number | null; quality: string };
+
+/**
+ * The Watch app is showing the live number only while the scene is active and
+ * the always-on view is not dimmed. Inactive, background, and
+ * `isLuminanceReduced` are wrist-down: keep the last drawn number.
+ */
+export function watchAppShowsLiveYards(sceneActive: boolean, luminanceReduced: boolean): boolean {
+  return sceneActive && !luminanceReduced;
+}
+
+/**
+ * Number drawn in the Watch app. GPS and the complication keep the latest
+ * yards either way. While the wrist is down, keep `shown`. On raise, show
+ * `current` immediately, unless a shot hold is still on — then `shown` (the
+ * mark) stays until that hold ends.
+ * `WatchClubSession.appLiveYardsDisplay` mirrors this.
+ */
+export function watchAppLiveYardsDisplay(args: {
+  sceneActive: boolean;
+  luminanceReduced: boolean;
+  holdActive: boolean;
+  shown: WatchAppLiveYards;
+  current: WatchAppLiveYards;
+}): WatchAppLiveYards {
+  if (!watchAppShowsLiveYards(args.sceneActive, args.luminanceReduced) || args.holdActive) {
+    return args.shown;
+  }
+  return args.current;
+}
+
+/** A putter mark opens the putt sheet and does not start the 30 s / 10 yd hold. */
+export function watchShotMarkStartsHold(clubId: string): boolean {
+  return !isPutterClubId(clubId);
+}
+
+/** Background GPS during the golf workout. Must ship with allowsBackgroundLocationUpdates. */
+export function watchLiveLocationBackgroundMode(): 'location' {
+  return 'location';
+}
+
+/** Wrist-down walking filter. Wrist-up stays unfiltered so a club mark stays under 3 s. */
+export const WATCH_LIVE_DISTANCE_FILTER_M = 3;
+
+export const WATCH_LOCATION_WHEN_IN_USE =
+  'ShotTraxx™ uses Watch location during a round to show yards to the green and mark where you hit from.';
+
+/** Caption under the dash in the Watch app. The complication stays "—" with no caption. */
+export const WATCH_LIVE_YARDS_NO_GREEN = 'No green';
+export const WATCH_LIVE_YARDS_WEAK_GPS = 'Weak GPS';
+export const WATCH_LIVE_YARDS_LOCATION_OFF = 'Location off';
+export const WATCH_LIVE_YARDS_FINDING_GPS = 'Finding GPS';
+
+export type WatchLiveYardsAuth = 'notDetermined' | 'restricted' | 'denied' | 'authorized';
+
+/**
+ * The location sheet is shown only while the Watch app is in use.
+ * A background launch (complication transfer, application context, workout)
+ * must not call `requestWhenInUseAuthorization` — watchOS delays that prompt
+ * and leaves status notDetermined. Ask on the active scene, and ask again
+ * the next time the scene becomes active if it is still notDetermined.
+ * An in-flight request is not repeated until the scene leaves active, so a
+ * synchronous notDetermined callback cannot loop.
+ * `WatchClubSession.requestLiveLocationAuthorizationIfNeeded` mirrors this.
+ */
+export function watchShouldRequestLocationAuthorization(args: {
+  sceneActive: boolean;
+  authorization: WatchLiveYardsAuth;
+  requestInFlight: boolean;
+}): boolean {
+  return args.sceneActive && args.authorization === 'notDetermined' && !args.requestInFlight;
+}
+
+/**
+ * Why the Watch app is showing a dash. Null when a trusted yardage is showing,
+ * or when none of the four honest states apply (still notDetermined, or a fix
+ * that was rejected for a reason other than accuracy). Never a yardage.
+ */
+export function watchLiveYardsReason(args: {
+  hasTrustedYards: boolean;
+  hasGreen: boolean;
+  authorization: WatchLiveYardsAuth;
+  accuracyM: number | null;
+}): string | null {
+  if (args.hasTrustedYards) return null;
+  if (!args.hasGreen) return WATCH_LIVE_YARDS_NO_GREEN;
+  if (args.authorization === 'denied' || args.authorization === 'restricted') {
+    return WATCH_LIVE_YARDS_LOCATION_OFF;
+  }
+  const accuracy = args.accuracyM;
+  if (accuracy != null && Number.isFinite(accuracy) && accuracy > SOFT_GPS_MAX_M) {
+    return WATCH_LIVE_YARDS_WEAK_GPS;
+  }
+  const usableFix =
+    accuracy != null && Number.isFinite(accuracy) && accuracy >= 0 && accuracy <= SOFT_GPS_MAX_M;
+  if (!usableFix && args.authorization === 'authorized') return WATCH_LIVE_YARDS_FINDING_GPS;
+  return null;
+}
 
 export type WatchGreenFields = {
   greenLat: number;
@@ -118,18 +263,16 @@ export function watchWidgetShouldReload(args: {
   yards: number | null;
   previous: { hole: number; quality: string; yards: number | null; atMs: number } | null;
   nowMs: number;
+  /** Watch app frontmost: the face cannot be seen, so a reload is wasted. */
+  appOnScreen?: boolean;
 }): boolean {
   const prev = args.previous;
   if (!prev) return true;
-  if (prev.hole !== args.hole || prev.quality !== args.quality) return true;
-  if ((prev.yards == null) !== (args.yards == null)) return true;
-  if (
-    prev.yards != null &&
-    args.yards != null &&
-    Math.abs(args.yards - prev.yards) >= WATCH_WIDGET_RELOAD_MIN_YD
-  ) {
-    return true;
-  }
-  if (prev.yards !== args.yards && args.nowMs - prev.atMs >= WATCH_WIDGET_RELOAD_MIN_MS) return true;
-  return false;
+  // Quality alone does not reload. good/soft show the same yards; none is a
+  // number↔dash change, which still waits out the interval unless the hole changed.
+  if (prev.hole !== args.hole) return true;
+  if (args.appOnScreen) return false;
+  if (args.nowMs - prev.atMs < WATCH_WIDGET_RELOAD_MIN_MS) return false;
+  if (prev.yards == null || args.yards == null) return prev.yards !== args.yards;
+  return Math.abs(args.yards - prev.yards) >= WATCH_WIDGET_RELOAD_MIN_YD;
 }

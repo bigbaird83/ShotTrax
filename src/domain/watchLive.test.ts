@@ -1,17 +1,35 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { clubStripThreeClosestIds } from './clubStrip';
 import { SOFT_GPS_MAX_M, SOFT_GPS_MIN_M } from '../config/sensing';
 import { clubListPayload, parseClubList } from './watchMessages';
 import {
+  WATCH_LIVE_DISTANCE_FILTER_M,
+  WATCH_LIVE_YARDS_FINDING_GPS,
+  WATCH_LIVE_YARDS_LOCATION_OFF,
+  WATCH_LIVE_YARDS_NO_GREEN,
+  WATCH_LIVE_YARDS_WEAK_GPS,
+  WATCH_LOCATION_WHEN_IN_USE,
+  WATCH_SHOT_HOLD_MIN_MOVE_YD,
+  WATCH_SHOT_HOLD_MS,
   WATCH_WIDGET_RELOAD_MIN_MS,
   WATCH_WIDGET_RELOAD_MIN_YD,
   phoneLiveShouldReplaceWatch,
   planWatchLiveYards,
   watchClubCarry,
   watchGreenFields,
+  watchLiveLocationBackgroundMode,
+  watchLiveYardsReason,
+  watchAppLiveYardsDisplay,
+  watchAppShowsLiveYards,
+  watchShotHoldDecision,
+  watchShotMarkStartsHold,
+  watchShouldRequestLocationAuthorization,
   watchWidgetShouldReload,
+  type WatchLiveYardsAuth,
 } from './watchLive';
 
 const listBase = {
@@ -63,6 +81,124 @@ test('Watch live yards use the phone good/soft/none bands and the 600 yard cap',
   }
 });
 
+test('a dash names why there are no live yards and never invents a number', () => {
+  const base = {
+    hasTrustedYards: false,
+    hasGreen: true,
+    authorization: 'authorized' as const,
+    accuracyM: null as number | null,
+  };
+  assert.equal(
+    watchLiveYardsReason({ ...base, hasTrustedYards: true, hasGreen: false, authorization: 'denied', accuracyM: 80 }),
+    null,
+  );
+  assert.equal(watchLiveYardsReason({ ...base, hasGreen: false }), WATCH_LIVE_YARDS_NO_GREEN);
+  assert.equal(
+    watchLiveYardsReason({ ...base, hasGreen: false, authorization: 'denied', accuracyM: 80 }),
+    WATCH_LIVE_YARDS_NO_GREEN,
+  );
+  assert.equal(watchLiveYardsReason({ ...base, authorization: 'denied' }), WATCH_LIVE_YARDS_LOCATION_OFF);
+  assert.equal(
+    watchLiveYardsReason({ ...base, authorization: 'restricted', accuracyM: 40 }),
+    WATCH_LIVE_YARDS_LOCATION_OFF,
+  );
+  assert.equal(watchLiveYardsReason({ ...base, accuracyM: SOFT_GPS_MAX_M + 0.1 }), WATCH_LIVE_YARDS_WEAK_GPS);
+  assert.equal(watchLiveYardsReason({ ...base, accuracyM: 80 }), WATCH_LIVE_YARDS_WEAK_GPS);
+  assert.equal(watchLiveYardsReason({ ...base, authorization: 'notDetermined', accuracyM: 40 }), WATCH_LIVE_YARDS_WEAK_GPS);
+  assert.equal(watchLiveYardsReason({ ...base, accuracyM: SOFT_GPS_MAX_M }), null);
+  assert.equal(watchLiveYardsReason({ ...base, accuracyM: 0 }), null);
+  assert.equal(watchLiveYardsReason({ ...base, accuracyM: null }), WATCH_LIVE_YARDS_FINDING_GPS);
+  assert.equal(watchLiveYardsReason({ ...base, accuracyM: -1 }), WATCH_LIVE_YARDS_FINDING_GPS);
+  assert.equal(watchLiveYardsReason({ ...base, accuracyM: Number.POSITIVE_INFINITY }), WATCH_LIVE_YARDS_FINDING_GPS);
+  assert.equal(watchLiveYardsReason({ ...base, authorization: 'notDetermined', accuracyM: null }), null);
+  for (const reason of [
+    WATCH_LIVE_YARDS_NO_GREEN,
+    WATCH_LIVE_YARDS_WEAK_GPS,
+    WATCH_LIVE_YARDS_LOCATION_OFF,
+    WATCH_LIVE_YARDS_FINDING_GPS,
+  ]) {
+    assert.equal(reason.trim().length > 0, true);
+    assert.doesNotMatch(reason, /\d/);
+  }
+  assert.equal(watchLiveYardsReason(base), WATCH_LIVE_YARDS_FINDING_GPS);
+});
+
+test('request only while active, re-request on next active if still notDetermined', () => {
+  let sceneActive = false;
+  let authorization: WatchLiveYardsAuth = 'notDetermined';
+  let requestInFlight = false;
+  const requests: string[] = [];
+  const decide = (where: string) => {
+    if (!watchShouldRequestLocationAuthorization({ sceneActive, authorization, requestInFlight })) return;
+    requestInFlight = true;
+    requests.push(where);
+  };
+
+  decide('background-launch');
+  assert.deepEqual(requests, []);
+
+  sceneActive = true;
+  decide('scene-active');
+  decide('live-round-while-active');
+  assert.deepEqual(requests, ['scene-active']);
+
+  sceneActive = false;
+  requestInFlight = false;
+  decide('wrist-down');
+  assert.deepEqual(requests, ['scene-active']);
+
+  sceneActive = true;
+  decide('next-active');
+  assert.deepEqual(requests, ['scene-active', 'next-active']);
+
+  authorization = 'authorized';
+  requestInFlight = false;
+  decide('authorized');
+  authorization = 'denied';
+  decide('denied');
+  authorization = 'restricted';
+  decide('restricted');
+  assert.deepEqual(requests, ['scene-active', 'next-active']);
+
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+  const initFn = session.slice(session.indexOf('override init()'), session.indexOf('func requestHome'));
+  assert.match(initFn, /launch authorization=/);
+  assert.doesNotMatch(initFn, /requestWhenInUseAuthorization/);
+  const requestCalls = session.match(/location\.requestWhenInUseAuthorization\(\)/g) ?? [];
+  assert.equal(requestCalls.length, 1);
+
+  const ask = session.slice(
+    session.indexOf('private func requestLiveLocationAuthorizationIfNeeded'),
+    session.indexOf('private func syncLiveLocation'),
+  );
+  assert.match(ask, /guard sceneIsActive else \{ return \}/);
+  assert.doesNotMatch(ask, /liveHoleInProgress/);
+  assert.match(ask, /authorizationStatus == \.notDetermined/);
+  assert.match(ask, /!locationAuthRequestInFlight/);
+  assert.ok(ask.indexOf('guard sceneIsActive else') < ask.indexOf('location.requestWhenInUseAuthorization()'));
+  assert.match(ask, /requestWhenInUseAuthorization; scene active/);
+
+  const scene = session.slice(session.indexOf('func noteScenePhase'), session.indexOf('private func noteLocationScene'));
+  assert.ok(scene.indexOf('sceneIsActive = true') < scene.indexOf('requestLiveLocationAuthorizationIfNeeded()'));
+  assert.match(scene, /locationAuthRequestInFlight = false/);
+  const liveStart = session.slice(session.indexOf('private func syncLiveLocation'), session.indexOf('func locationManagerDidChangeAuthorization'));
+  assert.match(liveStart, /if liveHoleInProgress \{[\s\S]*requestLiveLocationAuthorizationIfNeeded\(\)/);
+  const stay = session.slice(session.indexOf('private func syncRoundStay'), session.indexOf('private func syncWorkoutDeniedHint'));
+  const roundGoesLive = stay.slice(stay.indexOf('if next && !wantsStay'), stay.indexOf('wantsStay = next'));
+  assert.match(roundGoesLive, /sceneIsActive/);
+  assert.match(roundGoesLive, /locationAuthRequestInFlight = false/);
+  assert.ok(stay.indexOf('locationAuthRequestInFlight = false') < stay.indexOf('syncLiveLocation()'));
+
+  const authChange = session.slice(
+    session.indexOf('func locationManagerDidChangeAuthorization'),
+    session.indexOf('func locationManager(_: CLLocationManager, didFailWithError'),
+  );
+  assert.match(authChange, /case \.authorizedWhenInUse, \.authorizedAlways:/);
+  assert.match(authChange, /startLiveLocationIfAuthorized\(\)/);
+  assert.doesNotMatch(authChange, /requestWhenInUseAuthorization/);
+  assert.match(authChange, /case \.notDetermined:\s*break/);
+});
+
 test('a stale phone push cannot overwrite fresher Watch yards on the same hole', () => {
   assert.equal(
     phoneLiveShouldReplaceWatch({ phoneHole: 4, phoneAtMs: 2_000, watchHole: 4, watchAtMs: 3_000 }),
@@ -86,9 +222,100 @@ test('a stale phone push cannot overwrite fresher Watch yards on the same hole',
   );
 });
 
-test('widget reload waits out one-yard drift and still fires on a 5 yard step', () => {
-  assert.equal(WATCH_WIDGET_RELOAD_MIN_YD, 5);
-  assert.equal(WATCH_WIDGET_RELOAD_MIN_MS, 5_000);
+test('after a Watch shot mark, live yards hold 30 s and then until the Watch moves 10 yd', () => {
+  assert.equal(WATCH_SHOT_HOLD_MS, 30_000);
+  assert.equal(WATCH_SHOT_HOLD_MIN_MOVE_YD, 10);
+  // Goode Circle Test tee.
+  const mark = { lat: 33.31183, lng: -93.22676 };
+  // ~0.00001° lat ≈ 1.2 yd.
+  const near = { lat: 33.31189, lng: -93.22676 }; // ~7 yd
+  const far = { lat: 33.31194, lng: -93.22676 }; // ~13 yd
+  const hold = { hole: 1, atMs: 1_000, anchor: mark };
+  const at = (nowMs: number, fix = far, accuracyM = 5, h: typeof hold | { hole: number; atMs: number; anchor: null } = hold) =>
+    watchShotHoldDecision({ hold: h, hole: 1, nowMs, fix, accuracyM });
+
+  assert.equal(watchShotHoldDecision({ hold: null, hole: 1, nowMs: 5_000, fix: far, accuracyM: 5 }), 'update');
+  // Walking fast in the first 30 s still does not move the number.
+  assert.equal(at(1_000 + WATCH_SHOT_HOLD_MS - 1), 'hold');
+  // After 30 s, under 10 yd from the mark stays held.
+  assert.equal(at(1_000 + WATCH_SHOT_HOLD_MS, near), 'hold');
+  assert.equal(at(1_000 + WATCH_SHOT_HOLD_MS, far), 'release');
+  // A weak fix cannot release the hold by GPS scatter.
+  assert.equal(at(1_000 + WATCH_SHOT_HOLD_MS, far, 40), 'hold');
+  assert.equal(at(1_000 + WATCH_SHOT_HOLD_MS, far, Number.NaN), 'hold');
+  // No fresh fix at the mark: the first usable fix after 30 s becomes the anchor.
+  const unanchored = { hole: 1, atMs: 1_000, anchor: null };
+  assert.equal(at(1_000 + WATCH_SHOT_HOLD_MS - 1, far, 5, unanchored), 'hold');
+  assert.equal(at(1_000 + WATCH_SHOT_HOLD_MS, far, 40, unanchored), 'hold');
+  assert.equal(at(1_000 + WATCH_SHOT_HOLD_MS, far, 5, unanchored), 'anchor');
+  // A new hole ends the hold at once.
+  assert.equal(watchShotHoldDecision({ hold, hole: 2, nowMs: 2_000, fix: mark, accuracyM: 5 }), 'update');
+});
+
+test('Watch app yards freeze wrist-down and refresh on raise, and a putter mark does not hold', () => {
+  const shown = { yards: 150, quality: 'good' as const };
+  const current = { yards: 120, quality: 'good' as const };
+  const dash = { yards: null, quality: 'none' as const };
+  const draw = (sceneActive: boolean, luminanceReduced: boolean, holdActive: boolean, next = current) =>
+    watchAppLiveYardsDisplay({ sceneActive, luminanceReduced, holdActive, shown, current: next });
+
+  assert.equal(watchAppShowsLiveYards(true, false), true);
+  assert.equal(watchAppShowsLiveYards(false, false), false);
+  assert.equal(watchAppShowsLiveYards(true, true), false);
+
+  // Frozen while inactive, background, or the dimmed always-on view.
+  assert.deepEqual(draw(false, false, false), shown);
+  assert.deepEqual(draw(false, true, false), shown);
+  assert.deepEqual(draw(true, true, false), shown);
+
+  // Wrist raise refreshes from the latest location.
+  assert.deepEqual(draw(true, false, false), current);
+
+  // Hold still wins on that raise.
+  assert.deepEqual(draw(true, false, true), shown);
+
+  // Hold ended: the raise shows the current distance.
+  assert.deepEqual(draw(true, false, false, dash), dash);
+  assert.deepEqual(draw(true, false, false, { yards: 98, quality: 'soft' }), { yards: 98, quality: 'soft' });
+
+  // Putter does not start the hold, so nothing keeps the old number once the wrist is up.
+  assert.equal(watchShotMarkStartsHold('club_putter'), false);
+  assert.equal(watchShotMarkStartsHold('club_7i'), true);
+  assert.equal(
+    watchShotHoldDecision({
+      hold: null,
+      hole: 1,
+      nowMs: 1_000,
+      fix: { lat: 33.31183, lng: -93.22676 },
+      accuracyM: 5,
+    }),
+    'update',
+  );
+
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+  const content = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  assert.match(session, /func appLiveYardsDisplay/);
+  assert.match(session, /sceneActive && !luminanceReduced/);
+  assert.match(session, /func noteLuminanceReduced/);
+  assert.match(content, /isLuminanceReduced/);
+  assert.match(content, /noteLuminanceReduced/);
+  const pick = session.slice(session.indexOf('func pick(clubId:'), session.indexOf('func select('));
+  const holdAt = pick.indexOf('beginShotHold()');
+  assert.ok(holdAt > pick.lastIndexOf('clubId != "club_putter"', holdAt));
+  const reload = session.slice(session.indexOf('private func reloadWidgetIfNeeded'), session.indexOf('private func loadFromDefaults'));
+  assert.match(reload, /if sceneIsActive \{ return \}/);
+  assert.doesNotMatch(reload, /luminanceReduced|appLiveYards/);
+  const adopt = session.slice(session.indexOf('private func adoptWatchFix'), session.indexOf('private func persist'));
+  assert.match(adopt, /list = next/);
+  assert.match(adopt, /persist\(next\)/);
+  const location = session.slice(session.indexOf('private func noteLocationScene'), session.indexOf('enum ComplicationReloader'));
+  assert.match(location, /keeping location updates for the live hole/);
+  assert.match(location, /startLiveLocationIfAuthorized\(\)/);
+});
+
+test('widget reload waits out yard drift and still fires on a hole change', () => {
+  assert.equal(WATCH_WIDGET_RELOAD_MIN_YD, 1);
+  assert.equal(WATCH_WIDGET_RELOAD_MIN_MS, 45_000);
   const previous = { hole: 1, quality: 'good', yards: 180, atMs: 1_000 };
   assert.equal(
     watchWidgetShouldReload({ hole: 1, quality: 'good', yards: 179, previous, nowMs: 2_000 }),
@@ -96,14 +323,50 @@ test('widget reload waits out one-yard drift and still fires on a 5 yard step', 
   );
   assert.equal(
     watchWidgetShouldReload({ hole: 1, quality: 'good', yards: 175, previous, nowMs: 2_000 }),
-    true,
+    false,
   );
   assert.equal(
     watchWidgetShouldReload({ hole: 1, quality: 'good', yards: 179, previous, nowMs: 1_000 + WATCH_WIDGET_RELOAD_MIN_MS }),
     true,
   );
   assert.equal(
+    watchWidgetShouldReload({ hole: 1, quality: 'good', yards: 180, previous, nowMs: 1_000 + WATCH_WIDGET_RELOAD_MIN_MS }),
+    false,
+  );
+  assert.equal(
     watchWidgetShouldReload({ hole: 1, quality: 'none', yards: null, previous, nowMs: 1_100 }),
+    false,
+  );
+  assert.equal(
+    watchWidgetShouldReload({ hole: 1, quality: 'none', yards: null, previous, nowMs: 1_000 + WATCH_WIDGET_RELOAD_MIN_MS }),
+    true,
+  );
+  assert.equal(
+    watchWidgetShouldReload({ hole: 2, quality: 'good', yards: 180, previous, nowMs: 1_100 }),
+    true,
+  );
+});
+
+test('widget does not reload while the Watch app hides the face, except on a new hole', () => {
+  const previous = { hole: 1, quality: 'good', yards: 180, atMs: 1_000 };
+  const later = 1_000 + WATCH_WIDGET_RELOAD_MIN_MS * 10;
+  // Big move, long wait: still no reload while the app is on screen.
+  assert.equal(
+    watchWidgetShouldReload({ hole: 1, quality: 'good', yards: 120, previous, nowMs: later, appOnScreen: true }),
+    false,
+  );
+  assert.equal(
+    watchWidgetShouldReload({ hole: 1, quality: 'none', yards: null, previous, nowMs: later, appOnScreen: true }),
+    false,
+  );
+  // A new hole still reloads at once.
+  assert.equal(
+    watchWidgetShouldReload({ hole: 2, quality: 'good', yards: 350, previous, nowMs: 1_100, appOnScreen: true }),
+    true,
+  );
+  // Leaving the app re-checks with the normal rule, so the face catches up.
+  assert.equal(
+    watchWidgetShouldReload({ hole: 1, quality: 'good', yards: 120, previous, nowMs: later, appOnScreen: false }),
     true,
   );
 });
@@ -160,12 +423,122 @@ test('Watch re-rank uses the same closest-carry window as the phone wheel', () =
   assert.match(session, /accuracyM < 15/);
   assert.match(session, /accuracyM <= 25/);
   assert.match(session, /yards > 600/);
-  assert.match(session, /widgetReloadMinYd = 5/);
-  assert.match(session, /widgetReloadMinSec = 5.0/);
+  assert.match(session, /widgetReloadMinYd = 1/);
+  assert.match(session, /widgetReloadMinSec = 45.0/);
   assert.match(session, /greenLat/);
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   assert.match(hole, /watchGreenFields\(\{ green, front: pins\.front, back: pins\.back \}\)/);
   assert.match(hole, /watchClubCarry\(stripPlan\.carries\)/);
   assert.match(hole, /atMs: fix\?\.timestamp/);
   assert.doesNotMatch(hole, /isIosBackgroundLocationEnabled:\s*true/);
+});
+
+test('Watch live location stays up wrist-down and stops when the round ends', () => {
+  assert.equal(watchLiveLocationBackgroundMode(), 'location');
+  assert.equal(WATCH_LIVE_DISTANCE_FILTER_M, 3);
+  assert.match(WATCH_LOCATION_WHEN_IN_USE, /show yards to the green and mark where you hit from/);
+  assert.doesNotMatch(WATCH_LOCATION_WHEN_IN_USE, /more accurate than the phone/);
+
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+  const plist = readFileSync(new URL('../../targets/watch/Info.plist', import.meta.url), 'utf8');
+  const target = readFileSync(new URL('../../targets/watch/expo-target.config.js', import.meta.url), 'utf8');
+  assert.ok(plist.includes(WATCH_LOCATION_WHEN_IN_USE));
+  assert.ok(target.includes(WATCH_LOCATION_WHEN_IN_USE));
+  assert.match(target, /NSLocationWhenInUseUsageDescription/);
+  assert.match(plist, /<key>NSLocationWhenInUseUsageDescription<\/key>/);
+  assert.match(plist, /<string>workout-processing<\/string>/);
+  // Core Location reads UIBackgroundModes; WKBackgroundModes takes session types only.
+  assert.match(plist, /<key>UIBackgroundModes<\/key>\s*<array>\s*<string>location<\/string>\s*<\/array>/);
+  assert.match(plist, /<key>WKBackgroundModes<\/key>\s*<array>\s*<string>workout-processing<\/string>\s*<\/array>/);
+  assert.match(target, /UIBackgroundModes: \['location'\]/);
+  assert.match(target, /WKBackgroundModes: \['workout-processing'\]/);
+  assert.match(session, /forInfoDictionaryKey: "UIBackgroundModes"/);
+  assert.match(session, /activityType = \.fitness/);
+  assert.match(session, /kCLLocationAccuracyBest/);
+  assert.match(session, /liveDistanceFilterM: CLLocationDistance = 3/);
+  assert.doesNotMatch(session, /pausesLocationUpdatesAutomatically/);
+  assert.doesNotMatch(session, /func locationManagerDidPauseLocationUpdates/);
+  assert.doesNotMatch(session, /locationManagerDidResumeLocationUpdates/);
+  assert.doesNotMatch(session, /showsBackgroundLocationIndicator/);
+  assert.doesNotMatch(session, /WKExtension/);
+  assert.match(session, /func locationManagerDidChangeAuthorization/);
+  assert.match(session, /didFailWithError/);
+  assert.match(session, /category: "liveYards"/);
+  assert.match(session, /launch authorization=/);
+  assert.match(session, /scene active authorization=/);
+  assert.match(session, /clubList missing green/);
+  assert.match(session, /@Published private\(set\) var liveYardsReason: String\?/);
+  const reason = session.slice(
+    session.indexOf('private static func liveYardsReason'),
+    session.indexOf('private func liveAuthBucket'),
+  );
+  assert.ok(reason.indexOf('if hasTrustedYards { return nil }') < reason.indexOf('return "No green"'));
+  assert.ok(reason.indexOf('return "No green"') < reason.indexOf('return "Location off"'));
+  assert.ok(reason.indexOf('return "Location off"') < reason.indexOf('return "Weak GPS"'));
+  assert.ok(reason.indexOf('return "Weak GPS"') < reason.indexOf('return "Finding GPS"'));
+  assert.match(reason, /accuracyM > 25/);
+  assert.match(reason, /authorization == "authorized"/);
+  assert.match(reason, /return nil/);
+  const authChange = session.slice(
+    session.indexOf('func locationManagerDidChangeAuthorization'),
+    session.indexOf('func locationManager(_: CLLocationManager, didFailWithError'),
+  );
+  assert.ok(authChange.indexOf('@unknown default') < authChange.indexOf('syncLiveYardsReason()'));
+  assert.match(authChange, /case \.notDetermined:\s*break/);
+  const ask = session.slice(
+    session.indexOf('private func requestLiveLocationAuthorizationIfNeeded'),
+    session.indexOf('private func syncLiveLocation'),
+  );
+  assert.match(ask, /guard sceneIsActive else \{ return \}/);
+  assert.doesNotMatch(ask, /liveHoleInProgress/);
+  assert.match(ask, /authorizationStatus == \.notDetermined/);
+  assert.match(ask, /requestWhenInUseAuthorization\(\)/);
+  assert.match(ask, /requestWhenInUseAuthorization; scene active/);
+  assert.match(session, /fix accepted/);
+  assert.match(session, /fix rejected/);
+  assert.match(session, /allowsBackgroundLocationUpdates = true/);
+  assert.match(session, /allowsBackgroundLocationUpdates = false/);
+  assert.match(session, /location\.startUpdatingLocation\(\)/);
+  assert.match(session, /location\.stopUpdatingLocation\(\)/);
+
+  const note = session.slice(session.indexOf('private func noteLocationScene'), session.indexOf('enum ComplicationReloader'));
+  const kept = note.slice(note.indexOf('guard !liveHoleInProgress'), note.indexOf('endLiveLocation()'));
+  assert.match(kept, /keeping location updates for the live hole/);
+  assert.doesNotMatch(kept, /stopUpdatingLocation/);
+  assert.match(note, /endLiveLocation\(\)/);
+
+  const end = session.slice(session.indexOf('private func endLiveLocation'), session.indexOf('private func syncLiveLocation'));
+  assert.match(end, /stopUpdatingLocation/);
+  assert.match(end, /disableWorkoutBackgroundLocation\(\)/);
+  const disable = session.slice(
+    session.indexOf('private func disableWorkoutBackgroundLocation'),
+    session.indexOf('private func startLiveLocationIfAuthorized'),
+  );
+  assert.match(disable, /allowsBackgroundLocationUpdates = false/);
+
+  const scene = session.slice(session.indexOf('func noteScenePhase'), session.indexOf('private func noteLocationScene'));
+  assert.match(scene, /noteLocationScene\(active: true\)/);
+  assert.match(scene, /noteLocationScene\(active: false\)/);
+  assert.doesNotMatch(scene, /stopUpdatingLocation/);
+  assert.doesNotMatch(scene, /stopRoundStay/);
+});
+
+test('watch target infoPlist is copied into the Info.plist Xcode compiles', () => {
+  const require = createRequire(import.meta.url);
+  const { mergeInfoPlist, watchTargetInfoPlist } = require('../../plugins/withWatchInfoPlist.js') as {
+    mergeInfoPlist: (
+      plistText: string,
+      infoPlist: Record<string, unknown>,
+    ) => { changed: boolean; text: string };
+    watchTargetInfoPlist: (projectRoot: string, expoConfig: { ios: { bundleIdentifier: string } }) => Record<string, unknown>;
+  };
+  const projectRoot = fileURLToPath(new URL('../..', import.meta.url));
+  const info = watchTargetInfoPlist(projectRoot, { ios: { bundleIdentifier: 'com.shottrax.app' } });
+  assert.equal(info.NSLocationWhenInUseUsageDescription, WATCH_LOCATION_WHEN_IN_USE);
+  assert.deepEqual(info.UIBackgroundModes, ['location']);
+  assert.deepEqual(info.WKBackgroundModes, ['workout-processing']);
+  const plistText = readFileSync(new URL('../../targets/watch/Info.plist', import.meta.url), 'utf8');
+  assert.equal(mergeInfoPlist(plistText, info).changed, false);
+  const app = readFileSync(new URL('../../app.json', import.meta.url), 'utf8');
+  assert.match(app, /plugins\/withWatchInfoPlist/);
 });

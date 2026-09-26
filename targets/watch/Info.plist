@@ -25,9 +25,13 @@
   <key>NSHealthUpdateUsageDescription</key>
   <string>ShotTraxx™ uses a golf workout on your Apple Watch only to keep the round running. It does not save the round to Health.</string>
   <key>NSLocationWhenInUseUsageDescription</key>
-  <string>ShotTraxx™ uses Watch location when you pick a club on the Watch to mark where you hit from.</string>
+  <string>ShotTraxx™ uses Watch location during a round to show yards to the green and mark where you hit from.</string>
   <key>WKApplication</key>
   <true/>
+  <key>UIBackgroundModes</key>
+  <array>
+    <string>location</string>
+  </array>
   <key>WKBackgroundModes</key>
   <array>
     <string>workout-processing</string>
