@@ -1,4 +1,4 @@
-/** Launch clip. A background process start must not play or time it out. */
+/** Launch splash. A background process start must not play or time it out. */
 
 export type WatchSplashScene = 'active' | 'inactive' | 'background';
 
@@ -9,7 +9,7 @@ export type WatchSplashScene = 'active' | 'inactive' | 'background';
  */
 export function watchSplashPlayback(args: {
   scene: WatchSplashScene;
-  /** AVPlayer / Reduce Motion hold has begun this process. */
+  /** Frame advance or the Reduce Motion hold has begun this process. */
   started: boolean;
   liveHoleInProgress: boolean;
 }): 'skip-live' | 'pending' | 'start' | 'dismiss-left' | 'playing' {
@@ -37,96 +37,85 @@ export function watchLaunchCoverVisible(args: {
   return args.scene !== 'active';
 }
 
-export type WatchPlayerItemStatus = 'unknown' | 'readyToPlay' | 'failed';
-export type WatchTimeControlStatus = 'paused' | 'waiting' | 'playing';
+/** Stills of the bundled clip, one SwiftUI Image at a time. Mirrors `frameCount` / `framesPerSecond`. */
+export const WATCH_SPLASH_FRAME_COUNT = 37;
+export const WATCH_SPLASH_FPS = 12;
+/** Nanoseconds between frames. The first advance is the start of motion. Mirrors `frameIntervalNanoseconds`. */
+export const WATCH_SPLASH_FRAME_INTERVAL_NS = Math.floor(1_000_000_000 / WATCH_SPLASH_FPS);
+/** Motion has to begin by this long after the logo is up. */
+export const WATCH_SPLASH_MOTION_DEADLINE_NS = 1_500_000_000;
 
 /**
- * A failed item dismisses. Request playback only while the scene is active,
- * the item is ready, and the clock is not already playing. The same rule
- * allows another attempt about every 250 ms.
+ * Frames advance only after the first active scene, and not for Reduce Motion
+ * or once the splash is leaving. A background launch stays on frame 0.
  */
-export function watchSplashPlayGate(args: {
+export function watchSplashFramesAdvance(args: {
   scene: WatchSplashScene;
-  itemStatus: WatchPlayerItemStatus;
-  timeControlStatus: WatchTimeControlStatus;
-}): 'wait' | 'play' | 'failed' {
-  if (args.itemStatus === 'failed') return 'failed';
-  if (args.scene === 'active' && args.itemStatus === 'readyToPlay' && args.timeControlStatus !== 'playing') {
-    return 'play';
-  }
-  return 'wait';
-}
-
-/** Keep requesting playback on that gate. Stops once the clock is playing. */
-export function watchSplashShouldReplay(args: {
-  scene: WatchSplashScene;
-  itemStatus: WatchPlayerItemStatus;
-  timeControlStatus: WatchTimeControlStatus;
-}): boolean {
-  return watchSplashPlayGate(args) === 'play';
-}
-
-/** Another start while still not playing. Mirrors `playRetryNanoseconds`. */
-export const WATCH_SPLASH_PLAY_RETRY_NS = 250_000_000;
-
-/**
- * Fade home when the scene has been active and the item ready for this long
- * and the clip is still not playing. The 6 s stall ceiling still covers an
- * item that never becomes ready. Mirrors `lateNanoseconds`.
- */
-export const WATCH_SPLASH_LATE_NS = 1_500_000_000;
-
-export function watchSplashLateDismisses(args: {
-  /** Both scene-active and `.readyToPlay` have been true. The late clock runs only then. */
-  readyAndActive: boolean;
-  playing: boolean;
-  dismissing: boolean;
-  elapsed: boolean;
-}): boolean {
-  if (!args.readyAndActive || args.playing || args.dismissing) return false;
-  return args.elapsed;
-}
-
-/**
- * The clip picture is up only after `timeControlStatus == .playing` has settled.
- * Until then, whenever playback stops, and again once the splash is dismissing,
- * the logo covers VideoPlayer so watchOS transport chrome is not on screen.
- * Mirrors `videoVisible` / `revealSettleNanoseconds`.
- */
-export function watchSplashVideoShown(args: {
-  playing: boolean;
-  settled: boolean;
-  dismissing: boolean;
-}): boolean {
-  return args.playing && args.settled && !args.dismissing;
-}
-
-/** After playback is observed, wait so the first decoded frame is up. Mirrors `revealSettleNanoseconds`. */
-export const WATCH_SPLASH_REVEAL_SETTLE_NS = 150_000_000;
-
-/** The 5 s safety clock starts when the clip is actually moving. Mirrors `safetyNanoseconds`. */
-export const WATCH_SPLASH_SAFETY_NS = 5_000_000_000;
-
-export function watchSplashSafetyStarts(timeControlStatus: WatchTimeControlStatus, safetyStarted: boolean): boolean {
-  return timeControlStatus === 'playing' && !safetyStarted;
-}
-
-/**
- * Hard ceiling from the first active playback attempt. Mirrors `stallNanoseconds`.
- * Independent of item status. Does not start in the background or for Reduce Motion.
- * Once dismissing, the timer is ignored.
- */
-export const WATCH_SPLASH_STALL_NS = 6_000_000_000;
-
-export function watchSplashStallCeilingStarts(args: {
-  scene: WatchSplashScene;
-  /** `run()` has begun. That only happens after the first active scene. */
-  playbackStarted: boolean;
+  started: boolean;
   reduceMotion: boolean;
   dismissing: boolean;
 }): boolean {
-  if (!args.playbackStarted || args.reduceMotion || args.dismissing) return false;
+  if (!args.started || args.reduceMotion || args.dismissing) return false;
   return args.scene === 'active';
+}
+
+/**
+ * Index of the one image on screen. Frame 0 is the still. Elapsed is measured
+ * from the moment frames are allowed to advance.
+ */
+export function watchSplashFrameIndex(args: {
+  advancing: boolean;
+  elapsedNs: number;
+  frameCount?: number;
+  frameIntervalNs?: number;
+}): number {
+  const frameCount = args.frameCount ?? WATCH_SPLASH_FRAME_COUNT;
+  const interval = args.frameIntervalNs ?? WATCH_SPLASH_FRAME_INTERVAL_NS;
+  if (!args.advancing || frameCount <= 0 || interval <= 0) return 0;
+  const steps = Math.floor(args.elapsedNs / interval);
+  if (steps <= 0) return 0;
+  return Math.min(frameCount - 1, steps);
+}
+
+/** True once the last frame has been held for one interval. */
+export function watchSplashClipFinished(args: {
+  advancing: boolean;
+  elapsedNs: number;
+  frameCount?: number;
+  frameIntervalNs?: number;
+}): boolean {
+  if (!args.advancing) return false;
+  const frameCount = args.frameCount ?? WATCH_SPLASH_FRAME_COUNT;
+  const interval = args.frameIntervalNs ?? WATCH_SPLASH_FRAME_INTERVAL_NS;
+  return args.elapsedNs >= frameCount * interval;
+}
+
+/** The first frame change lands inside the motion window. */
+export function watchSplashMotionWithinDeadline(frameIntervalNs = WATCH_SPLASH_FRAME_INTERVAL_NS): boolean {
+  return frameIntervalNs > 0 && frameIntervalNs <= WATCH_SPLASH_MOTION_DEADLINE_NS;
+}
+
+/** Fade after the clip ends or a tap. Mirrors `fadeNanoseconds`. */
+export const WATCH_SPLASH_FADE_NS = 200_000_000;
+
+/** Reduce Motion holds frame 0 this long. Mirrors `reduceMotionNanoseconds`. */
+export const WATCH_SPLASH_REDUCE_MOTION_NS = 1_200_000_000;
+
+/**
+ * Hard ceiling from the first active run. Mirrors `safetyNanoseconds`.
+ * Does not start in the background. Once dismissing, the timer is ignored.
+ * The frame sequence and Reduce Motion both finish sooner.
+ */
+export const WATCH_SPLASH_SAFETY_NS = 5_000_000_000;
+
+export function watchSplashSafetyDue(args: {
+  /** `run()` has begun. That only happens after the first active scene. */
+  playbackStarted: boolean;
+  dismissing: boolean;
+  elapsed: boolean;
+}): boolean {
+  if (!args.playbackStarted || args.dismissing) return false;
+  return args.elapsed;
 }
 
 /**

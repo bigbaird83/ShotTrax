@@ -1,34 +1,67 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { test } from 'node:test';
 import {
   watchLaunchCoverVisible,
   watchLocationAuthorizationWaitsForSplash,
-  watchSplashLateDismisses,
-  watchSplashPlayGate,
+  watchSplashClipFinished,
+  watchSplashFrameIndex,
+  watchSplashFramesAdvance,
+  watchSplashMotionWithinDeadline,
   watchSplashPlayback,
-  watchSplashVideoShown,
-  WATCH_SPLASH_LATE_NS,
-  WATCH_SPLASH_PLAY_RETRY_NS,
-  WATCH_SPLASH_REVEAL_SETTLE_NS,
+  watchSplashSafetyDue,
+  WATCH_SPLASH_FADE_NS,
+  WATCH_SPLASH_FPS,
+  WATCH_SPLASH_FRAME_COUNT,
+  WATCH_SPLASH_FRAME_INTERVAL_NS,
+  WATCH_SPLASH_MOTION_DEADLINE_NS,
+  WATCH_SPLASH_REDUCE_MOTION_NS,
   WATCH_SPLASH_SAFETY_NS,
-  WATCH_SPLASH_STALL_NS,
-  watchSplashSafetyStarts,
-  watchSplashShouldReplay,
-  watchSplashStallCeilingStarts,
 } from './watchSplash';
 
 const root = new URL('../../', import.meta.url);
 const read = (path: string) => readFileSync(new URL(path, root), 'utf8');
 
-test('Watch splash clip ships in the Watch target with no audio track', () => {
-  const clip = readFileSync(new URL('targets/watch/WatchSplash.mov', root));
-  assert.ok(clip.length > 0);
-  assert.ok(clip.length < 2_000_000, 'keep the Watch bundle small');
-  assert.equal(clip.subarray(4, 8).toString('latin1'), 'ftyp');
-  assert.equal(clip.includes(Buffer.from('avc1')), true);
-  // Handler type for an audio track. Stripped so the splash never touches audio.
-  assert.equal(clip.includes(Buffer.from('soun')), false);
+function jpegSize(buf: Buffer): { width: number; height: number } {
+  assert.equal(buf[0], 0xff);
+  assert.equal(buf[1], 0xd8);
+  let i = 2;
+  while (i + 8 < buf.length) {
+    if (buf[i] !== 0xff) break;
+    const marker = buf[i + 1];
+    if (marker === 0xc0 || marker === 0xc1 || marker === 0xc2) {
+      return { height: buf.readUInt16BE(i + 5), width: buf.readUInt16BE(i + 7) };
+    }
+    const len = buf.readUInt16BE(i + 2);
+    i += 2 + len;
+  }
+  throw new Error('jpeg has no start-of-frame marker');
+}
+
+test('Watch splash ships as contained JPEG frames and not a movie', () => {
+  assert.equal(existsSync(new URL('targets/watch/WatchSplash.mov', root)), false);
+  const catalog = new URL('targets/watch/Assets.xcassets/', root);
+  const sets = readdirSync(catalog).filter((name) => /^WatchSplashFrame\d+\.imageset$/.test(name)).sort();
+  assert.equal(sets.length, WATCH_SPLASH_FRAME_COUNT);
+  assert.equal(sets[0], 'WatchSplashFrame00.imageset');
+  assert.equal(sets[sets.length - 1], `WatchSplashFrame${String(WATCH_SPLASH_FRAME_COUNT - 1).padStart(2, '0')}.imageset`);
+  let total = 0;
+  for (let i = 0; i < sets.length; i += 1) {
+    const name = `WatchSplashFrame${String(i).padStart(2, '0')}`;
+    const jpg = readFileSync(new URL(`${name}.imageset/${name}.jpg`, catalog));
+    const size = jpegSize(jpg);
+    assert.equal(size.width, 345);
+    assert.equal(size.height, 514);
+    const contents = read(`targets/watch/Assets.xcassets/${name}.imageset/Contents.json`);
+    assert.match(contents, new RegExp(`${name}\\.jpg`));
+    total += jpg.length;
+  }
+  assert.ok(total < 2_000_000, `splash frames are ${total} bytes`);
+  assert.ok(Math.abs(345 / 514 - 392 / 584) < 0.001);
+  assert.equal(WATCH_SPLASH_FPS, 12);
+  assert.equal(WATCH_SPLASH_FRAME_COUNT, 37);
+  assert.equal(WATCH_SPLASH_FRAME_INTERVAL_NS, Math.floor(1_000_000_000 / WATCH_SPLASH_FPS));
+  assert.equal(statSync(new URL('targets/watch/Assets.xcassets/WatchSplashFrame00.imageset/WatchSplashFrame00.jpg', root)).size > 0, true);
 });
 
 test('Watch splash plays over the app on cold start and never blocks it', () => {
@@ -53,18 +86,18 @@ test('Watch splash plays over the app on cold start and never blocks it', () => 
   assert.match(coverRule, /return false/);
 
   const splash = read('targets/watch/WatchSplash.swift');
-  assert.match(splash, /static let resource = "WatchSplash"/);
-  assert.match(splash, /static let fileExtension = "mov"/);
   assert.match(splash, /static let firstFrame = "WatchSplashFirstFrame"/);
-  assert.match(splash, /isMuted = true/);
+  assert.match(splash, /static let frameCount = 37/);
+  assert.match(splash, /static let framesPerSecond = 12/);
+  assert.match(splash, /frameIntervalNanoseconds: UInt64 = 1_000_000_000 \/ UInt64\(framesPerSecond\)/);
   // Contain on the Watch too — never fill or crop the owner art.
   assert.match(splash, /contentMode: \.fit/);
   assert.doesNotMatch(splash, /contentMode: \.fill/);
-  // Tap skips; end, failure, missing file and a safety timeout all dismiss.
+  // Tap skips; end, failure, missing frames and a safety timeout all dismiss.
   assert.match(splash, /onTapGesture \{ dismiss\(fade: true, reason: "tap"\) \}/);
-  assert.match(splash, /AVPlayerItemDidPlayToEndTime/);
-  assert.match(splash, /AVPlayerItemFailedToPlayToEndTime/);
   assert.match(splash, /safetyNanoseconds/);
+  assert.match(splash, /safetyNanoseconds: UInt64 = 5_000_000_000/);
+  assert.match(splash, /fadeNanoseconds: UInt64 = 200_000_000/);
   assert.match(splash, /accessibilityReduceMotion/);
   assert.match(splash, /reduceMotionNanoseconds: UInt64 = 1_200_000_000/);
   assert.match(splash, /splash pending \(scene not active\)/);
@@ -77,66 +110,62 @@ test('Watch splash plays over the app on cold start and never blocks it', () => 
   assert.match(splash, /reason: "safety"/);
   assert.match(splash, /reason: "failed"/);
   assert.match(splash, /reason: "ended"/);
-  assert.match(splash, /reason: "late"/);
-  // Player and timers start only after the scene is active.
+  // Frames and timers start only after the scene is active.
   const apply = splash.slice(splash.indexOf('private func applyPhase'), splash.indexOf('private func run'));
   assert.match(apply, /phase == \.active/);
   assert.ok(apply.indexOf('playbackStarted = true') > apply.indexOf('phase == .active'));
   assert.match(apply, /splash pending/);
-  const run = splash.slice(splash.indexOf('private func run'), splash.indexOf('private func tryStart'));
-  assert.doesNotMatch(run, /safetyNanoseconds/);
-  assert.doesNotMatch(run, /player\.play\(\)/);
-  const tryStart = splash.slice(splash.indexOf('private func tryStart'), splash.indexOf('private func startSafety'));
-  assert.match(tryStart, /guard box\.sceneActive else \{ return \}/);
-  assert.match(tryStart, /guard box\.item\.status == \.readyToPlay else \{ return \}/);
-  assert.ok(tryStart.indexOf('sceneActive') < tryStart.indexOf('playImmediately(atRate: 1)'));
-  assert.ok(tryStart.indexOf('readyToPlay') < tryStart.indexOf('playImmediately(atRate: 1)'));
-  assert.match(tryStart, /playRetryNanoseconds/);
-  assert.match(tryStart, /timeControlStatus != \.playing/);
-  assert.doesNotMatch(splash, /300_000_000/);
-  assert.match(splash, /playRetryNanoseconds: UInt64 = 250_000_000/);
-  assert.match(splash, /lateNanoseconds: UInt64 = 1_500_000_000/);
-  assert.match(splash, /automaticallyWaitsToMinimizeStalling = false/);
-  assert.match(splash, /preroll\(atRate: 1\)/);
-  assert.match(splash, /play attempt/);
-  const late = splash.slice(splash.indexOf('private func startLateLimit'), splash.indexOf('private func startStallCeiling'));
-  assert.match(late, /lateNanoseconds/);
-  assert.match(late, /timeControlStatus != \.playing/);
-  assert.match(late, /dismiss\(fade: true, reason: "late"/);
-  const safety = splash.slice(splash.indexOf('private func startSafety'), splash.indexOf('private func logPlayback'));
-  assert.match(safety, /playback started/);
+  const run = splash.slice(splash.indexOf('private func run'), splash.indexOf('private func advanceFrames'));
+  assert.match(run, /startSafety\(\)/);
+  assert.ok(run.indexOf('startSafety()') < run.indexOf('if reduceMotion'));
+  assert.match(run, /reduceMotionNanoseconds/);
+  assert.match(run, /reason: "failed"/);
+  assert.match(run, /playback started/);
+  assert.ok(run.indexOf('if reduceMotion') < run.indexOf('playback started'));
+  const advance = splash.slice(splash.indexOf('private func advanceFrames'), splash.indexOf('private func startSafety'));
+  assert.match(advance, /frameIntervalNanoseconds/);
+  assert.ok(advance.indexOf('frameIntervalNanoseconds') < advance.indexOf('frameIndex = index'));
+  assert.doesNotMatch(advance, /1_500_000_000/);
+  const safety = splash.slice(splash.indexOf('private func startSafety'), splash.indexOf('private func dismiss'));
   assert.match(safety, /safetyNanoseconds/);
-  assert.ok(safety.indexOf('playback started') < safety.indexOf('safetyNanoseconds'));
-  assert.match(splash, /status=/);
-  assert.match(splash, /timeControlStatus=/);
-  assert.match(splash, /reasonForWaitingToPlay/);
-  assert.match(splash, /item\.error/);
+  assert.match(safety, /dismiss\(fade: false, reason: "safety"\)/);
   assert.match(splash, /392×584/);
   assert.match(splash, /392\.0 \/ 584\.0/);
   assert.match(splash, /static let poster: UIImage = loadPoster\(\) \?\? UIImage\(\)/);
   assert.match(splash, /struct WatchSplashCover/);
   assert.match(splash, /Image\(uiImage: poster\)/);
-  assert.match(splash, /VideoPlayer\(player: player\)/);
-  assert.match(splash, /concealedPlayerOpacity = 0\.001/);
-  assert.match(splash, /allowsHitTesting\(false\)/);
-  assert.match(splash, /revealSettleNanoseconds: UInt64 = 150_000_000/);
-  // Logo cover is in the file before the player view, and on top of it in the stack
-  // until playback has settled. The player is never the top view while paused.
-  assert.ok(splash.indexOf('Image(uiImage: poster)') < splash.indexOf('VideoPlayer(player: player)'));
-  const stack = splash.slice(splash.indexOf('var body: some View'), splash.indexOf('.onTapGesture'));
-  assert.ok(stack.indexOf('VideoPlayer(player: player)') < stack.indexOf('WatchSplashCover()'));
-  assert.match(stack, /if !videoVisible/);
-  assert.match(stack, /opacity\(videoVisible \? 1 : WatchSplashClip\.concealedPlayerOpacity\)/);
-  const control = splash.slice(splash.indexOf('case .control'), splash.indexOf('case .sceneActive'));
-  assert.match(control, /control == \.playing/);
-  assert.ok(control.indexOf('armReveal()') > control.indexOf('control == .playing'));
-  assert.match(control, /concealPlayback\(\)/);
-  const dismissFn = splash.slice(splash.indexOf('private func dismiss'), splash.indexOf('private func armReveal'));
-  assert.ok(dismissFn.indexOf('concealPlayback()') < dismissFn.indexOf('player?.pause()'));
-  assert.ok(dismissFn.indexOf('player?.pause()') < dismissFn.indexOf('opacity = 0'));
+  const splashType = splash.indexOf('struct WatchSplash: View');
+  const body = splash.slice(splash.indexOf('var body: some View', splashType), splash.indexOf('.onTapGesture'));
+  assert.match(body, /Image\(WatchSplashClip\.frameName\(frameIndex\)\)/);
+  assert.match(body, /\.resizable\(\)\s+\.aspectRatio\(WatchSplashClip\.aspectRatio, contentMode: \.fit\)/);
   const appear = splash.slice(splash.indexOf('.onAppear'), splash.indexOf('.onChange(of: scenePhase)'));
   assert.doesNotMatch(appear, /loadPoster|poster =/);
   assert.doesNotMatch(splash, /@State private var poster/);
+  assert.equal(WATCH_SPLASH_FADE_NS, 200_000_000);
+  assert.equal(WATCH_SPLASH_REDUCE_MOTION_NS, 1_200_000_000);
+  assert.equal(WATCH_SPLASH_SAFETY_NS, 5_000_000_000);
+  assert.ok(WATCH_SPLASH_FRAME_INTERVAL_NS <= WATCH_SPLASH_MOTION_DEADLINE_NS);
+  assert.ok(WATCH_SPLASH_FRAME_COUNT * WATCH_SPLASH_FRAME_INTERVAL_NS < WATCH_SPLASH_SAFETY_NS);
+});
+
+test('splash draws one frame on an unconditional background and does not use AVKit', () => {
+  const splash = read('targets/watch/WatchSplash.swift');
+  assert.doesNotMatch(splash, /VideoPlayer/);
+  assert.doesNotMatch(splash, /AVPlayer/);
+  assert.doesNotMatch(splash, /AVKit/);
+  assert.doesNotMatch(splash, /AVFoundation/);
+  assert.doesNotMatch(splash, /SplashPlaybackBox/);
+  assert.doesNotMatch(splash, /concealedPlayerOpacity/);
+  const splashType = splash.indexOf('struct WatchSplash: View');
+  const body = splash.slice(splash.indexOf('var body: some View', splashType), splash.indexOf('.onTapGesture'));
+  assert.match(
+    body,
+    /WatchSplashClip\.background\s+\.frame\(maxWidth: \.infinity, maxHeight: \.infinity\)\s+\.ignoresSafeArea\(\)/,
+  );
+  assert.doesNotMatch(body, /\bif\b/);
+  assert.equal(body.indexOf('WatchSplashClip.background') < body.indexOf('Image(WatchSplashClip.frameName(frameIndex))'), true);
+  const config = read('targets/watch/expo-target.config.js');
+  assert.doesNotMatch(config, /AVFoundation|AVKit/);
 });
 
 test('background launch does not start the splash until the first active scene', () => {
@@ -169,6 +198,19 @@ test('background launch does not start the splash until the first active scene',
     watchSplashPlayback({ scene: 'active', started: true, liveHoleInProgress: false }),
     'playing',
   );
+  assert.equal(
+    watchSplashFramesAdvance({ scene: 'background', started: false, reduceMotion: false, dismissing: false }),
+    false,
+  );
+  assert.equal(
+    watchSplashFramesAdvance({ scene: 'active', started: false, reduceMotion: false, dismissing: false }),
+    false,
+  );
+  assert.equal(
+    watchSplashFramesAdvance({ scene: 'active', started: true, reduceMotion: false, dismissing: false }),
+    true,
+  );
+  assert.equal(watchSplashFrameIndex({ advancing: false, elapsedNs: WATCH_SPLASH_FRAME_INTERVAL_NS }), 0);
 });
 
 test('the logo cover is up before playback, and the snapshot is the logo unless a live round is on the hole', () => {
@@ -266,103 +308,62 @@ test('a fresh live round skips the splash and does not hold the location prompt'
   assert.match(read('targets/watch/WatchSplash.swift'), /UIImage\(named: firstFrame\)/);
 });
 
-test('play() waits for a ready item and an active scene; safety starts when the clip is moving', () => {
-  assert.equal(watchSplashPlayGate({ scene: 'active', itemStatus: 'unknown', timeControlStatus: 'paused' }), 'wait');
-  assert.equal(watchSplashPlayGate({ scene: 'background', itemStatus: 'readyToPlay', timeControlStatus: 'paused' }), 'wait');
-  assert.equal(watchSplashPlayGate({ scene: 'inactive', itemStatus: 'readyToPlay', timeControlStatus: 'paused' }), 'wait');
-  assert.equal(watchSplashPlayGate({ scene: 'active', itemStatus: 'readyToPlay', timeControlStatus: 'paused' }), 'play');
-  assert.equal(watchSplashPlayGate({ scene: 'active', itemStatus: 'readyToPlay', timeControlStatus: 'waiting' }), 'play');
-  assert.equal(watchSplashPlayGate({ scene: 'active', itemStatus: 'readyToPlay', timeControlStatus: 'playing' }), 'wait');
-  assert.equal(watchSplashPlayGate({ scene: 'active', itemStatus: 'failed', timeControlStatus: 'paused' }), 'failed');
+test('frames advance from the still on an active scene and finish before the safety ceiling', () => {
   assert.equal(
-    watchSplashShouldReplay({ scene: 'active', itemStatus: 'readyToPlay', timeControlStatus: 'paused' }),
-    true,
-  );
-  assert.equal(
-    watchSplashShouldReplay({ scene: 'active', itemStatus: 'readyToPlay', timeControlStatus: 'waiting' }),
-    true,
-  );
-  assert.equal(
-    watchSplashShouldReplay({ scene: 'active', itemStatus: 'readyToPlay', timeControlStatus: 'playing' }),
+    watchSplashFramesAdvance({ scene: 'active', started: true, reduceMotion: true, dismissing: false }),
     false,
   );
   assert.equal(
-    watchSplashShouldReplay({ scene: 'background', itemStatus: 'readyToPlay', timeControlStatus: 'paused' }),
+    watchSplashFramesAdvance({ scene: 'active', started: true, reduceMotion: false, dismissing: true }),
     false,
   );
   assert.equal(
-    watchSplashShouldReplay({ scene: 'active', itemStatus: 'unknown', timeControlStatus: 'paused' }),
+    watchSplashFramesAdvance({ scene: 'inactive', started: true, reduceMotion: false, dismissing: false }),
     false,
   );
-  assert.equal(watchSplashLateDismisses({ readyAndActive: false, playing: false, dismissing: false, elapsed: true }), false);
-  assert.equal(watchSplashLateDismisses({ readyAndActive: true, playing: true, dismissing: false, elapsed: true }), false);
-  assert.equal(watchSplashLateDismisses({ readyAndActive: true, playing: false, dismissing: true, elapsed: true }), false);
-  assert.equal(watchSplashLateDismisses({ readyAndActive: true, playing: false, dismissing: false, elapsed: false }), false);
-  assert.equal(watchSplashLateDismisses({ readyAndActive: true, playing: false, dismissing: false, elapsed: true }), true);
-  assert.equal(WATCH_SPLASH_PLAY_RETRY_NS, 250_000_000);
-  assert.equal(WATCH_SPLASH_LATE_NS, 1_500_000_000);
-  assert.ok(WATCH_SPLASH_LATE_NS < WATCH_SPLASH_STALL_NS);
-  assert.equal(watchSplashVideoShown({ playing: false, settled: false, dismissing: false }), false);
-  assert.equal(watchSplashVideoShown({ playing: false, settled: true, dismissing: false }), false);
-  assert.equal(watchSplashVideoShown({ playing: true, settled: false, dismissing: false }), false);
-  assert.equal(watchSplashVideoShown({ playing: true, settled: true, dismissing: false }), true);
-  assert.equal(watchSplashVideoShown({ playing: true, settled: true, dismissing: true }), false);
-  assert.equal(WATCH_SPLASH_REVEAL_SETTLE_NS, 150_000_000);
-  assert.ok(WATCH_SPLASH_REVEAL_SETTLE_NS >= 100_000_000 && WATCH_SPLASH_REVEAL_SETTLE_NS <= 150_000_000);
-  assert.equal(watchSplashSafetyStarts('playing', false), true);
-  assert.equal(watchSplashSafetyStarts('playing', true), false);
-  assert.equal(watchSplashSafetyStarts('paused', false), false);
-  assert.equal(watchSplashSafetyStarts('waiting', false), false);
+  const interval = WATCH_SPLASH_FRAME_INTERVAL_NS;
+  assert.equal(watchSplashFrameIndex({ advancing: true, elapsedNs: 0 }), 0);
+  assert.equal(watchSplashFrameIndex({ advancing: true, elapsedNs: interval - 1 }), 0);
+  assert.equal(watchSplashFrameIndex({ advancing: true, elapsedNs: interval }), 1);
+  assert.equal(
+    watchSplashFrameIndex({ advancing: true, elapsedNs: (WATCH_SPLASH_FRAME_COUNT - 1) * interval }),
+    WATCH_SPLASH_FRAME_COUNT - 1,
+  );
+  assert.equal(
+    watchSplashFrameIndex({ advancing: true, elapsedNs: WATCH_SPLASH_FRAME_COUNT * interval }),
+    WATCH_SPLASH_FRAME_COUNT - 1,
+  );
+  assert.equal(watchSplashClipFinished({ advancing: false, elapsedNs: WATCH_SPLASH_FRAME_COUNT * interval }), false);
+  assert.equal(
+    watchSplashClipFinished({ advancing: true, elapsedNs: WATCH_SPLASH_FRAME_COUNT * interval - 1 }),
+    false,
+  );
+  assert.equal(watchSplashClipFinished({ advancing: true, elapsedNs: WATCH_SPLASH_FRAME_COUNT * interval }), true);
+  assert.equal(watchSplashMotionWithinDeadline(), true);
+  assert.equal(watchSplashMotionWithinDeadline(WATCH_SPLASH_MOTION_DEADLINE_NS + 1), false);
+  assert.equal(WATCH_SPLASH_MOTION_DEADLINE_NS, 1_500_000_000);
+  assert.ok(interval <= WATCH_SPLASH_MOTION_DEADLINE_NS);
+  assert.equal(watchSplashSafetyDue({ playbackStarted: false, dismissing: false, elapsed: true }), false);
+  assert.equal(watchSplashSafetyDue({ playbackStarted: true, dismissing: true, elapsed: true }), false);
+  assert.equal(watchSplashSafetyDue({ playbackStarted: true, dismissing: false, elapsed: false }), false);
+  assert.equal(watchSplashSafetyDue({ playbackStarted: true, dismissing: false, elapsed: true }), true);
   assert.equal(WATCH_SPLASH_SAFETY_NS, 5_000_000_000);
-  assert.equal(WATCH_SPLASH_STALL_NS, 6_000_000_000);
-  assert.ok(WATCH_SPLASH_STALL_NS > WATCH_SPLASH_SAFETY_NS);
+  assert.ok(WATCH_SPLASH_REDUCE_MOTION_NS < WATCH_SPLASH_SAFETY_NS);
+  assert.ok(WATCH_SPLASH_FRAME_COUNT * interval + WATCH_SPLASH_FADE_NS < WATCH_SPLASH_SAFETY_NS);
 });
 
-test('a clip that never plays still dismisses on the stall ceiling', () => {
-  assert.equal(
-    watchSplashStallCeilingStarts({ scene: 'active', playbackStarted: true, reduceMotion: false, dismissing: false }),
-    true,
-  );
-  assert.equal(
-    watchSplashStallCeilingStarts({ scene: 'background', playbackStarted: false, reduceMotion: false, dismissing: false }),
-    false,
-  );
-  assert.equal(
-    watchSplashStallCeilingStarts({ scene: 'inactive', playbackStarted: false, reduceMotion: false, dismissing: false }),
-    false,
-  );
-  assert.equal(
-    watchSplashStallCeilingStarts({ scene: 'active', playbackStarted: false, reduceMotion: false, dismissing: false }),
-    false,
-  );
-  assert.equal(
-    watchSplashStallCeilingStarts({ scene: 'active', playbackStarted: true, reduceMotion: true, dismissing: false }),
-    false,
-  );
-  assert.equal(
-    watchSplashStallCeilingStarts({ scene: 'active', playbackStarted: true, reduceMotion: false, dismissing: true }),
-    false,
-  );
-
+test('a splash that never finishes still dismisses on the safety ceiling', () => {
   const splash = read('targets/watch/WatchSplash.swift');
-  assert.match(splash, /stallNanoseconds: UInt64 = 6_000_000_000/);
-  assert.match(splash, /reason: "stall"/);
-  const reduce = splash.slice(splash.indexOf('if reduceMotion'), splash.indexOf('startStallCeiling()'));
-  assert.doesNotMatch(reduce, /stallNanoseconds/);
-  const stall = splash.slice(splash.indexOf('private func startStallCeiling'), splash.indexOf('private func startSafety'));
-  assert.match(stall, /stallNanoseconds/);
-  assert.match(stall, /guard !dismissing else \{ return \}/);
-  assert.match(stall, /dismiss\(fade: false, reason: "stall"/);
-  assert.match(stall, /timeControlStatus/);
-  assert.match(stall, /playbackDetail/);
-  const detail = splash.slice(splash.indexOf('private func playbackDetail'), splash.indexOf('private func dismiss'));
-  assert.match(detail, /status=/);
-  assert.match(detail, /timeControlStatus=/);
-  assert.match(detail, /reasonForWaitingToPlay=/);
-});
-
-test('Watch target links the video frameworks the splash imports', () => {
-  const config = read('targets/watch/expo-target.config.js');
-  assert.match(config, /'AVFoundation'/);
-  assert.match(config, /'AVKit'/);
+  assert.match(splash, /safetyNanoseconds: UInt64 = 5_000_000_000/);
+  assert.match(splash, /reason: "safety"/);
+  const reduce = splash.slice(splash.indexOf('if reduceMotion'), splash.indexOf('playback started'));
+  assert.match(reduce, /reduceMotionNanoseconds/);
+  assert.doesNotMatch(reduce, /safetyNanoseconds/);
+  const safety = splash.slice(splash.indexOf('private func startSafety'), splash.indexOf('private func dismiss'));
+  assert.match(safety, /safetyNanoseconds/);
+  assert.match(safety, /guard !dismissing else \{ return \}/);
+  assert.match(safety, /dismiss\(fade: false, reason: "safety"\)/);
+  assert.doesNotMatch(splash, /stallNanoseconds/);
+  assert.doesNotMatch(splash, /lateNanoseconds/);
+  assert.doesNotMatch(splash, /playRetryNanoseconds/);
 });
