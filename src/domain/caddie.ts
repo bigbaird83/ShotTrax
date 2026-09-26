@@ -176,7 +176,8 @@ export function planCaddie(args: {
   const reasons: string[] = [];
   const gapWords =
     pick.gap === 0 ? 'right at the middle' : pick.gap > 0 ? `${pick.gap} long of the middle` : `${-pick.gap} short of the middle`;
-  reasons.push(`${pick.name} finishes ${rangeWords(pick)} (${basedOn(pick)}) — ${gapWords}.`);
+  // The sheet shows the pick and its range above the reasons, so this line says where they come from.
+  reasons.push(`From ${basedOn(pick)} — ${gapWords}.`);
   if (pick !== closest) {
     const why = closest.risks.map((r) => hazardWords(r.hazard)).join('; ');
     reasons.push(`Not ${closest.name} (${rangeWords(closest)}): ${why}.`);

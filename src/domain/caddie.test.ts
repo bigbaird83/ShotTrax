@@ -45,7 +45,7 @@ test('no hazards: the club closest to the yards left, with its spread', () => {
   assert.equal(a.instead, null);
   assert.equal(a.shorter?.clubId, '8 Iron');
   assert.equal(a.longer?.clubId, '6 Iron');
-  assert.match(a.reasons[0], /^7 Iron finishes 141–158 \(your 10 measured shots\) — 3 long of the middle\.$/);
+  assert.equal(a.reasons[0], 'From your 10 measured shots — 3 long of the middle.');
   assert.ok(a.reasons.includes('No mapped hazards in play from here.'));
   assert.equal(formatCaddieChip(a), 'Caddie · 7 Iron');
 });
@@ -93,9 +93,9 @@ test('without enough measured shots: distance only, no spread claimed, and it sa
   const a = planCaddie({ yardsLeft: 149, clubs: few, hazards: [] });
   assert.ok(a);
   assert.equal(a.pick.range, null);
-  assert.match(a.reasons[0], /^7 Iron finishes 150 \(your average\)/);
+  assert.match(a.reasons[0], /^From your average — /);
   assert.match(a.reasons.join('\n'), /Fewer than 5 measured shots with 7 Iron, so no spread yet\./);
-  assert.match(planCaddie({ yardsLeft: 139, clubs: few, hazards: [] })!.reasons[0], /\(your bag number\)/);
+  assert.match(planCaddie({ yardsLeft: 139, clubs: few, hazards: [] })!.reasons[0], /^From your bag number — /);
 });
 
 test('nothing invented: no yards left or no club with a distance → no advice', () => {
@@ -111,7 +111,7 @@ test('carry source words follow the bag row', () => {
   assert.equal(caddieCarrySource('seed'), 'stock');
   assert.equal(caddieCarrySource(null), 'stock');
   const stock = planCaddie({ yardsLeft: 150, clubs: [{ id: '7i', name: '7 Iron', carry: 150, source: 'stock', dispersion: null }], hazards: [] });
-  assert.match(stock!.reasons[0], /\(a typical distance for this club\)/);
+  assert.match(stock!.reasons[0], /^From a typical distance for this club — /);
 });
 
 test('hole screen: same yards as the wheel, live hazards only, off for past rounds, history read once', () => {
