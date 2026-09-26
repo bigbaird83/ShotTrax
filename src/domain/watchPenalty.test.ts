@@ -101,9 +101,11 @@ test('a penalty does not start the live-yard hold', () => {
   const clubPick = watch.slice(watch.indexOf('private var clubPick'), watch.indexOf('private var moreClubs'));
   assert.ok(clubPick.indexOf('actionPill("Penalty")') < clubPick.indexOf('actionPill("Hole Out")'));
   assert.ok(clubPick.indexOf('actionPill("Hole Out")') < clubPick.indexOf('ScrollView(.horizontal'));
+  // Reasons live on their own penaltyMenu screen (see watchHoleLayout.test.ts).
+  const menu = watch.slice(watch.indexOf('private var penaltyMenu'), watch.indexOf('private func penaltyTile'));
   for (const row of PENALTY_REASONS) {
-    assert.match(clubPick, new RegExp(`actionPill\\("${row.label}"\\)`));
-    assert.match(clubPick, new RegExp(`pickPenalty\\("${row.reason}"\\)`));
+    assert.match(menu, new RegExp(`penaltyTile\\("${row.label}"`));
+    assert.match(menu, new RegExp(`pickPenalty\\("${row.reason}"\\)`));
   }
   assert.match(clubPick, new RegExp(`actionPill\\("${WATCH_PENALTY_RETRY_ACTION}"\\)`));
   assert.match(clubPick, /session\.penaltyNotice/);

@@ -141,7 +141,8 @@ test('Watch opens on the same top 3 as the phone; no scroll to hit one', () => {
   const homeAt = pick.indexOf('session.leave("home")');
   const stripAt = pick.indexOf('ScrollView(.horizontal');
   const allClubsAt = pick.indexOf('Text("All clubs")');
-  assert.ok(headerAt >= 0 && holeOutAt > headerAt && homeAt > holeOutAt && stripAt > homeAt && allClubsAt > stripAt);
+  // Penalty | Home | Putt sit above Hole Out; the club strip is under Hole Out.
+  assert.ok(headerAt >= 0 && homeAt > headerAt && holeOutAt > homeAt && stripAt > holeOutAt && allClubsAt > stripAt);
   assert.equal(watchOneHomeOnly(), true);
   assert.equal(watchSameClubSharesRowWithAllClubs(), false);
   assert.equal(watchBackHomeAreTinyText(), false);
@@ -150,7 +151,7 @@ test('Watch opens on the same top 3 as the phone; no scroll to hit one', () => {
   const pill = watchUi.slice(watchUi.indexOf('private func actionPill'), watchUi.indexOf('private var clubPick'));
   assert.match(pill, /minHeight: 44/);
   assert.doesNotMatch(pick, /top3\.enumerated\(\)|TabView|tabViewStyle/);
-  const holeOut = pick.slice(holeOutAt, homeAt);
+  const holeOut = pick.slice(holeOutAt, stripAt);
   assert.match(holeOut, /actionPill\("Hole Out"\)/);
   assert.doesNotMatch(holeOut, /Color\.black|borderedProminent/);
   assert.match(pick.slice(pick.indexOf('HStack(spacing: 8)'), pick.indexOf('if showAllClubs')), /session\.madeIt\(\)/);

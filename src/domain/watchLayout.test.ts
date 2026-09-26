@@ -117,7 +117,8 @@ test('282 opening window includes Dr; Watch control band is ~40%; round start fr
 
   const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
   assert.match(watchUi, /geo\.size\.height \* 0\.6/);
-  assert.match(watchUi, /geo\.size\.height \* 0\.4/);
+  // Control band is at least 40%: the rest after the (capped) 60% top.
+  assert.match(watchUi, /let controlHeight = geo\.size\.height - mapHeight/);
   assert.match(watchUi, /minHeight: 44/);
   assert.match(watchUi, /minHeight: 40/);
   assert.match(watchUi, /minHeight: 32/);
