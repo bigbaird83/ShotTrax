@@ -40,6 +40,8 @@ export function useWatchClubList(
     teeLengthYards?: number | null;
     green?: WatchGreenFields | null;
     clubCarry?: Record<string, number | null | undefined> | null;
+    /** Shot the phone's Undo last shot would remove. Null dims the Watch Undo. */
+    lastShotId?: string | null;
   },
 ): void {
   const ctxRef = useRef(ctx);

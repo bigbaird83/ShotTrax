@@ -1923,11 +1923,14 @@ export function undoLastShot(
   db: SQLiteDatabase,
   roundId: string,
   holeNumber: number,
-): { ok: true } | { ok: false; reason: 'empty' } {
+  /** Watch Undo: remove only while this is still the shot Undo would remove. */
+  expectShotId?: string,
+): { ok: true } | { ok: false; reason: 'empty' | 'changed' } {
   const hole = getHole(db, roundId, holeNumber);
   if (!hole) return { ok: false, reason: 'empty' };
   const plan = planUndoLastShot(listShotsForHole(db, hole.id));
   if (!plan) return { ok: false, reason: 'empty' };
+  if (expectShotId != null && plan.deleteShotId !== expectShotId) return { ok: false, reason: 'changed' };
   db.withTransactionSync(() => {
     deleteShot(db, plan.deleteShotId);
     if (plan.reopenShotId) {

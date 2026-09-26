@@ -3,7 +3,11 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { PENALTY_REASONS } from './penalty';
 import {
+  WATCH_HOLE_HEADER_GAP,
   WATCH_HOLE_HEADER_HEIGHT,
+  WATCH_YARDS_COLUMN_WIDTH,
+  watchHeaderTextOverlaps,
+  watchHoleHeaderFrames,
   WATCH_PENALTY_BOTTOM_CLEARANCE,
   WATCH_PUTT_HEADER_HEIGHT,
   watchHoleFrames,
@@ -32,7 +36,7 @@ function onScreen(r: WatchFrame, width: number, height: number, label: string) {
 }
 
 test('Watch hole: every button is on screen from 40mm to Ultra; Penalty | Home | Putt are Hole Out-sized', () => {
-  assert.equal(WATCH_HOLE_HEADER_HEIGHT, 46);
+  assert.equal(WATCH_HOLE_HEADER_HEIGHT, 48);
   for (const face of FACES) {
     for (const height of face.heights) {
       const f = watchHoleFrames(face.width, height);
@@ -40,21 +44,25 @@ test('Watch hole: every button is on screen from 40mm to Ultra; Penalty | Home |
       const w = (r: { minX: number; maxX: number }) => r.maxX - r.minX;
       const h = (r: { minY: number; maxY: number }) => r.maxY - r.minY;
       // Not a full-width primary: every chrome button shares one size.
-      for (const other of [f.home, f.putt, f.holeOut, f.retry, f.allClubs]) {
+      for (const other of [f.home, f.putt, f.holeOut, f.undo, f.retry, f.allClubs]) {
         assert.ok(Math.abs(w(f.penalty) - w(other)) < EPS, label);
         assert.ok(Math.abs(h(f.penalty) - h(other)) < EPS, label);
       }
       assert.ok(w(f.penalty) < (face.width - 8) / 2, label);
-      // Full 44pt rows from 190pt up; never under 34pt on the smallest face.
-      if (height >= 190) assert.equal(f.rowHeight, 44, label);
-      assert.ok(f.rowHeight >= 34, label);
+      // Full 44pt rows from 196pt up; never under 32pt on the smallest face.
+      if (height >= 196) assert.equal(f.rowHeight, 44, label);
+      assert.ok(f.rowHeight >= 32, label);
       // Penalty left, directly above Hole Out; Home / Putt share its row.
       assert.equal(f.penalty.minX, f.holeOut.minX, label);
-      assert.ok(f.header.maxY <= f.penalty.minY + EPS, label);
+      assert.ok(f.header.maxY + WATCH_HOLE_HEADER_GAP <= f.penalty.minY + EPS, label);
       assert.ok(f.penalty.maxY <= f.holeOut.minY, label);
       assert.equal(f.home.minY, f.penalty.minY, label);
       assert.equal(f.putt.minY, f.penalty.minY, label);
       assert.equal(f.allClubs.minY, f.holeOut.minY, label);
+      // Undo sits in Row B's middle slot, between Hole Out and All clubs.
+      assert.equal(f.undo.minY, f.holeOut.minY, label);
+      assert.ok(f.holeOut.maxX < f.undo.minX && f.undo.maxX < f.allClubs.minX, label);
+      assert.deepEqual(f.retry, f.undo, label);
       assert.ok(f.putt.maxX <= face.width - 4 + EPS, label);
       assert.ok(f.allClubs.maxX <= face.width - 4 + EPS, label);
       assert.ok(f.clubPills.minY >= f.holeOut.maxY, label);
@@ -64,6 +72,50 @@ test('Watch hole: every button is on screen from 40mm to Ultra; Penalty | Home |
       }
     }
   }
+});
+
+test('Watch header: Hole N and the tee length never run under the yards, 40mm to Ultra', () => {
+  assert.equal(WATCH_YARDS_COLUMN_WIDTH, 70);
+  // Worst cases: two-digit hole, three-digit tee and yards, the longest caption.
+  const cases = [
+    { holeNumber: 18, teeYards: 612, yards: 999, caption: 'Location off' },
+    { holeNumber: 7, teeYards: 412, yards: 156, caption: 'to hole' },
+    { holeNumber: 1, teeYards: null, yards: null, caption: 'Finding GPS' },
+    { holeNumber: 12, teeYards: 88, yards: 7, caption: 'Weak GPS' },
+  ];
+  for (const face of FACES) {
+    for (const text of cases) {
+      const f = watchHoleHeaderFrames(face.width, text);
+      const label = `${face.name} · Hole ${text.holeNumber} · ${text.teeYards ?? '—'} yd · ${text.yards ?? '—'}`;
+      const yardsLeft = Math.min(f.yards.minX, f.caption.minX);
+      // The case that fails when header text overlaps the yardage.
+      assert.ok(f.hole.maxX <= yardsLeft, `${label}: Hole N runs under the yards`);
+      if (f.tee) assert.ok(f.tee.maxX <= yardsLeft, `${label}: tee length runs under the yards`);
+      // Scaled, never dropped: both lines keep at least 75% size (the Swift minimumScaleFactor).
+      assert.ok(f.holeScale >= 0.75, `${label}: Hole N would truncate`);
+      assert.ok(f.teeScale >= 0.75, `${label}: tee length would truncate`);
+      assert.ok(f.yardsScale >= 0.6 && f.captionScale >= 0.7, `${label}: yards column would truncate`);
+      // Everything fits the header band.
+      for (const r of [f.hole, f.tee, f.yards, f.caption]) {
+        if (!r) continue;
+        onScreen(r, face.width, WATCH_HOLE_HEADER_HEIGHT, label);
+      }
+      if (f.tee) assert.ok(f.tee.maxY + 12 * 1.2 <= WATCH_HOLE_HEADER_HEIGHT + EPS, `${label}: no room for the message line`);
+    }
+  }
+  // The #179 header — "Hole 7 · 412 yd" on one line beside "156 yd" at 28pt — is
+  // what this guards against: it overlaps on 40mm and 41mm even at 60% scale.
+  const oldYards = 6 * 28 * 0.62;
+  for (const width of [162, 176]) {
+    assert.equal(
+      watchHeaderTextOverlaps({ leftText: 'Hole 7 · 412 yd', leftSize: 16, leftMinScale: 0.6, rightWidth: oldYards, safeWidth: width }),
+      true,
+    );
+  }
+  assert.equal(
+    watchHeaderTextOverlaps({ leftText: 'Hole 18', leftSize: 15, leftMinScale: 1, rightWidth: WATCH_YARDS_COLUMN_WIDTH, safeWidth: 162 }),
+    false,
+  );
 });
 
 test('Watch putt sheet: 2×2 lengths, Add | Undo and Made stay on screen from 40mm to Ultra', () => {
@@ -88,8 +140,15 @@ test('Watch putt sheet: 2×2 lengths, Add | Undo and Made stay on screen from 40
 });
 
 test('Watch hole + putt sheet source use the same row math as the layout model', () => {
-  assert.match(pick, /let headerHeight: CGFloat = 46/);
-  assert.match(pick, /let rowHeight = max\(0, min\(44, \(geo\.size\.height - headerHeight - 12\) \/ 3\)\)/);
+  assert.match(pick, /let headerHeight: CGFloat = 48/);
+  assert.match(pick, /let yardsColumnWidth: CGFloat = 70/);
+  assert.match(pick, /\.frame\(width: yardsColumnWidth, alignment: \.trailing\)/);
+  // Hole N and the tee length are two lines that scale (never dropped), not one squeezed line.
+  assert.match(pick, /Text\("Hole \\\(session\.list\.holeNumber\)"\)\s*\.font\(\.system\(size: 15, weight: \.heavy, design: \.rounded\)\)[\s\S]{0,120}\.minimumScaleFactor\(0\.75\)/);
+  assert.match(pick, /if let tee = session\.list\.teeLengthLabel \{\s*Text\(tee\)\s*\.font\(\.system\(size: 12,[\s\S]{0,160}\.minimumScaleFactor\(0\.75\)/);
+  assert.doesNotMatch(pick, /Text\(session\.list\.statusLine\)\s*\.font/);
+  assert.match(pick, /let rowHeight = max\(0, min\(44, \(geo\.size\.height - headerHeight - 16\) \/ 3\)\)/);
+  assert.equal(WATCH_HOLE_HEADER_GAP, 4);
   assert.match(pick, /let mapHeight = max\(0, min\(geo\.size\.height \* 0\.6, geo\.size\.height - \(rowHeight \* 2 \+ 6\)\)\)/);
   assert.match(pick, /\.frame\(width: pillWidth, height: rowHeight\)/);
   assert.match(pick, /Text\("All clubs"\)/);
