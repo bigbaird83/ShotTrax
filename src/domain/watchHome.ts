@@ -6,6 +6,12 @@
  *
  * Both lists still come from the phone:
  * - Favorites are the phone's `course.favorites` list. There is no Watch-only list.
+ *   With an authorized fresh fix they are nearest first: the Watch's fresh fix
+ *   when it has one, otherwise a fresh phone fix. Measured to the lat/lng
+ *   already stored on that favorite. No new lookup, and not the stored
+ *   last-known point nearby uses when GPS is asleep. No fresh fix, or location
+ *   denied / restricted / not determined, keeps phone order (newest star first)
+ *   and never blanks the list. A favorite with no stored pin stays at the bottom.
  * - Nearby is the same Golf Courses API nearby search the phone Home uses.
  *   Location: a fresh Watch fix when the Watch has one, else a fresh phone fix,
  *   else the phone's last known location. Radius is 40 mi, same as phone nearby.
@@ -25,6 +31,7 @@
  * No Export / Restore on the Watch. No cloud account.
  */
 
+import { METERS_PER_YARD } from '../config/sensing';
 import { isYardTestCourseId } from '../course/yardTestCourse';
 import {
   favoriteFromSummary,
@@ -33,6 +40,7 @@ import {
   type FavoriteCourse,
   type JsonStore,
 } from './favorites';
+import { haversineYards } from './haversine';
 import { isValidLatLng, type LatLng } from './latLng';
 import { COPY } from './playerCopy';
 import type { GpsFix } from './types';
@@ -105,7 +113,92 @@ export type WatchHomeRequest = {
   accuracyM?: number;
   /** When the Watch fix was taken (ISO). */
   fixAt?: string;
+  /**
+   * Watch location permission. Omitted by an older Watch: a fix still counts
+   * as authorized, and no fix does not.
+   */
+  locationAuth?: WatchHomeLocationAuth;
 };
+
+/** Watch `CLAuthorizationStatus`, bucketed the same way live yards does. */
+export type WatchHomeLocationAuth = 'authorized' | 'denied' | 'restricted' | 'notDetermined';
+
+const WATCH_HOME_LOCATION_AUTHS: readonly WatchHomeLocationAuth[] = [
+  'authorized',
+  'denied',
+  'restricted',
+  'notDetermined',
+];
+
+export function parseWatchHomeLocationAuth(value: unknown): WatchHomeLocationAuth | null {
+  return typeof value === 'string' && (WATCH_HOME_LOCATION_AUTHS as readonly string[]).includes(value)
+    ? (value as WatchHomeLocationAuth)
+    : null;
+}
+
+/** Phone `PermissionStatus` → the same buckets. Anything else is not determined. */
+export function watchHomeLocationAuthFromStatus(status: string | null | undefined): WatchHomeLocationAuth {
+  if (status === 'granted' || status === 'authorized') return 'authorized';
+  if (status === 'denied') return 'denied';
+  if (status === 'restricted') return 'restricted';
+  return 'notDetermined';
+}
+
+/**
+ * Point Favorites are measured from.
+ * Authorized Watch fix when the caller has one, otherwise an authorized phone
+ * fix. Callers pass a fresh fix only — not a stored last-known point.
+ * Denied / restricted / not determined does not use a fix that is still
+ * attached. No authorized point → null (keep phone order).
+ */
+export function watchHomeFavoritesMeasurePoint(args: {
+  watchFix?: LatLng | null;
+  /** Omitted and a Watch fix is present → treat that fix as authorized. */
+  watchAuthorization?: WatchHomeLocationAuth | null;
+  phoneFix?: LatLng | null;
+  phoneAuthorization?: WatchHomeLocationAuth | null;
+}): LatLng | null {
+  const watchAuth =
+    args.watchAuthorization ?? (isValidLatLng(args.watchFix) ? 'authorized' : 'notDetermined');
+  if (watchAuth === 'authorized' && isValidLatLng(args.watchFix)) {
+    return { lat: args.watchFix.lat, lng: args.watchFix.lng };
+  }
+  if (args.phoneAuthorization === 'authorized' && isValidLatLng(args.phoneFix)) {
+    return { lat: args.phoneFix.lat, lng: args.phoneFix.lng };
+  }
+  return null;
+}
+
+function metersBetween(a: LatLng, b: LatLng): number {
+  return haversineYards(a, b) * METERS_PER_YARD;
+}
+
+/**
+ * Nearest stored pin first. Missing or invalid pins stay last, in their
+ * original relative order. Equal distances keep that order. No authorized
+ * fix returns the list unchanged — never filtered, never emptied.
+ */
+export function orderWatchHomeFavorites<T extends { location?: LatLng | null }>(
+  favorites: readonly T[],
+  measure?: {
+    fix?: LatLng | null;
+    authorization?: WatchHomeLocationAuth | null;
+  } | null,
+): T[] {
+  if (favorites.length === 0) return [];
+  const authorization = measure?.authorization ?? 'notDetermined';
+  const fix = measure?.fix;
+  if (authorization !== 'authorized' || !isValidLatLng(fix)) return [...favorites];
+  const origin = fix;
+  return favorites
+    .map((course, index) => ({
+      course,
+      index,
+      distance: isValidLatLng(course.location) ? metersBetween(origin, course.location) : Number.POSITIVE_INFINITY,
+    }))
+    .sort((a, b) => (a.distance === b.distance ? a.index - b.index : a.distance - b.distance))
+    .map((row) => row.course);
+}
 
 /** Watch → Phone. Explicit target state, so a replay is harmless. */
 export type FavoriteToggleMessage = {
@@ -138,14 +231,22 @@ function row(id: string, name: string, favorite: boolean, distance: number | und
 
 /**
  * Build Watch Home from the phone favorites + the phone nearby search.
- * Favorites keep phone order (newest star first). Nearby is distance order,
- * minus anything already under Favorites. Every id appears at most once.
+ * Favorites keep phone order (newest star first) unless `favoritesMeasure`
+ * is an authorized fix — then that same list is nearest-first by the stored
+ * course pin. Nearby is distance order, minus anything already under
+ * Favorites. Every id appears at most once. Row distance stays the nearby
+ * distance the phone already had; sorting does not add one.
  */
 export function buildWatchHome(args: {
-  favorites: readonly Pick<FavoriteCourse, 'id' | 'name'>[];
+  favorites: readonly (Pick<FavoriteCourse, 'id' | 'name'> & { location?: LatLng | null })[];
   nearby: readonly NearbyInput[];
   locationSource: WatchHomeLocationSource;
   live?: { courseName: string | null; courseId?: string | null } | null;
+  /** Authorized fix → nearest first. Omitted, denied, or no fix → phone order. */
+  favoritesMeasure?: {
+    fix?: LatLng | null;
+    authorization?: WatchHomeLocationAuth | null;
+  } | null;
 }): WatchHomeMessage {
   const distanceById = new Map<string, number>();
   for (const course of args.nearby) {
@@ -155,15 +256,19 @@ export function buildWatchHome(args: {
   }
 
   const seen = new Set<string>();
-  const favorites: WatchHomeCourse[] = [];
+  const cleaned: { id: string; name: string; location?: LatLng | null }[] = [];
   for (const course of args.favorites) {
     const id = cleanText(course.id);
     const name = cleanText(course.name);
     if (!id || !name || seen.has(id)) continue;
     seen.add(id);
-    favorites.push(row(id, name, true, distanceById.get(id)));
-    if (favorites.length >= WATCH_HOME_FAVORITES_MAX) break;
+    cleaned.push({ id, name, location: course.location });
+    if (cleaned.length >= WATCH_HOME_FAVORITES_MAX) break;
   }
+
+  const favorites: WatchHomeCourse[] = orderWatchHomeFavorites(cleaned, args.favoritesMeasure).map((course) =>
+    row(course.id, course.name, true, distanceById.get(course.id)),
+  );
 
   const nearbyRows: WatchHomeCourse[] = [];
   const sorted = [...args.nearby].sort((a, b) => {
@@ -298,6 +403,8 @@ export function parseWatchHomeRequest(raw: unknown): WatchHomeRequest | null {
   if (r.type !== 'homeRequest') return null;
   if (typeof r.at !== 'string' || !isIso8601(r.at)) return null;
   const out: WatchHomeRequest = { type: 'homeRequest', at: r.at };
+  const locationAuth = parseWatchHomeLocationAuth(r.locationAuth);
+  if (locationAuth) out.locationAuth = locationAuth;
   const point = { lat: Number(r.lat), lng: Number(r.lng) };
   if (typeof r.lat === 'number' && typeof r.lng === 'number' && isValidLatLng(point)) {
     out.lat = point.lat;
