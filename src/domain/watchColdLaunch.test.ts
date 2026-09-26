@@ -178,19 +178,26 @@ test('Watch cold launch loads defaults before WCSession and applies context on m
   assert.ok(enable.indexOf('hasBackgroundLocationMode') < enable.indexOf('allowsBackgroundLocationUpdates = true'));
 });
 
-test('every WCSession and location callback hops before it touches session state', () => {
+test('every delegate callback hops before it touches session state', () => {
   const session = read('targets/watch/WatchClubSession.swift');
+  const app = read('targets/watch/index.swift');
   const methods = [
+    'func workoutSession(\n    _ workoutSession: HKWorkoutSession,\n    didChangeTo',
+    'func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError',
     'func session(_ session: WCSession, activationDidCompleteWith',
     'func session(_ session: WCSession, didReceiveApplicationContext',
-    'func session(_ session: WCSession, didReceiveMessage',
+    'func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {',
+    'didReceiveMessage message: [String: Any],\n    replyHandler:',
     'func session(_ session: WCSession, didReceiveUserInfo',
+    'func session(_ session: WCSession, didFinish userInfoTransfer:',
+    'func session(_ session: WCSession, didReceive file:',
+    'func session(_ session: WCSession, didFinish fileTransfer:',
     'func sessionReachabilityDidChange',
     'func locationManagerDidChangeAuthorization',
     'func locationManager(_: CLLocationManager, didFailWithError',
     'func locationManager(_ manager: CLLocationManager, didUpdateLocations',
   ];
-  const stateTouch = /self\.|applyClubList\(|applyWatchAck\(|applyWatchHome\(|flushPending\(|syncRoundStay\(|adoptWatchFix\(|lastFix\s*=/;
+  const stateTouch = /self\.|applyClubList\(|applyWatchAck\(|applyWatchHome\(|flushPending\(|syncRoundStay\(|adoptWatchFix\(|lastFix\s*=|replyHandler\(/;
   for (let i = 0; i < methods.length; i++) {
     const start = session.indexOf(methods[i]);
     assert.ok(start >= 0, methods[i]);
@@ -209,4 +216,43 @@ test('every WCSession and location callback hops before it touches session state
       .join('\n');
     assert.equal(stateTouch.test(before), false, methods[i]);
   }
+
+  const reply = session.slice(
+    session.indexOf('didReceiveMessage message: [String: Any],\n    replyHandler:'),
+    session.indexOf('func session(_ session: WCSession, didReceiveUserInfo'),
+  );
+  const replyHop = reply.indexOf('DispatchQueue.main.async');
+  assert.ok(reply.indexOf('applyClubList(') > replyHop);
+  assert.ok(reply.indexOf('replyHandler([:])') > replyHop);
+  assert.equal(session.includes('DispatchQueue.main.sync'), false);
+  assert.equal(app.includes('DispatchQueue.main.sync'), false);
+  assert.match(session, /transferCurrentComplicationUserInfo/);
+  assert.doesNotMatch(session, /func session\(_ session: WCSession, didReceiveComplicationUserInfo/);
+
+  const mutators = [
+    'private func applyWatchAck',
+    'private func handleReply',
+    'private func applyNearbyCourses',
+    'private func applyWatchHome',
+    'private func applyNearbyTees',
+    'private func applyClubList',
+    'private func applyPuttSheet',
+    'private func adoptWatchFix',
+    'private func flushPending',
+    'private func syncRoundStay',
+  ];
+  for (const name of mutators) {
+    const start = session.indexOf(name);
+    assert.ok(start >= 0, name);
+    const head = session.slice(start, start + 280);
+    const brace = head.indexOf('{');
+    const call = head.indexOf('requireMainForPublishedState()');
+    assert.ok(brace >= 0 && call > brace, name);
+  }
+  assert.match(session, /dispatchPrecondition\(condition: \.onQueue\(\.main\)\)/);
+
+  const drain = session.slice(session.indexOf('static func drainConnectivity'), session.indexOf('@Published var list'));
+  assert.match(drain, /await MainActor\.run/);
+  assert.doesNotMatch(drain, /applyClubList\(/);
+  assert.match(app, /await WatchClubSession\.drainConnectivity\(\)/);
 });

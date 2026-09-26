@@ -53,6 +53,7 @@ struct ShotTraxxWatchApp: App {
       ShotTraxxWatchRoot(session: session)
     }
     .backgroundTask(.watchConnectivity) {
+      // Not the main actor. drainConnectivity applies session state on MainActor.
       await WatchClubSession.drainConnectivity()
     }
     .backgroundTask(.snapshot) { _ in

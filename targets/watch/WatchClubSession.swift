@@ -221,6 +221,12 @@ struct PuttSheetState {
   }
 }
 
+/// `@Published` storage is Combine's lock. SwiftUI holds that lock during a
+/// scene-create view update. A setter from the WCSession queue takes the same
+/// lock and then waits on SwiftUI, so the two threads deadlock (0x8badf00d).
+/// The class stays off `@MainActor`: it is an `NSObject` plus three system
+/// delegates, and every `sendMessage` reply would have to be rewritten.
+/// Callbacks hop, and the mutators trap if they are not on the main queue.
 final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLLocationManagerDelegate, HKWorkoutSessionDelegate {
   /// One session for the app and for background WatchConnectivity launches.
   static let shared = WatchClubSession()
@@ -228,15 +234,27 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   /// Background WatchConnectivity task: stay up until the delivered clubList
   /// (application context / complication userInfo) has been applied, so the app
   /// group and the ShotTraxxHole widget move while the Watch app is not in front.
+  /// The task is not the main actor. Published state is applied only inside
+  /// `MainActor.run`, after the delegate callbacks have queued their hops.
   static func drainConnectivity() async {
-    _ = shared
+    await MainActor.run {
+      _ = shared
+    }
     for _ in 0..<40 {
-      let wc = WCSession.default
-      if wc.activationState == .activated && !wc.hasContentPending { break }
+      let settled = await MainActor.run { () -> Bool in
+        guard WCSession.isSupported() else { return true }
+        let wc = WCSession.default
+        return wc.activationState == .activated && !wc.hasContentPending
+      }
+      if settled { break }
       try? await Task.sleep(nanoseconds: 250_000_000)
     }
-    // Let the main-queue applyClubList → persist → reload run before we return.
-    try? await Task.sleep(nanoseconds: 250_000_000)
+    // Delegate callbacks enqueue applyClubList with DispatchQueue.main.async.
+    // This turn is queued after those blocks, so the write finishes on main
+    // before the background task returns. Do not hop synchronously onto main.
+    await MainActor.run {
+      _ = shared
+    }
   }
 
   @Published var list = ClubListState()
@@ -1370,10 +1388,17 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     return false
   }
 
+  /// Combine's `@Published` lock must be taken on the main queue. A setter from
+  /// a WCSession or location callback deadlocks the scene-create view update.
+  private func requireMainForPublishedState() {
+    dispatchPrecondition(condition: .onQueue(.main))
+  }
+
   /// Phone → Watch. sendMessage can reply; transferUserInfo cannot, so the
   /// phone also pushes `watchConfirm` with the accepted id. A duplicate id
   /// confirms again and removes nothing else. `ok` false leaves the queue.
   private func applyWatchAck(_ message: [String: Any]) -> Bool {
+    requireMainForPublishedState()
     guard (message["type"] as? String) == "watchConfirm" else { return false }
     guard replyIsOk(message) else { return true }
     let id = message["id"] as? String
@@ -1482,6 +1507,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   private func handleReply(_ reply: [String: Any], fallbackClubId: String?, type: String? = nil) {
+    requireMainForPublishedState()
     sending = false
     let ok = reply["ok"] as? Bool ?? false
     let text: String
@@ -1565,6 +1591,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   /// Phone list reply (e.g. a pick the phone could not open). Land back on
   /// Watch Home with the phone's line instead of a dead end.
   private func applyNearbyCourses(_ message: [String: Any]) {
+    requireMainForPublishedState()
     if hasLiveHole && !nearbyFromHome { return }
     var next = nearby
     next.active = true
@@ -1612,6 +1639,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   /// Phone → Watch Home. Phone favorites win, except a Watch star the phone
   /// has not seen yet (kept for a short window so the row does not flicker).
   private func applyWatchHome(_ message: [String: Any], save: Bool = true) {
+    requireMainForPublishedState()
     var next = WatchHomeState()
     next.favorites = parseHomeRows(message["favorites"], favorite: true)
     next.nearby = parseHomeRows(message["nearby"], favorite: false)
@@ -1671,6 +1699,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   private func applyNearbyTees(_ message: [String: Any]) {
+    requireMainForPublishedState()
     if hasLiveHole && !nearbyFromHome { return }
     var next = nearby
     next.active = true
@@ -1693,6 +1722,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   private func applyClubList(_ message: [String: Any], fromPhone: Bool = false) {
+    requireMainForPublishedState()
     let type = message["type"] as? String
     // Application context carries the latest Watch Home next to clubList.
     if let nested = message["watchHome"] as? [String: Any] {
@@ -1909,6 +1939,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   private func applyPuttSheet(_ message: [String: Any]) {
+    requireMainForPublishedState()
     let priorPending = putt.pending
     let priorLengths = putt.lengths
     var next = PuttSheetState()
@@ -2010,6 +2041,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   /// Walking update. A locked phone sends nothing. This keeps the latest yards
   /// for the complication. The on-screen number stays put while the wrist is down.
   private func adoptWatchFix(_ fix: CLLocation) {
+    requireMainForPublishedState()
     let accuracy = fix.horizontalAccuracy
     let accuracyText = String(format: "%.1f", accuracy)
     guard let greenLat = list.greenLat, let greenLng = list.greenLng else {
@@ -2236,6 +2268,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   private func flushPending() {
+    requireMainForPublishedState()
     guard WCSession.isSupported(), WCSession.default.isReachable else { return }
     dropStaleClubPicks(liveHole: list.holeNumber)
     if let legacy = pendingPick {
@@ -2286,6 +2319,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   private func syncRoundStay() {
+    requireMainForPublishedState()
     let next = roundLooksLive && roundIsFresh
     if next && !wantsStay {
       suppressGolfStart = false
@@ -2762,10 +2796,11 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     syncRoundStay()
   }
 
-  // WCSessionDelegate and CLLocationManagerDelegate are not the main thread.
-  // Copy the callback arguments, then hop before reading or writing this object.
-  // Activation runs on every cold launch — live round, a round that just ended,
-  // or no round — and can overlap init and the first body.
+  // WCSession, CLLocationManager, and HKWorkoutSession callbacks are not the
+  // main thread. Hop with DispatchQueue.main.async before any @Published write.
+  // A synchronous hop onto main from these queues can deadlock the same way.
+  // Activation runs on every cold launch — a live round, a round that just
+  // ended, or no round — and overlaps the scene-create view update.
   func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
     // Last context from any launch — not a receive during this process.
     let context = session.receivedApplicationContext
@@ -2798,6 +2833,24 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
   }
 
+  func session(
+    _ session: WCSession,
+    didReceiveMessage message: [String: Any],
+    replyHandler: @escaping ([String: Any]) -> Void
+  ) {
+    // Reply after the hop. A synchronous hop from this queue deadlocks scene creation.
+    DispatchQueue.main.async {
+      if self.applyWatchAck(message) {
+        replyHandler([:])
+        return
+      }
+      self.applyClubList(message, fromPhone: true)
+      replyHandler([:])
+    }
+  }
+
+  /// Phone `transferCurrentComplicationUserInfo` arrives here on watchOS.
+  /// The iOS-only complication receive callback is not part of this delegate.
   func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
     DispatchQueue.main.async {
       if self.applyWatchAck(userInfo) { return }
@@ -2805,12 +2858,35 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
   }
 
+  func session(_ session: WCSession, didFinish userInfoTransfer: WCSessionUserInfoTransfer, error: Error?) {
+    DispatchQueue.main.async {
+      // Outgoing transfer finished. Published state changes when the phone's
+      // watchConfirm arrives, not from this callback.
+      _ = userInfoTransfer
+      _ = error
+    }
+  }
+
+  func session(_ session: WCSession, didReceive file: WCSessionFile) {
+    DispatchQueue.main.async {
+      // The phone does not send files. Do not touch @Published state.
+      _ = file
+    }
+  }
+
+  func session(_ session: WCSession, didFinish fileTransfer: WCSessionFileTransfer, error: Error?) {
+    DispatchQueue.main.async {
+      _ = fileTransfer
+      _ = error
+    }
+  }
+
   func sessionReachabilityDidChange(_ session: WCSession) {
-    if session.isReachable {
-      DispatchQueue.main.async {
-        self.flushPending()
-        self.refreshHomeIfShowing()
-      }
+    let reachable = session.isReachable
+    DispatchQueue.main.async {
+      guard reachable else { return }
+      self.flushPending()
+      self.refreshHomeIfShowing()
     }
   }
 
