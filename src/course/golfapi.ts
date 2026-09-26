@@ -418,25 +418,131 @@ function searchHits(raw: unknown): Record<string, unknown>[] {
   return rows.map(asRecord).filter((row): row is Record<string, unknown> => row != null);
 }
 
-function courseMatchesHit(course: CourseHydrateMatch, hit: Record<string, unknown>): boolean {
-  const name = normalizeGolfApiName(course.name);
-  const hitName = normalizeGolfApiName(
+/**
+ * Words that do not identify a course. `normalizeGolfApiName` turns
+ * "g.c." / "c.c." into the letters g and c, and drops "&".
+ */
+const GENERIC_GOLF_NAME_WORDS = new Set([
+  'golf',
+  'club',
+  'course',
+  'country',
+  'cc',
+  'gc',
+  'links',
+  'the',
+  'and',
+  'of',
+  'g',
+  'c',
+]);
+
+function normalizedGolfNameTokens(value: string | null | undefined): string[] {
+  const normalized = normalizeGolfApiName(value);
+  if (!normalized) return [];
+  return normalized.split(' ').filter((token) => token.length > 0);
+}
+
+function distinctiveGolfNameTokens(value: string | null | undefined): string[] {
+  return normalizedGolfNameTokens(value).filter((token) => !GENERIC_GOLF_NAME_WORDS.has(token));
+}
+
+/** Retry query. Null when stripping generic words leaves the name unchanged or empty. */
+function strippedGolfApiSearchName(name: string): string | null {
+  const parts = name.trim().split(/[^A-Za-z0-9]+/).filter((part) => part.length > 0);
+  const kept = parts.filter((part) => !GENERIC_GOLF_NAME_WORDS.has(part.toLowerCase()));
+  if (kept.length === 0) return null;
+  const stripped = kept.join(' ');
+  if (normalizeGolfApiName(stripped) === normalizeGolfApiName(name)) return null;
+  return stripped;
+}
+
+function golfApiCoursesSearchPath(name: string): string {
+  return `/courses?country=US&name=${encodeURIComponent(name)}`;
+}
+
+function golfApiHitName(hit: Record<string, unknown>): string {
+  return normalizeGolfApiName(
     trimKey(hit.clubName) ?? trimKey(hit.courseName) ?? trimKey(hit.name),
   );
-  if (!name || !hitName) return false;
-  const tokens = name.split(' ').filter((token) => token.length > 2);
-  if (tokens.length === 0) return hitName === name;
-  if (!tokens.every((token) => hitName.includes(token))) return false;
+}
+
+function golfApiLocationMatches(course: CourseHydrateMatch, hit: Record<string, unknown>): boolean {
   const city = normalizeGolfApiName(course.city);
   const hitCity = normalizeGolfApiName(trimKey(hit.city));
   if (city && hitCity && city !== hitCity) return false;
+  const state = normalizeGolfApiName(course.state);
+  const hitState = normalizeGolfApiName(trimKey(hit.state));
+  if (state && hitState && state !== hitState) return false;
   return true;
+}
+
+/** Exact when distinctive tokens match both ways. Subset when ours sit inside theirs. */
+function classifyGolfApiNameMatch(
+  courseName: string | null | undefined,
+  hitName: string,
+): 'exact' | 'subset' | null {
+  const fullCourse = normalizeGolfApiName(courseName);
+  if (!fullCourse || !hitName) return null;
+  const ours = distinctiveGolfNameTokens(fullCourse);
+  const theirs = distinctiveGolfNameTokens(hitName);
+  if (ours.length === 0 || theirs.length === 0) {
+    return fullCourse === hitName ? 'exact' : null;
+  }
+  const ourSet = new Set(ours);
+  const theirSet = new Set(theirs);
+  if (![...ourSet].every((token) => theirSet.has(token))) return null;
+  return ourSet.size === theirSet.size ? 'exact' : 'subset';
+}
+
+/**
+ * Pick one golfapi search row. Location is required (city when both sides
+ * have one, state when both sides have one). Several name matches prefer an
+ * exact distinctive-token match, then a matching city. A tie is no match.
+ */
+export function pickGolfApiSearchHit(
+  course: CourseHydrateMatch,
+  hits: readonly Record<string, unknown>[],
+): Record<string, unknown> | null {
+  const city = normalizeGolfApiName(course.city);
+  const ranked: { hit: Record<string, unknown>; exact: boolean; cityMatch: boolean }[] = [];
+  for (const hit of hits) {
+    const name = golfApiHitName(hit);
+    if (!name || !golfApiLocationMatches(course, hit)) continue;
+    const match = classifyGolfApiNameMatch(course.name, name);
+    if (!match) continue;
+    const hitCity = normalizeGolfApiName(trimKey(hit.city));
+    ranked.push({
+      hit,
+      exact: match === 'exact',
+      cityMatch: Boolean(city && hitCity && city === hitCity),
+    });
+  }
+  const seen = new Set<string>();
+  const unique = ranked.filter((row) => {
+    const id = trimKey(row.hit.courseID) ?? trimKey(row.hit.courseId);
+    if (!id) return true;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+  if (unique.length === 0) return null;
+  const exact = unique.filter((row) => row.exact);
+  const pool = exact.length > 0 ? exact : unique;
+  const withCity = pool.filter((row) => row.cityMatch);
+  const chosen = withCity.length > 0 ? withCity : pool;
+  if (chosen.length !== 1) return null;
+  return chosen[0].hit;
 }
 
 /**
  * Search + course + coordinates via the Worker. No Worker / miss / thin → null.
  * Last-resort paint source — the waterfall calls this only after OSM/OpenGolf
  * and GCA Pro both hard-miss. Never invents tee/green. Cache hit skips the network.
+ *
+ * golfapi.io searches on `name`, not `q`. One full-name search, then at most
+ * one retry with generic words removed. A hit fetches the course and its
+ * coordinates. A second miss stops.
  */
 export async function fetchGolfApiHydrate(
   course: CourseHydrateMatch,
@@ -465,10 +571,18 @@ export async function fetchGolfApiHydrate(
   const fetchImpl = deps.fetchImpl ?? globalThis.fetch;
   if (typeof fetchImpl !== 'function') return null;
 
-  const q = [course.name, course.city, course.state].filter((part) => trimKey(part)).join(' ');
-  if (!q) return null;
-  const search = await golfApiGet(`/courses?country=US&q=${encodeURIComponent(q)}`, base, fetchImpl);
-  const hit = searchHits(search).find((row) => courseMatchesHit(course, row)) ?? null;
+  const courseName = trimKey(course.name);
+  if (!courseName) return null;
+  const searchNames = [courseName];
+  const stripped = strippedGolfApiSearchName(courseName);
+  if (stripped) searchNames.push(stripped);
+
+  let hit: Record<string, unknown> | null = null;
+  for (const searchName of searchNames) {
+    const search = await golfApiGet(golfApiCoursesSearchPath(searchName), base, fetchImpl);
+    hit = pickGolfApiSearchHit(course, searchHits(search));
+    if (hit) break;
+  }
   const courseId = trimKey(hit?.courseID) ?? trimKey(hit?.courseId);
   if (!courseId) return null;
 
