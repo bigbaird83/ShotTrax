@@ -6,6 +6,7 @@ import {
   loadCachedGolfApiHydrate,
   loadCachedHydrate,
   mapGolfApiCourseToHydrate,
+  pickGolfApiSearchHit,
   resetGolfApiCacheForTests,
   saveCachedGolfApiHydrate,
   saveCachedHydrate,
@@ -173,7 +174,12 @@ test('golfapi fetch maps mocked search + coords and does not invent on empty GPS
     assert.ok(fetched);
     assert.equal(fetched?.source, 'golfapi');
     assert.equal(fetched?.holes[0]?.tee?.lat, 35.5250149);
-    assert.equal(urls.some((url) => url.includes('country=US')), true);
+    const searchUrls = urls.filter((url) => new URL(url).pathname.endsWith('/courses'));
+    assert.equal(searchUrls.length, 1);
+    const searchParams = new URL(searchUrls[0] ?? '').searchParams;
+    assert.equal(searchParams.get('country'), 'US');
+    assert.equal(searchParams.get('name'), 'Sample Municipal');
+    assert.equal(searchParams.has('q'), false);
     assert.equal(urls.every((url) => url.startsWith('https://share.test/golfapi/v2.3/')), true);
     assert.equal(urls.filter((url) => url.includes('/coordinates/')).length, 1);
 
@@ -281,6 +287,207 @@ test('fillCourseDetailFromGolfApi cache hit skips network and empty coords do no
     assert.equal(thin?.holes[0]?.teeCentroid, null);
     assert.equal(inventGreenFromClubhouse(), false);
     assert.equal(inventGreenFromScorecardYards(), false);
+  } finally {
+    resetGolfApiCacheForTests();
+    for (const name of names) {
+      if (prev[name] == null) delete process.env[name];
+      else process.env[name] = prev[name];
+    }
+  }
+});
+
+const HIDDEN_HILLS = {
+  name: 'Hidden Hills Golf Club',
+  city: 'Jacksonville',
+  state: 'FL',
+  courseKey: '2936',
+};
+
+const HIDDEN_HILLS_HIT = {
+  courseID: '012141520702871450040',
+  clubName: 'Hidden Hills Golf Course',
+  city: 'Jacksonville',
+  state: 'FL',
+};
+
+test('golfapi matches Hidden Hills Golf Club to Hidden Hills Golf Course', () => {
+  const picked = pickGolfApiSearchHit(HIDDEN_HILLS, [
+    HIDDEN_HILLS_HIT,
+    HIDDEN_HILLS_HIT,
+    {
+      courseID: 'fixture-hidden-hills-north',
+      clubName: 'Hidden Hills North',
+      city: 'Jacksonville',
+      state: 'FL',
+    },
+  ]);
+  assert.equal(picked?.courseID, '012141520702871450040');
+});
+
+test('golfapi state match treats USPS codes and full names as the same state', () => {
+  assert.equal(
+    pickGolfApiSearchHit({ ...HIDDEN_HILLS, state: 'FL' }, [{ ...HIDDEN_HILLS_HIT, state: 'Florida' }])
+      ?.courseID,
+    '012141520702871450040',
+  );
+  assert.equal(
+    pickGolfApiSearchHit({ ...HIDDEN_HILLS, state: 'Florida' }, [{ ...HIDDEN_HILLS_HIT, state: 'fl' }])
+      ?.courseID,
+    '012141520702871450040',
+  );
+  assert.equal(
+    pickGolfApiSearchHit(HIDDEN_HILLS, [{ ...HIDDEN_HILLS_HIT, courseID: 'fixture-ga', state: 'GA' }]),
+    null,
+  );
+  assert.equal(
+    pickGolfApiSearchHit(HIDDEN_HILLS, [
+      { ...HIDDEN_HILLS_HIT, courseID: 'fixture-georgia', state: 'Georgia' },
+    ]),
+    null,
+  );
+});
+
+test('golfapi rejects the same name in another state or another city', () => {
+  assert.equal(
+    pickGolfApiSearchHit(HIDDEN_HILLS, [
+      { ...HIDDEN_HILLS_HIT, courseID: 'fixture-other-state', state: 'ZZ' },
+    ]),
+    null,
+  );
+  assert.equal(
+    pickGolfApiSearchHit(HIDDEN_HILLS, [
+      { ...HIDDEN_HILLS_HIT, courseID: 'fixture-other-city', city: 'Other City' },
+    ]),
+    null,
+  );
+});
+
+test('golfapi generic-only names fall back to the full name', () => {
+  const place = { city: 'Conway', state: 'AR' };
+  assert.equal(
+    pickGolfApiSearchHit(
+      { name: 'The Golf & Country Club', ...place },
+      [{ courseID: 'generic-same', clubName: 'The Golf & Country Club', ...place }],
+    )?.courseID,
+    'generic-same',
+  );
+  assert.equal(
+    pickGolfApiSearchHit(
+      { name: 'The Golf & Country Club', ...place },
+      [{ courseID: 'generic-other', clubName: 'Golf Club', ...place }],
+    ),
+    null,
+  );
+  assert.equal(
+    pickGolfApiSearchHit(
+      { name: 'Sample Hills G.C.', ...place },
+      [{ courseID: 'gc-1', courseName: 'The Links of Sample Hills', ...place }],
+    )?.courseID,
+    'gc-1',
+  );
+});
+
+test('golfapi ambiguous hits return no match', () => {
+  const place = { city: 'Conway', state: 'AR' };
+  assert.equal(
+    pickGolfApiSearchHit({ name: 'Sample Hills Golf Club', ...place }, [
+      { courseID: 'amb-1', clubName: 'Sample Hills Golf Course', ...place },
+      { courseID: 'amb-2', clubName: 'Sample Hills Country Club', ...place },
+    ]),
+    null,
+  );
+  assert.equal(
+    pickGolfApiSearchHit({ name: 'Sample Hills Golf Club', ...place }, [
+      { courseID: 'amb-north', clubName: 'Sample Hills North', ...place },
+      { courseID: 'amb-south', clubName: 'Sample Hills South', ...place },
+    ]),
+    null,
+  );
+});
+
+test('golfapi search uses name= and a miss retries once', async () => {
+  resetGolfApiCacheForTests();
+  const names = ['EXPO_PUBLIC_SHARE_SYNC_URL'];
+  const prev = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  try {
+    process.env.EXPO_PUBLIC_SHARE_SYNC_URL = 'https://share.test';
+    const urls: string[] = [];
+    const missed = await fetchGolfApiHydrate(HIDDEN_HILLS, {
+      fetchImpl: async (input) => {
+        urls.push(String(input));
+        return new Response(JSON.stringify({ courses: [] }), { status: 200 });
+      },
+    });
+    assert.equal(missed, null);
+    assert.equal(urls.length, 2);
+    const first = new URL(urls[0] ?? '');
+    const second = new URL(urls[1] ?? '');
+    assert.equal(first.searchParams.get('country'), 'US');
+    assert.equal(first.searchParams.get('name'), 'Hidden Hills Golf Club');
+    assert.equal(first.searchParams.has('q'), false);
+    assert.deepEqual([...first.searchParams.keys()].sort(), ['country', 'name']);
+    assert.equal(second.searchParams.get('country'), 'US');
+    assert.equal(second.searchParams.get('name'), 'Hidden Hills');
+    assert.equal(second.searchParams.has('q'), false);
+    assert.equal(urls.some((url) => url.includes('/coordinates/')), false);
+    assert.equal(urls.some((url) => /\/courses\/[^?]/.test(url)), false);
+  } finally {
+    resetGolfApiCacheForTests();
+    for (const name of names) {
+      if (prev[name] == null) delete process.env[name];
+      else process.env[name] = prev[name];
+    }
+  }
+});
+
+test('golfapi full-name hit does not retry, then the cache skips the network', async () => {
+  resetGolfApiCacheForTests();
+  const names = ['EXPO_PUBLIC_SHARE_SYNC_URL'];
+  const prev = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const sample = {
+    ...THUNDERBIRD_COURSE,
+    courseID: 'sample-municipal-1',
+    clubName: 'Sample Municipal Golf Course',
+    city: 'Conway',
+    state: 'AR',
+  };
+  try {
+    process.env.EXPO_PUBLIC_SHARE_SYNC_URL = 'https://share.test';
+    const urls: string[] = [];
+    const fetched = await fetchGolfApiHydrate(
+      { name: 'Sample Municipal Golf Club', city: 'Conway', state: 'AR', courseKey: 'sample-1' },
+      {
+        now: () => '2026-09-21T14:12:17Z',
+        fetchImpl: async (input) => {
+          const url = String(input);
+          urls.push(url);
+          if (new URL(url).pathname.endsWith('/courses')) {
+            return new Response(JSON.stringify([sample]), { status: 200 });
+          }
+          if (url.includes('/coordinates/')) {
+            return new Response(JSON.stringify(THUNDERBIRD_COORDS), { status: 200 });
+          }
+          return new Response(JSON.stringify(sample), { status: 200 });
+        },
+      },
+    );
+    assert.equal(fetched?.courseKey, 'golfapi:sample-municipal-1');
+    const searches = urls.filter((url) => new URL(url).pathname.endsWith('/courses'));
+    assert.equal(searches.length, 1);
+    assert.equal(new URL(searches[0] ?? '').searchParams.get('name'), 'Sample Municipal Golf Club');
+    assert.equal(urls.length, 3);
+    let extra = 0;
+    const again = await fetchGolfApiHydrate(
+      { name: 'Sample Municipal Golf Club', city: 'Conway', state: 'AR', courseKey: 'sample-1' },
+      {
+        fetchImpl: async () => {
+          extra += 1;
+          throw new Error('cache should skip');
+        },
+      },
+    );
+    assert.equal(again?.courseKey, fetched?.courseKey);
+    assert.equal(extra, 0);
   } finally {
     resetGolfApiCacheForTests();
     for (const name of names) {
