@@ -37,6 +37,38 @@ export function watchLaunchCoverVisible(args: {
   return args.scene !== 'active';
 }
 
+export type WatchPlayerItemStatus = 'unknown' | 'readyToPlay' | 'failed';
+export type WatchTimeControlStatus = 'paused' | 'waiting' | 'playing';
+
+/**
+ * play() waits until the item is ready and the scene is active.
+ * A failed item dismisses. A second call does not play again.
+ */
+export function watchSplashPlayGate(args: {
+  scene: WatchSplashScene;
+  itemStatus: WatchPlayerItemStatus;
+  playCalled: boolean;
+}): 'wait' | 'play' | 'failed' {
+  if (args.itemStatus === 'failed') return 'failed';
+  if (args.playCalled) return 'wait';
+  if (args.scene === 'active' && args.itemStatus === 'readyToPlay') return 'play';
+  return 'wait';
+}
+
+/** One more play() if the clock is not playing yet. */
+export function watchSplashShouldReplay(args: {
+  timeControlStatus: WatchTimeControlStatus;
+  retried: boolean;
+}): boolean {
+  if (args.retried) return false;
+  return args.timeControlStatus !== 'playing';
+}
+
+/** The 5 s safety clock starts when the clip is actually moving. */
+export function watchSplashSafetyStarts(timeControlStatus: WatchTimeControlStatus, safetyStarted: boolean): boolean {
+  return timeControlStatus === 'playing' && !safetyStarted;
+}
+
 /**
  * When In Use waits while the splash overlay is up so the system sheet does
  * not cover the clip. A fresh live round skips the splash, so it does not wait.

@@ -36,6 +36,21 @@ export function watchShouldStartRoundWorkout(args: {
   return (args.hasLiveHole && args.roundComplete !== true) || args.puttOpen;
 }
 
+/**
+ * Watch Home "Continue · Hole". A round-end list and a stale saved list still
+ * have a bag, so `hasLiveHole` alone is not enough. Home/Back (`userLeftApp`)
+ * does not hide Continue during a real live round.
+ */
+export function watchCanContinueRound(args: {
+  roundLive: boolean;
+  roundComplete: boolean;
+  hasLiveHole: boolean;
+  roundIsFresh: boolean;
+  userLeftApp?: boolean;
+}): boolean {
+  return args.roundLive && !args.roundComplete && args.hasLiveHole && args.roundIsFresh;
+}
+
 /** Splash skip and hole-follow location use this. A stale saved round plays the clip. */
 export function watchLiveHoleInProgress(args: {
   hasLiveHole: boolean;

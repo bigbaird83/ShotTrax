@@ -297,6 +297,12 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     receivedClubList || !list.bag.isEmpty
   }
 
+  /// Watch Home Continue. A finished or stale list still has a bag, so this is
+  /// stricter than `hasLiveHole`. Home/Back does not hide it.
+  var canContinueRound: Bool {
+    list.roundLive && !list.roundComplete && hasLiveHole && roundIsFresh
+  }
+
   var showsNearby: Bool {
     nearby.active && (!hasLiveHole || nearbyFromHome)
   }

@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import {
   WATCH_ROUND_FRESH_MS,
   nextStaleWatchRoundClear,
+  watchCanContinueRound,
   watchLiveHoleInProgress,
   watchRecoveredWorkoutAction,
   watchRoundEndOverridesStaleSeq,
@@ -21,6 +22,34 @@ const live = {
   roundLive: true,
   roundComplete: false,
 };
+
+test('Continue shows only for a fresh live round, including after Home', () => {
+  const fresh = { roundLive: true, roundComplete: false, hasLiveHole: true, roundIsFresh: true };
+  assert.equal(watchCanContinueRound(fresh), true);
+  assert.equal(watchCanContinueRound({ ...fresh, userLeftApp: true }), true);
+  assert.equal(watchCanContinueRound({ ...fresh, userLeftApp: false }), true);
+  assert.equal(
+    watchCanContinueRound({ roundLive: false, roundComplete: true, hasLiveHole: true, roundIsFresh: true }),
+    false,
+  );
+  assert.equal(
+    watchCanContinueRound({ roundLive: true, roundComplete: false, hasLiveHole: true, roundIsFresh: false }),
+    false,
+  );
+  assert.equal(watchCanContinueRound({ ...fresh, hasLiveHole: false }), false);
+  assert.equal(watchCanContinueRound({ ...fresh, roundComplete: true }), false);
+
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+  const gate = session.slice(session.indexOf('var canContinueRound: Bool {'), session.indexOf('var showsNearby'));
+  assert.match(gate, /list\.roundLive && !list\.roundComplete && hasLiveHole && roundIsFresh/);
+  assert.doesNotMatch(gate, /userLeftApp/);
+  const ui = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  const home = ui.slice(ui.indexOf('private var watchHome'), ui.indexOf('private var nearbySearch'));
+  assert.match(home, /if session\.canContinueRound/);
+  assert.ok(home.indexOf('canContinueRound') < home.indexOf('Continue · Hole'));
+  const tile = home.slice(home.indexOf('if session.canContinueRound'), home.indexOf('Continue · Hole'));
+  assert.doesNotMatch(tile, /hasLiveHole/);
+});
 
 test('a stale saved round starts no workout and still plays the clip', () => {
   assert.equal(WATCH_ROUND_FRESH_MS, 30 * 60 * 1000);

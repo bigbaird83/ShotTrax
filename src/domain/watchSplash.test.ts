@@ -4,7 +4,10 @@ import { test } from 'node:test';
 import {
   watchLaunchCoverVisible,
   watchLocationAuthorizationWaitsForSplash,
+  watchSplashPlayGate,
   watchSplashPlayback,
+  watchSplashSafetyStarts,
+  watchSplashShouldReplay,
 } from './watchSplash';
 
 const root = new URL('../../', import.meta.url);
@@ -71,8 +74,25 @@ test('Watch splash plays over the app on cold start and never blocks it', () => 
   assert.match(apply, /phase == \.active/);
   assert.ok(apply.indexOf('playbackStarted = true') > apply.indexOf('phase == .active'));
   assert.match(apply, /splash pending/);
-  const run = splash.slice(splash.indexOf('private func run'), splash.indexOf('private func dismiss'));
-  assert.ok(run.indexOf('next.play()') > run.indexOf('playback started'));
+  const run = splash.slice(splash.indexOf('private func run'), splash.indexOf('private func tryStart'));
+  assert.doesNotMatch(run, /safetyNanoseconds/);
+  assert.doesNotMatch(run, /player\.play\(\)/);
+  const tryStart = splash.slice(splash.indexOf('private func tryStart'), splash.indexOf('private func startSafety'));
+  assert.match(tryStart, /guard box\.sceneActive else \{ return \}/);
+  assert.match(tryStart, /guard box\.item\.status == \.readyToPlay else \{ return \}/);
+  assert.ok(tryStart.indexOf('sceneActive') < tryStart.indexOf('player.play()'));
+  assert.ok(tryStart.indexOf('readyToPlay') < tryStart.indexOf('player.play()'));
+  assert.match(tryStart, /500_000_000/);
+  assert.match(tryStart, /timeControlStatus != \.playing/);
+  const safety = splash.slice(splash.indexOf('private func startSafety'), splash.indexOf('private func logPlayback'));
+  assert.match(safety, /playback started/);
+  assert.match(safety, /safetyNanoseconds/);
+  assert.ok(safety.indexOf('playback started') < safety.indexOf('safetyNanoseconds'));
+  assert.match(splash, /status=/);
+  assert.match(splash, /timeControlStatus=/);
+  assert.match(splash, /item\.error/);
+  assert.match(splash, /392×584/);
+  assert.match(splash, /392\.0 \/ 584\.0/);
   assert.match(splash, /static let poster: UIImage = loadPoster\(\) \?\? UIImage\(\)/);
   assert.match(splash, /struct WatchSplashCover/);
   assert.match(splash, /Image\(uiImage: poster\)/);
@@ -196,8 +216,25 @@ test('a fresh live round skips the splash and does not hold the location prompt'
   assert.match(finish, /requestLiveLocationAuthorizationIfNeeded\(\)/);
   const png = readFileSync(new URL('targets/watch/WatchSplashFirstFrame.png', root));
   assert.equal(png.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
-  assert.equal(png.readUInt32BE(16), 784);
-  assert.equal(png.readUInt32BE(20), 1168);
+  assert.equal(png.readUInt32BE(16), 392);
+  assert.equal(png.readUInt32BE(20), 584);
+});
+
+test('play() waits for a ready item and an active scene; safety starts when the clip is moving', () => {
+  assert.equal(watchSplashPlayGate({ scene: 'active', itemStatus: 'unknown', playCalled: false }), 'wait');
+  assert.equal(watchSplashPlayGate({ scene: 'background', itemStatus: 'readyToPlay', playCalled: false }), 'wait');
+  assert.equal(watchSplashPlayGate({ scene: 'inactive', itemStatus: 'readyToPlay', playCalled: false }), 'wait');
+  assert.equal(watchSplashPlayGate({ scene: 'active', itemStatus: 'readyToPlay', playCalled: false }), 'play');
+  assert.equal(watchSplashPlayGate({ scene: 'active', itemStatus: 'readyToPlay', playCalled: true }), 'wait');
+  assert.equal(watchSplashPlayGate({ scene: 'active', itemStatus: 'failed', playCalled: false }), 'failed');
+  assert.equal(watchSplashShouldReplay({ timeControlStatus: 'paused', retried: false }), true);
+  assert.equal(watchSplashShouldReplay({ timeControlStatus: 'waiting', retried: false }), true);
+  assert.equal(watchSplashShouldReplay({ timeControlStatus: 'playing', retried: false }), false);
+  assert.equal(watchSplashShouldReplay({ timeControlStatus: 'paused', retried: true }), false);
+  assert.equal(watchSplashSafetyStarts('playing', false), true);
+  assert.equal(watchSplashSafetyStarts('playing', true), false);
+  assert.equal(watchSplashSafetyStarts('paused', false), false);
+  assert.equal(watchSplashSafetyStarts('waiting', false), false);
 });
 
 test('Watch target links the video frameworks the splash imports', () => {

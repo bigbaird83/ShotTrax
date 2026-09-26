@@ -6,12 +6,12 @@ import UIKit
 
 /// Watch open splash. Same brand clip as the phone, bundled in this target.
 enum WatchSplashClip {
-  /// 3.0s, portrait 784×1168, H.264. Audio track removed; played muted.
+  /// 3.0s, portrait 392×584, H.264 Main, yuv420p, 24 fps. No audio, no cover art.
   static let resource = "WatchSplash"
   static let fileExtension = "mov"
   /// Frame 0 of the clip. Shown under the player and for Reduce Motion.
   static let firstFrame = "WatchSplashFirstFrame"
-  static let aspectRatio = 784.0 / 1168.0
+  static let aspectRatio = 392.0 / 584.0
   /// Field behind the contained clip — the clip's own near-black edge.
   static let background = Color(red: 0, green: 1.0 / 255, blue: 1.0 / 255)
   /// Fade after the clip ends or a tap.
@@ -47,6 +47,67 @@ struct WatchSplashCover: View {
   }
 }
 
+private enum SplashPlayEvent {
+  case status(Int, String)
+  case control(Int)
+  case sceneActive
+}
+
+/// Owns the player so status and timeControlStatus can be observed off the view value.
+private final class SplashPlaybackBox {
+  let player: AVPlayer
+  let item: AVPlayerItem
+  var sceneActive = false
+  var playCalled = false
+  var retried = false
+  var safetyStarted = false
+  let events: AsyncStream<SplashPlayEvent>
+  private let continuation: AsyncStream<SplashPlayEvent>.Continuation
+  private var statusObs: NSKeyValueObservation?
+  private var controlObs: NSKeyValueObservation?
+
+  init(url: URL) {
+    let item = AVPlayerItem(url: url)
+    let player = AVPlayer(playerItem: item)
+    player.isMuted = true
+    player.actionAtItemEnd = .pause
+    self.item = item
+    self.player = player
+    var continuation: AsyncStream<SplashPlayEvent>.Continuation!
+    self.events = AsyncStream { continuation = $0 }
+    self.continuation = continuation
+  }
+
+  /// Observe after the caller is ready to consume `events`, so the initial status is not dropped.
+  func start() {
+    statusObs = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
+      self?.continuation.yield(.status(item.status.rawValue, Self.errorText(item)))
+    }
+    controlObs = player.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] player, _ in
+      self?.continuation.yield(.control(player.timeControlStatus.rawValue))
+    }
+  }
+
+  func setSceneActive(_ active: Bool) {
+    sceneActive = active
+    continuation.yield(.sceneActive)
+  }
+
+  static func errorText(_ item: AVPlayerItem) -> String {
+    guard let error = item.error else { return "" }
+    let text = error.localizedDescription
+    if !text.isEmpty { return text }
+    let ns = error as NSError
+    return "\(ns.domain) \(ns.code)"
+  }
+
+  deinit {
+    statusObs?.invalidate()
+    controlObs?.invalidate()
+    continuation.finish()
+  }
+}
+
 /// Full-screen overlay on the first time this process is actually on screen.
 /// A background launch keeps the still up and does not start a player or a timer.
 /// The app is mounted underneath. Tap skips.
@@ -62,6 +123,7 @@ struct WatchSplash: View {
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var player: AVPlayer?
+  @State private var playbackBox: SplashPlaybackBox?
   @State private var dismissing = false
   @State private var opacity = 1.0
   @State private var playbackStarted = false
@@ -92,6 +154,7 @@ struct WatchSplash: View {
       applyPhase(scenePhase)
     }
     .onChange(of: scenePhase) { _, phase in
+      playbackBox?.setSceneActive(phase == .active)
       applyPhase(phase)
     }
     .task(id: playbackStarted) {
@@ -151,15 +214,83 @@ struct WatchSplash: View {
       dismiss(fade: false, reason: "failed")
       return
     }
-    let next = AVPlayer(url: url)
-    next.isMuted = true
-    next.actionAtItemEnd = .pause
-    player = next
+    let box = SplashPlaybackBox(url: url)
+    playbackBox = box
+    player = box.player
+    box.sceneActive = scenePhase == .active
+    box.start()
+    for await event in box.events {
+      if Task.isCancelled || dismissing { return }
+      switch event {
+      case .status(let raw, let error):
+        let status = AVPlayerItem.Status(rawValue: raw) ?? .unknown
+        logPlayback(status: status, control: box.player.timeControlStatus, error: error)
+        if status == .failed {
+          dismiss(fade: false, reason: "failed")
+          return
+        }
+        tryStart(box)
+      case .control(let raw):
+        let control = AVPlayer.TimeControlStatus(rawValue: raw) ?? .paused
+        logPlayback(status: box.item.status, control: control, error: SplashPlaybackBox.errorText(box.item))
+        if control == .playing {
+          startSafety(box)
+        }
+      case .sceneActive:
+        tryStart(box)
+      }
+    }
+  }
+
+  /// `play()` only after the item is ready and this scene is active.
+  /// watchOS pauses media that starts before the app is really in front.
+  private func tryStart(_ box: SplashPlaybackBox) {
+    guard box.sceneActive else { return }
+    guard box.item.status == .readyToPlay else { return }
+    guard !box.playCalled else { return }
+    box.playCalled = true
+    box.player.play()
+    logPlayback(status: box.item.status, control: box.player.timeControlStatus, error: SplashPlaybackBox.errorText(box.item))
+    Task { @MainActor in
+      try? await Task.sleep(nanoseconds: 500_000_000)
+      guard !dismissing, !box.retried else { return }
+      if box.player.timeControlStatus != .playing {
+        box.retried = true
+        box.player.play()
+        logPlayback(status: box.item.status, control: box.player.timeControlStatus, error: SplashPlaybackBox.errorText(box.item))
+      }
+    }
+  }
+
+  /// 5 s ceiling from the moment the clip is actually moving, not from view creation.
+  private func startSafety(_ box: SplashPlaybackBox) {
+    guard !box.safetyStarted else { return }
+    box.safetyStarted = true
     WatchSplashClip.splashLog.info("playback started")
-    next.play()
-    try? await Task.sleep(nanoseconds: WatchSplashClip.safetyNanoseconds)
-    if Task.isCancelled || dismissing { return }
-    dismiss(fade: false, reason: "safety")
+    Task { @MainActor in
+      try? await Task.sleep(nanoseconds: WatchSplashClip.safetyNanoseconds)
+      guard !dismissing else { return }
+      dismiss(fade: false, reason: "safety")
+    }
+  }
+
+  private func logPlayback(status: AVPlayerItem.Status, control: AVPlayer.TimeControlStatus, error: String) {
+    let statusLabel: String
+    switch status {
+    case .unknown: statusLabel = "unknown"
+    case .readyToPlay: statusLabel = "readyToPlay"
+    case .failed: statusLabel = "failed"
+    @unknown default: statusLabel = "unknown"
+    }
+    let controlLabel: String
+    switch control {
+    case .paused: controlLabel = "paused"
+    case .waitingToPlayAtSpecifiedRate: controlLabel = "waiting"
+    case .playing: controlLabel = "playing"
+    @unknown default: controlLabel = "paused"
+    }
+    let errorLabel = error
+    WatchSplashClip.splashLog.info("status=\(statusLabel, privacy: .public) timeControlStatus=\(controlLabel, privacy: .public) error=\(errorLabel, privacy: .public)")
   }
 
   private func dismiss(fade: Bool, reason: String) {
