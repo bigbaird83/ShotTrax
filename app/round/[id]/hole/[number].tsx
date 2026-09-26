@@ -2162,12 +2162,13 @@ function HoleScreenBody() {
       <FullSheet
         visible={menuOpen}
         title={COPY.menu}
+        swipeToClose
         onDismiss={openQueuedShare}
         onClose={() => {
           setMenuOpen(false);
           bumpPlayFrame();
         }}>
-        <View style={styles.sheetPad}>
+        <ScrollView contentContainerStyle={styles.sheetPad}>
           <BigButton
             label={COPY.home}
             variant="secondary"
@@ -2253,7 +2254,7 @@ function HoleScreenBody() {
               router.push('/settings');
             }}
           />
-        </View>
+        </ScrollView>
       </FullSheet>
 
       <FullSheet
