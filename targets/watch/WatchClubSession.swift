@@ -121,7 +121,8 @@ struct WatchHomeState {
     return loading ? "Updating…" : "Refresh"
   }
 
-  /// Favorites, each id once.
+  /// Favorites, each id once, in the order the phone sent. The phone sorts
+  /// nearest-first when it has an authorized fix; this view does not re-sort.
   var favoriteRows: [HomeCourse] {
     var seen = Set<String>()
     return favorites.filter { seen.insert($0.id).inserted }
@@ -438,6 +439,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     var payload: [String: Any] = [
       "type": "homeRequest",
       "at": isoNow(),
+      // Favorites sort uses this. Nearby still follows attachHomeFix as before.
+      "locationAuth": liveAuthBucket(location.authorizationStatus),
     ]
     attachHomeFix(&payload)
     session.transferUserInfo(payload)

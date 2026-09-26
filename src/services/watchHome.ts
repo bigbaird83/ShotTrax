@@ -1,3 +1,4 @@
+import * as Location from 'expo-location';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getWatchBridgeNative } from '@/modules/watch-bridge';
 import { getCourseDataClient } from '@/src/course/client';
@@ -18,9 +19,12 @@ import {
   parseFavoriteToggle,
   parseWatchHomeRequest,
   watchFixFromHomeRequest,
+  watchHomeFavoritesMeasurePoint,
+  watchHomeLocationAuthFromStatus,
   watchHomeRequestDidApply,
   watchHomeRequestShouldApply,
   watchHomeSearchPoint,
+  type WatchHomeLocationAuth,
   type WatchHomeLocationSource,
   type WatchHomeMessage,
 } from '@/src/domain/watchHome';
@@ -44,6 +48,8 @@ let lastPushedJson = '';
 /** Last nearby search — favorites-only changes re-push without the network. */
 let lastNearby: CourseSummary[] = [];
 let lastSource: WatchHomeLocationSource = 'none';
+/** Last authorized point Favorites were measured from. Null keeps phone order. */
+let favoritesMeasurePoint: LatLng | null = null;
 let nearbyCacheLoaded = false;
 /** A pocketed phone may never answer a GPS wake. Do not hold the Watch reply on it. */
 const PHONE_FIX_WAKE_TIMEOUT_MS = 8_000;
@@ -131,6 +137,16 @@ function saveNearbyCache(db: SQLiteDatabase, rows: CourseSummary[]): void {
   }
 }
 
+/** Read permission only. Never prompts, and never clears the favorites list. */
+async function readPhoneLocationAuth(): Promise<WatchHomeLocationAuth> {
+  try {
+    const { status } = await Location.getForegroundPermissionsAsync();
+    return watchHomeLocationAuthFromStatus(status);
+  } catch {
+    return 'notDetermined';
+  }
+}
+
 async function wakePhoneFix(): Promise<GpsFix | null> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -155,6 +171,9 @@ function buildFromCache(ctx: WatchHomeContext): WatchHomeMessage {
     nearby: coursesForWatchNearby(lastNearby),
     locationSource: lastSource,
     live: active ? { courseName: active.courseName, courseId: active.courseApiId } : null,
+    favoritesMeasure: favoritesMeasurePoint
+      ? { fix: favoritesMeasurePoint, authorization: 'authorized' }
+      : { fix: null, authorization: 'notDetermined' },
   });
 }
 
@@ -192,13 +211,15 @@ export async function pushWatchHomeFromCache(): Promise<WatchHomeMessage | null>
 async function refreshNearby(
   ctx: WatchHomeContext,
   watchFix: { lat: number; lng: number; timestamp: number } | null,
+  watchAuthorization: WatchHomeLocationAuth | null,
 ): Promise<void> {
   const nowMs = () => ctx.nowMs?.() ?? Date.now();
   loadNearbyCache(ctx.db);
+  const freshWatch = watchHomeSearchPoint({ watchFix, nowMs: nowMs() });
   let phoneFix: GpsFix | null = null;
   let lastPhoneFix: LatLng | null = null;
   // Only wake the phone GPS when the Watch has no fresh fix of its own.
-  if (!watchHomeSearchPoint({ watchFix, nowMs: nowMs() })) {
+  if (!freshWatch) {
     phoneFix = (await wakePhoneFix()) ?? ctx.phoneFix() ?? getLastLiveFix();
     rememberPhoneFix(ctx.db, phoneFix);
     lastPhoneFix = await readLastPhoneFix(ctx.db);
@@ -212,16 +233,56 @@ async function refreshNearby(
   if (!chosen) {
     // No location anywhere. A cached list still answers; only no cache is 'none'.
     lastSource = lastNearby.length > 0 ? 'last_phone' : 'none';
-    return;
+  } else {
+    try {
+      lastNearby = await getCourseDataClient().nearbyCourses(chosen.point);
+      lastSource = chosen.source;
+      saveNearbyCache(ctx.db, lastNearby);
+    } catch {
+      // Keep the last good list rather than blanking the Watch.
+      lastSource = chosen.source;
+    }
   }
-  try {
-    lastNearby = await getCourseDataClient().nearbyCourses(chosen.point);
-    lastSource = chosen.source;
-    saveNearbyCache(ctx.db, lastNearby);
-  } catch {
-    // Keep the last good list rather than blanking the Watch.
-    lastSource = chosen.source;
+  favoritesMeasurePoint = await favoritesMeasureFrom(ctx, {
+    freshWatch: freshWatch?.point ?? null,
+    watchAuthorization,
+    phoneFix,
+    nowMs: nowMs(),
+  });
+}
+
+/**
+ * Watch fix when that fix is authorized, else a fresh phone fix.
+ * Not the stored last-known point (nearby search still uses that).
+ * A denied Watch does not wake GPS; it only reads a phone fix already in
+ * memory, and only if phone permission is granted.
+ */
+async function favoritesMeasureFrom(
+  ctx: WatchHomeContext,
+  args: {
+    freshWatch: LatLng | null;
+    watchAuthorization: WatchHomeLocationAuth | null;
+    phoneFix: GpsFix | null;
+    nowMs: number;
+  },
+): Promise<LatLng | null> {
+  const watchAuth = args.watchAuthorization ?? (args.freshWatch ? 'authorized' : 'notDetermined');
+  const watchCanMeasure = watchAuth === 'authorized' && args.freshWatch != null;
+  let phonePoint = watchHomeSearchPoint({ phoneFix: args.phoneFix, nowMs: args.nowMs })?.point ?? null;
+  let phoneAuthorization: WatchHomeLocationAuth = 'notDetermined';
+  if (!watchCanMeasure) {
+    if (!phonePoint) {
+      const live = ctx.phoneFix() ?? getLastLiveFix();
+      phonePoint = watchHomeSearchPoint({ phoneFix: live, nowMs: args.nowMs })?.point ?? null;
+    }
+    phoneAuthorization = await readPhoneLocationAuth();
   }
+  return watchHomeFavoritesMeasurePoint({
+    watchFix: args.freshWatch,
+    watchAuthorization: watchAuth,
+    phoneFix: phonePoint,
+    phoneAuthorization,
+  });
 }
 
 async function handleHomeRequest(raw: unknown): Promise<WatchHomeReply | null> {
@@ -236,7 +297,7 @@ async function handleHomeRequest(raw: unknown): Promise<WatchHomeReply | null> {
   // Watch Home → course pick may replace a live round, same as Home → Select course.
   allowWatchCoursePickDuringRound();
   try {
-    await refreshNearby(ctx, watchFixFromHomeRequest(req));
+    await refreshNearby(ctx, watchFixFromHomeRequest(req), req.locationAuth ?? null);
     const msg = buildFromCache(ctx);
     await push(msg, true);
     watchHomeRequestDidApply(req.at);
