@@ -139,8 +139,16 @@ test('Watch cold launch loads defaults before WCSession and applies context on m
   assert.ok(activate.indexOf('applyClubList(') > hop);
   assert.ok(activate.indexOf('flushPending()') > hop);
   assert.ok(activate.indexOf('syncRoundStay()') > hop);
-  assert.match(activate, /awaitingSelect = true/);
+  assert.ok(activate.indexOf('settleLaunchFace(commit: true)') > hop);
+  assert.ok(activate.indexOf('launchFaceSettled = true') > hop);
+  assert.doesNotMatch(activate, /hasLiveHole && !self\.nearbyFromHome/);
   assert.doesNotMatch(activate, /requestNearby/);
+  const settle = session.slice(
+    session.indexOf('private func settleLaunchFace'),
+    session.indexOf('private func logSavedRoundHomeSkipIfNeeded'),
+  );
+  assert.match(settle, /requireMainForPublishedState\(\)/);
+  assert.match(settle, /awaitingSelect = true/);
 
   const may = session.slice(session.indexOf('func mayCreateGolfWorkout'), session.indexOf('private func beginGolfWorkoutSession'));
   assert.match(may, /if launchGate \|\| recovering \|\| ending \|\| creating \{ return false \}/);
@@ -236,6 +244,8 @@ test('every delegate callback hops before it touches session state', () => {
     'private func applyWatchHome',
     'private func applyNearbyTees',
     'private func applyClubList',
+    'private func settleLaunchFace',
+    'private func restoreHomeAfterSavedEcho',
     'private func applyPuttSheet',
     'private func adoptWatchFix',
     'private func flushPending',
