@@ -10,6 +10,12 @@ import {
 } from '../domain/groupGames';
 import { finishedHoleDisplayScore } from '../domain/holeScore';
 import { totalPenaltyStrokes } from '../domain/penalty';
+import {
+  RECENT_PLAYERS_CAP,
+  recentPlayerNameKey,
+  recentPlayersToOffer,
+  type RecentPlayer,
+} from '../domain/recentPlayers';
 import { newId } from '../lib/id';
 import { listHoles, listPenaltiesForHole, listShotsForHole } from './repo';
 
@@ -97,10 +103,13 @@ export function addGroupPlayer(
     }
     const id = newId();
     const sortOrder = Math.max(0, ...players.map((p) => p.sortOrder)) + 1;
+    const handicap = parseGroupHandicap(args.handicap);
     db.runSync(
       'INSERT INTO round_players (id, round_id, name, handicap, is_me, sort_order) VALUES (?, ?, ?, ?, 0, ?)',
-      [id, roundId, name, parseGroupHandicap(args.handicap), sortOrder],
+      [id, roundId, name, handicap, sortOrder],
     );
+    // The owner row is ensureMe, above. Only the partner just added is remembered.
+    writeRecentPartner(db, { name, handicap });
     player = listGroupPlayers(db, roundId).find((p) => p.id === id) ?? null;
   });
   if (full) return { status: 'full' };
@@ -183,6 +192,98 @@ export type GroupSnapshot = {
   players: (GroupPlayer & { scores: GroupPlayerIn['scores'] })[];
   settings: GroupGameSettings;
 };
+
+type RecentRow = {
+  id: string;
+  name: string;
+  name_key: string;
+  handicap: number | null;
+  last_used_at: string;
+};
+
+function mapRecent(row: RecentRow): RecentPlayer {
+  return {
+    id: row.id,
+    name: row.name,
+    nameKey: row.name_key,
+    handicap: parseGroupHandicap(row.handicap),
+    lastUsedAt: row.last_used_at,
+  };
+}
+
+/**
+ * Insert or refresh one partner on the device recent list.
+ * Same trimmed name (any case) is one row: the display name and last_used_at update.
+ * A blank handicap leaves a handicap already saved. Then the list is cut to 15, newest first.
+ */
+function writeRecentPartner(
+  db: SQLiteDatabase,
+  args: { name: string; handicap: number | null; at?: string },
+): void {
+  const name = cleanPlayerName(args.name);
+  const key = name ? recentPlayerNameKey(name) : null;
+  if (!name || !key) return;
+  const entered = parseGroupHandicap(args.handicap);
+  const at = args.at ?? new Date().toISOString();
+  const existing = db.getFirstSync<{ id: string; handicap: number | null }>(
+    'SELECT id, handicap FROM recent_players WHERE name_key = ?',
+    [key],
+  );
+  if (existing) {
+    const handicap = entered != null ? entered : parseGroupHandicap(existing.handicap);
+    db.runSync('UPDATE recent_players SET name = ?, handicap = ?, last_used_at = ? WHERE id = ?', [
+      name,
+      handicap,
+      at,
+      existing.id,
+    ]);
+  } else {
+    db.runSync(
+      'INSERT INTO recent_players (id, name, name_key, handicap, last_used_at) VALUES (?, ?, ?, ?, ?)',
+      [newId(), name, key, entered, at],
+    );
+  }
+  const keep = db.getAllSync<{ id: string }>(
+    'SELECT id FROM recent_players ORDER BY last_used_at DESC, id DESC LIMIT ?',
+    [RECENT_PLAYERS_CAP],
+  );
+  if (keep.length === 0) return;
+  const placeholders = keep.map(() => '?').join(', ');
+  db.runSync(`DELETE FROM recent_players WHERE id NOT IN (${placeholders})`, keep.map((row) => row.id));
+}
+
+/** Records a partner on the device recent list. Does not touch any round. */
+export function rememberRecentPartner(
+  db: SQLiteDatabase,
+  args: { name: string; handicap: number | null; at?: string },
+): void {
+  db.withTransactionSync(() => writeRecentPartner(db, args));
+}
+
+/** Newest first, at most 15. */
+export function listRecentPlayers(db: SQLiteDatabase): RecentPlayer[] {
+  return db
+    .getAllSync<RecentRow>(
+      'SELECT * FROM recent_players ORDER BY last_used_at DESC, id DESC LIMIT ?',
+      [RECENT_PLAYERS_CAP],
+    )
+    .map(mapRecent);
+}
+
+/** Drops one person from the recent list. Round players and their scores stay. */
+export function removeRecentPlayer(db: SQLiteDatabase, id: string): void {
+  db.runSync('DELETE FROM recent_players WHERE id = ?', [id]);
+}
+
+/** Recent partners still available to add to this round. Hidden once three partners are in. */
+export function recentPartnersForRound(db: SQLiteDatabase, roundId: string): RecentPlayer[] {
+  const players = listGroupPlayers(db, roundId);
+  return recentPlayersToOffer({
+    recent: listRecentPlayers(db),
+    inRoundNames: players.map((player) => player.name),
+    partnerCount: players.filter((player) => !player.isMe).length,
+  });
+}
 
 /** Everything the group screen and games need for one round. */
 export function loadGroup(db: SQLiteDatabase, roundId: string): GroupSnapshot {

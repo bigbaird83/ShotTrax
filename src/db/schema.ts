@@ -243,6 +243,19 @@ export function migrate(db: SQLiteDatabase): void {
       PRIMARY KEY (player_id, hole_number),
       FOREIGN KEY (player_id) REFERENCES round_players(id) ON DELETE CASCADE
     );
+
+    -- Device-only recent partners for the Group add form. Not part of round
+    -- export, and not removed when a round is deleted or restored.
+    -- name_key is the trimmed, lowercased name.
+    CREATE TABLE IF NOT EXISTS recent_players (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      name_key TEXT NOT NULL,
+      handicap INTEGER,
+      last_used_at TEXT NOT NULL
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS recent_players_name_key ON recent_players(name_key);
   `);
 
   ensureColumn(db, 'holes', 'green_lat', 'REAL');
