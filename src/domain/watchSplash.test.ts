@@ -21,7 +21,8 @@ test('Watch splash plays over the app on cold start and never blocks it', () => 
   assert.match(app, /@State private var showSplash = !WatchClubSession\.shared\.liveHoleInProgress/);
   assert.match(app, /onChange\(of: session\.liveHoleInProgress\) \{ _, live in\s*[^}]*if live \{ showSplash = false \}/);
   const session = read('targets/watch/WatchClubSession.swift');
-  assert.match(session, /\n  var liveHoleInProgress: Bool \{\n    !userLeftApp && list\.roundLive && \(\(hasLiveHole && !list\.roundComplete\) \|\| putt\.open\)/);
+  assert.match(session, /var liveHoleInProgress: Bool \{\n    roundLooksLive && roundIsFresh/);
+  assert.match(session, /var roundLooksLive: Bool \{\n    !userLeftApp && list\.roundLive && \(\(hasLiveHole && !list\.roundComplete\) \|\| putt\.open\)/);
   assert.match(app, /ZStack \{\s*ContentView\(\)[\s\S]*if showSplash \{\s*WatchSplash \{ showSplash = false \}/);
 
   const splash = read('targets/watch/WatchSplash.swift');
