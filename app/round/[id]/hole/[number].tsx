@@ -641,14 +641,18 @@ function HoleScreenBody() {
     depthYards: hole?.greenDepthYards ?? sheetOnGreen?.greenDepthYards ?? null,
   };
   // Lock Screen / Dynamic Island: this hole, the running score, the last shot, and the group.
-  const liveGroupLine = useMemo(() => {
-    if (!round) return null;
+  // Also drives the Group score chip under the live yards badge.
+  const { groupPlaying, liveGroupLine } = useMemo(() => {
+    if (!round) return { groupPlaying: false, liveGroupLine: null };
     const group = loadGroup(db, round.id);
-    if (group.players.length < 2) return null;
-    return formatLiveGroupLine(
-      planGroupGames({ holes: group.holes, players: group.players, settings: group.settings }),
-      group.players.length,
-    );
+    if (group.players.length < 2) return { groupPlaying: false, liveGroupLine: null };
+    return {
+      groupPlaying: true,
+      liveGroupLine: formatLiveGroupLine(
+        planGroupGames({ holes: group.holes, players: group.players, settings: group.settings }),
+        group.players.length,
+      ),
+    };
   }, [db, round, revision]);
   const livePayload =
     round && hole && round.finishedAt == null && !marksOnly
@@ -2028,9 +2032,9 @@ function HoleScreenBody() {
           )}
         </View>
         <View
-          pointerEvents="none"
+          pointerEvents="box-none"
           style={[styles.headerCorner, { top: (headerBottom ?? insets.top + 6 + tapTarget + 16) + 6 }]}>
-          <View testID="live-gps-to-pin">
+          <View pointerEvents="none" testID="live-gps-to-pin">
             <YardsToGreenBadge
               compact
               approximateOnSoft
@@ -2040,6 +2044,19 @@ function HoleScreenBody() {
               hasGreen={Boolean(green)}
             />
           </View>
+          {groupPlaying && !catchUpFullScreen ? (
+            <Pressable
+              testID="group-score-chip"
+              accessibilityRole="button"
+              accessibilityLabel={COPY.groupScoreChip}
+              onPress={() => router.push(`/round/${id}/group?hole=${holeNumber}`)}
+              hitSlop={6}
+              style={styles.groupScoreChip}>
+              <Text style={styles.groupScoreChipText} numberOfLines={1}>
+                {COPY.groupScoreChip}
+              </Text>
+            </Pressable>
+          ) : null}
           {hazardCarries.length > 0 ? (
             <View pointerEvents="none" testID="hazard-carries" style={styles.hazardBadge}>
               {hazardCarries.map((row) => (
@@ -2886,6 +2903,17 @@ function makeStyles(colors: ColorPalette) {
     gap: 6,
     maxWidth: '46%',
   },
+  groupScoreChip: {
+    minHeight: 32,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.overlay,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  groupScoreChipText: { color: colors.cream, fontWeight: '800', fontSize: type.tiny },
   hazardBadge: {
     maxWidth: 160,
     backgroundColor: colors.overlay,
