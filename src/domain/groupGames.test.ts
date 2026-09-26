@@ -5,9 +5,13 @@ import {
   formatMatchLine,
   formatToPar,
   netAvailable,
+  netBlockReason,
   parseGroupGameSettings,
   parseGroupHandicap,
   planGroupGames,
+  roundStrokes,
+  strokesByHole,
+  strokesOffLow,
   type GroupHoleIn,
   type GroupPlayerIn,
 } from './groupGames';
@@ -79,25 +83,121 @@ test('skins carry on ties and stop at the first unscored hole', () => {
   assert.equal(open.skins?.carrying, 2);
 });
 
-test('net gives strokes on the hardest holes', () => {
-  // B gets 1 stroke on SI 1 (hole 1): net 4 ties A's 4, so the skin carries; hole 2 A wins both skins.
+test('net: the low plays off scratch and net equals gross for them', () => {
+  // B is 1 off A: one stroke on SI 1 (hole 1). Net 4 ties A's 4, so the skin carries; A wins hole 2 for both.
   const r = planGroupGames({
     holes: holes(2),
-    players: [player('a', [4, 4]), player('b', [5, 5], 1)],
+    players: [player('a', [4, 4], 3), player('b', [5, 5], 4)],
     settings: { ...DEFAULT_GROUP_GAMES, net: true },
   });
   assert.equal(r.net, true);
   assert.deepEqual(r.skins?.won, { a: 2, b: 0 });
-  assert.equal(r.strokePlay.find((row) => row.playerId === 'b')?.net, 9);
+  const a = r.strokePlay.find((row) => row.playerId === 'a');
+  const b = r.strokePlay.find((row) => row.playerId === 'b');
+  assert.equal(a?.net, a?.gross);
+  assert.equal(b?.net, 9);
 });
 
-test('net without a stroke index stays gross and says so', () => {
-  const players = [player('a', [4]), player('b', [5], 3)];
-  assert.equal(netAvailable(holes(1, false), players), false);
-  assert.equal(netAvailable(holes(1, false), [player('a', [4]), player('b', [5])]), true);
-  const r = planGroupGames({ holes: holes(1, false), players, settings: { ...DEFAULT_GROUP_GAMES, net: true } });
+test('10 vs 4: strokes go on SI 1–6, not SI 5–10', () => {
+  assert.deepEqual(strokesOffLow([player('a', [], 4), player('b', [], 10)]), { a: 0, b: 6 });
+  const given = strokesByHole(holes(18), 6);
+  assert.deepEqual(
+    [...given.entries()].filter(([, n]) => n > 0).map(([hole]) => hole),
+    [1, 2, 3, 4, 5, 6],
+  );
+  // Hole 1 is SI 8. Off the low, B gets no stroke there, so A's 4 beats B's 5 outright.
+  // Full handicaps would give B (10) a stroke on SI 8 and A (4) none, tying the hole.
+  const course = holes(18).map((h) => (h.number === 1 ? { ...h, strokeIndex: 8 } : h.number === 8 ? { ...h, strokeIndex: 1 } : h));
+  const r = planGroupGames({
+    holes: course,
+    players: [player('a', [4], 4), player('b', [5], 10)],
+    settings: { ...DEFAULT_GROUP_GAMES, net: true },
+  });
+  assert.deepEqual(r.skins?.won, { a: 1, b: 0 });
+});
+
+test('a match inside a foursome goes off the pair\'s low, not the group low', () => {
+  // B 12 vs C 20: C gets 8, on SI 1–8. Hole 1 is SI 12: no stroke for C, so B's 4 beats C's 5.
+  // Off the group low (A = 2) C would get 18 and B 10, putting a stroke for C (not B) on SI 12 — a halve.
+  const course = holes(18).map((h) => (h.number === 1 ? { ...h, strokeIndex: 12 } : h.number === 12 ? { ...h, strokeIndex: 1 } : h));
+  const r = planGroupGames({
+    holes: course,
+    players: [player('a', [4], 2), player('b', [4], 12), player('c', [5], 20), player('d', [4], 8)],
+    settings: { ...ALL, net: true, matchPlayerIds: ['b', 'c'] },
+  });
+  assert.equal(r.net, true);
+  assert.equal(r.match?.lead, 1);
+  assert.equal(r.match?.label, '1 UP thru 1');
+});
+
+test('a blank handicap blocks net instead of counting as 0', () => {
+  const players = [player('a', [4], 5), player('b', [5], null)];
+  assert.equal(netBlockReason(holes(1), players, { net: true, stableford: false }), 'handicap');
+  assert.equal(netAvailable(holes(1), players), false);
+  const r = planGroupGames({ holes: holes(1), players, settings: { ...DEFAULT_GROUP_GAMES, net: true } });
   assert.equal(r.net, false);
   assert.equal(r.netBlocked, true);
+  assert.equal(r.netBlockReason, 'handicap');
+  assert.equal(netBlockReason(holes(1), players, { net: false, stableford: false }), null);
+});
+
+test('9-hole rounds halve the strokes, rounded', () => {
+  assert.equal(roundStrokes(7, 9), 4);
+  assert.equal(roundStrokes(6, 9), 3);
+  assert.equal(roundStrokes(7, 18), 7);
+  // B is 7 off A: 4 strokes on the 9-hole round, on SI 1–4.
+  const r = planGroupGames({
+    holes: holes(9),
+    players: [player('a', Array(9).fill(4), 0), player('b', Array(9).fill(5), 7)],
+    settings: { ...DEFAULT_GROUP_GAMES, net: true },
+  });
+  assert.equal(r.strokePlay.find((row) => row.playerId === 'b')?.net, 45 - 4);
+});
+
+test('net without a stroke index blocks only when someone gets strokes off the low', () => {
+  const even = [player('a', [4], 10), player('b', [5], 10)];
+  assert.equal(netAvailable(holes(1, false), even), true);
+  assert.equal(netBlockReason(holes(1, false), even, { net: true, stableford: false }), null);
+  // Stableford uses full handicaps, so the same group needs an index there.
+  assert.equal(netBlockReason(holes(1, false), even, { net: true, stableford: true }), 'stroke_index');
+
+  const uneven = [player('a', [4], 0), player('b', [5], 3)];
+  assert.equal(netAvailable(holes(1, false), uneven), false);
+  const r = planGroupGames({ holes: holes(1, false), players: uneven, settings: { ...DEFAULT_GROUP_GAMES, net: true } });
+  assert.equal(r.net, false);
+  assert.equal(r.netBlockReason, 'stroke_index');
+});
+
+test('stableford net uses each full course handicap', () => {
+  // A 1 and B 2 on two par 4s (SI 1, 2): A gets a stroke on hole 1, B on both. Off the low, A would get none.
+  const r = planGroupGames({
+    holes: holes(2),
+    players: [player('a', [5, 4], 1), player('b', [5, 5], 2)],
+    settings: { ...DEFAULT_GROUP_GAMES, net: true, stableford: true },
+  });
+  // A: net 4, 4 → 2 + 2. B: net 4, 4 → 2 + 2.
+  assert.deepEqual(
+    r.stableford?.map((row) => [row.playerId, row.points]),
+    [
+      ['a', 4],
+      ['b', 4],
+    ],
+  );
+});
+
+test('skins waiting on a missing score say where', () => {
+  const r = planGroupGames({
+    holes: holes(3),
+    players: [player('a', [4, 4, 4]), player('b', [3, null, 4])],
+    settings: DEFAULT_GROUP_GAMES,
+  });
+  assert.deepEqual(r.skins?.waitingOn, { holeNumber: 2, playerIds: ['b'] });
+  const fresh = planGroupGames({
+    holes: holes(3),
+    players: [player('a', [4]), player('b', [3])],
+    settings: DEFAULT_GROUP_GAMES,
+  });
+  assert.equal(fresh.skins?.waitingOn, null);
 });
 
 test('stableford points: par 2, birdie 3, double 0', () => {

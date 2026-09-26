@@ -16,21 +16,37 @@ import {
   formatMatchLine,
   formatToPar,
   GROUP_MAX_PLAYERS,
+  matchPair,
   parseGroupHandicap,
   planGroupGames,
   type GroupGameSettings,
 } from '@/src/domain/groupGames';
+import { describeGroupGame, type GroupGameId, type GroupRulesContext } from '@/src/domain/groupRules';
 import { COPY } from '@/src/domain/playerCopy';
 import { BigButton } from '@/src/ui/BigButton';
 import { Screen } from '@/src/ui/Screen';
 import { useColors } from '@/src/ui/ColorThemeProvider';
 import { tapTarget, type ColorPalette } from '@/src/ui/theme';
 
-/** Score chips for a hole: par − 2 … par + 4, or 2 … 8 when par is unknown. */
-function scoreChoices(par: number | null): number[] {
-  const low = par != null ? Math.max(1, par - 2) : 2;
+const MIN_SCORE = 1;
+const MAX_SCORE = 20;
+
+/**
+ * Score chips for a hole: par − 2 … par + 4 (2 … 8 when par is unknown), plus
+ * the current score when − / + took it outside that range.
+ */
+function scoreChoices(par: number | null, current: number | null): number[] {
+  const low = par != null ? Math.max(MIN_SCORE, par - 2) : 2;
   const high = par != null ? par + 4 : 8;
-  return Array.from({ length: high - low + 1 }, (_, i) => low + i);
+  const out = Array.from({ length: high - low + 1 }, (_, i) => low + i);
+  if (current != null && !out.includes(current)) out.push(current);
+  return out.sort((a, b) => a - b);
+}
+
+/** − / + from the current score, or from par (4 when unknown) when blank. */
+function stepScore(current: number | null, par: number | null, delta: -1 | 1): number {
+  const from = current ?? par ?? 4;
+  return Math.min(MAX_SCORE, Math.max(MIN_SCORE, from + delta));
 }
 
 /**
@@ -55,6 +71,7 @@ export default function RoundGroupScreen() {
   const [editName, setEditName] = useState('');
   const [editHcp, setEditHcp] = useState('');
   const [note, setNote] = useState<string | null>(null);
+  const [rulesOpen, setRulesOpen] = useState<GroupGameId | null>(null);
 
   const result = useMemo(
     () => (group ? planGroupGames({ holes: group.holes, players: group.players, settings: group.settings }) : null),
@@ -73,6 +90,32 @@ export default function RoundGroupScreen() {
   const hole = group.holes.find((h) => h.number === holeNumber) ?? group.holes[0] ?? null;
   const partners = group.players.filter((p) => !p.isMe);
   const settings = group.settings;
+  const pair = matchPair(group.players, settings);
+  const rulesCtx: GroupRulesContext = {
+    net: result.net,
+    holeCount: group.holes.length,
+    playerCount: group.players.length,
+    matchNames: pair ? [nameOf(pair[0]), nameOf(pair[1])] : null,
+  };
+  const rules = (gameId: GroupGameId) => describeGroupGame(gameId, settings, rulesCtx);
+  const howLink = (gameId: GroupGameId) => (
+    <>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: rulesOpen === gameId }}
+        testID={`group-rules-${gameId}`}
+        onPress={() => setRulesOpen((open) => (open === gameId ? null : gameId))}>
+        <Text style={styles.link}>{rulesOpen === gameId ? COPY.groupHideRules : COPY.groupHowScored}</Text>
+      </Pressable>
+      {rulesOpen === gameId ? <Text style={styles.note}>{rules(gameId)}</Text> : null}
+    </>
+  );
+  const netBlockedCopy =
+    result.netBlockReason === 'handicap'
+      ? COPY.groupNetNeedsHandicaps
+      : result.netBlockReason === 'stroke_index'
+        ? COPY.groupNetBlocked
+        : null;
   const saveGames = (next: Partial<GroupGameSettings>) => {
     setGroupGames(db, round.id, { ...settings, ...next });
     bump();
@@ -150,7 +193,18 @@ export default function RoundGroupScreen() {
               <View key={player.id} style={styles.entry}>
                 <Text style={styles.label}>{player.name}</Text>
                 <View style={styles.chips}>
-                  {scoreChoices(hole.par).map((n) => {
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`${player.name} ${COPY.groupScoreDown}`}
+                    testID={`group-score-${player.id}-down`}
+                    onPress={() => {
+                      setPlayerHoleScore(db, player.id, hole.number, stepScore(score, hole.par, -1));
+                      bump();
+                    }}
+                    style={styles.scoreChip}>
+                    <Text style={styles.chipText}>−</Text>
+                  </Pressable>
+                  {scoreChoices(hole.par, score).map((n) => {
                     const on = score === n;
                     return (
                       <Pressable
@@ -168,6 +222,17 @@ export default function RoundGroupScreen() {
                       </Pressable>
                     );
                   })}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`${player.name} ${COPY.groupScoreUp}`}
+                    testID={`group-score-${player.id}-up`}
+                    onPress={() => {
+                      setPlayerHoleScore(db, player.id, hole.number, stepScore(score, hole.par, 1));
+                      bump();
+                    }}
+                    style={styles.scoreChip}>
+                    <Text style={styles.chipText}>+</Text>
+                  </Pressable>
                 </View>
               </View>
             );
@@ -179,6 +244,7 @@ export default function RoundGroupScreen() {
       {partners.length > 0 ? (
         <View style={styles.block} testID="group-leaderboard">
           <Text style={styles.section}>{result.net ? COPY.groupLeaderboardNet : COPY.groupLeaderboard}</Text>
+          {result.net ? <Text style={styles.note}>{COPY.groupNetToParLabel}</Text> : null}
           {result.strokePlay.map((row) => (
             <View key={row.playerId} style={styles.row}>
               <Text style={styles.label}>
@@ -193,7 +259,8 @@ export default function RoundGroupScreen() {
               </Text>
             </View>
           ))}
-          {result.netBlocked ? <Text style={styles.warn}>{COPY.groupNetBlocked}</Text> : null}
+          {netBlockedCopy ? <Text style={styles.warn}>{netBlockedCopy}</Text> : null}
+          {howLink('strokePlay')}
         </View>
       ) : null}
 
@@ -208,9 +275,17 @@ export default function RoundGroupScreen() {
           ))}
           {result.skins.carrying > 0 ? (
             <Text style={styles.muted}>
-              {result.skins.carrying} {result.skins.carrying === 1 ? 'skin' : 'skins'} {COPY.groupSkinsCarrying}
+              {result.skins.carrying} {result.skins.carrying === 1 ? 'skin' : 'skins'}{' '}
+              {result.skins.holes.length === group.holes.length ? COPY.groupSkinsTiedAtEnd : COPY.groupSkinsCarrying}
             </Text>
           ) : null}
+          {result.skins.waitingOn ? (
+            <Text style={styles.warn} testID="group-skins-waiting">
+              {COPY.groupSkinsWaitingPrefix} {result.skins.waitingOn.holeNumber}:{' '}
+              {result.skins.waitingOn.playerIds.map(nameOf).join(', ')}. {COPY.groupSkinsWaitingSuffix}
+            </Text>
+          ) : null}
+          {howLink('skins')}
         </View>
       ) : null}
 
@@ -223,6 +298,7 @@ export default function RoundGroupScreen() {
               <Text style={styles.value}>{row.points} pts</Text>
             </View>
           ))}
+          {howLink('stableford')}
         </View>
       ) : null}
 
@@ -232,6 +308,7 @@ export default function RoundGroupScreen() {
             <>
               <Text style={styles.section}>{COPY.groupMatchPlay}</Text>
               <Text style={styles.value}>{formatMatchLine(result.match, nameOf)}</Text>
+              {howLink('matchPlay')}
             </>
           ) : null}
           {result.nassau ? (
@@ -249,6 +326,7 @@ export default function RoundGroupScreen() {
                 <Text style={styles.label}>Overall</Text>
                 <Text style={styles.value}>{formatMatchLine(result.nassau.overall, nameOf)}</Text>
               </View>
+              {howLink('nassau')}
             </>
           ) : null}
         </View>
@@ -334,6 +412,13 @@ export default function RoundGroupScreen() {
         <View style={styles.block} testID="group-games">
           <Text style={styles.section}>{COPY.groupGames}</Text>
           <Toggle styles={styles} colors={colors} label={COPY.groupNet} value={settings.net} onChange={(net) => saveGames({ net })} />
+          <Text style={styles.note}>
+            {COPY.groupNetHow}
+            {group.holes.length === 9 ? ` ${COPY.groupNetHalved}` : ''}
+          </Text>
+          {netBlockedCopy ? <Text style={styles.warn}>{netBlockedCopy}</Text> : null}
+          <Text style={styles.label}>{COPY.groupStrokePlay}</Text>
+          <Text style={styles.note}>{rules('strokePlay')}</Text>
           <Toggle styles={styles} colors={colors} label={COPY.groupSkins} value={settings.skins} onChange={(skins) => saveGames({ skins })} />
           {settings.skins ? (
             <Toggle
@@ -344,6 +429,7 @@ export default function RoundGroupScreen() {
               onChange={(skinsCarry) => saveGames({ skinsCarry })}
             />
           ) : null}
+          <Text style={styles.note}>{rules('skins')}</Text>
           <Toggle
             styles={styles}
             colors={colors}
@@ -351,6 +437,7 @@ export default function RoundGroupScreen() {
             value={settings.stableford}
             onChange={(stableford) => saveGames({ stableford })}
           />
+          <Text style={styles.note}>{rules('stableford')}</Text>
           <Toggle
             styles={styles}
             colors={colors}
@@ -358,6 +445,7 @@ export default function RoundGroupScreen() {
             value={settings.matchPlay}
             onChange={(matchPlay) => saveGames({ matchPlay })}
           />
+          <Text style={styles.note}>{rules('matchPlay')}</Text>
           {round.holeCount === 18 ? (
             <Toggle
               styles={styles}
@@ -367,6 +455,7 @@ export default function RoundGroupScreen() {
               onChange={(nassau) => saveGames({ nassau })}
             />
           ) : null}
+          {round.holeCount === 18 ? <Text style={styles.note}>{rules('nassau')}</Text> : null}
           {(settings.matchPlay || settings.nassau) && group.players.length > 2 ? (
             <>
               <Text style={styles.label}>{COPY.groupMatchPick}</Text>
@@ -430,6 +519,7 @@ function makeStyles(colors: ColorPalette) {
     muted: { color: colors.muted, fontSize: 15 },
     note: { color: colors.muted, fontSize: 13 },
     warn: { color: colors.orange, fontSize: 14, fontWeight: '700' },
+    link: { color: colors.lime, fontSize: 14, fontWeight: '800', minHeight: 32, paddingVertical: 6 },
     block: { gap: 10, backgroundColor: colors.bgElevated, padding: 14, borderRadius: 16 },
     row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, minHeight: 36 },
     entry: { gap: 8 },

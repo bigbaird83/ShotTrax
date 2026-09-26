@@ -12,10 +12,13 @@ import { strokesReceived } from './handicap';
  *   closes out as "3 & 2", "AS" when level.
  * - Nassau (two players, 18 holes): front 9, back 9, and overall matches.
  *
- * Net uses each player's course handicap for this round, given out by stroke
- * index (hardest hole first). Net needs a stroke index on every hole; without
- * one, games stay gross and say so. Nothing is invented: a hole with no score
- * is simply not played yet.
+ * Net gives handicap strokes by stroke index, hardest hole first, and halves
+ * them (rounded) on a 9-hole round. Leaderboard and skins play off the
+ * group's lowest handicap; match play and Nassau off the lower of the two
+ * match players; Stableford uses full course handicaps. Net needs every
+ * handicap filled in, and a stroke index on every hole whenever someone gets
+ * a stroke; otherwise games stay gross and say why. Nothing is invented: a
+ * hole with no score is simply not played yet.
  */
 
 export const GROUP_MAX_PLAYERS = 4;
@@ -30,7 +33,7 @@ export type GroupHoleIn = {
 export type GroupPlayerIn = {
   id: string;
   name: string;
-  /** Course handicap for this round. Null / 0 → plays off scratch. */
+  /** Course handicap for this round. Null = not entered, which blocks net. */
   handicap: number | null;
   /** Hole number → strokes. Missing / null → not scored yet. */
   scores: Readonly<Record<number, number | null | undefined>>;
@@ -93,34 +96,90 @@ function validPar(n: number | null): n is number {
   return n != null && Number.isInteger(n) && n >= 3 && n <= 6;
 }
 
-/** Net needs a stroke index on every hole whenever someone gets strokes. */
-export function netAvailable(holes: readonly GroupHoleIn[], players: readonly GroupPlayerIn[]): boolean {
-  const anyStrokes = players.some((p) => (p.handicap ?? 0) > 0);
-  if (!anyStrokes) return true;
+/** Handicap strokes for the round: halved (rounded, .5 up) on a 9-hole round. */
+export function roundStrokes(strokes: number, holeCount: number): number {
+  const whole = Math.max(0, Math.round(strokes));
+  return holeCount === 9 ? Math.round(whole / 2) : whole;
+}
+
+/** Each player's strokes off the lowest handicap among `players`. Null when any handicap is blank. */
+export function strokesOffLow(players: readonly GroupPlayerIn[]): Record<string, number> | null {
+  if (players.some((p) => p.handicap == null)) return null;
+  const low = Math.min(...players.map((p) => p.handicap as number));
+  return Object.fromEntries(players.map((p) => [p.id, (p.handicap as number) - low]));
+}
+
+function allStrokeIndexes(holes: readonly GroupHoleIn[]): boolean {
   return holes.length > 0 && holes.every((h) => h.strokeIndex != null && h.strokeIndex >= 1);
 }
 
-type Scored = { gross: number; net: number };
+/**
+ * Net can be scored off the low: every handicap is filled in, and either
+ * nobody gets strokes after subtracting the lowest, or every hole has a
+ * stroke index to place them on.
+ */
+export function netAvailable(holes: readonly GroupHoleIn[], players: readonly GroupPlayerIn[]): boolean {
+  const off = strokesOffLow(players);
+  if (!off) return false;
+  const anyStrokes = Object.values(off).some((n) => roundStrokes(n, holes.length) > 0);
+  return !anyStrokes || allStrokeIndexes(holes);
+}
 
-/** Per player, hole number → gross and net for scored holes. */
+export type NetBlockReason = 'handicap' | 'stroke_index';
+
+/** Why net cannot be scored with these settings, or null when it can (or net is off). */
+export function netBlockReason(
+  holes: readonly GroupHoleIn[],
+  players: readonly GroupPlayerIn[],
+  settings: Pick<GroupGameSettings, 'net' | 'stableford'>,
+): NetBlockReason | null {
+  if (!settings.net) return null;
+  if (players.some((p) => p.handicap == null)) return 'handicap';
+  if (netAvailable(holes, players)) {
+    // Stableford uses full handicaps, so it can need an index when off-the-low does not.
+    const fullStrokes =
+      settings.stableford && players.some((p) => roundStrokes(p.handicap ?? 0, holes.length) > 0);
+    return fullStrokes && !allStrokeIndexes(holes) ? 'stroke_index' : null;
+  }
+  return 'stroke_index';
+}
+
+type Scored = { gross: number; net: number };
+type ScoreTable = Map<string, Map<number, Scored>>;
+
+/**
+ * Per player, hole number → gross and net for scored holes. `strokes` is each
+ * player's handicap strokes for this game (before the 9-hole halving), given
+ * out over `holes` by stroke index, hardest first. No entry → net = gross.
+ */
 function scoreTable(
   holes: readonly GroupHoleIn[],
   players: readonly GroupPlayerIn[],
-  useNet: boolean,
-): Map<string, Map<number, Scored>> {
+  strokes: Record<string, number> | null,
+): ScoreTable {
   const siHoles = holes.map((h) => ({ number: h.number, par: h.par, score: null, strokeIndex: h.strokeIndex }));
-  const out = new Map<string, Map<number, Scored>>();
+  const out: ScoreTable = new Map();
   for (const player of players) {
-    const shots = useNet ? strokesReceived(siHoles, player.handicap ?? 0) : null;
+    const given = strokes?.[player.id] ?? 0;
+    const perHole = given > 0 ? strokesReceived(siHoles, roundStrokes(given, holes.length)) : null;
     const row = new Map<number, Scored>();
     for (const hole of holes) {
       const gross = player.scores[hole.number];
       if (!validScore(gross)) continue;
-      row.set(hole.number, { gross, net: gross - (shots?.get(hole.number) ?? 0) });
+      row.set(hole.number, { gross, net: gross - (perHole?.get(hole.number) ?? 0) });
     }
     out.set(player.id, row);
   }
   return out;
+}
+
+/** Strokes each player gets on each hole in a game, for display and tests. */
+export function strokesByHole(
+  holes: readonly GroupHoleIn[],
+  strokes: number,
+): Map<number, number> {
+  const siHoles = holes.map((h) => ({ number: h.number, par: h.par, score: null, strokeIndex: h.strokeIndex }));
+  return strokesReceived(siHoles, roundStrokes(strokes, holes.length));
 }
 
 export type StrokePlayRow = {
@@ -143,6 +202,12 @@ export type SkinsResult = {
   holes: { number: number; winnerId: string | null; value: number }[];
   /** Skins riding on the next hole (ties still open). */
   carrying: number;
+  /**
+   * The first hole someone has not scored, when a later hole (or another
+   * player on that hole) already has a score — skins wait there until it is
+   * entered. Null when nothing is waiting.
+   */
+  waitingOn: { holeNumber: number; playerIds: string[] } | null;
 };
 
 export type StablefordRow = { playerId: string; name: string; points: number; holes: number };
@@ -163,8 +228,9 @@ export type MatchStatus = {
 
 export type GroupResult = {
   net: boolean;
-  /** Net was asked for but a hole has no stroke index. */
+  /** Net was asked for but cannot be scored; games stay gross. */
   netBlocked: boolean;
+  netBlockReason: NetBlockReason | null;
   strokePlay: StrokePlayRow[];
   skins: SkinsResult | null;
   stableford: StablefordRow[] | null;
@@ -183,7 +249,7 @@ function placeRows<T extends { place: number }>(rows: T[], key: (row: T) => numb
 function strokePlay(
   holes: readonly GroupHoleIn[],
   players: readonly GroupPlayerIn[],
-  table: Map<string, Map<number, Scored>>,
+  table: ScoreTable,
   useNet: boolean,
 ): StrokePlayRow[] {
   const par = new Map(holes.map((h) => [h.number, h.par]));
@@ -218,20 +284,30 @@ function strokePlay(
 function skins(
   holes: readonly GroupHoleIn[],
   players: readonly GroupPlayerIn[],
-  table: Map<string, Map<number, Scored>>,
+  table: ScoreTable,
   useNet: boolean,
   carry: boolean,
 ): SkinsResult {
   const won: Record<string, number> = Object.fromEntries(players.map((p) => [p.id, 0]));
   const rows: SkinsResult['holes'] = [];
+  const ordered = [...holes].sort((a, b) => a.number - b.number);
   let pot = 0;
-  for (const hole of [...holes].sort((a, b) => a.number - b.number)) {
+  let waitingOn: SkinsResult['waitingOn'] = null;
+  for (const [i, hole] of ordered.entries()) {
     const scores = players.map((p) => table.get(p.id)?.get(hole.number));
-    if (scores.some((s) => s == null)) break;
+    if (scores.some((sc) => sc == null)) {
+      const started =
+        scores.some((sc) => sc != null) ||
+        ordered.slice(i + 1).some((later) => players.some((p) => table.get(p.id)?.has(later.number)));
+      if (started) {
+        waitingOn = { holeNumber: hole.number, playerIds: players.filter((_, j) => scores[j] == null).map((p) => p.id) };
+      }
+      break;
+    }
     pot += 1;
-    const values = scores.map((s) => (useNet ? (s as Scored).net : (s as Scored).gross));
+    const values = scores.map((sc) => (useNet ? (sc as Scored).net : (sc as Scored).gross));
     const best = Math.min(...values);
-    const winners = players.filter((_, i) => values[i] === best);
+    const winners = players.filter((_, j) => values[j] === best);
     if (winners.length === 1) {
       won[winners[0].id] += pot;
       rows.push({ number: hole.number, winnerId: winners[0].id, value: pot });
@@ -241,13 +317,13 @@ function skins(
       if (!carry) pot = 0;
     }
   }
-  return { won, holes: rows, carrying: carry ? pot : 0 };
+  return { won, holes: rows, carrying: carry ? pot : 0, waitingOn };
 }
 
 function stableford(
   holes: readonly GroupHoleIn[],
   players: readonly GroupPlayerIn[],
-  table: Map<string, Map<number, Scored>>,
+  table: ScoreTable,
   useNet: boolean,
 ): StablefordRow[] {
   return players
@@ -255,9 +331,9 @@ function stableford(
       let points = 0;
       let counted = 0;
       for (const hole of holes) {
-        const s = table.get(player.id)?.get(hole.number);
-        if (!s || !validPar(hole.par)) continue;
-        points += Math.max(0, 2 + hole.par - (useNet ? s.net : s.gross));
+        const sc = table.get(player.id)?.get(hole.number);
+        if (!sc || !validPar(hole.par)) continue;
+        points += Math.max(0, 2 + hole.par - (useNet ? sc.net : sc.gross));
         counted += 1;
       }
       return { playerId: player.id, name: player.name, points, holes: counted };
@@ -270,7 +346,7 @@ function matchStatus(
   holes: readonly GroupHoleIn[],
   aId: string,
   bId: string,
-  table: Map<string, Map<number, Scored>>,
+  table: ScoreTable,
   useNet: boolean,
 ): MatchStatus {
   const ordered = [...holes].sort((x, y) => x.number - y.number);
@@ -298,41 +374,61 @@ function matchStatus(
   return { aId, bId, thru, length: ordered.length, lead, decided, label };
 }
 
-/** Every game the settings turn on, for the players and holes given. */
+/** The two players in the match: the chosen pair, or the only two players. */
+export function matchPair(
+  players: readonly GroupPlayerIn[],
+  settings: Pick<GroupGameSettings, 'matchPlayerIds'>,
+): readonly [string, string] | null {
+  const ids = settings.matchPlayerIds;
+  if (ids && players.some((p) => p.id === ids[0]) && players.some((p) => p.id === ids[1])) return ids;
+  return players.length === 2 ? [players[0].id, players[1].id] : null;
+}
+
+/**
+ * Every game the settings turn on, for the players and holes given.
+ *
+ * Net strokes (halved on a 9-hole round):
+ * - Leaderboard and skins: each player's handicap minus the group's lowest.
+ * - Match play and Nassau: the difference between the two match players only.
+ * - Stableford: each player's full course handicap.
+ */
 export function planGroupGames(args: {
   holes: readonly GroupHoleIn[];
   players: readonly GroupPlayerIn[];
   settings: GroupGameSettings;
 }): GroupResult {
   const { holes, players, settings } = args;
-  const netOk = netAvailable(holes, players);
-  const useNet = settings.net && netOk;
-  const table = scoreTable(holes, players, useNet);
+  const blocked = netBlockReason(holes, players, settings);
+  const useNet = settings.net && blocked == null;
 
-  const pair =
-    settings.matchPlayerIds &&
-    players.some((p) => p.id === settings.matchPlayerIds?.[0]) &&
-    players.some((p) => p.id === settings.matchPlayerIds?.[1])
-      ? settings.matchPlayerIds
-      : players.length === 2
-        ? ([players[0].id, players[1].id] as const)
-        : null;
+  const groupTable = scoreTable(holes, players, useNet ? strokesOffLow(players) : null);
+  const pair = matchPair(players, settings);
+  const pairPlayers = pair ? players.filter((p) => p.id === pair[0] || p.id === pair[1]) : [];
+  const pairTable = pair ? scoreTable(holes, pairPlayers, useNet ? strokesOffLow(pairPlayers) : null) : groupTable;
+  const fullTable = settings.stableford
+    ? scoreTable(
+        holes,
+        players,
+        useNet ? Object.fromEntries(players.map((p) => [p.id, p.handicap ?? 0])) : null,
+      )
+    : groupTable;
 
   const ordered = [...holes].sort((a, b) => a.number - b.number);
   const nassauOk = pair != null && settings.nassau && ordered.length === 18;
 
   return {
     net: useNet,
-    netBlocked: settings.net && !netOk,
-    strokePlay: strokePlay(holes, players, table, useNet),
-    skins: settings.skins && players.length >= 2 ? skins(holes, players, table, useNet, settings.skinsCarry) : null,
-    stableford: settings.stableford ? stableford(holes, players, table, useNet) : null,
-    match: pair && settings.matchPlay ? matchStatus(holes, pair[0], pair[1], table, useNet) : null,
+    netBlocked: blocked != null,
+    netBlockReason: blocked,
+    strokePlay: strokePlay(holes, players, groupTable, useNet),
+    skins: settings.skins && players.length >= 2 ? skins(holes, players, groupTable, useNet, settings.skinsCarry) : null,
+    stableford: settings.stableford ? stableford(holes, players, fullTable, useNet) : null,
+    match: pair && settings.matchPlay ? matchStatus(holes, pair[0], pair[1], pairTable, useNet) : null,
     nassau: nassauOk
       ? {
-          front: matchStatus(ordered.slice(0, 9), pair[0], pair[1], table, useNet),
-          back: matchStatus(ordered.slice(9), pair[0], pair[1], table, useNet),
-          overall: matchStatus(ordered, pair[0], pair[1], table, useNet),
+          front: matchStatus(ordered.slice(0, 9), pair[0], pair[1], pairTable, useNet),
+          back: matchStatus(ordered.slice(9), pair[0], pair[1], pairTable, useNet),
+          overall: matchStatus(ordered, pair[0], pair[1], pairTable, useNet),
         }
       : null,
   };
