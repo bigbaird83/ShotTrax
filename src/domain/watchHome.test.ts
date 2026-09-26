@@ -647,7 +647,7 @@ test('Watch keeps club pick + hole scoring; no Export / Restore, no cloud accoun
   assert.match(ui, /actionPill\("Hole Out"\)/);
   // Highlight is the pill only: fill clipped to the same rounded shape.
   const wheel = ui.slice(ui.indexOf('ForEach(wheelClubs'), ui.indexOf('private var moreClubs'));
-  assert.match(wheel, /\.background\(selected \? outdoorLime : Color\("bg"\)\)\s*(\/\/[^\n]*\s*)?\.clipShape\(RoundedRectangle\(cornerRadius: 10\)\)/);
+  assert.match(wheel, /\.background\(selected \? outdoorLime : tileFill\)\s*(\/\/[^\n]*\s*)?\.clipShape\(RoundedRectangle\(cornerRadius: 10\)\)/);
 });
 
 test('Search nearby refreshes when the phone is only background-reachable', () => {

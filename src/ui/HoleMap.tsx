@@ -60,7 +60,8 @@ import { QualityBadge } from './Badge';
 import { CLUB_MARK_CONFIDENCE_LIFT_PX, GpsConfidenceChip } from './GpsConfidenceChip';
 import { FmbRow } from './FmbRow';
 import { YardsToGreenBadge } from './YardsToGreenBadge';
-import { colors, type } from './theme';
+import { useColors } from './ColorThemeProvider';
+import { mapInk, type, type ColorPalette } from './theme';
 
 type Coord = { latitude: number; longitude: number };
 
@@ -190,6 +191,8 @@ function TrailFallback({
   paintSourceChip?: string | null;
   requestCourse?: { name?: string | null; city?: string | null; courseId?: string | null } | null;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const yardsOnCard = Boolean(yardsToGreen && yardsToGreen.yards != null && Number.isFinite(yardsToGreen.yards));
   const waiting =
     !frameMiss &&
@@ -277,6 +280,8 @@ function LiveDragGeometry({
   dragLines: ReturnType<typeof planDragShotLines>;
   pinVisible: boolean;
 }) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <>
       {dragLines.shot ? (
@@ -285,7 +290,7 @@ function LiveDragGeometry({
             toCoord(dragLines.shot.from.lat, dragLines.shot.from.lng),
             toCoord(dragLines.shot.to.lat, dragLines.shot.to.lng),
           ]}
-          strokeColor={colors.cream}
+          strokeColor={mapInk.text}
           strokeWidth={3}
           lineDashPattern={[8, 6]}
         />
@@ -305,7 +310,7 @@ function LiveDragGeometry({
             toCoord(dragLines.toGreen.from.lat, dragLines.toGreen.from.lng),
             toCoord(dragLines.toGreen.to.lat, dragLines.toGreen.to.lng),
           ]}
-          strokeColor={colors.cream}
+          strokeColor={mapInk.text}
           strokeWidth={3}
           lineDashPattern={[8, 6]}
         />
@@ -370,6 +375,8 @@ function NativeHoleMap({
   paintSourceChip,
   requestCourse,
 }: Props) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const mapRef = useRef<MapView | null>(null);
   const framedOnce = useRef(false);
   const pendingLocked = useRef(false);
@@ -810,7 +817,7 @@ function NativeHoleMap({
               <View pointerEvents="none" style={styles.lineChip}>
                 {trail.chip ? <Text style={styles.lineChipValue}>{trail.chip}</Text> : null}
                 {trail.showQualityBadge ? (
-                  <QualityBadge quality={shot.fixQuality} source={shot.source} />
+                  <QualityBadge onMap quality={shot.fixQuality} source={shot.source} />
                 ) : null}
               </View>
             </Marker>
@@ -1012,143 +1019,145 @@ export function HoleMap(props: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  wrap: {
-    height: 236,
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.bgElevated,
-  },
-  bleed: {
-    ...StyleSheet.absoluteFill,
-    flex: 1,
-    minHeight: 0,
-    alignSelf: 'stretch',
-    overflow: 'hidden',
-    backgroundColor: colors.bgElevated,
-  },
-  map: {
-    ...StyleSheet.absoluteFill,
-    flex: 1,
-  },
-  mapCover: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    backgroundColor: colors.bgElevated,
-  },
-  lineChip: {
-    backgroundColor: 'rgba(11,26,18,0.88)',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    alignItems: 'center',
-    gap: 2,
-  },
-  lineChipGreen: { borderWidth: 1, borderColor: colors.cream },
-  lineChipValue: { color: colors.cream, fontSize: 14, fontWeight: '900' },
-  ringLabel: {
-    backgroundColor: 'rgba(11,26,18,0.72)',
-    borderRadius: 8,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-  },
-  ringLabelText: { color: colors.cream, fontSize: 11, fontWeight: '800' },
-  legalCover: {
-    position: 'absolute',
-    left: 0,
-    bottom: 0,
-    width: 168,
-    height: 56,
-    backgroundColor: colors.bgElevated,
-  },
-  holeBadgeText: {
-    color: colors.cream,
-    fontSize: 18,
-    fontWeight: '900',
-  },
-  toGreen: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    maxWidth: '58%',
-  },
-  hint: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(11,26,18,0.78)',
-    color: colors.cream,
-    fontSize: type.tiny,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  fallback: {
-    minHeight: 160,
-    flex: 1,
-    backgroundColor: colors.bgElevated,
-    padding: 12,
-    gap: 6,
-    justifyContent: 'center',
-  },
-  missCard: {
-    minHeight: 160,
-    flex: 1,
-    backgroundColor: colors.bg,
-    paddingHorizontal: 20,
-    paddingVertical: 24,
-    gap: 10,
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  paintChip: { color: colors.muted, fontSize: type.tiny, fontWeight: '600' },
-  missMsg: { color: colors.cream, fontSize: type.body, lineHeight: 22, fontWeight: '700' },
-  missDetail: { color: colors.muted, fontSize: type.meta, lineHeight: 20, fontWeight: '700' },
-  fallbackMsg: { color: colors.muted, fontSize: type.meta, lineHeight: 20 },
-  userDot: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#2F80FF',
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-  },
-  confidenceOnMark: {
-    alignItems: 'center',
-    paddingBottom: CLUB_MARK_CONFIDENCE_LIFT_PX,
-  },
-  toPinHit: {
-    width: ADD_SHOT_TO_PIN_HIT_W,
-    height: ADD_SHOT_TO_PIN_HIT_H,
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-  },
-  toPinHead: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.good,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  toPinStem: {
-    width: 3,
-    height: 16,
-    marginTop: -2,
-    backgroundColor: colors.good,
-  },
-  pathDot: {
-    width: ADD_SHOT_PATH_DOT_PX,
-    height: ADD_SHOT_PATH_DOT_PX,
-    borderRadius: ADD_SHOT_PATH_DOT_PX / 2,
-    backgroundColor: colors.cream,
-    borderWidth: 3,
-    borderColor: colors.good,
-  },
-});
+function makeStyles(colors: ColorPalette) {
+  return StyleSheet.create({
+    wrap: {
+      height: 236,
+      borderRadius: 16,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: colors.line,
+      backgroundColor: colors.bgElevated,
+    },
+    bleed: {
+      ...StyleSheet.absoluteFill,
+      flex: 1,
+      minHeight: 0,
+      alignSelf: 'stretch',
+      overflow: 'hidden',
+      backgroundColor: colors.bgElevated,
+    },
+    map: {
+      ...StyleSheet.absoluteFill,
+      flex: 1,
+    },
+    mapCover: {
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+      backgroundColor: colors.bgElevated,
+    },
+    lineChip: {
+      backgroundColor: mapInk.scrim,
+      borderRadius: 10,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      alignItems: 'center',
+      gap: 2,
+    },
+    lineChipGreen: { borderWidth: 1, borderColor: mapInk.text },
+    lineChipValue: { color: mapInk.text, fontSize: 14, fontWeight: '900' },
+    ringLabel: {
+      backgroundColor: mapInk.scrimSoft,
+      borderRadius: 8,
+      paddingHorizontal: 5,
+      paddingVertical: 1,
+    },
+    ringLabelText: { color: mapInk.text, fontSize: 11, fontWeight: '800' },
+    legalCover: {
+      position: 'absolute',
+      left: 0,
+      bottom: 0,
+      width: 168,
+      height: 56,
+      backgroundColor: colors.bgElevated,
+    },
+    holeBadgeText: {
+      color: colors.cream,
+      fontSize: 18,
+      fontWeight: '900',
+    },
+    toGreen: {
+      position: 'absolute',
+      top: 10,
+      right: 10,
+      maxWidth: '58%',
+    },
+    hint: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      backgroundColor: mapInk.scrim,
+      color: mapInk.text,
+      fontSize: type.tiny,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+    },
+    fallback: {
+      minHeight: 160,
+      flex: 1,
+      backgroundColor: colors.bgElevated,
+      padding: 12,
+      gap: 6,
+      justifyContent: 'center',
+    },
+    missCard: {
+      minHeight: 160,
+      flex: 1,
+      backgroundColor: colors.bg,
+      paddingHorizontal: 20,
+      paddingVertical: 24,
+      gap: 10,
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: colors.line,
+    },
+    paintChip: { color: colors.muted, fontSize: type.tiny, fontWeight: '600' },
+    missMsg: { color: colors.cream, fontSize: type.body, lineHeight: 22, fontWeight: '700' },
+    missDetail: { color: colors.muted, fontSize: type.meta, lineHeight: 20, fontWeight: '700' },
+    fallbackMsg: { color: colors.muted, fontSize: type.meta, lineHeight: 20 },
+    userDot: {
+      width: 16,
+      height: 16,
+      borderRadius: 8,
+      backgroundColor: '#2F80FF',
+      borderWidth: 3,
+      borderColor: '#FFFFFF',
+    },
+    confidenceOnMark: {
+      alignItems: 'center',
+      paddingBottom: CLUB_MARK_CONFIDENCE_LIFT_PX,
+    },
+    toPinHit: {
+      width: ADD_SHOT_TO_PIN_HIT_W,
+      height: ADD_SHOT_TO_PIN_HIT_H,
+      alignItems: 'center',
+      justifyContent: 'flex-start',
+    },
+    toPinHead: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      backgroundColor: colors.good,
+      borderWidth: 2,
+      borderColor: '#FFFFFF',
+    },
+    toPinStem: {
+      width: 3,
+      height: 16,
+      marginTop: -2,
+      backgroundColor: colors.good,
+    },
+    pathDot: {
+      width: ADD_SHOT_PATH_DOT_PX,
+      height: ADD_SHOT_PATH_DOT_PX,
+      borderRadius: ADD_SHOT_PATH_DOT_PX / 2,
+      backgroundColor: mapInk.text,
+      borderWidth: 3,
+      borderColor: colors.good,
+    },
+  });
+}

@@ -149,7 +149,8 @@ test('Watch opens on the same top 3 as the phone; no scroll to hit one', () => {
   assert.equal((pick.match(/actionPill\("Home"\)/g) ?? []).length, 1);
   // Back / Home render through the shared 44pt actionPill, defined just above clubPick.
   const pill = watchUi.slice(watchUi.indexOf('private func actionPill'), watchUi.indexOf('private var clubPick'));
-  assert.match(pill, /minHeight: 44/);
+  // The pill fills its row: 44pt, less only on a short face (watchHoleFrames).
+  assert.match(pill, /maxWidth: \.infinity, maxHeight: \.infinity/);
   assert.doesNotMatch(pick, /top3\.enumerated\(\)|TabView|tabViewStyle/);
   const holeOut = pick.slice(holeOutAt, stripAt);
   assert.match(holeOut, /actionPill\("Hole Out"\)/);

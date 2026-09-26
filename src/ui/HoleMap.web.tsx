@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import type { GpsFix, Shot } from '@/src/domain/types';
 import type { YardsToGreenResult } from '@/src/sensing/yardsToGreen';
@@ -6,7 +7,8 @@ import { COPY, showWaitingOnLocationLine, yardsAreOnTheCard } from '@/src/domain
 import type { PaintMissNotice } from '@/src/domain/paintMiss';
 import { PaintMissBanner } from './PaintMissBanner';
 import { YardsToGreenBadge } from './YardsToGreenBadge';
-import { colors, type } from './theme';
+import { useColors } from './ColorThemeProvider';
+import { type, type ColorPalette } from './theme';
 
 type Props = {
   holeNumber: number;
@@ -48,6 +50,8 @@ export function HoleMap({
   paintNotice,
   paintSourceChip,
 }: Props) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={styles.fallback}>
       <Text style={styles.title}>Hole {holeNumber}</Text>
@@ -82,16 +86,18 @@ export function HoleMap({
   );
 }
 
-const styles = StyleSheet.create({
-  fallback: {
-    flex: 1,
-    minHeight: 160,
-    backgroundColor: colors.bgElevated,
-    padding: 12,
-    gap: 6,
-    justifyContent: 'center',
-  },
-  title: { color: colors.cream, fontSize: type.hole, fontWeight: '900' },
-  chip: { color: colors.muted, fontSize: type.tiny, fontWeight: '600' },
-  msg: { color: colors.muted, fontSize: type.meta, lineHeight: 20 },
-});
+function makeStyles(colors: ColorPalette) {
+  return StyleSheet.create({
+    fallback: {
+      flex: 1,
+      minHeight: 160,
+      backgroundColor: colors.bgElevated,
+      padding: 12,
+      gap: 6,
+      justifyContent: 'center',
+    },
+    title: { color: colors.cream, fontSize: type.hole, fontWeight: '900' },
+    chip: { color: colors.muted, fontSize: type.tiny, fontWeight: '600' },
+    msg: { color: colors.muted, fontSize: type.meta, lineHeight: 20 },
+  });
+}

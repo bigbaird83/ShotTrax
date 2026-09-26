@@ -39,39 +39,37 @@ struct ContentView: View {
       } else if session.putt.open {
         // Compact title only. Fixed 2×2 — Ultra clipped 0–3 and Made.
         // Back/Cancel returns to hole play — no Made/Add, no invent GPS.
+        // Feedback takes the title's place so it never adds a line and pushes
+        // Made down.
         VStack(alignment: .leading, spacing: 4) {
           HStack(spacing: 6) {
             Button(action: { session.closePuttSheet() }) {
-              Text("Back")
-                .font(.system(size: 12, weight: .heavy))
-                .foregroundStyle(Color("cream"))
-                .lineLimit(1)
-                .padding(.horizontal, 8)
-                .frame(minHeight: 24)
-                .overlay(
-                  Capsule()
-                    .stroke(Color("cream"), lineWidth: 1)
-                )
+              capsuleBack(Text("Back"), height: 22)
             }
             .buttonStyle(.plain)
-            Text("Hole \(session.putt.holeNumber) · Putts")
-              .font(.system(size: 12, weight: .heavy))
-              .foregroundStyle(Color("cream"))
-              .lineLimit(1)
-              .minimumScaleFactor(0.8)
+            if session.feedback.isEmpty {
+              Text("Hole \(session.putt.holeNumber) · Putts")
+                .font(.system(size: 12, weight: .heavy, design: .rounded))
+                .foregroundStyle(outdoorCream)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            } else {
+              Text(session.feedback)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(outdoorOrange)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            }
           }
-          if !session.feedback.isEmpty {
-            Text(session.feedback)
-              .font(.system(size: 11, weight: .bold))
-              .foregroundStyle(Color.orange)
-              .lineLimit(1)
-          }
+          .frame(height: 22)
           puttSheet
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(.horizontal, 4)
       } else if session.penaltyChoicesOpen {
         penaltyMenu
+      } else if showAllClubs {
+        allClubsList
       } else {
         clubPick
       }
@@ -93,6 +91,10 @@ struct ContentView: View {
     .onChange(of: isLuminanceReduced) { reduced in
       session.noteLuminanceReduced(reduced)
     }
+    .onChange(of: session.list.holeNumber) { _ in
+      // A new hole starts on the hole face, not a bag list left open.
+      showAllClubs = false
+    }
     .onChange(of: session.showsHome) { showing in
       // Leaving Home (hole, or holes/tees) drops the push. Search → Back does not.
       if !showing { homePath = NavigationPath() }
@@ -105,37 +107,46 @@ struct ContentView: View {
   private var watchHome: some View {
     VStack(alignment: .leading, spacing: 6) {
       Button(action: { homePath.append(WatchHomePush.searchNearby) }) {
-        Text("Search nearby")
-          .font(.system(size: 15, weight: .heavy))
-          .foregroundStyle(Color("cream"))
-          .lineLimit(1)
-          .minimumScaleFactor(0.7)
-          .frame(maxWidth: .infinity, minHeight: 40)
-          .overlay(
-            RoundedRectangle(cornerRadius: 10)
-              .stroke(Color("cream"), lineWidth: 1)
-          )
+        tileChrome(
+          HStack(spacing: 6) {
+            limeGlyph("location.fill")
+            Text("Search nearby")
+              .font(.system(size: 15, weight: .heavy, design: .rounded))
+              .foregroundStyle(outdoorCream)
+              .lineLimit(1)
+              .minimumScaleFactor(0.7)
+          }
+          .frame(maxWidth: .infinity, minHeight: 40),
+          tone: .plain,
+          radius: 12
+        )
       }
       .buttonStyle(.plain)
 
       if session.hasLiveHole {
         Button(action: { session.dismissNearbyToHole() }) {
-          Text("Continue · Hole \(session.list.holeNumber)")
-            .font(.system(size: 15, weight: .heavy))
+          tileChrome(
+            HStack(spacing: 6) {
+              Image(systemName: "play.fill")
+                .font(.system(size: 12, weight: .heavy))
+              Text("Continue · Hole \(session.list.holeNumber)")
+                .font(.system(size: 15, weight: .heavy, design: .rounded))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            }
             .foregroundStyle(Color("bg"))
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
-            .frame(maxWidth: .infinity, minHeight: 40)
-            .background(outdoorLime)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .frame(maxWidth: .infinity, minHeight: 40),
+            tone: .selected,
+            radius: 12
+          )
         }
         .buttonStyle(.plain)
       }
 
       if session.home.queued {
         Text("Queued · will sync")
-          .font(.system(size: 15, weight: .heavy))
-          .foregroundStyle(Color.orange)
+          .font(.system(size: 15, weight: .heavy, design: .rounded))
+          .foregroundStyle(outdoorOrange)
           .lineLimit(2)
           .minimumScaleFactor(0.8)
           .frame(maxWidth: .infinity, alignment: .leading)
@@ -144,12 +155,13 @@ struct ContentView: View {
       ScrollView {
         VStack(alignment: .leading, spacing: 6) {
           Text("Select course")
-            .font(.system(size: 16, weight: .heavy))
-            .foregroundStyle(Color("cream"))
+            .font(.system(size: 17, weight: .heavy, design: .rounded))
+            .foregroundStyle(outdoorCream)
+            .padding(.top, 2)
           if !session.feedback.isEmpty {
             Text(session.feedback)
               .font(.system(size: 11, weight: .bold))
-              .foregroundStyle(session.feedback.contains("✓") || session.feedback.contains("★") ? Color("accent") : Color.orange)
+              .foregroundStyle(session.feedback.contains("✓") || session.feedback.contains("★") ? outdoorLime : outdoorOrange)
               .lineLimit(2)
           }
 
@@ -162,20 +174,11 @@ struct ContentView: View {
           } else if !session.home.line.isEmpty {
             Text(session.home.line)
               .font(.system(size: 12, weight: .bold))
-              .foregroundStyle(Color("cream"))
+              .foregroundStyle(outdoorCream)
           }
 
           Button(action: { session.requestHome() }) {
-            Text(session.home.refreshLabel)
-              .font(.system(size: 13, weight: .heavy))
-              .foregroundStyle(session.home.queued ? Color.orange : Color("cream"))
-              .lineLimit(1)
-              .minimumScaleFactor(0.7)
-              .frame(maxWidth: .infinity, minHeight: 32)
-              .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                  .stroke(session.home.queued ? Color.orange : Color("muted"), lineWidth: 1)
-              )
+            refreshButtonLabel(session.home.refreshLabel)
           }
           .buttonStyle(.plain)
           .disabled(session.home.loading && !session.home.queued)
@@ -196,21 +199,24 @@ struct ContentView: View {
       Button(action: {
         if !homePath.isEmpty { homePath.removeLast() }
       }) {
-        Text("Back")
-          .font(.system(size: 13, weight: .heavy))
-          .foregroundStyle(Color("cream"))
-          .frame(maxWidth: .infinity, minHeight: 32)
-          .overlay(
-            RoundedRectangle(cornerRadius: 8)
-              .stroke(Color("cream"), lineWidth: 1)
-          )
+        tileChrome(
+          HStack(spacing: 4) {
+            backChevron
+            Text("Back")
+              .font(.system(size: 13, weight: .heavy, design: .rounded))
+          }
+          .foregroundStyle(outdoorCream)
+          .frame(maxWidth: .infinity, minHeight: 32),
+          tone: .plain,
+          radius: 10
+        )
       }
       .buttonStyle(.plain)
 
       if session.home.queued {
         Text("Queued · will sync")
-          .font(.system(size: 15, weight: .heavy))
-          .foregroundStyle(Color.orange)
+          .font(.system(size: 15, weight: .heavy, design: .rounded))
+          .foregroundStyle(outdoorOrange)
           .lineLimit(2)
           .minimumScaleFactor(0.8)
           .frame(maxWidth: .infinity, alignment: .leading)
@@ -232,7 +238,7 @@ struct ContentView: View {
             } else if !session.home.queued {
               Text(session.home.nearbyEmptyLine)
                 .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Color("cream"))
+                .foregroundStyle(outdoorCream)
                 .lineLimit(3)
                 .minimumScaleFactor(0.8)
             }
@@ -242,16 +248,7 @@ struct ContentView: View {
           }
 
           Button(action: { session.requestHome() }) {
-            Text(session.home.refreshLabel)
-              .font(.system(size: 13, weight: .heavy))
-              .foregroundStyle(session.home.queued ? Color.orange : Color("cream"))
-              .lineLimit(1)
-              .minimumScaleFactor(0.7)
-              .frame(maxWidth: .infinity, minHeight: 32)
-              .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                  .stroke(session.home.queued ? Color.orange : Color("muted"), lineWidth: 1)
-              )
+            refreshButtonLabel(session.home.refreshLabel)
           }
           .buttonStyle(.plain)
           .disabled(session.home.loading && !session.home.queued)
@@ -269,9 +266,30 @@ struct ContentView: View {
   @ViewBuilder
   private func homeSectionTitle(_ title: String) -> some View {
     Text(title.uppercased())
-      .font(.system(size: 11, weight: .heavy))
+      .font(.system(size: 11, weight: .heavy, design: .rounded))
+      .tracking(0.8)
       .foregroundStyle(Color("muted"))
       .padding(.top, 4)
+  }
+
+  /// Quiet refresh at the bottom of Home / Nearby. Outline only, so it never
+  /// competes with the course rows above it. Orange while queued.
+  private func refreshButtonLabel(_ title: String) -> some View {
+    HStack(spacing: 5) {
+      Image(systemName: session.home.queued ? "clock.arrow.circlepath" : "arrow.clockwise")
+        .font(.system(size: 11, weight: .heavy))
+      Text(title)
+        .font(.system(size: 13, weight: .heavy, design: .rounded))
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+    }
+    .foregroundStyle(session.home.queued ? outdoorOrange : Color("muted"))
+    .frame(maxWidth: .infinity, minHeight: 32)
+    .contentShape(RoundedRectangle(cornerRadius: 10))
+    .overlay(
+      RoundedRectangle(cornerRadius: 10)
+        .stroke(session.home.queued ? outdoorOrange : tileEdge, lineWidth: 1)
+    )
   }
 
   /// Name area starts / continues the round. Star toggles the phone favorite only.
@@ -280,29 +298,30 @@ struct ContentView: View {
     let live = session.isLiveCourse(course)
     HStack(spacing: 4) {
       Button(action: { session.openHomeCourse(course) }) {
-        VStack(alignment: .leading, spacing: 1) {
-          Text(course.name)
-            .font(.system(size: 15, weight: .heavy))
-            .foregroundStyle(Color("cream"))
-            .lineLimit(2)
-            .minimumScaleFactor(0.8)
-            .multilineTextAlignment(.leading)
-          if live {
-            Text("Continue round")
-              .font(.system(size: 11, weight: .heavy))
-              .foregroundStyle(outdoorLime)
-          } else if let distance = course.distanceLabel {
-            Text(distance)
-              .font(.system(size: 11, weight: .bold))
-              .foregroundStyle(Color("muted"))
+        tileChrome(
+          VStack(alignment: .leading, spacing: 1) {
+            Text(course.name)
+              .font(.system(size: 15, weight: .heavy, design: .rounded))
+              .foregroundStyle(outdoorCream)
+              .lineLimit(2)
+              .minimumScaleFactor(0.8)
+              .multilineTextAlignment(.leading)
+            if live {
+              Text("Continue round")
+                .font(.system(size: 11, weight: .heavy, design: .rounded))
+                .foregroundStyle(outdoorLime)
+            } else if let distance = course.distanceLabel {
+              Text(distance)
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(Color("muted"))
+            }
           }
-        }
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-        .padding(.horizontal, 8)
-        .contentShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(
-          RoundedRectangle(cornerRadius: 10)
-            .stroke(live ? outdoorLime : Color("cream"), lineWidth: live ? 2 : 1)
+          .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+          .padding(.horizontal, 10)
+          .padding(.vertical, 4),
+          // The live course keeps a lime edge so it stands out in the list.
+          tone: live ? .accent : .plain,
+          radius: 12
         )
       }
       .buttonStyle(.plain)
@@ -311,7 +330,7 @@ struct ContentView: View {
       Button(action: { session.toggleFavorite(course) }) {
         Image(systemName: course.favorite ? "star.fill" : "star")
           .font(.system(size: 18, weight: .bold))
-          .foregroundStyle(course.favorite ? outdoorLime : Color("cream"))
+          .foregroundStyle(course.favorite ? outdoorLime : Color("muted"))
           .frame(width: 34, height: 44)
           .contentShape(Rectangle())
       }
@@ -324,14 +343,17 @@ struct ContentView: View {
   @ViewBuilder
   private var coursesBack: some View {
     Button(action: { session.backToHome() }) {
-      Text("Courses")
-        .font(.system(size: 13, weight: .heavy))
-        .foregroundStyle(Color("cream"))
-        .frame(maxWidth: .infinity, minHeight: 32)
-        .overlay(
-          RoundedRectangle(cornerRadius: 8)
-            .stroke(Color("cream"), lineWidth: 1)
-        )
+      tileChrome(
+        HStack(spacing: 4) {
+          backChevron
+          Text("Courses")
+            .font(.system(size: 13, weight: .heavy, design: .rounded))
+        }
+        .foregroundStyle(outdoorCream)
+        .frame(maxWidth: .infinity, minHeight: 32),
+        tone: .plain,
+        radius: 10
+      )
     }
     .buttonStyle(.plain)
   }
@@ -353,21 +375,22 @@ struct ContentView: View {
   private var statusHeader: some View {
     HStack(alignment: .firstTextBaseline, spacing: 6) {
       Text(session.showsNearby ? nearbyNavTitle : session.putt.open ? "Hole \(session.putt.holeNumber) · Putts" : session.list.statusLine)
-        .font(.footnote.weight(.bold))
-        .foregroundStyle(Color("cream"))
+        .font(.system(size: 15, weight: .heavy, design: .rounded))
+        .foregroundStyle(outdoorCream)
       if !session.showsNearby, !session.putt.open, session.list.showSoft {
         Text("Approximate")
           .font(.system(size: 10, weight: .heavy))
+          .foregroundStyle(outdoorOrange)
           .padding(.horizontal, 5)
           .padding(.vertical, 2)
-          .background(Color.orange.opacity(0.25))
+          .background(outdoorOrange.opacity(0.2))
           .clipShape(Capsule())
       }
     }
     if nearbyShowsFeedback {
       Text(session.feedback)
         .font(.footnote.weight(.bold))
-        .foregroundStyle(session.feedback.contains("✓") ? Color("accent") : Color.orange)
+        .foregroundStyle(session.feedback.contains("✓") ? outdoorLime : outdoorOrange)
     }
   }
 
@@ -378,37 +401,58 @@ struct ContentView: View {
       // One cream title through holes → tees. Never orange + leftover white row.
       if let name = session.nearby.courseName {
         Text(name)
-          .font(.footnote.weight(.bold))
+          .font(.system(size: 13, weight: .bold, design: .rounded))
           .foregroundStyle(Color("cream"))
           .lineLimit(2)
       }
       if session.nearby.holeCount == nil {
         Button(action: { session.pickHoleCount(9) }) {
-          Text("9")
-            .font(.headline.weight(.heavy))
-            .frame(maxWidth: .infinity, minHeight: 40)
+          nearbyChoice(Text("9"))
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.plain)
         .disabled(session.sending)
         Button(action: { session.pickHoleCount(18) }) {
-          Text("18")
-            .font(.headline.weight(.heavy))
-            .frame(maxWidth: .infinity, minHeight: 40)
+          nearbyChoice(Text("18"))
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.plain)
         .disabled(session.sending)
       } else if !session.nearby.tees.isEmpty {
         ForEach(session.nearby.tees) { tee in
           Button(action: { session.pickTee(name: tee.name) }) {
-            Text(tee.name)
-              .font(.headline.weight(.heavy))
-              .frame(maxWidth: .infinity, minHeight: 40)
+            nearbyChoice(Text(tee.name))
           }
-          .buttonStyle(.bordered)
+          .buttonStyle(.plain)
           .disabled(session.sending)
         }
       }
     }
+  }
+
+  /// Leading chevron on full-width Back / Courses tiles.
+  private var backChevron: some View {
+    Image(systemName: "chevron.left")
+      .font(.system(size: 11, weight: .heavy))
+  }
+
+  /// Small lime SF Symbol that leads a tile label.
+  private func limeGlyph(_ name: String) -> some View {
+    Image(systemName: name)
+      .font(.system(size: 13, weight: .heavy))
+      .foregroundStyle(outdoorLime)
+  }
+
+  /// Holes / tees choice: same raised tile as the rest of the Watch.
+  private func nearbyChoice(_ label: Text) -> some View {
+    tileChrome(
+      label
+        .font(.system(size: 17, weight: .heavy, design: .rounded))
+        .foregroundStyle(outdoorCream)
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+        .frame(maxWidth: .infinity, minHeight: 40),
+      tone: .plain,
+      radius: 12
+    )
   }
 
   /// #C8F542 — same lime as phone. Asset accent can vanish on Ultra outdoor.
@@ -416,87 +460,185 @@ struct ContentView: View {
   /// #F4F1E8 — same cream as the hole title. Literal so the empty dash does not
   /// depend on a named color the way accent does.
   private let outdoorCream = Color(red: 244.0 / 255.0, green: 241.0 / 255.0, blue: 232.0 / 255.0)
+  /// #F57A3D — phone orange. Penalty and warnings.
+  private let outdoorOrange = Color(red: 245.0 / 255.0, green: 122.0 / 255.0, blue: 61.0 / 255.0)
+  /// #1A3324 — raised tile one step above the #0B1A12 face, so buttons read as
+  /// solid shapes instead of cream outlines.
+  private let tileFill = Color(red: 26.0 / 255.0, green: 51.0 / 255.0, blue: 36.0 / 255.0)
+  /// Tile edge: cream at low alpha still traces the shape in sun on Ultra.
+  private var tileEdge: Color { outdoorCream.opacity(0.28) }
+
+  /// One look for every Watch button. Plain is a raised tile, accent is the
+  /// finishing action, warning is Penalty, selected is the solid lime fill.
+  private enum TileTone { case plain, accent, warning, selected }
+
+  private func tileInk(_ tone: TileTone) -> Color {
+    switch tone {
+    case .plain: return outdoorCream
+    case .accent: return outdoorLime
+    case .warning: return outdoorOrange
+    case .selected: return Color("bg")
+    }
+  }
+
+  private func tileBackground(_ tone: TileTone) -> Color {
+    switch tone {
+    case .plain: return tileFill
+    case .accent: return outdoorLime.opacity(0.14)
+    case .warning: return outdoorOrange.opacity(0.16)
+    case .selected: return outdoorLime
+    }
+  }
+
+  private func tileStroke(_ tone: TileTone) -> Color {
+    switch tone {
+    case .plain: return tileEdge
+    case .accent: return outdoorLime
+    case .warning: return outdoorOrange
+    case .selected: return outdoorLime
+    }
+  }
+
+  private func tileStrokeWidth(_ tone: TileTone) -> CGFloat {
+    tone == .plain ? 1 : 1.5
+  }
+
+  /// Rounded-rect fill, clip, hit area and edge in one place.
+  private func tileChrome<Content: View>(_ content: Content, tone: TileTone, radius: CGFloat) -> some View {
+    content
+      .background(tileBackground(tone))
+      .clipShape(RoundedRectangle(cornerRadius: radius))
+      .contentShape(RoundedRectangle(cornerRadius: radius))
+      .overlay(
+        RoundedRectangle(cornerRadius: radius)
+          .stroke(tileStroke(tone), lineWidth: tileStrokeWidth(tone))
+      )
+  }
+
+  /// Small capsule Back used on the putt sheet and penalty menu.
+  private func capsuleBack(_ label: Text, height: CGFloat) -> some View {
+    HStack(spacing: 3) {
+      Image(systemName: "chevron.left")
+        .font(.system(size: 10, weight: .heavy))
+      label
+        .font(.system(size: 12, weight: .heavy, design: .rounded))
+        .lineLimit(1)
+    }
+    .foregroundStyle(outdoorCream)
+    .padding(.horizontal, 10)
+    .frame(height: height)
+    .background(tileFill)
+    .clipShape(Capsule())
+    .contentShape(Capsule())
+    .overlay(
+      Capsule()
+        .stroke(tileEdge, lineWidth: 1)
+    )
+  }
 
   @ViewBuilder
   private var puttSheet: some View {
     // Fixed 2×2 with literal 0–3 — a lazy grid dropped that cell on Ultra.
     // Selection is lime fill on the same pill — never hide the tapped bucket.
     // Made is a full-width high-contrast pill under Add/Undo.
-    VStack(spacing: 4) {
-      HStack(spacing: 4) {
-        puttLengthButton(id: "inside_3", label: "0–3")
-        puttLengthButton(id: "3_to_10", label: "3–10")
-      }
-      HStack(spacing: 4) {
-        puttLengthButton(id: "10_to_20", label: "10–20")
-        puttLengthButton(id: "over_20", label: "20+")
-      }
-
-      HStack(spacing: 4) {
-        Button(action: { session.addPutt() }) {
-          Text("Add putt")
-            .font(.system(size: 11, weight: .heavy))
-            .foregroundStyle(Color("cream"))
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
-            .frame(maxWidth: .infinity, minHeight: 36)
-            .overlay(
-              RoundedRectangle(cornerRadius: 10)
-                .stroke(Color("cream"), lineWidth: 1)
-            )
+    // Every button stays on screen from 40mm to Ultra: rows run 36pt (Made 48pt)
+    // and shrink only on a short face. The putt list / cue line is dropped
+    // before any row would go under 32pt. Same math as watchPuttSheetFrames.
+    GeometryReader { geo in
+      let footerLines = (session.putt.lengths.isEmpty ? 0 : 1)
+        + (session.putt.pending == nil && session.putt.lengths.count < 5 ? 1 : 0)
+      let footerHeight = CGFloat(footerLines) * 16
+      let rowWithFooter = min(36, (geo.size.height - 24 - footerHeight) / 4)
+      let showsFooter = footerLines > 0 && rowWithFooter >= 32
+      let rowHeight = max(0, showsFooter ? rowWithFooter : min(36, (geo.size.height - 24) / 4))
+      let madeHeight = rowHeight + 12
+      VStack(spacing: 4) {
+        HStack(spacing: 4) {
+          puttLengthButton(id: "inside_3", label: "0–3")
+          puttLengthButton(id: "3_to_10", label: "3–10")
         }
-        .buttonStyle(.plain)
-        .disabled(session.sending || session.putt.pending == nil || !session.putt.canAdd)
-
-        Button(action: { session.undoPutt() }) {
-          Text("Undo")
-            .font(.system(size: 11, weight: .heavy))
-            .foregroundStyle(Color("cream"))
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
-            .frame(maxWidth: .infinity, minHeight: 36)
-            .overlay(
-              RoundedRectangle(cornerRadius: 10)
-                .stroke(Color("cream"), lineWidth: 1)
-            )
+        .frame(height: rowHeight)
+        HStack(spacing: 4) {
+          puttLengthButton(id: "10_to_20", label: "10–20")
+          puttLengthButton(id: "over_20", label: "20+")
         }
-        .buttonStyle(.plain)
-        .disabled(session.sending || session.putt.lengths.isEmpty)
-      }
+        .frame(height: rowHeight)
 
-      Button(action: { session.madeIt() }) {
-        Text("Made")
-          .font(.system(size: 18, weight: .black))
+        HStack(spacing: 4) {
+          Button(action: { session.addPutt() }) {
+            tileChrome(
+              Text("Add putt")
+                .font(.system(size: 12, weight: .heavy, design: .rounded))
+                .foregroundStyle(outdoorCream)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity, maxHeight: .infinity),
+              tone: .plain,
+              radius: 10
+            )
+          }
+          .buttonStyle(.plain)
+          .disabled(session.sending || session.putt.pending == nil || !session.putt.canAdd)
+
+          Button(action: { session.undoPutt() }) {
+            tileChrome(
+              Text("Undo")
+                .font(.system(size: 12, weight: .heavy, design: .rounded))
+                .foregroundStyle(outdoorCream)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity, maxHeight: .infinity),
+              tone: .plain,
+              radius: 10
+            )
+          }
+          .buttonStyle(.plain)
+          .disabled(session.sending || session.putt.lengths.isEmpty)
+        }
+        .frame(height: rowHeight)
+
+        Button(action: { session.madeIt() }) {
+          HStack(spacing: 6) {
+            Image(systemName: "flag.fill")
+              .font(.system(size: 14, weight: .heavy))
+            Text("Made")
+              .font(.system(size: 18, weight: .black, design: .rounded))
+              .lineLimit(1)
+              .minimumScaleFactor(0.8)
+          }
           .foregroundStyle(Color("bg"))
-          .lineLimit(1)
-          .minimumScaleFactor(0.8)
-          .frame(maxWidth: .infinity, minHeight: 48)
+          .frame(maxWidth: .infinity)
+          .frame(height: madeHeight)
           // Fill is clipped to the pill — no square lime behind the rounded stroke.
           .background(outdoorLime)
           .clipShape(RoundedRectangle(cornerRadius: 12))
           .contentShape(RoundedRectangle(cornerRadius: 12))
+          // Cream edge keeps the pill outlined in Ultra outdoor glare.
           .overlay(
             RoundedRectangle(cornerRadius: 12)
               .stroke(Color("cream"), lineWidth: 2)
           )
-      }
-      .buttonStyle(.plain)
-      .layoutPriority(1)
-      .fixedSize(horizontal: false, vertical: true)
+        }
+        .buttonStyle(.plain)
+        .layoutPriority(1)
 
-      if !session.putt.lengths.isEmpty {
-        Text(session.putt.lengths.enumerated().map { "Putt \($0.offset + 1) · \(session.putt.label(for: $0.element))" }.joined(separator: " · "))
-          .font(.system(size: 10, weight: .heavy))
-          .foregroundStyle(Color("cream"))
-          .lineLimit(1)
-      }
+        if !session.putt.lengths.isEmpty, showsFooter {
+          Text(session.putt.lengths.enumerated().map { "Putt \($0.offset + 1) · \(session.putt.label(for: $0.element))" }.joined(separator: " · "))
+            .font(.system(size: 10, weight: .heavy, design: .rounded))
+            .foregroundStyle(outdoorCream)
+            .lineLimit(1)
+            .frame(height: 12)
+        }
 
-      if session.putt.pending == nil && session.putt.lengths.count < 5 {
-        Text("No length — pick a distance")
-          .font(.system(size: 10, weight: .bold))
-          .foregroundStyle(Color("cream"))
-          .lineLimit(1)
+        if session.putt.pending == nil && session.putt.lengths.count < 5, showsFooter {
+          Text("No length — pick a distance")
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(Color("muted"))
+            .lineLimit(1)
+            .frame(height: 12)
+        }
       }
+      .frame(maxWidth: .infinity, alignment: .top)
     }
   }
 
@@ -505,43 +647,58 @@ struct ContentView: View {
     let selected = session.putt.pending == id
     Button(action: { session.pickPuttLength(id) }) {
       Text(label)
-        .font(.system(size: 13, weight: .heavy))
-        .foregroundStyle(selected ? Color("bg") : Color("cream"))
+        .font(.system(size: 14, weight: .heavy, design: .rounded))
+        .monospacedDigit()
+        .foregroundStyle(tileInk(selected ? .selected : .plain))
         .lineLimit(1)
         .minimumScaleFactor(0.7)
-        .frame(maxWidth: .infinity, minHeight: 36)
-        .background(selected ? outdoorLime : Color.clear)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(selected ? outdoorLime : tileFill)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .contentShape(RoundedRectangle(cornerRadius: 10))
         .overlay(
           RoundedRectangle(cornerRadius: 10)
-            .stroke(selected ? outdoorLime : Color("cream"), lineWidth: selected ? 3 : 1)
+            .stroke(selected ? outdoorLime : tileEdge, lineWidth: selected ? 1.5 : 1)
         )
     }
     .buttonStyle(.plain)
     .disabled(!session.putt.canAdd)
   }
 
+  /// Hole Out is the finishing action (lime); Penalty costs a stroke (orange).
+  /// Everything else is a plain raised tile.
+  private func actionPillTone(_ title: String) -> TileTone {
+    switch title {
+    case "Hole Out": return .accent
+    case "Penalty": return .warning
+    default: return .plain
+    }
+  }
+
   /// Back / Home / Putt row pill — same 44pt height, 10pt radius, 16pt font as
   /// the club strip. Fill and hit area are clipped to the rounded shape.
   @ViewBuilder
   private func actionPill(_ title: String) -> some View {
+    let tone = actionPillTone(title)
     Text(title)
-      .font(.system(size: 16, weight: .heavy))
-      .foregroundStyle(Color("cream"))
+      .font(.system(size: 16, weight: .heavy, design: .rounded))
+      .foregroundStyle(tileInk(tone))
       .lineLimit(1)
       .minimumScaleFactor(0.65)
-      .frame(maxWidth: .infinity, minHeight: 44)
-      .background(Color("bg"))
+      // Fills its row: 44pt, less only on a short face (see clubPick).
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .background(tileBackground(tone))
       .clipShape(RoundedRectangle(cornerRadius: 10))
       .contentShape(RoundedRectangle(cornerRadius: 10))
       .overlay(
         RoundedRectangle(cornerRadius: 10)
-          .stroke(Color("cream"), lineWidth: 1)
+          .stroke(tileStroke(tone), lineWidth: tileStrokeWidth(tone))
       )
   }
 
   /// Blank slot the size of one actionPill, so a short row keeps the 3-column grid.
   private var emptyPillSlot: some View {
-    Color.clear.frame(maxWidth: .infinity, minHeight: 44)
+    Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
   /// Penalty reasons as their own screen: small Back, then a 2-column grid of
@@ -555,17 +712,7 @@ struct ContentView: View {
       let tileHeight = max(0, min(44, (geo.size.height - backHeight - 6 * rows - 8) / rows))
       VStack(alignment: .leading, spacing: 6) {
         Button(action: { session.closePenaltyChoices() }) {
-          Text("Back")
-            .font(.system(size: 12, weight: .heavy))
-            .foregroundStyle(Color("cream"))
-            .lineLimit(1)
-            .padding(.horizontal, 10)
-            .frame(height: backHeight)
-            .contentShape(Capsule())
-            .overlay(
-              Capsule()
-                .stroke(Color("cream"), lineWidth: 1)
-            )
+          capsuleBack(Text("Back"), height: backHeight)
         }
         .buttonStyle(.plain)
         HStack(spacing: 6) {
@@ -594,52 +741,79 @@ struct ContentView: View {
     .padding(.horizontal, 4)
   }
 
-  /// Same outline, radius and font as actionPill, at a height that fits the grid.
+  /// Same warning tone, radius and font as the Penalty pill, at a height that fits the grid.
   @ViewBuilder
   private func penaltyTile(_ title: String, height: CGFloat) -> some View {
     Text(title)
-      .font(.system(size: 16, weight: .heavy))
-      .foregroundStyle(Color("cream"))
+      .font(.system(size: 16, weight: .heavy, design: .rounded))
+      .foregroundStyle(outdoorCream)
       .lineLimit(1)
       .minimumScaleFactor(0.5)
       .padding(.horizontal, 4)
       .frame(maxWidth: .infinity)
       .frame(height: height)
-      .background(Color("bg"))
+      .background(tileBackground(.warning))
       .clipShape(RoundedRectangle(cornerRadius: 10))
       .contentShape(RoundedRectangle(cornerRadius: 10))
       .overlay(
         RoundedRectangle(cornerRadius: 10)
-          .stroke(Color("cream"), lineWidth: 1)
+          .stroke(tileStroke(.warning), lineWidth: tileStrokeWidth(.warning))
       )
   }
 
   @ViewBuilder
   private var clubPick: some View {
     GeometryReader { geo in
-      // 60% top, but never so tall that the Hole Out row + club pills (44 + 6 + 52)
-      // fall past the bottom safe area on a short face.
-      let mapHeight = max(0, min(geo.size.height * 0.6, geo.size.height - 102))
+      // Header, then three equal button rows: Penalty / Home / Putt, Hole Out /
+      // Retry / All clubs, and the club strip. Rows are 44pt and shrink only on a
+      // short face, so every button stays on screen from 40mm to Ultra.
+      // Same math as watchHoleFrames in src/domain/watchLayout.ts.
+      let headerHeight: CGFloat = 46
+      let rowHeight = max(0, min(44, (geo.size.height - headerHeight - 12) / 3))
+      let slotWidth = max(0, (geo.size.width - 16) / 3)
+      // 60% top, but never so tall that the Hole Out row + club pills fall past
+      // the bottom safe area on a short face.
+      let mapHeight = max(0, min(geo.size.height * 0.6, geo.size.height - (rowHeight * 2 + 6)))
       let controlHeight = geo.size.height - mapHeight
       VStack(alignment: .leading, spacing: 0) {
-        VStack(alignment: .leading, spacing: 6) {
-          // Left is Hole N · fixed tee length. Top-right is live yards to the green.
+        VStack(alignment: .leading, spacing: 0) {
+          // Hole N · tee length and a one-line message on the left, live yards on
+          // the right. Fixed height; the workout hint covers it (tap to dismiss)
+          // instead of pushing the buttons down.
           HStack(alignment: .top, spacing: 6) {
-            Text(session.list.statusLine)
-              .font(.system(size: 16, weight: .bold))
-              .foregroundStyle(Color("cream"))
-              .lineLimit(1)
-              .minimumScaleFactor(0.6)
-              .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+              // Left is Hole N · fixed tee length. Top-right is live yards to the green.
+              Text(session.list.statusLine)
+                .font(.system(size: 16, weight: .heavy, design: .rounded))
+                .foregroundStyle(outdoorCream)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+              if session.penaltyRetry, !session.penaltyNotice.isEmpty {
+                Text(session.penaltyNotice)
+                  .font(.system(size: 12, weight: .bold))
+                  .foregroundStyle(outdoorOrange)
+                  .lineLimit(1)
+                  .minimumScaleFactor(0.7)
+              } else if !session.feedback.isEmpty {
+                Text(session.feedback)
+                  .font(.system(size: 12, weight: .bold))
+                  .foregroundStyle(session.feedback.contains("✓") ? outdoorLime : outdoorOrange)
+                  .lineLimit(1)
+                  .minimumScaleFactor(0.7)
+              }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
             VStack(alignment: .trailing, spacing: 0) {
               // The empty string is still "—", but U+2014 in SF Compact stays a
               // hairline even at heavy 28. In muted on the dark green that stroke
               // disappears on Ultra, while size-11 "to hole" in the same color
               // still reads. A filled bar cannot collapse or antialias away.
-              // Trusted yards use literal lime: Color("accent") vanishes outdoors.
+              // Trusted yards use literal lime: the named accent color vanishes outdoors.
               if session.appLiveYardsTrusted {
                 Text(session.appLiveYardsLabel)
-                  .font(.system(size: 28, weight: .heavy))
+                  .font(.system(size: 28, weight: .heavy, design: .rounded))
+                  // Fixed-width digits: the number counts down without jitter.
+                  .monospacedDigit()
                   .foregroundStyle(outdoorLime)
                   .lineLimit(1)
                   .minimumScaleFactor(0.6)
@@ -657,37 +831,32 @@ struct ContentView: View {
                   Text("to hole")
                 }
               }
-              .font(.system(size: 11, weight: .semibold))
+              .font(.system(size: 11, weight: .semibold, design: .rounded))
               .foregroundStyle(Color("muted"))
               .lineLimit(1)
               .minimumScaleFactor(0.7)
             }
             .fixedSize(horizontal: true, vertical: true)
           }
-          if !session.feedback.isEmpty {
-            Text(session.feedback)
-              .font(.system(size: 12, weight: .bold))
-              .foregroundStyle(session.feedback.contains("✓") ? Color("accent") : Color.orange)
-              .lineLimit(2)
-          }
-          if !session.workoutDeniedHint.isEmpty {
-            Button(action: { session.dismissWorkoutDeniedHint() }) {
-              Text(session.workoutDeniedHint)
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(Color.orange)
-                .multilineTextAlignment(.leading)
-                .lineLimit(3)
-                .minimumScaleFactor(0.8)
-                .frame(maxWidth: .infinity, alignment: .leading)
+          .frame(height: headerHeight, alignment: .top)
+          .overlay {
+            if !session.workoutDeniedHint.isEmpty {
+              Button(action: { session.dismissWorkoutDeniedHint() }) {
+                tileChrome(
+                  Text(session.workoutDeniedHint)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(outdoorCream)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.7)
+                    .padding(.horizontal, 6)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading),
+                  tone: .warning,
+                  radius: 10
+                )
+              }
+              .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
-          }
-          if session.penaltyRetry, !session.penaltyNotice.isEmpty {
-            Text(session.penaltyNotice)
-              .font(.system(size: 12, weight: .bold))
-              .foregroundStyle(Color.orange)
-              .lineLimit(1)
-              .minimumScaleFactor(0.7)
           }
           Spacer(minLength: 0)
           // Penalty / Home / Putt: three equal Hole Out-sized pills, Penalty left,
@@ -708,6 +877,7 @@ struct ContentView: View {
             }
             .buttonStyle(.plain)
           }
+          .frame(height: rowHeight)
           .padding(.bottom, 6)
         }
         .frame(height: mapHeight, alignment: .topLeading)
@@ -715,6 +885,7 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 6) {
           // Hole Out keeps the same pill and column as Penalty. Retry takes the
           // next slot instead of its own row, so the club pills stay on screen.
+          // The last slot holds All clubs (overlay below).
           HStack(spacing: 8) {
             Button(action: { session.madeIt() }) {
               actionPill("Hole Out")
@@ -730,6 +901,7 @@ struct ContentView: View {
             }
             emptyPillSlot
           }
+          .frame(height: rowHeight)
 
           GeometryReader { wheelGeo in
             let visible = min(3, max(stripClubs.count, 1))
@@ -742,18 +914,18 @@ struct ContentView: View {
                     let selected = club.id == stripSelectedId
                     Button(action: { session.pick(clubId: club.id) }) {
                       Text(session.list.label(for: club.id))
-                        .font(.system(size: 16, weight: .black))
-                        .foregroundStyle(selected ? Color("bg") : Color("cream"))
+                        .font(.system(size: 16, weight: .black, design: .rounded))
+                        .foregroundStyle(tileInk(selected ? .selected : .plain))
                         .lineLimit(1)
                         .minimumScaleFactor(0.65)
-                        .frame(width: pillWidth, height: 44)
+                        .frame(width: pillWidth, height: rowHeight)
                         // Fill is clipped to the pill — no square halo / overflow box.
-                        .background(selected ? outdoorLime : Color("bg"))
+                        .background(selected ? outdoorLime : tileFill)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                         .contentShape(RoundedRectangle(cornerRadius: 10))
                         .overlay(
                           RoundedRectangle(cornerRadius: 10)
-                            .stroke(selected ? outdoorLime : Color("cream"), lineWidth: selected ? 3 : 1)
+                            .stroke(selected ? outdoorLime : tileEdge, lineWidth: selected ? 1.5 : 1)
                         )
                     }
                     .buttonStyle(.plain)
@@ -770,42 +942,67 @@ struct ContentView: View {
               }
             }
           }
-          .frame(height: 52)
+          .frame(height: rowHeight)
           .layoutPriority(1)
-
-          Button(action: { showAllClubs.toggle() }) {
-            Text("All clubs")
-              .font(.system(size: 15, weight: .heavy))
-              .foregroundStyle(Color("cream"))
-              .frame(maxWidth: .infinity, minHeight: 40)
-              .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                  .stroke(Color("cream"), lineWidth: 1)
-              )
+        }
+        // All clubs fills Row B's last slot, so it costs no extra row. It opens
+        // the bag as its own screen (allClubsList) instead of a list under the fold.
+        .overlay(alignment: .topTrailing) {
+          Button(action: { showAllClubs = true }) {
+            tileChrome(
+              Text("All clubs")
+                .font(.system(size: 14, weight: .heavy, design: .rounded))
+                .foregroundStyle(outdoorCream)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .padding(.horizontal, 2)
+                .frame(maxWidth: .infinity, maxHeight: .infinity),
+              tone: .plain,
+              radius: 10
+            )
           }
           .buttonStyle(.plain)
-
-          if showAllClubs {
-            ScrollView {
-              VStack(spacing: 4) {
-                ForEach(moreClubs, id: \.self) { clubId in
-                  Button(action: { session.pick(clubId: clubId) }) { // same pick as strip — marks the shot
-                    Text(session.list.label(for: clubId))
-                      .font(.system(size: 15, weight: .heavy))
-                      .foregroundStyle(Color("cream"))
-                      .frame(maxWidth: .infinity, alignment: .leading)
-                      .frame(minHeight: 36)
-                  }
-                  .buttonStyle(.bordered)
-                  .tint(Color("cream"))
-                }
-              }
-            }
-          }
+          .frame(width: slotWidth, height: rowHeight)
         }
         .frame(minHeight: controlHeight, alignment: .top)
       }
     }
+    .padding(.horizontal, 4)
+  }
+
+  /// The whole bag as its own screen, so every club is reachable by scrolling
+  /// instead of sitting under the fold of the hole face.
+  @ViewBuilder
+  private var allClubsList: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      Button(action: { showAllClubs = false }) {
+        capsuleBack(Text("Back"), height: 28)
+      }
+      .buttonStyle(.plain)
+      ScrollView {
+        VStack(spacing: 4) {
+          ForEach(moreClubs, id: \.self) { clubId in
+            Button(action: {
+              session.pick(clubId: clubId) // same pick as strip — marks the shot
+              showAllClubs = false
+            }) {
+              tileChrome(
+                Text(session.list.label(for: clubId))
+                  .font(.system(size: 15, weight: .heavy, design: .rounded))
+                  .foregroundStyle(tileInk(clubId == stripSelectedId ? .selected : .plain))
+                  .frame(maxWidth: .infinity, alignment: .leading)
+                  .padding(.horizontal, 10)
+                  .frame(minHeight: 38),
+                tone: clubId == stripSelectedId ? .selected : .plain,
+                radius: 10
+              )
+            }
+            .buttonStyle(.plain)
+          }
+        }
+      }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     .padding(.horizontal, 4)
   }
 
@@ -937,11 +1134,17 @@ struct ContentView: View {
   @ViewBuilder
   private var roundComplete: some View {
     VStack(alignment: .leading, spacing: 8) {
-      Text("Round complete")
-        .font(.system(size: 18, weight: .heavy))
-        .foregroundStyle(Color("cream"))
-        .lineLimit(1)
-        .minimumScaleFactor(0.7)
+      // Icon shares the title line so Home stays on screen on a 40mm face.
+      HStack(spacing: 6) {
+        Image(systemName: "flag.checkered")
+          .font(.system(size: 16, weight: .heavy))
+          .foregroundStyle(outdoorLime)
+        Text("Round complete")
+          .font(.system(size: 18, weight: .heavy, design: .rounded))
+          .foregroundStyle(outdoorCream)
+          .lineLimit(1)
+          .minimumScaleFactor(0.7)
+      }
       Text("Finish round on your phone.")
         .font(.system(size: 13, weight: .bold))
         .foregroundStyle(Color("muted"))
@@ -950,7 +1153,7 @@ struct ContentView: View {
       if !session.feedback.isEmpty {
         Text(session.feedback)
           .font(.system(size: 12, weight: .bold))
-          .foregroundStyle(session.feedback.contains("✓") ? Color("accent") : Color.orange)
+          .foregroundStyle(session.feedback.contains("✓") ? outdoorLime : outdoorOrange)
           .lineLimit(2)
       }
       Spacer(minLength: 0)
@@ -958,6 +1161,7 @@ struct ContentView: View {
         actionPill("Home")
       }
       .buttonStyle(.plain)
+      .frame(height: 44)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     .padding(.horizontal, 4)

@@ -268,3 +268,17 @@ export const space = {
   md: 16,
   lg: 24,
 } as const;
+
+/**
+ * Chips drawn on the satellite map. Imagery is dark in every theme, so these keep
+ * a dark scrim and light ink whatever preset is picked (a light theme's dark
+ * "cream" would vanish on it). Muted is brighter than the card muted so small
+ * labels still read in sun.
+ */
+export const mapInk = {
+  scrim: 'rgba(8,16,12,0.86)',
+  scrimSoft: 'rgba(8,16,12,0.72)',
+  text: '#F4F1E8',
+  muted: '#BCC8BF',
+  edge: 'rgba(255,255,255,0.18)',
+} as const;

@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 import { useColors } from './ColorThemeProvider';
+import { cardBorder } from './surface';
 import { tapTarget, type, type ColorPalette } from './theme';
 
 type Props = {
@@ -42,14 +43,12 @@ function makeStyles(colors: ColorPalette) {
       minHeight: tapTarget + 8,
       backgroundColor: colors.bgElevated,
       borderRadius: 16,
-      borderWidth: 1,
-      borderColor: colors.line,
+      ...cardBorder(colors),
       padding: 12,
       justifyContent: 'center',
     },
     featured: {
       width: '100%',
-      borderColor: colors.line,
       borderWidth: 2,
       minHeight: 80,
     },
