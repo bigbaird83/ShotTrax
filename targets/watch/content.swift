@@ -70,6 +70,8 @@ struct ContentView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(.horizontal, 4)
+      } else if session.penaltyChoicesOpen {
+        penaltyMenu
       } else {
         clubPick
       }
@@ -537,6 +539,81 @@ struct ContentView: View {
       )
   }
 
+  /// Blank slot the size of one actionPill, so a short row keeps the 3-column grid.
+  private var emptyPillSlot: some View {
+    Color.clear.frame(maxWidth: .infinity, minHeight: 44)
+  }
+
+  /// Penalty reasons as their own screen: small Back, then a 2-column grid of
+  /// equal tiles. Tile height shrinks so the last row ends ≥8pt above the
+  /// bottom safe area — no scroll, no clipped "Unplayable".
+  @ViewBuilder
+  private var penaltyMenu: some View {
+    GeometryReader { geo in
+      let backHeight: CGFloat = 28
+      let rows: CGFloat = 2
+      let tileHeight = max(0, min(44, (geo.size.height - backHeight - 6 * rows - 8) / rows))
+      VStack(alignment: .leading, spacing: 6) {
+        Button(action: { session.closePenaltyChoices() }) {
+          Text("Back")
+            .font(.system(size: 12, weight: .heavy))
+            .foregroundStyle(Color("cream"))
+            .lineLimit(1)
+            .padding(.horizontal, 10)
+            .frame(height: backHeight)
+            .contentShape(Capsule())
+            .overlay(
+              Capsule()
+                .stroke(Color("cream"), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        HStack(spacing: 6) {
+          Button(action: { session.pickPenalty("water") }) {
+            penaltyTile("Water", height: tileHeight)
+          }
+          .buttonStyle(.plain)
+          Button(action: { session.pickPenalty("ob") }) {
+            penaltyTile("OB", height: tileHeight)
+          }
+          .buttonStyle(.plain)
+        }
+        HStack(spacing: 6) {
+          Button(action: { session.pickPenalty("unplayable") }) {
+            penaltyTile("Unplayable", height: tileHeight)
+          }
+          .buttonStyle(.plain)
+          Button(action: { session.pickPenalty("other") }) {
+            penaltyTile("Other", height: tileHeight)
+          }
+          .buttonStyle(.plain)
+        }
+        Spacer(minLength: 0)
+      }
+    }
+    .padding(.horizontal, 4)
+  }
+
+  /// Same outline, radius and font as actionPill, at a height that fits the grid.
+  @ViewBuilder
+  private func penaltyTile(_ title: String, height: CGFloat) -> some View {
+    Text(title)
+      .font(.system(size: 16, weight: .heavy))
+      .foregroundStyle(Color("cream"))
+      .lineLimit(1)
+      .minimumScaleFactor(0.5)
+      .padding(.horizontal, 4)
+      .frame(maxWidth: .infinity)
+      .frame(height: height)
+      .background(Color("bg"))
+      .clipShape(RoundedRectangle(cornerRadius: 10))
+      .contentShape(RoundedRectangle(cornerRadius: 10))
+      .overlay(
+        RoundedRectangle(cornerRadius: 10)
+          .stroke(Color("cream"), lineWidth: 1)
+      )
+  }
+
   @ViewBuilder
   private var clubPick: some View {
     GeometryReader { geo in
@@ -605,74 +682,20 @@ struct ContentView: View {
             }
             .buttonStyle(.plain)
           }
-          Spacer(minLength: 0)
-          // Penalty is one Hole Out-sized pill, left, directly above Hole Out.
-          // It sits in the top area's spare space so it never pushes the
-          // Hole Out / Home / Putt row or the club pills down. Never full width.
-          if !session.penaltyChoicesOpen {
-            HStack(spacing: 8) {
-              Button(action: { session.openPenaltyChoices() }) {
-                actionPill("Penalty")
-              }
-              .buttonStyle(.plain)
-              Color.clear.frame(maxWidth: .infinity, minHeight: 44)
-              Color.clear.frame(maxWidth: .infinity, minHeight: 44)
-            }
-            .padding(.bottom, 6)
-          }
-        }
-        .frame(height: mapHeight, alignment: .topLeading)
-
-        VStack(alignment: .leading, spacing: 6) {
-          if session.penaltyRetry {
+          if session.penaltyRetry, !session.penaltyNotice.isEmpty {
             Text(session.penaltyNotice)
               .font(.system(size: 12, weight: .bold))
               .foregroundStyle(Color.orange)
-              .lineLimit(2)
-              .minimumScaleFactor(0.8)
-            Button(action: { session.retryPenalty() }) {
-              actionPill("Retry")
-            }
-            .buttonStyle(.plain)
+              .lineLimit(1)
+              .minimumScaleFactor(0.7)
           }
-          if session.penaltyChoicesOpen {
-            Button(action: { session.closePenaltyChoices() }) {
-              Text("Back")
-                .font(.system(size: 12, weight: .heavy))
-                .foregroundStyle(Color("cream"))
-                .lineLimit(1)
-                .padding(.horizontal, 8)
-                .frame(minHeight: 24)
-                .overlay(
-                  Capsule()
-                    .stroke(Color("cream"), lineWidth: 1)
-                )
-            }
-            .buttonStyle(.plain)
-            HStack(spacing: 6) {
-              Button(action: { session.pickPenalty("water") }) {
-                actionPill("Water")
-              }
-              .buttonStyle(.plain)
-              Button(action: { session.pickPenalty("ob") }) {
-                actionPill("OB")
-              }
-              .buttonStyle(.plain)
-            }
-            HStack(spacing: 6) {
-              Button(action: { session.pickPenalty("unplayable") }) {
-                actionPill("Unplayable")
-              }
-              .buttonStyle(.plain)
-              Button(action: { session.pickPenalty("other") }) {
-                actionPill("Other")
-              }
-              .buttonStyle(.plain)
-            }
-          }
+          Spacer(minLength: 0)
+          // Penalty / Home / Putt: three equal Hole Out-sized pills, Penalty left,
+          // directly above Hole Out. They sit in the top area's spare space so
+          // nothing pushes Hole Out or the club pills down. Never full width.
           HStack(spacing: 8) {
-            Button(action: { session.madeIt() }) {
-              actionPill("Hole Out")
+            Button(action: { session.openPenaltyChoices() }) {
+              actionPill("Penalty")
             }
             .buttonStyle(.plain)
             Button(action: { session.leave("home") }) {
@@ -684,6 +707,28 @@ struct ContentView: View {
               actionPill("Putt")
             }
             .buttonStyle(.plain)
+          }
+          .padding(.bottom, 6)
+        }
+        .frame(height: mapHeight, alignment: .topLeading)
+
+        VStack(alignment: .leading, spacing: 6) {
+          // Hole Out keeps the same pill and column as Penalty. Retry takes the
+          // next slot instead of its own row, so the club pills stay on screen.
+          HStack(spacing: 8) {
+            Button(action: { session.madeIt() }) {
+              actionPill("Hole Out")
+            }
+            .buttonStyle(.plain)
+            if session.penaltyRetry {
+              Button(action: { session.retryPenalty() }) {
+                actionPill("Retry")
+              }
+              .buttonStyle(.plain)
+            } else {
+              emptyPillSlot
+            }
+            emptyPillSlot
           }
 
           GeometryReader { wheelGeo in

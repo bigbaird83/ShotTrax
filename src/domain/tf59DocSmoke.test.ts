@@ -58,7 +58,9 @@ test('TF 59: dedicated Putt shares the Back/Home row — clubs stay on-screen', 
   assert.doesNotMatch(navRow, /session\.leave\("back"\)/);
   assert.match(navRow, /session\.leave\("home"\)/);
   assert.doesNotMatch(navRow, /maxWidth: \.infinity, minHeight: 40/);
-  assert.ok(navRow.indexOf('actionPill("Hole Out")') < navRow.indexOf('actionPill("Putt")'));
+  // Penalty | Home | Putt sit on the row above Hole Out; the club strip is under Hole Out.
+  assert.ok(navRow.indexOf('actionPill("Penalty")') < navRow.indexOf('actionPill("Home")'));
+  assert.ok(navRow.indexOf('actionPill("Putt")') < navRow.indexOf('actionPill("Hole Out")'));
   assert.ok(navRow.indexOf('actionPill("Home")') < navRow.indexOf('actionPill("Putt")'));
 
   // Back / Home / Putt share one 44pt pill; its fill and hit area are clipped to the shape.
