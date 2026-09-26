@@ -6,6 +6,7 @@ import {
   getGolfApiProxyBase,
   getGolfCoursesProxyBase,
   isGolfCoursesApiConfigured,
+  OSM_OVERLAY_PROXY_PATH,
 } from './config';
 
 function withShareSyncUrl(value: string | undefined, run: () => void): void {
@@ -34,6 +35,7 @@ test('course vendors route through EXPO_PUBLIC_SHARE_SYNC_URL', () => {
     assert.equal(getCourseProxyHost(), 'https://share.example.dev');
     assert.equal(getGolfCoursesProxyBase(), 'https://share.example.dev/gca/v1');
     assert.equal(getGolfApiProxyBase(), 'https://share.example.dev/golfapi/v2.3');
+    assert.equal(OSM_OVERLAY_PROXY_PATH, '/osm/v1/overlay');
     assert.equal(isGolfCoursesApiConfigured(), true);
   });
 });

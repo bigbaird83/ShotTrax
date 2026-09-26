@@ -13,6 +13,7 @@ import {
   hydrateOsmOverlayMemory,
   COURSE_OSM_OVERLAY_RADIUS_M,
   cachedOsmOverlay,
+  fetchOsmOverlay,
 } from './osmOverlay';
 import { ensureHoleTeeGreen } from './prefetch';
 import {
@@ -555,6 +556,39 @@ describe('backfill overlays for Ready favorites', { concurrency: 1 }, () => {
     assert.equal(loadCourseOsmOverlay(tb.id), null);
     assert.equal(offlinePackFor(store, missed.id)?.status, 'miss');
     assert.equal(offlinePackFor(store, tb.id)?.status, 'ready');
+  });
+
+  test('Worker upstream_busy stores nothing and leaves Ready alone', async () => {
+    resetCourseOsmOverlayForTests();
+    resetFavoriteOverlayBackfillForTests();
+    dropCourseOverlayMemory('overlay-worker-busy');
+    const store = memoryStore();
+    const course = favorite('overlay-worker-busy', GREEN_1);
+    const urls: string[] = [];
+    const status = await downloadFavoriteForOffline(course, store, {
+      now: () => FETCHED_AT,
+      resolve: async () => readyPaint(),
+      fetchOverlay: (query) =>
+        fetchOsmOverlay(query, {
+          retryDelayMs: 0,
+          getBaseUrl: () => 'https://share.test',
+          fetch: async (input) => {
+            urls.push(String(input));
+            return new Response(JSON.stringify({ error: 'upstream_busy' }), {
+              status: 503,
+              headers: { 'Content-Type': 'application/json', 'Retry-After': '2' },
+            });
+          },
+        }),
+    });
+    assert.equal(status, 'ready');
+    assert.equal(offlinePackFor(store, course.id)?.status, 'ready');
+    assert.equal(offlinePackFor(store, course.id)?.updatedAt, FETCHED_AT);
+    assert.equal(loadCourseOsmOverlay(course.id), null);
+    assert.equal(urls.length, 2);
+    assert.equal(urls.every((url) => url.includes('/osm/v1/overlay?')), true);
+    assert.equal(urls.some((url) => url.includes('overpass')), false);
+    dropCourseOverlayMemory(course.id);
   });
 
   test('no query center does not spend the session attempt', async () => {

@@ -1,6 +1,7 @@
 import { featureCentroid } from '../domain/catchUpMap';
 import { haversineYards } from '../domain/haversine';
 import { isValidLatLng, type LatLng } from '../domain/latLng';
+import { getCourseProxyHost, OSM_OVERLAY_PROXY_PATH } from './config';
 import type { CourseLayoutSeed } from './layout';
 import {
   courseOsmOverlayFromRecord,
@@ -35,6 +36,11 @@ export type OsmOverlayDeps = {
   overpassUrl?: string;
   /** Delay before the single retry. Tests pass 0. */
   retryDelayMs?: number;
+  /**
+   * Share-sync Worker host, same base as GCA Pro and golfapi.
+   * Default is `getCourseProxyHost()`. Null skips the Worker and asks Overpass.
+   */
+  getBaseUrl?: () => string | null;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -280,12 +286,31 @@ function waitMs(ms: number): Promise<void> {
   });
 }
 
+const WORKER_RADIUS_MIN_M = 200;
+const WORKER_RADIUS_MAX_M = 2000;
+
+function workerOverlayRadiusM(radiusM: number): number {
+  const rounded = Math.round(radiusM);
+  if (!Number.isFinite(rounded)) return WORKER_RADIUS_MIN_M;
+  return Math.max(WORKER_RADIUS_MIN_M, Math.min(WORKER_RADIUS_MAX_M, rounded));
+}
+
+function workerErrorCode(json: unknown): string | null {
+  const error = asRecord(json)?.error;
+  return typeof error === 'string' ? error : null;
+}
+
+type WorkerFetch = { kind: 'skip' } | { kind: 'overlay'; overlay: OsmOverlay | null } | { kind: 'busy' };
+
 /**
  * OSM course overlay (golf=green/fairway/tee/hole, plus bunker, water hazard, and cartpath).
  * Returns null when there is no location, the query fails, or OSM has nothing —
  * never invents GeoJSON. Bare service roads and untagged water are not overlays.
  * OSM par tags are ignored (par comes from course API only).
- * One retry with backoff on 429, 504, or a thrown timeout / network error.
+ * When the share-sync Worker is configured, ask it first. A definitive miss
+ * (`no_overlay`) or a busy Worker (`upstream_busy`) is not sent on to Overpass.
+ * Anything else falls back to a direct Overpass request.
+ * One retry with backoff on Worker busy, Overpass 429 or 504, or a thrown timeout / network error.
  */
 export async function fetchOsmOverlay(
   query: OsmOverlayQuery | string,
@@ -300,8 +325,43 @@ export async function fetchOsmOverlay(
   const fetchImpl = deps.fetch ?? fetch;
   const url = deps.overpassUrl ?? OVERPASS_URL;
   const retryDelayMs = deps.retryDelayMs ?? OVERPASS_RETRY_DELAY_MS;
+  const courseId = q.courseId?.trim() ?? '';
 
-  const attempt = async (): Promise<{ overlay: OsmOverlay | null; retry: boolean }> => {
+  const readWorker = async (): Promise<WorkerFetch> => {
+    const base = (deps.getBaseUrl ?? getCourseProxyHost)();
+    const host = base?.trim().replace(/\/+$/, '') ?? '';
+    if (!host || !courseId) return { kind: 'skip' };
+    const radius = workerOverlayRadiusM(radiusM);
+    const params = new URLSearchParams({
+      courseId,
+      lat: String(location.lat),
+      lng: String(location.lng),
+      radius: String(radius),
+    });
+    try {
+      const res = await fetchImpl(`${host}${OSM_OVERLAY_PROXY_PATH}?${params.toString()}`, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      });
+      let json: unknown = undefined;
+      if (res.status === 200 || res.status === 404 || res.status === 503) {
+        try {
+          json = await res.json();
+        } catch {
+          json = undefined;
+        }
+      }
+      const error = workerErrorCode(json);
+      if (res.status === 404 && error === 'no_overlay') return { kind: 'overlay', overlay: null };
+      if (res.status === 503 && error === 'upstream_busy') return { kind: 'busy' };
+      if (res.ok && json !== undefined) return { kind: 'overlay', overlay: overlayFromPayload(json, q.holeNumber) };
+      return { kind: 'skip' };
+    } catch {
+      return { kind: 'skip' };
+    }
+  };
+
+  const overpassAttempt = async (): Promise<{ overlay: OsmOverlay | null; retry: boolean }> => {
     try {
       const res = await fetchImpl(url, {
         method: 'POST',
@@ -324,10 +384,19 @@ export async function fetchOsmOverlay(
     }
   };
 
-  const first = await attempt();
+  const firstWorker = await readWorker();
+  if (firstWorker.kind === 'overlay') return firstWorker.overlay;
+  if (firstWorker.kind === 'busy') {
+    await waitMs(retryDelayMs);
+    const secondWorker = await readWorker();
+    if (secondWorker.kind === 'overlay') return secondWorker.overlay;
+    if (secondWorker.kind === 'busy') return null;
+  }
+
+  const first = await overpassAttempt();
   if (!first.retry) return first.overlay;
   await waitMs(retryDelayMs);
-  const second = await attempt();
+  const second = await overpassAttempt();
   return second.overlay;
 }
 

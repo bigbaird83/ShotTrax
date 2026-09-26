@@ -5,13 +5,16 @@
  *
  *   {EXPO_PUBLIC_SHARE_SYNC_URL}/gca/v1/…        → golfcoursesapi.com/api/v1/…
  *   {EXPO_PUBLIC_SHARE_SYNC_URL}/golfapi/v2.3/…  → golfapi.io/api/v2.3/…
+ *   {EXPO_PUBLIC_SHARE_SYNC_URL}/osm/v1/overlay  → cached Overpass golf overlay
  *
- * No share-sync URL → course search is the bundled catalog only, and paint
- * never calls GCA Pro or golfapi. Never invents.
+ * No share-sync URL → course search is the bundled catalog only, paint
+ * never calls GCA Pro or golfapi, and overlays go straight to Overpass.
+ * Never invents.
  */
 export const SHARE_SYNC_URL_EXTRA_KEY = 'shareSyncUrl';
 export const GCA_PROXY_PATH = '/gca/v1';
 export const GOLFAPI_PROXY_PATH = '/golfapi/v2.3';
+export const OSM_OVERLAY_PROXY_PATH = '/osm/v1/overlay';
 
 function trimUrl(value: unknown): string | null {
   if (typeof value !== 'string') return null;
