@@ -23,6 +23,7 @@ import {
   roundStrokesGained,
   SG_CATEGORIES,
   SG_CATEGORY_LABELS,
+  strokesGainedForStats,
   weakestCategory,
 } from '@/src/domain/strokesGained';
 import { BigButton } from '@/src/ui/BigButton';
@@ -62,7 +63,7 @@ export default function ReviewStatsScreen() {
   }, [db, round, revision]);
 
   const strokesGained = useMemo(
-    () => (round ? roundStrokesGained(listStrokesGainedHoles(db, round.id)) : null),
+    () => strokesGainedForStats(round ? roundStrokesGained(listStrokesGainedHoles(db, round.id)) : null),
     [db, round, revision],
   );
 

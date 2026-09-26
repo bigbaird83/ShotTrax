@@ -1,6 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { formatTrendValue, trendScale, type TrendSeries } from '@/src/domain/trends';
+import {
+  formatTrendValue,
+  trendScale,
+  trendScaledReadoutSuffix,
+  trendScaledRowSuffix,
+  type TrendSeries,
+} from '@/src/domain/trends';
 import { useColors } from './ColorThemeProvider';
 import { type, type ColorPalette } from './theme';
 
@@ -31,7 +37,7 @@ export function TrendBars({ series, testID }: { series: TrendSeries; testID?: st
     <View testID={testID} style={styles.wrap}>
       <Text style={styles.readout} numberOfLines={1}>
         {pick
-          ? `${pick.label} · ${pick.courseName} · ${formatTrendValue(pick.value, series.unit, signed)}${pick.scaled ? ' (9 holes, per 18)' : ''}`
+          ? `${pick.label} · ${pick.courseName} · ${formatTrendValue(pick.value, series.unit, signed)}${trendScaledReadoutSuffix(pick)}`
           : 'Tap a bar for that round'}
       </Text>
       <View style={styles.plotRow}>
@@ -51,7 +57,7 @@ export function TrendBars({ series, testID }: { series: TrendSeries; testID?: st
           <View style={styles.bars}>
             {series.points.map((point, index) => {
               const on = selected === index;
-              const label = `${point.label}, ${point.courseName}: ${formatTrendValue(point.value, series.unit, signed)}`;
+              const label = `${point.label}, ${point.courseName}${trendScaledRowSuffix(point)}: ${formatTrendValue(point.value, series.unit, signed)}`;
               return (
                 <Pressable
                   key={point.roundId}
@@ -101,7 +107,7 @@ export function TrendBars({ series, testID }: { series: TrendSeries; testID?: st
             <View key={point.roundId} style={styles.tableRow}>
               <Text style={styles.tableLabel} numberOfLines={1}>
                 {point.label} · {point.courseName}
-                {point.scaled ? ' · 9' : ''}
+                {trendScaledRowSuffix(point)}
               </Text>
               <Text style={styles.tableValue}>{formatTrendValue(point.value, series.unit, signed)}</Text>
             </View>

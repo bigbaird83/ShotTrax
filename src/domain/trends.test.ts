@@ -4,9 +4,14 @@ import {
   formatTrendChange,
   formatTrendValue,
   planTrend,
+  trendChartReady,
   trendClubs,
+  trendRoundCounts,
+  trendScaledReadoutSuffix,
+  trendScaledRowSuffix,
   trendScale,
   trendValue,
+  trendWindowRounds,
   type TrendRoundIn,
 } from './trends';
 
@@ -142,12 +147,177 @@ test('formatting and bar scale', () => {
   assert.deepEqual(trendScale([null]), { max: 1, min: 0 });
 });
 
+test('per-18 charts drop rounds under 9 holes; a 9-hole round scales by 2', () => {
+  const one = round('one', 1, { holesPlayed: 1, toPar: 0, putts: 2, penaltyStrokes: 1 });
+  const eight = round('eight', 2, { holesPlayed: 8, toPar: 4, putts: 16, penaltyStrokes: 2 });
+  const nine = round('nine', 3, { holesPlayed: 9, toPar: 5, putts: 17, penaltyStrokes: 1 });
+  const ten = round('ten', 4, { holesPlayed: 10, toPar: 5, putts: 20, penaltyStrokes: 1 });
+  const full = round('full', 5, { holesPlayed: 18, toPar: 8, putts: 30, penaltyStrokes: 2 });
+  const rounds = [one, eight, nine, ten, full];
+
+  for (const metric of ['toPar', 'putts', 'penalties'] as const) {
+    assert.equal(trendRoundCounts(one, metric), false);
+    assert.equal(trendRoundCounts(eight, metric), false);
+    assert.equal(trendValue(one, metric).value, null);
+    assert.equal(trendValue(eight, metric).value, null);
+    const series = planTrend({ rounds, metric, window: 5 });
+    assert.deepEqual(
+      series.points.map((point) => point.roundId),
+      ['nine', 'ten', 'full'],
+    );
+    assert.equal(trendChartReady(series), true);
+  }
+
+  const toPar = planTrend({ rounds, metric: 'toPar', window: 5 });
+  const ninePoint = toPar.points[0];
+  const tenPoint = toPar.points[1];
+  const fullPoint = toPar.points[2];
+  assert.deepEqual(
+    { value: ninePoint.value, scaled: ninePoint.scaled, holesPlayed: ninePoint.holesPlayed },
+    { value: 10, scaled: true, holesPlayed: 9 },
+  );
+  assert.equal(ninePoint.value, 5 * 2);
+  assert.equal(trendScaledRowSuffix(ninePoint), ' · 9');
+  assert.equal(trendScaledReadoutSuffix(ninePoint), ' (9 holes, per 18)');
+  assert.equal(tenPoint.value, 9);
+  assert.equal(tenPoint.scaled, true);
+  assert.equal(tenPoint.holesPlayed, 10);
+  assert.equal(trendScaledRowSuffix(tenPoint), ' · 10');
+  assert.equal(trendScaledReadoutSuffix(tenPoint), ' (10 holes, per 18)');
+  assert.notEqual(trendScaledRowSuffix(tenPoint), ' · 9');
+  assert.equal(fullPoint.value, 8);
+  assert.equal(fullPoint.scaled, false);
+  assert.equal(fullPoint.holesPlayed, 18);
+  assert.equal(trendScaledRowSuffix(fullPoint), '');
+  assert.equal(trendScaledReadoutSuffix(fullPoint), '');
+
+  const putts = planTrend({ rounds, metric: 'putts', window: 5 });
+  assert.equal(putts.points.find((point) => point.roundId === 'nine')?.value, 34);
+  const penalties = planTrend({ rounds, metric: 'penalties', window: 5 });
+  assert.equal(penalties.points.find((point) => point.roundId === 'nine')?.value, 2);
+
+  // A 1-hole or 8-hole round never picks up a hardcoded 9.
+  for (const holes of [1, 8, 10, 12, 15, 17, 18]) {
+    const suffix = trendScaledRowSuffix({ scaled: holes >= 9 && holes < 18, holesPlayed: holes });
+    const readout = trendScaledReadoutSuffix({ scaled: holes >= 9 && holes < 18, holesPlayed: holes });
+    if (holes !== 9) {
+      assert.notEqual(suffix, ' · 9');
+      assert.notEqual(readout, ' (9 holes, per 18)');
+    }
+    if (holes < 9 || holes >= 18) {
+      assert.equal(suffix, '');
+      assert.equal(readout, '');
+    } else {
+      assert.equal(suffix, ` · ${holes}`);
+      assert.equal(readout, ` (${holes} holes, per 18)`);
+    }
+  }
+  assert.equal(trendScaledRowSuffix({ scaled: true, holesPlayed: 1 }), '');
+  assert.equal(trendScaledReadoutSuffix({ scaled: true, holesPlayed: 1 }), '');
+});
+
+test('the window is the last N finished rounds; short rounds keep their slot', () => {
+  const rounds = [
+    round('a', 1, { holesPlayed: 18, toPar: 20 }),
+    round('b', 2, { holesPlayed: 18, toPar: 18 }),
+    round('c', 3, { holesPlayed: 1, toPar: 0 }),
+    round('d', 4, { holesPlayed: 18, toPar: 10 }),
+    round('e', 5, { holesPlayed: 8, toPar: 40 }),
+    round('f', 6, { holesPlayed: 9, toPar: 5 }),
+    round('g', 7, { holesPlayed: 18, toPar: 14 }),
+  ];
+  const window = trendWindowRounds(rounds, 5);
+  assert.deepEqual(
+    window.map((row) => row.id),
+    ['c', 'd', 'e', 'f', 'g'],
+  );
+  const series = planTrend({ rounds, metric: 'toPar', window: 5 });
+  assert.deepEqual(
+    series.points.map((point) => point.roundId),
+    ['d', 'f', 'g'],
+  );
+  assert.equal(series.average, 11.3);
+  // Previous window is a and b. The 1-hole round is not pulled in, and it is not a zero.
+  assert.equal(series.previousAverage, 19);
+  assert.equal(series.change, -7.7);
+  const onlyShort = planTrend({
+    rounds: [round('s1', 1, { holesPlayed: 1, toPar: 0 }), round('s2', 2, { holesPlayed: 4, toPar: 3 })],
+    metric: 'toPar',
+    window: 5,
+  });
+  assert.equal(onlyShort.points.length, 0);
+  assert.equal(onlyShort.average, null);
+  assert.equal(onlyShort.change, null);
+  assert.equal(trendChartReady(onlyShort), false);
+  const oneQualifying = planTrend({
+    rounds: [round('full', 1, { toPar: 4 }), round('short', 2, { holesPlayed: 1, toPar: 0 })],
+    metric: 'putts',
+    window: 5,
+  });
+  assert.equal(oneQualifying.points.length, 1);
+  assert.equal(trendChartReady(oneQualifying), false);
+});
+
+test('fairways, greens, and carry still include a round under 9 holes', () => {
+  const fg = {
+    ...emptyFg,
+    fairwaysHit: 1,
+    fairwayHoles: 1,
+    greensHit: 0,
+    greenHoles: 1,
+  };
+  const short = round('short', 1, {
+    holesPlayed: 1,
+    fairwayGir: fg,
+    clubAverages: [{ id: 'club_dr', name: 'Driver', count: 1, avgYards: 250 }],
+  });
+  const full = round('full', 2, {
+    fairwayGir: { ...emptyFg, fairwaysHit: 7, fairwayHoles: 14, greensHit: 9, greenHoles: 18 },
+    clubAverages: [{ id: 'club_dr', name: 'Driver', count: 8, avgYards: 240 }],
+  });
+  const fairways = planTrend({ rounds: [short, full], metric: 'fairways', window: 5 });
+  assert.deepEqual(
+    fairways.points.map((point) => [point.roundId, point.value, point.scaled]),
+    [
+      ['short', 100, false],
+      ['full', 50, false],
+    ],
+  );
+  assert.equal(trendScaledRowSuffix(fairways.points[0]), '');
+  const gir = planTrend({ rounds: [short, full], metric: 'gir', window: 5 });
+  assert.deepEqual(
+    gir.points.map((point) => point.roundId),
+    ['short', 'full'],
+  );
+  assert.equal(gir.points[0].value, 0);
+  const carry = planTrend({ rounds: [short, full], metric: 'carry', window: 5, clubId: 'club_dr' });
+  assert.deepEqual(
+    carry.points.map((point) => [point.roundId, point.value]),
+    [
+      ['short', 250],
+      ['full', 240],
+    ],
+  );
+  assert.equal(trendChartReady(carry), true);
+});
+
 test('trends screen reads saved rounds only and reuses round stats', async () => {
   const { readFileSync } = await import('node:fs');
   const page = readFileSync(new URL('../../app/trends.tsx', import.meta.url), 'utf8');
   assert.match(page, /planRoundStats/);
   assert.match(page, /planTrend/);
+  assert.match(page, /trendWindowRounds/);
+  assert.match(page, /trendChartReady/);
+  assert.match(page, /COPY\.trendsNoData/);
   assert.doesNotMatch(page, /useLiveFix|HoleMap|getActiveRound/);
+  const bars = readFileSync(new URL('../../src/ui/TrendBars.tsx', import.meta.url), 'utf8');
+  assert.match(bars, /trendScaledRowSuffix/);
+  assert.match(bars, /trendScaledReadoutSuffix/);
+  assert.doesNotMatch(bars, /· 9/);
+  assert.doesNotMatch(bars, /9 holes, per 18/);
+  const stats = readFileSync(new URL('../../app/review/[id]/stats.tsx', import.meta.url), 'utf8');
+  assert.match(stats, /strokesGainedForStats/);
+  assert.match(stats, /COPY\.strokesGainedEmpty/);
   const nerd = readFileSync(new URL('../../app/nerd-out.tsx', import.meta.url), 'utf8');
   assert.match(nerd, /'\/trends'/);
 });

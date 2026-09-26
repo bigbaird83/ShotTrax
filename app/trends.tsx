@@ -24,7 +24,9 @@ import {
   formatTrendChange,
   formatTrendValue,
   planTrend,
+  trendChartReady,
   trendClubs,
+  trendWindowRounds,
   TREND_WINDOWS,
   type TrendMetricId,
   type TrendRoundIn,
@@ -77,20 +79,26 @@ export default function TrendsScreen() {
       }));
   }, [db, revision]);
 
-  /** Newest first, same order as `rounds`, and only the selected window. */
+  /**
+   * Same last-N finished rounds as the metric charts (`playedAt`, not start time).
+   * Short rounds keep a slot; the strokes-gained average then drops any round
+   * under the shared 9-hole minimum.
+   */
+  const windowRounds = useMemo(() => trendWindowRounds(rounds, windowSize), [rounds, windowSize]);
   const sgAverage = useMemo(
     () =>
       averageStrokesGainedPer18(
-        rounds
-          .slice(0, windowSize)
-          .map((round) => roundStrokesGained(listStrokesGainedHolesBatched(db, round.id))),
+        windowRounds.map((round) => roundStrokesGained(listStrokesGainedHolesBatched(db, round.id))),
       ),
-    [db, rounds, windowSize],
+    [db, windowRounds],
   );
 
   const clubs = useMemo(() => trendClubs(rounds, windowSize), [rounds, windowSize]);
   const activeClub = clubs.find((club) => club.id === clubId) ?? clubs[0] ?? null;
 
+  // Two finished rounds open the page. Fairways, greens, and carry can use a
+  // shorter round, so the gate is not "two rounds of at least 9 holes".
+  // Each per-18 chart still stays blank until that chart has two qualifying rounds.
   if (rounds.length < 2) {
     return (
       <Screen>
@@ -124,16 +132,17 @@ export default function TrendsScreen() {
 
       {METRICS.map((metric) => {
         const series = planTrend({ rounds, metric: metric.id, window: windowSize });
+        const ready = trendChartReady(series);
         return (
           <MetricCard
             key={metric.id}
             styles={styles}
             title={metric.title}
             hint={metric.hint}
-            average={formatTrendValue(series.average, series.unit, metric.id === 'toPar')}
-            change={formatTrendChange(series, windowSize)}
-            tone={series.tone}>
-            {series.points.some((point) => point.value != null) ? (
+            average={ready ? formatTrendValue(series.average, series.unit, metric.id === 'toPar') : '—'}
+            change={ready ? formatTrendChange(series, windowSize) : null}
+            tone={ready ? series.tone : null}>
+            {ready ? (
               <TrendBars series={series} testID={`trend-${metric.id}`} />
             ) : (
               <Text style={styles.muted}>{COPY.trendsNoData}</Text>
@@ -226,6 +235,9 @@ function CarryChart({
   clubId: string;
 }) {
   const series = planTrend({ rounds, metric: 'carry', window: windowSize, clubId });
+  if (!trendChartReady(series)) {
+    return <Text style={styles.muted}>{COPY.trendsNoData}</Text>;
+  }
   const change = formatTrendChange(series, windowSize);
   return (
     <View style={styles.cardBody}>

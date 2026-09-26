@@ -27,9 +27,10 @@ import { isValidLatLng, type LatLng } from './latLng';
 export const ARG_MAX_YARDS = 30;
 
 /**
- * Trends average ignores shorter rounds. Scaling a 2-hole round by 9
- * would let a couple of holes swing the chart. A round's own stats screen
- * still uses every finished hole.
+ * Shared Trends cutoff. The strokes-gained average and the per-18 charts
+ * (vs par, putts, penalty strokes) ignore a round with fewer counted holes
+ * than this. Scaling those rounds up to 18 would let a couple of holes
+ * swing the chart. A round's own stats screen still uses every finished hole.
  */
 export const SG_TRENDS_MIN_HOLES = 9;
 
@@ -293,6 +294,18 @@ export type SgRound = SgTotals & {
   shotsSplit: number;
   shotsTotal: number;
 };
+
+/**
+ * Stats-screen strokes gained. The 9-hole Trends cutoff does not apply.
+ * Null when no hole was counted, or when no shot could be split — the screen
+ * then shows the empty line instead of a table of 0.0. A round with counted
+ * holes and at least one split shot is returned unchanged, including a real
+ * 0.0 and any unsplit remainder. Nothing here is replaced with 0.
+ */
+export function strokesGainedForStats(round: SgRound | null): SgRound | null {
+  if (round == null || round.holesCounted === 0 || round.shotsSplit === 0) return null;
+  return round;
+}
 
 /** Strokes gained for a round: the sum of its finished holes. Null when no hole counts. */
 export function roundStrokesGained(holes: readonly SgHoleIn[]): SgRound | null {
