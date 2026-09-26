@@ -324,6 +324,29 @@ test('golfapi matches Hidden Hills Golf Club to Hidden Hills Golf Course', () =>
   assert.equal(picked?.courseID, '012141520702871450040');
 });
 
+test('golfapi state match treats USPS codes and full names as the same state', () => {
+  assert.equal(
+    pickGolfApiSearchHit({ ...HIDDEN_HILLS, state: 'FL' }, [{ ...HIDDEN_HILLS_HIT, state: 'Florida' }])
+      ?.courseID,
+    '012141520702871450040',
+  );
+  assert.equal(
+    pickGolfApiSearchHit({ ...HIDDEN_HILLS, state: 'Florida' }, [{ ...HIDDEN_HILLS_HIT, state: 'fl' }])
+      ?.courseID,
+    '012141520702871450040',
+  );
+  assert.equal(
+    pickGolfApiSearchHit(HIDDEN_HILLS, [{ ...HIDDEN_HILLS_HIT, courseID: 'fixture-ga', state: 'GA' }]),
+    null,
+  );
+  assert.equal(
+    pickGolfApiSearchHit(HIDDEN_HILLS, [
+      { ...HIDDEN_HILLS_HIT, courseID: 'fixture-georgia', state: 'Georgia' },
+    ]),
+    null,
+  );
+});
+
 test('golfapi rejects the same name in another state or another city', () => {
   assert.equal(
     pickGolfApiSearchHit(HIDDEN_HILLS, [

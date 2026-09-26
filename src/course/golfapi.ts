@@ -467,12 +467,81 @@ function golfApiHitName(hit: Record<string, unknown>): string {
   );
 }
 
+/** USPS code, then full name. Both sides of a location check map to the code. */
+const US_STATES: readonly (readonly [string, string])[] = [
+  ['AL', 'Alabama'],
+  ['AK', 'Alaska'],
+  ['AZ', 'Arizona'],
+  ['AR', 'Arkansas'],
+  ['CA', 'California'],
+  ['CO', 'Colorado'],
+  ['CT', 'Connecticut'],
+  ['DE', 'Delaware'],
+  ['FL', 'Florida'],
+  ['GA', 'Georgia'],
+  ['HI', 'Hawaii'],
+  ['ID', 'Idaho'],
+  ['IL', 'Illinois'],
+  ['IN', 'Indiana'],
+  ['IA', 'Iowa'],
+  ['KS', 'Kansas'],
+  ['KY', 'Kentucky'],
+  ['LA', 'Louisiana'],
+  ['ME', 'Maine'],
+  ['MD', 'Maryland'],
+  ['MA', 'Massachusetts'],
+  ['MI', 'Michigan'],
+  ['MN', 'Minnesota'],
+  ['MS', 'Mississippi'],
+  ['MO', 'Missouri'],
+  ['MT', 'Montana'],
+  ['NE', 'Nebraska'],
+  ['NV', 'Nevada'],
+  ['NH', 'New Hampshire'],
+  ['NJ', 'New Jersey'],
+  ['NM', 'New Mexico'],
+  ['NY', 'New York'],
+  ['NC', 'North Carolina'],
+  ['ND', 'North Dakota'],
+  ['OH', 'Ohio'],
+  ['OK', 'Oklahoma'],
+  ['OR', 'Oregon'],
+  ['PA', 'Pennsylvania'],
+  ['RI', 'Rhode Island'],
+  ['SC', 'South Carolina'],
+  ['SD', 'South Dakota'],
+  ['TN', 'Tennessee'],
+  ['TX', 'Texas'],
+  ['UT', 'Utah'],
+  ['VT', 'Vermont'],
+  ['VA', 'Virginia'],
+  ['WA', 'Washington'],
+  ['WV', 'West Virginia'],
+  ['WI', 'Wisconsin'],
+  ['WY', 'Wyoming'],
+  ['DC', 'District of Columbia'],
+];
+
+const US_STATE_CODE = new Map<string, string>();
+for (const [code, name] of US_STATES) {
+  const usps = code.toLowerCase();
+  US_STATE_CODE.set(usps, usps);
+  US_STATE_CODE.set(normalizeGolfApiName(name), usps);
+}
+
+/** 2-letter USPS code when the value is a state name or code. Otherwise the normalized string. */
+function normalizeGolfApiState(value: string | null | undefined): string {
+  const normalized = normalizeGolfApiName(value);
+  if (!normalized) return '';
+  return US_STATE_CODE.get(normalized) ?? normalized;
+}
+
 function golfApiLocationMatches(course: CourseHydrateMatch, hit: Record<string, unknown>): boolean {
   const city = normalizeGolfApiName(course.city);
   const hitCity = normalizeGolfApiName(trimKey(hit.city));
   if (city && hitCity && city !== hitCity) return false;
-  const state = normalizeGolfApiName(course.state);
-  const hitState = normalizeGolfApiName(trimKey(hit.state));
+  const state = normalizeGolfApiState(course.state);
+  const hitState = normalizeGolfApiState(trimKey(hit.state));
   if (state && hitState && state !== hitState) return false;
   return true;
 }
