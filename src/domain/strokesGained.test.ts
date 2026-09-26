@@ -8,6 +8,7 @@ import {
   formatStrokesGained,
   holeStrokesGained,
   roundStrokesGained,
+  strokesGainedChip,
   weakestCategory,
   type SgHoleIn,
   type SgShotIn,
@@ -182,4 +183,10 @@ test('format and weakest category', () => {
     weakestCategory({ offTee: 1, approach: 0, aroundGreen: 0, putting: 0, total: 1, unsplit: 0 }),
     null,
   );
+});
+
+test('shot chip reads SG with a sign, or nothing', () => {
+  assert.equal(strokesGainedChip(0.34), 'SG +0.3');
+  assert.equal(strokesGainedChip(-1.26), 'SG −1.3');
+  assert.equal(strokesGainedChip(null), null);
 });
