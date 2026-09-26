@@ -14,6 +14,8 @@ type Props = {
   holeNumber: number;
   shots: Shot[];
   userFix: GpsFix | null;
+  /** Yards-card reading. Web draws no yardage overlays. */
+  liveGpsToPin?: { yards: number | null; quality: string; unavailable?: boolean } | null;
   green: { lat: number; lng: number } | null;
   yardsToGreen: YardsToGreenResult;
   fmb?: { f: string; m: string; b: string } | null;
