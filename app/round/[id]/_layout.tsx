@@ -1,8 +1,21 @@
-import { Stack } from 'expo-router';
+import { useEffect } from 'react';
+import { Stack, useLocalSearchParams } from 'expo-router';
+import { backfillReadyFavoriteOverlays } from '@/src/course/offlineFavorite';
+import { useDb } from '@/src/db/DbProvider';
+import { getRound, readSettingStore } from '@/src/db/repo';
 import { useColors } from '@/src/ui/ColorThemeProvider';
 
 export default function RoundLayout() {
   const colors = useColors();
+  const { db } = useDb();
+  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const roundId = typeof params.id === 'string' ? params.id : params.id?.[0] ?? null;
+  useEffect(() => {
+    const round = roundId ? getRound(db, roundId) : null;
+    void backfillReadyFavoriteOverlays(readSettingStore(db), {
+      courseId: round?.courseApiId ?? null,
+    });
+  }, [db, roundId]);
   return (
     <Stack
       screenOptions={{

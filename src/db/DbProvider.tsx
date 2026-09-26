@@ -4,6 +4,7 @@ import { ActivityIndicator, Text, View } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import * as SQLite from 'expo-sqlite';
 import { attachGolfApiCachePersist } from '../course/golfapi';
+import { backfillReadyFavoriteOverlays } from '../course/offlineFavorite';
 import { hydrateOsmOverlayMemory } from '../course/osmOverlay';
 import { attachCourseOsmOverlayPersist } from '../course/osmOverlayStore';
 import { attachCoursePaintCachePersist } from '../course/paintCache';
@@ -16,6 +17,7 @@ import {
   getGolfApiHydrateCache,
   getSetting,
   purgeYardTestCourseSaved,
+  readSettingStore,
   setCourseOsmOverlay,
   setCoursePaintCache,
   setGolfApiHydrateCache,
@@ -55,6 +57,7 @@ export function DbProvider({ children }: { children: ReactNode }) {
       // TEMP yard test course switch. Ignored unless the build gate and geometry pass.
       hydrateYardTestCourseFromSettings((key) => getSetting(opened, key));
       purgeYardTestCourseSaved(opened);
+      void backfillReadyFavoriteOverlays(readSettingStore(opened));
       // Hydrates the Pro cache before the first screen, then refreshes from RevenueCat.
       startPurchases(opened);
       setDb(opened);

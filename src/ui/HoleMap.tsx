@@ -47,7 +47,7 @@ import {
   toPinYardsRecalcOnDragMove,
 } from '@/src/domain/placeToDrag';
 import { requestThisCourseVisible } from '@/src/domain/courseRequest';
-import { COPY, showWaitingOnLocationLine } from '@/src/domain/playerCopy';
+import { COPY, osmOverlayCreditLabel, showWaitingOnLocationLine } from '@/src/domain/playerCopy';
 import type { PaintMissNotice } from '@/src/domain/paintMiss';
 import { PaintMissBanner } from './PaintMissBanner';
 import { appleBasemapTilesBestEffortOnly } from '@/src/course/startRoundEntry';
@@ -438,6 +438,7 @@ function NativeHoleMap({
     () => overlayFeatures(osmOverlay ?? null, holeNumber),
     [osmOverlay, holeNumber],
   );
+  const osmCredit = osmOverlayCreditLabel(osmFeatures.length);
 
   const coords = useMemo(() => {
     const out: Coord[] = [];
@@ -977,6 +978,11 @@ function NativeHoleMap({
         <View pointerEvents="none" style={styles.mapCover} />
       ) : null}
       {!allowMapsChrome ? <View pointerEvents="none" style={styles.legalCover} /> : null}
+      {mapCanPaint && osmCredit ? (
+        <Text pointerEvents="none" style={styles.osmCredit}>
+          {osmCredit}
+        </Text>
+      ) : null}
       {!placeHint && !hideYardsOverlay ? (
         <View pointerEvents="none" style={styles.toGreen}>
           <YardsToGreenBadge
@@ -1073,6 +1079,19 @@ function makeStyles(colors: ColorPalette) {
       width: 168,
       height: 56,
       backgroundColor: colors.bgElevated,
+    },
+    osmCredit: {
+      position: 'absolute',
+      right: 8,
+      bottom: 6,
+      color: mapInk.text,
+      backgroundColor: mapInk.scrim,
+      fontSize: 10,
+      fontWeight: '600',
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 4,
+      overflow: 'hidden',
     },
     holeBadgeText: {
       color: colors.cream,

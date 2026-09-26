@@ -448,6 +448,15 @@ export function adoptCourseOverlay(courseId: string | null | undefined, overlay:
   }
 }
 
+/** Full course overlay already fetched this session, if one has real features. */
+export function courseWideOsmOverlay(courseId: string | null | undefined): OsmOverlay | null {
+  const id = courseId?.trim() ?? '';
+  if (!id) return null;
+  const overlay = courseWide.get(id) ?? null;
+  if (!overlay || overlay.source !== 'osm' || overlay.features.length === 0) return null;
+  return overlay;
+}
+
 /** Drop one course from the session maps. The SQLite record is left alone. */
 export function dropCourseOverlayMemory(courseId: string | null | undefined): void {
   const id = courseId?.trim() ?? '';
