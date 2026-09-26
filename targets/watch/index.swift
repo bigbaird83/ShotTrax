@@ -3,6 +3,8 @@ import SwiftUI
 @main
 struct ShotTraxxWatchApp: App {
   @StateObject private var session = WatchClubSession.shared
+  /// App-lifetime state: plays on cold start, not when returning from background.
+  @State private var showSplash = true
 
   init() {
     // Background launch (complication transfer / application context): the
@@ -12,8 +14,13 @@ struct ShotTraxxWatchApp: App {
 
   var body: some Scene {
     WindowGroup {
-      ContentView()
-        .environmentObject(session)
+      ZStack {
+        ContentView()
+          .environmentObject(session)
+        if showSplash {
+          WatchSplash { showSplash = false }
+        }
+      }
     }
     .backgroundTask(.watchConnectivity) {
       await WatchClubSession.drainConnectivity()
