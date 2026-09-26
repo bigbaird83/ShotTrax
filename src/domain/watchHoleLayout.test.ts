@@ -241,13 +241,13 @@ test('Watch Edit shot screen and Change club list fit 40mm through Ultra', () =>
   assert.match(edit, /let rowHeight = max\(0, min\(44, \(geo\.size\.height - backHeight - 6 \* 3 - 8\) \/ 2\)\)/);
   assert.match(edit, /actionPill\("Change club"\)/);
   assert.match(edit, /actionPill\("Delete shot"\)/);
-  assert.match(edit, /session\.undoLastShot\(\)/);
+  assert.match(edit, /session\.deleteEditedShot\(\)/);
   assert.doesNotMatch(edit, /beginShotHold|session\.pick\(|attachWatchFix/);
   const change = watchUi.slice(watchUi.indexOf('private var changeClubList'), watchUi.indexOf('private var allClubsList'));
   assert.match(change, /capsuleBack\(Text\("Back"\), height: 28\)/);
   assert.match(change, /ScrollView/);
   assert.match(change, /session\.list\.lastShotClubId/);
-  assert.match(change, /session\.changeShotClub\(clubId\)/);
+  assert.match(change, /session\.pickEditClub\(clubId\)/);
   assert.match(change, /frame\(minHeight: 38\)/);
   assert.doesNotMatch(change, /beginShotHold|session\.pick\(|attachWatchFix/);
   // Opening Edit shot, Back, and Change club are not swings.

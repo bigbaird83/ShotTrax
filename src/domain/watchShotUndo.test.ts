@@ -317,7 +317,7 @@ test('Watch Row B: Edit shot in the middle slot; Retry takes it while a penalty,
   assert.match(rowB, /session\.retryUndo\(\)/);
   assert.match(rowB, /session\.retryClubChange\(\)/);
   assert.match(ui, /private let watchEditShotLabel = "Edit shot"/);
-  assert.match(rowB, /showEditShot = true/);
+  assert.match(rowB, /session\.openEditShot\(\)/);
   assert.doesNotMatch(rowB, /beginShotHold|undoLastShot|changeShotClub/);
   assert.match(rowB, /\.allowsHitTesting\(session\.canEditShot\)/);
   assert.match(rowB, /\.opacity\(session\.canEditShot \? 1 : 0\.4\)/);

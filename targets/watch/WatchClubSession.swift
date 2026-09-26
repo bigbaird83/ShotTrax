@@ -255,6 +255,10 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   @Published var home = WatchHomeState()
   /// Penalty reasons are showing. Not a club mark and not the putt sheet.
   @Published var penaltyChoicesOpen = false
+  /// Edit shot is showing. The hole face is both of these false.
+  @Published var editShotOpen = false
+  /// Change club list is showing. Picking a club clears this and Edit shot.
+  @Published var changeClubOpen = false
   /// A penalty is still unconfirmed. Retry stays until the phone accepts the id.
   @Published var penaltyRetry = false
   /// Short line next to Retry. Empty once every pending penalty is confirmed.
@@ -873,6 +877,46 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     for payload in pending {
       sendUndoReliable(payload)
     }
+  }
+
+  /// Leave Edit shot and Change club. The hole face shows the confirmation flash.
+  func closeEditScreens() {
+    editShotOpen = false
+    changeClubOpen = false
+  }
+
+  /// Back on Edit shot. Not a swing.
+  func backFromEditShot() {
+    closeEditScreens()
+  }
+
+  /// Back on the club list. Returns to the hole. Not a swing.
+  func backFromChangeClub() {
+    closeEditScreens()
+  }
+
+  func openChangeClub() {
+    editShotOpen = true
+    changeClubOpen = true
+  }
+
+  func openEditShot() {
+    editShotOpen = true
+    changeClubOpen = false
+  }
+
+  /// A club was picked. Both edit screens close immediately. The hole screen
+  /// shows "Club changed ✓" when the phone confirms. Not a swing.
+  func pickEditClub(_ clubId: String) {
+    changeShotClub(clubId)
+    closeEditScreens()
+  }
+
+  /// Delete shot. The edit screen closes immediately. The hole screen shows
+  /// "Shot deleted ✓" when the phone confirms. Not a swing.
+  func deleteEditedShot() {
+    undoLastShot()
+    closeEditScreens()
   }
 
   /// Opens Water / OB / Unplayable / Other. Does not mark a shot.

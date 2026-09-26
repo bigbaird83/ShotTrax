@@ -13,8 +13,6 @@ struct ContentView: View {
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.isLuminanceReduced) private var isLuminanceReduced
   @State private var showAllClubs = false
-  @State private var showEditShot = false
-  @State private var showChangeClub = false
   /// Search nearby is a push on this stack so Back pops and Home stays mounted.
   @State private var homePath = NavigationPath()
 
@@ -73,9 +71,9 @@ struct ContentView: View {
         .padding(.horizontal, 4)
       } else if session.penaltyChoicesOpen {
         penaltyMenu
-      } else if showChangeClub {
+      } else if session.changeClubOpen {
         changeClubList
-      } else if showEditShot {
+      } else if session.editShotOpen {
         editShotMenu
       } else if showAllClubs {
         allClubsList
@@ -103,8 +101,7 @@ struct ContentView: View {
     .onChange(of: session.list.holeNumber) { _ in
       // A new hole starts on the hole face, not a bag list or edit screen left open.
       showAllClubs = false
-      showEditShot = false
-      showChangeClub = false
+      session.closeEditScreens()
     }
     .onChange(of: session.showsHome) { showing in
       // Leaving Home (hole, or holes/tees) drops the push. Search → Back does not.
@@ -942,7 +939,7 @@ struct ContentView: View {
               .buttonStyle(.plain)
             } else {
               // Dim with no shot on this hole. Opening the screen is not a swing.
-              Button(action: { showEditShot = true }) {
+              Button(action: { session.openEditShot() }) {
                 actionPill(watchEditShotLabel)
               }
               .buttonStyle(.plain)
@@ -1029,19 +1026,16 @@ struct ContentView: View {
       let backHeight: CGFloat = 28
       let rowHeight = max(0, min(44, (geo.size.height - backHeight - 6 * 3 - 8) / 2))
       VStack(alignment: .leading, spacing: 6) {
-        Button(action: { showEditShot = false }) {
+        Button(action: { session.backFromEditShot() }) {
           capsuleBack(Text("Back"), height: backHeight)
         }
         .buttonStyle(.plain)
-        Button(action: { showChangeClub = true }) {
+        Button(action: { session.openChangeClub() }) {
           actionPill("Change club")
             .frame(height: rowHeight)
         }
         .buttonStyle(.plain)
-        Button(action: {
-          session.undoLastShot()
-          showEditShot = false
-        }) {
+        Button(action: { session.deleteEditedShot() }) {
           actionPill("Delete shot")
             .frame(height: rowHeight)
         }
@@ -1057,7 +1051,7 @@ struct ContentView: View {
   @ViewBuilder
   private var changeClubList: some View {
     VStack(alignment: .leading, spacing: 6) {
-      Button(action: { showChangeClub = false }) {
+      Button(action: { session.backFromChangeClub() }) {
         capsuleBack(Text("Back"), height: 28)
       }
       .buttonStyle(.plain)
@@ -1065,11 +1059,7 @@ struct ContentView: View {
         VStack(spacing: 4) {
           ForEach(moreClubs, id: \.self) { clubId in
             let current = clubId == session.list.lastShotClubId
-            Button(action: {
-              session.changeShotClub(clubId)
-              showChangeClub = false
-              showEditShot = false
-            }) {
+            Button(action: { session.pickEditClub(clubId) }) {
               tileChrome(
                 Text(session.list.label(for: clubId))
                   .font(.system(size: 15, weight: .heavy, design: .rounded))
