@@ -2154,21 +2154,47 @@ type InsertPenaltyArgs = {
   lng?: number | null;
   afterShotId?: string | null;
   afterShotSeq?: number | null;
+  /**
+   * Caller-supplied id. A second insert with the same id returns the existing
+   * row and does not add another stroke. Omit on the phone menu (a new id).
+   */
+  id?: string | null;
 };
+
+function penaltyScoreOrStored(
+  db: SQLiteDatabase,
+  holeId: string,
+  fallback: number,
+): number {
+  const hole = db.getFirstSync<{ score: number | null }>('SELECT score FROM holes WHERE id = ?', [holeId]);
+  return typeof hole?.score === 'number' && Number.isFinite(hole.score) ? hole.score : fallback;
+}
 
 /**
  * Writes the penalty row and hole score. Caller owns the transaction.
  * Do not call insertPenalty from inside withTransactionSync — that helper
  * opens its own BEGIN, and expo-sqlite cannot nest those.
+ * The same id is one stroke: a retry returns the row already stored.
  */
 export function insertPenaltyInTransaction(
   db: SQLiteDatabase,
   args: InsertPenaltyArgs,
 ): { penalty: HolePenalty; score: number } {
+  const requestedId = textOrNull(args.id);
+  if (requestedId) {
+    const existing = db.getFirstSync<PenaltyRow>('SELECT * FROM hole_penalties WHERE id = ?', [requestedId]);
+    if (existing) {
+      const penalty = mapPenalty(existing);
+      return {
+        penalty,
+        score: penaltyScoreOrStored(db, penalty.holeId, scoreAfterPenalty(args.currentScore, args.par, penalty.strokes)),
+      };
+    }
+  }
   const strokes = clampPenaltyStrokes(args.strokes);
   const score = scoreAfterPenalty(args.currentScore, args.par, strokes);
   const penalty: HolePenalty = {
-    id: newId(),
+    id: requestedId ?? newId(),
     holeId: args.holeId,
     strokes,
     reason: args.reason,

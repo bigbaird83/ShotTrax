@@ -23,8 +23,12 @@ import {
   forgetWatchHomeRequestAt,
   planWatchHomeSearchNearby,
   planWatchHomeTap,
+  orderWatchHomeFavorites,
+  parseWatchHomeLocationAuth,
   watchFixFromHomeRequest,
   watchHomeBackgroundRefreshUsesSendMessage,
+  watchHomeFavoritesMeasurePoint,
+  watchHomeLocationAuthFromStatus,
   watchHomeBodyIsFavoritesOnly,
   watchHomeHasDuplicateIds,
   watchHomePermanentlyShowsNearbyList,
@@ -197,6 +201,158 @@ test('Watch Home location: fresh Watch fix → fresh phone fix → last phone lo
   assert.ok(noFix);
   assert.equal(watchFixFromHomeRequest(noFix), null);
   assert.equal(parseWatchHomeRequest({ type: 'homeRequest', at: 'nope' }), null);
+});
+
+// ─── Favorites nearest first ─────────────────────────────────────────────────
+
+const pin = (lat: number, lng: number) => ({ lat, lng });
+
+test('Watch Home favorites: nearest stored pin first, missing pins last, ties keep order', () => {
+  const fix = pin(36, -94);
+  const measure = { fix, authorization: 'authorized' as const };
+  const rows = [
+    { id: 'far', name: 'Far', location: pin(36.3, -94) },
+    { id: 'none-a', name: 'No Pin A', location: null },
+    { id: 'near', name: 'Near', location: pin(36.01, -94) },
+    { id: 'tie-a', name: 'Tie A', location: pin(36.1, -94) },
+    { id: 'none-b', name: 'No Pin B', location: null },
+    { id: 'tie-b', name: 'Tie B', location: pin(36.1, -94) },
+    { id: 'zero', name: 'Placeholder', location: pin(0, 0) },
+  ];
+  assert.deepEqual(
+    orderWatchHomeFavorites(rows, measure).map((row) => row.id),
+    ['near', 'tie-a', 'tie-b', 'far', 'none-a', 'none-b', 'zero'],
+  );
+  assert.deepEqual(orderWatchHomeFavorites([], measure), []);
+
+  const home = buildWatchHome({
+    favorites: rows,
+    nearby: [{ id: 'near', name: 'Near', distanceMeters: 9_000 }, { id: 'other', name: 'Other', distanceMeters: 500 }],
+    locationSource: 'watch',
+    favoritesMeasure: measure,
+  });
+  assert.deepEqual(home.favorites.map((row) => row.id), ['near', 'tie-a', 'tie-b', 'far', 'none-a', 'none-b', 'zero']);
+  // Distance on the row is only the nearby distance already returned. Sorting does not add one.
+  assert.equal(home.favorites[0].distanceMeters, 9000);
+  assert.equal('distanceMeters' in home.favorites[1], false);
+  assert.deepEqual(home.nearby.map((row) => row.id), ['other']);
+  assert.deepEqual(watchNearbyScreenRows(home).map((row) => row.id), ['other', 'near']);
+});
+
+test('Watch Home favorites: no fix, denied, restricted, or not determined keeps order', () => {
+  const rows = [
+    { id: 'far', name: 'Far', location: pin(37, -94) },
+    { id: 'near', name: 'Near', location: pin(36.01, -94) },
+    { id: 'none', name: 'None', location: null },
+  ];
+  const fix = pin(36, -94);
+  const ids = rows.map((row) => row.id);
+  assert.deepEqual(orderWatchHomeFavorites(rows, { fix: null, authorization: 'authorized' }).map((row) => row.id), ids);
+  assert.deepEqual(orderWatchHomeFavorites(rows, { fix: pin(0, 0), authorization: 'authorized' }).map((row) => row.id), ids);
+  assert.deepEqual(orderWatchHomeFavorites(rows, { authorization: 'authorized' }).map((row) => row.id), ids);
+  for (const authorization of ['denied', 'restricted', 'notDetermined'] as const) {
+    assert.deepEqual(orderWatchHomeFavorites(rows, { fix, authorization }).map((row) => row.id), ids);
+  }
+  assert.deepEqual(orderWatchHomeFavorites(rows).map((row) => row.id), ids);
+
+  const denied = buildWatchHome({
+    favorites: rows,
+    nearby: [],
+    locationSource: 'none',
+    favoritesMeasure: { fix, authorization: 'denied' },
+  });
+  assert.deepEqual(denied.favorites.map((row) => row.id), ids);
+  assert.equal(denied.favorites.length, rows.length);
+  assert.equal(denied.line, WATCH_NEARBY_NO_LOCATION);
+
+  const noFix = buildWatchHome({
+    favorites: rows,
+    nearby: [{ id: 'near', name: 'Near', distanceMeters: 400 }],
+    locationSource: 'none',
+    favoritesMeasure: { fix: null, authorization: 'authorized' },
+  });
+  assert.deepEqual(noFix.favorites.map((row) => row.id), ids);
+  assert.equal(noFix.favorites.find((row) => row.id === 'near')?.distanceMeters, 400);
+});
+
+test('Watch Home favorites measure from an authorized Watch fix, else an authorized phone fix', () => {
+  const watch = pin(36.2, -94.2);
+  const phone = pin(36.1, -94.1);
+  assert.deepEqual(
+    watchHomeFavoritesMeasurePoint({
+      watchFix: watch,
+      watchAuthorization: 'authorized',
+      phoneFix: phone,
+      phoneAuthorization: 'authorized',
+    }),
+    watch,
+  );
+  assert.deepEqual(
+    watchHomeFavoritesMeasurePoint({
+      watchFix: watch,
+      watchAuthorization: 'denied',
+      phoneFix: phone,
+      phoneAuthorization: 'authorized',
+    }),
+    phone,
+  );
+  assert.equal(
+    watchHomeFavoritesMeasurePoint({
+      watchFix: watch,
+      watchAuthorization: 'restricted',
+      phoneFix: phone,
+      phoneAuthorization: 'denied',
+    }),
+    null,
+  );
+  assert.equal(
+    watchHomeFavoritesMeasurePoint({
+      watchFix: watch,
+      watchAuthorization: 'notDetermined',
+      phoneFix: null,
+      phoneAuthorization: 'authorized',
+    }),
+    null,
+  );
+  assert.equal(watchHomeFavoritesMeasurePoint({ phoneFix: phone, phoneAuthorization: 'notDetermined' }), null);
+  assert.equal(watchHomeFavoritesMeasurePoint({ phoneFix: phone }), null);
+  // Older Watch: a fix with no permission field still counts.
+  assert.deepEqual(watchHomeFavoritesMeasurePoint({ watchFix: watch }), watch);
+  assert.equal(watchHomeFavoritesMeasurePoint({}), null);
+  assert.equal(watchHomeLocationAuthFromStatus('granted'), 'authorized');
+  assert.equal(watchHomeLocationAuthFromStatus('denied'), 'denied');
+  assert.equal(watchHomeLocationAuthFromStatus('restricted'), 'restricted');
+  assert.equal(watchHomeLocationAuthFromStatus('undetermined'), 'notDetermined');
+  assert.equal(watchHomeLocationAuthFromStatus(null), 'notDetermined');
+  assert.equal(parseWatchHomeLocationAuth('authorized'), 'authorized');
+  assert.equal(parseWatchHomeLocationAuth('nope'), null);
+
+  const req = parseWatchHomeRequest({
+    type: 'homeRequest',
+    at: '2026-09-24T12:00:00.000Z',
+    lat: 36.2,
+    lng: -94.2,
+    fixAt: '2026-09-24T11:59:58.000Z',
+    locationAuth: 'denied',
+  });
+  assert.equal(req?.locationAuth, 'denied');
+  assert.equal(
+    parseWatchHomeRequest({ type: 'homeRequest', at: '2026-09-24T12:00:00.000Z', locationAuth: 'always' })?.locationAuth,
+    undefined,
+  );
+
+  const service = read('../services/watchHome.ts');
+  const measure = service.slice(service.indexOf('async function favoritesMeasureFrom'), service.indexOf('async function handleHomeRequest'));
+  assert.match(measure, /watchHomeFavoritesMeasurePoint/);
+  assert.match(measure, /readPhoneLocationAuth/);
+  assert.doesNotMatch(measure, /lastPhoneFix|readLastPhoneFix|requestForegroundPermissionsAsync/);
+  const authRead = service.slice(service.indexOf('async function readPhoneLocationAuth'), service.indexOf('async function wakePhoneFix'));
+  assert.match(authRead, /getForegroundPermissionsAsync/);
+  assert.doesNotMatch(authRead, /requestForegroundPermissionsAsync/);
+  const session = read('../../targets/watch/WatchClubSession.swift');
+  const request = session.slice(session.indexOf('func requestHome'), session.indexOf('func refreshHomeIfShowing'));
+  assert.match(request, /"locationAuth": liveAuthBucket\(location\.authorizationStatus\)/);
+  assert.match(request, /attachHomeFix/);
 });
 
 // ─── Favorite toggle sync ────────────────────────────────────────────────────
