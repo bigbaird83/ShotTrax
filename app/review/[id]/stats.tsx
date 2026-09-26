@@ -21,10 +21,9 @@ import { scorecardDiffLabel } from '@/src/domain/scorecard';
 import {
   formatStrokesGained,
   roundStrokesGained,
-  SG_CATEGORIES,
   SG_CATEGORY_LABELS,
   strokesGainedForStats,
-  weakestCategory,
+  strokesGainedStatsRows,
 } from '@/src/domain/strokesGained';
 import { BigButton } from '@/src/ui/BigButton';
 import { Screen } from '@/src/ui/Screen';
@@ -188,22 +187,30 @@ function StrokesGainedBlock({
       </View>
     );
   }
-  const weakest = weakestCategory(sg);
-  const showUnsplit = Math.abs(sg.unsplit) >= 0.05;
+  const table = strokesGainedStatsRows(sg);
   return (
     <View style={styles.block} testID="stats-strokes-gained">
       <Text style={styles.section}>{COPY.strokesGained}</Text>
       <Text style={styles.note}>{COPY.strokesGainedLede}</Text>
-      {SG_CATEGORIES.map((key) => (
-        <Row key={key} styles={styles} label={SG_CATEGORY_LABELS[key]} value={formatStrokesGained(sg[key])} />
-      ))}
-      {showUnsplit ? (
-        <Row styles={styles} label={COPY.strokesGainedUnsplit} value={formatStrokesGained(sg.unsplit)} />
-      ) : null}
-      <Row styles={styles} label={COPY.strokesGainedTotal} value={formatStrokesGained(sg.total)} />
-      {weakest ? (
+      {table.rows.map((row) => {
+        const label =
+          row.kind === 'category'
+            ? SG_CATEGORY_LABELS[row.key]
+            : row.kind === 'unsplit'
+              ? COPY.strokesGainedUnsplit
+              : COPY.strokesGainedTotal;
+        return (
+          <Row
+            key={row.kind === 'category' ? row.key : row.kind}
+            styles={styles}
+            label={label}
+            value={formatStrokesGained(row.value)}
+          />
+        );
+      })}
+      {table.weakest ? (
         <Text style={styles.muted}>
-          {COPY.strokesGainedWeakest} {SG_CATEGORY_LABELS[weakest]}
+          {COPY.strokesGainedWeakest} {SG_CATEGORY_LABELS[table.weakest]}
         </Text>
       ) : null}
       <Text style={styles.note}>

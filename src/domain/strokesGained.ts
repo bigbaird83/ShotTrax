@@ -297,14 +297,41 @@ export type SgRound = SgTotals & {
 
 /**
  * Stats-screen strokes gained. The 9-hole Trends cutoff does not apply.
- * Null when no hole was counted, or when no shot could be split — the screen
- * then shows the empty line instead of a table of 0.0. A round with counted
- * holes and at least one split shot is returned unchanged, including a real
- * 0.0 and any unsplit remainder. Nothing here is replaced with 0.
+ * Null only when the round is missing or no hole was counted — the screen
+ * then shows the empty line. A counted hole is returned unchanged, including
+ * a total that sits entirely in `unsplit` when no shot could be split.
  */
 export function strokesGainedForStats(round: SgRound | null): SgRound | null {
-  if (round == null || round.holesCounted === 0 || round.shotsSplit === 0) return null;
+  if (round == null || round.holesCounted === 0) return null;
   return round;
+}
+
+export type StrokesGainedStatsRow =
+  | { kind: 'category'; key: SgCategory; value: number }
+  | { kind: 'unsplit'; value: number }
+  | { kind: 'total'; value: number };
+
+/**
+ * Rows for one round's stats block. Category lines are measured shots, so
+ * they appear only when a shot was split. With nothing split, the whole
+ * total stays on the unsplit row. `weakest` is null in that case.
+ */
+export function strokesGainedStatsRows(round: SgRound): {
+  rows: StrokesGainedStatsRow[];
+  weakest: SgCategory | null;
+} {
+  const rows: StrokesGainedStatsRow[] = [];
+  if (round.shotsSplit > 0) {
+    for (const key of SG_CATEGORIES) rows.push({ kind: 'category', key, value: round[key] });
+  }
+  if (round.shotsSplit === 0 || Math.abs(round.unsplit) >= 0.05) {
+    rows.push({ kind: 'unsplit', value: round.unsplit });
+  }
+  rows.push({ kind: 'total', value: round.total });
+  return {
+    rows,
+    weakest: round.shotsSplit > 0 ? weakestCategory(round) : null,
+  };
 }
 
 /** Strokes gained for a round: the sum of its finished holes. Null when no hole counts. */

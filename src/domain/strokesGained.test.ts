@@ -9,7 +9,9 @@ import {
   formatStrokesGained,
   holeStrokesGained,
   roundStrokesGained,
+  SG_CATEGORIES,
   strokesGainedForStats,
+  strokesGainedStatsRows,
   weakestCategory,
   type SgHoleIn,
   type SgRound,
@@ -209,17 +211,43 @@ test('a window of only short rounds has no strokes-gained average', () => {
   assert.equal(averageStrokesGainedPer18([trendRound(2, -1), trendRound(8, -4), null]), null);
 });
 
-test('stats strokes gained is empty when no hole counted or no shot could be split', () => {
+test('counted holes with no split shots show total and unsplit, not category rows', () => {
+  const round = trendRound(2, -1.4);
+  round.unsplit = -1.4;
+  round.shotsTotal = 5;
+  round.shotsSplit = 0;
+  const shown = strokesGainedForStats(round);
+  assert.equal(shown, round);
+  assert.equal(shown?.total, -1.4);
+  assert.equal(shown?.unsplit, -1.4);
+  const table = strokesGainedStatsRows(shown!);
+  assert.deepEqual(
+    table.rows.map((row) => row.kind),
+    ['unsplit', 'total'],
+  );
+  assert.equal(table.rows[0].value, -1.4);
+  assert.equal(table.rows[1].value, -1.4);
+  assert.equal(
+    table.rows.some((row) => row.kind === 'category'),
+    false,
+  );
+  assert.equal(table.weakest, null);
+});
+
+test('a round with 0 counted holes gets the empty strokes-gained line', async () => {
   assert.equal(strokesGainedForStats(null), null);
   assert.equal(strokesGainedForStats(trendRound(0, 0)), null);
   assert.equal(strokesGainedForStats(trendRound(0, -4)), null);
-  // Counted holes, but nothing split: empty line, not a table of 0.0 or a rewritten total.
-  const unsplit = trendRound(1, -1.2);
-  unsplit.unsplit = -1.2;
-  assert.equal(unsplit.shotsSplit, 0);
-  assert.equal(strokesGainedForStats(unsplit), null);
-  assert.equal(strokesGainedForStats(trendRound(1, 0)), null);
-  // Split shots show the computed numbers. A genuine 0 stays 0; other lines stay real.
+  const { readFileSync } = await import('node:fs');
+  const stats = readFileSync(new URL('../../app/review/[id]/stats.tsx', import.meta.url), 'utf8');
+  const block = stats.slice(stats.indexOf('function StrokesGainedBlock'));
+  const emptyBranch = block.slice(block.indexOf('if (!sg)'), block.indexOf('const table'));
+  assert.match(emptyBranch, /COPY\.strokesGainedEmpty/);
+  assert.match(block, /strokesGainedStatsRows\(sg\)/);
+  assert.match(block, /\{sg\.holesCounted\} holes · \{sg\.shotsSplit\} of \{sg\.shotsTotal\} shots split/);
+});
+
+test('split shots keep the full strokes-gained table', () => {
   const even = trendRound(3, 0);
   even.shotsSplit = 4;
   even.shotsTotal = 6;
@@ -228,6 +256,12 @@ test('stats strokes gained is empty when no hole counted or no shot could be spl
   assert.equal(shownEven, even);
   assert.equal(shownEven?.total, 0);
   assert.equal(shownEven?.offTee, -0.6);
+  const evenRows = strokesGainedStatsRows(even);
+  assert.deepEqual(
+    evenRows.rows.filter((row) => row.kind === 'category').map((row) => (row.kind === 'category' ? row.key : '')),
+    [...SG_CATEGORIES],
+  );
+  assert.equal(evenRows.weakest, 'offTee');
   const played = roundStrokesGained([hole()]);
   assert.ok(played);
   assert.equal(played.holesCounted, 1);
@@ -236,6 +270,15 @@ test('stats strokes gained is empty when no hole counted or no shot could be spl
   assert.equal(shown, played);
   close(shown?.total ?? null, played.total);
   assert.notEqual(Math.round((shown?.total ?? 0) * 10) / 10, 0);
+  const full = strokesGainedStatsRows(played);
+  assert.deepEqual(
+    full.rows.filter((row) => row.kind === 'category').map((row) => (row.kind === 'category' ? row.key : '')),
+    [...SG_CATEGORIES],
+  );
+  assert.equal(
+    full.rows.some((row) => row.kind === 'total' && row.value === played.total),
+    true,
+  );
   // The round's own screen still counts one finished hole. Trends does not.
   assert.equal(averageStrokesGainedPer18([played]), null);
 });
