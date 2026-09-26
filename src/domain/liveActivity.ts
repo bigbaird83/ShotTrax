@@ -19,7 +19,7 @@ export type LiveActivityPayload = {
   front: LatLng | null;
   middle: LatLng | null;
   back: LatLng | null;
-  /** "thru 6, +3", or "Hole 1" before any hole is finished. */
+  /** "thru 6, +3"; empty before any hole is finished (the hole line already says which hole). */
   scoreLine: string;
   /** "7 Iron · 152 yd" — the latest shot on this hole with a club and a distance. */
   lastShot: string | null;
@@ -92,7 +92,7 @@ export function planLiveActivityPayload(args: {
     front: bothEnds ? front : null,
     middle: point(args.pins.middle),
     back: bothEnds ? back : null,
-    scoreLine: args.runningPar.visible ? args.runningPar.line : `Hole ${args.hole.number}`,
+    scoreLine: args.runningPar.visible ? args.runningPar.line : '',
     lastShot: args.lastShot,
     groupLine: args.groupLine,
   };

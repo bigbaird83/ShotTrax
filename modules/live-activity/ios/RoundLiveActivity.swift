@@ -45,7 +45,7 @@ struct LiveRoundPayload: Equatable {
     self.front = point("front")
     self.middle = point("middle")
     self.back = point("back")
-    self.scoreLine = text("scoreLine") ?? "Hole \(hole)"
+    self.scoreLine = text("scoreLine") ?? ""
     self.lastShot = text("lastShot")
     self.groupLine = text("groupLine")
   }

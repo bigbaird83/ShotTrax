@@ -50,7 +50,7 @@ test('front and back only when the course has both; no green → no middle; noth
   assert.equal(p.middle, null);
   assert.equal(p.par, null);
   assert.equal(p.courseName, 'Round');
-  assert.equal(p.scoreLine, 'Hole 1');
+  assert.equal(p.scoreLine, '');
 
   const zero = planLiveActivityPayload({
     courseName: 'X',

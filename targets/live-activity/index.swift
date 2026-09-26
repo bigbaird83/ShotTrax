@@ -92,11 +92,13 @@ struct RoundLockScreenView: View {
             .foregroundStyle(RoundColors.cream)
         }
         Spacer(minLength: 8)
-        Text(state.scoreLine)
-          .font(.subheadline.weight(.heavy))
-          .monospacedDigit()
-          .foregroundStyle(RoundColors.cream)
-          .lineLimit(1)
+        if !state.scoreLine.isEmpty {
+          Text(state.scoreLine)
+            .font(.subheadline.weight(.heavy))
+            .monospacedDigit()
+            .foregroundStyle(RoundColors.cream)
+            .lineLimit(1)
+        }
       }
       HStack {
         Spacer(minLength: 0)
@@ -131,11 +133,13 @@ struct ShotTraxxRoundLiveActivity: Widget {
             .lineLimit(1)
         }
         DynamicIslandExpandedRegion(.trailing) {
-          Text(state.scoreLine)
-            .font(.subheadline.weight(.heavy))
-            .monospacedDigit()
-            .foregroundStyle(RoundColors.cream)
-            .lineLimit(1)
+          if !state.scoreLine.isEmpty {
+            Text(state.scoreLine)
+              .font(.subheadline.weight(.heavy))
+              .monospacedDigit()
+              .foregroundStyle(RoundColors.cream)
+              .lineLimit(1)
+          }
         }
         DynamicIslandExpandedRegion(.center) {
           YardsRow(state: state)

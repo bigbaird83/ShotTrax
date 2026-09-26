@@ -17,7 +17,7 @@ struct ShotTraxxRoundAttributes: ActivityAttributes {
     /// The course has a green / front and back points for this hole.
     var hasGreen: Bool
     var hasEnds: Bool
-    /// "thru 6, +3" or "Hole 1".
+    /// "thru 6, +3"; empty before any hole is finished.
     var scoreLine: String
     /// "7 Iron · 152 yd".
     var lastShot: String?
