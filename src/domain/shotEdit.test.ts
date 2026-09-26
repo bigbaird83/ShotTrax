@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { MAX_SHOT_YD } from '../config/sensing';
+import { YARD_TEST_COURSE_ID } from '../course/yardTestCourse';
 import {
   collectRoundCsv,
   collectRoundHistoryExport,
@@ -10,15 +11,22 @@ import {
   getShot,
   insertPenalty,
   listClubAverages,
+  listDispersionShots,
   listPenaltiesForHole,
   listShotsForHole,
   moveShotSpotOnHole,
   restoreRoundHistory,
+  setHoleGreen,
   startRound,
+  updateClubCarry,
   updateShotClub,
 } from '../db/repo';
 import { migrate } from '../db/schema';
+import { clubCarryMeta } from './bagDistance';
+import { planDispersion } from './dispersion';
 import { haversineYards, roundYards } from './haversine';
+import { COPY, formatBagCarrySuggestion, formatDispersionPlacedNote } from './playerCopy';
+import { formatHistoryDate } from './roundHistory';
 import { confirmPlacedShot, includeInDistanceAverages } from './shotSource';
 import { acceptTransferShot, serializeRoundHistory } from './roundTransfer';
 import {
@@ -588,9 +596,10 @@ function insertGpsShot(
     endLat: number;
     endLng: number;
     yards: number;
+    startedAt?: string;
   },
 ): void {
-  const stamp = '2026-06-01T18:00:00.000Z';
+  const stamp = args.startedAt ?? '2026-06-01T18:00:00.000Z';
   db.runSync(
     `INSERT INTO shots (
       id, hole_id, club_id, seq,
@@ -688,6 +697,7 @@ test('saved club and spot round-trip, and putts, score, and penalty order stay p
   updateShotClub(db, 's1', 'club_8i');
   const afterClub = getShot(db, 's1');
   assert.equal(afterClub?.clubId, 'club_8i');
+  assert.equal(afterClub?.source, 'gps');
   assert.equal(afterClub?.endLat, 35.102);
   assert.equal(afterClub?.distanceYards, 150);
   const movedClub = listClubAverages(db);
@@ -748,4 +758,361 @@ test('saved club and spot round-trip, and putts, score, and penalty order stay p
   assert.equal(restoredSecond?.startLng, dropped.lng);
   assert.equal(restoredHole.putts, 2);
   assert.equal(restoredHole.score, 5);
+});
+
+/** Same line Show numbers builds. DispersionPlot must keep `point.placed ? \` · ${COPY.placed}\``. */
+function showNumbersLabel(point: {
+  playedAt: string;
+  courseName: string;
+  holeNumber: number;
+  placed: boolean;
+}): string {
+  return `${formatHistoryDate(point.playedAt)} · ${point.courseName} · H${point.holeNumber}${
+    point.placed ? ` · ${COPY.placed}` : ''
+  }`;
+}
+
+test('a hand-moved GPS shot is Placed on Dispersion; a club change leaves the source', {
+  skip: DatabaseSync ? false : 'node:sqlite needs Node 22.5+',
+}, () => {
+  const db = memoryDb();
+  const round = startRound(db, 18, 'North Hills');
+  const hole = getHole(db, round.id, 1);
+  assert.ok(hole);
+  if (!hole) return;
+  setHoleGreen(db, hole.id, { lat: 35.104, lng: -92.3, source: 'course_centroid' });
+  insertGpsShot(db, {
+    id: 'gps-1',
+    holeId: hole.id,
+    clubId: 'club_7i',
+    seq: 1,
+    startLat: 35.1,
+    startLng: -92.3,
+    endLat: 35.102,
+    endLng: -92.3,
+    yards: 150,
+  });
+
+  const before = planDispersion(listDispersionShots(db), 'club_7i');
+  assert.equal(before.count, 1);
+  assert.equal(before.placed, 0);
+  assert.equal(formatDispersionPlacedNote(before.placed), null);
+  assert.equal(before.points[0]?.placed, false);
+  assert.equal(showNumbersLabel(before.points[0]!).includes('Placed'), false);
+  assert.equal(getShot(db, 'gps-1')?.source, 'gps');
+
+  updateShotClub(db, 'gps-1', 'club_8i');
+  const clubOnly = getShot(db, 'gps-1');
+  assert.equal(clubOnly?.clubId, 'club_8i');
+  assert.equal(clubOnly?.source, 'gps');
+  assert.equal(clubOnly?.fixQuality, 'good');
+  assert.equal(clubOnly?.endLat, 35.102);
+  const afterClub = planDispersion(listDispersionShots(db), 'club_8i');
+  assert.equal(afterClub.placed, 0);
+  assert.equal(formatDispersionPlacedNote(afterClub.placed), null);
+  assert.equal(showNumbersLabel(afterClub.points[0]!).endsWith(' · Placed'), false);
+
+  const dropped = { lat: 35.103, lng: -92.301 };
+  const moved = moveShotSpotOnHole(db, {
+    roundId: round.id,
+    holeNumber: 1,
+    shotId: 'gps-1',
+    point: dropped,
+    dropped: true,
+    confirmed: true,
+  });
+  assert.equal(moved.status, 'commit');
+  const saved = getShot(db, 'gps-1');
+  assert.equal(saved?.source, 'placed');
+  assert.equal(saved?.fixQuality, null);
+  assert.equal(saved?.endLat, dropped.lat);
+  assert.equal(saved?.endLng, dropped.lng);
+  assert.equal(saved?.clubId, 'club_8i');
+
+  const plan = planDispersion(listDispersionShots(db), 'club_8i');
+  assert.equal(plan.count, 1);
+  assert.equal(plan.placed, 1);
+  assert.equal(plan.points[0]?.placed, true);
+  assert.equal(
+    formatDispersionPlacedNote(plan.placed),
+    'Includes 1 placed shot. Placed shots are set by hand and may be less accurate than GPS-marked ones.',
+  );
+  assert.equal(showNumbersLabel(plan.points[0]!).endsWith(' · Placed'), true);
+  assert.equal(planDispersion(listDispersionShots(db), 'club_7i').count, 0);
+});
+
+test('a club change updates both clubs and switches the five-shot label', {
+  skip: DatabaseSync ? false : 'node:sqlite needs Node 22.5+',
+}, () => {
+  const db = memoryDb();
+  updateClubCarry(db, 'club_5i', 170);
+  updateClubCarry(db, 'club_6i', 160);
+  updateClubCarry(db, 'club_9i', 130);
+  const round = startRound(db, 18, 'North Hills');
+  const hole = getHole(db, round.id, 1);
+  assert.ok(hole);
+  if (!hole) return;
+
+  const sevenYards = [145, 148, 150, 152, 155];
+  sevenYards.forEach((yards, index) => {
+    insertGpsShot(db, {
+      id: `7i-${index}`,
+      holeId: hole.id,
+      clubId: 'club_7i',
+      seq: index + 1,
+      startLat: 35.1,
+      startLng: -92.3,
+      endLat: 35.102,
+      endLng: -92.3,
+      yards,
+    });
+  });
+  const eightYards = [136, 138, 140, 142];
+  eightYards.forEach((yards, index) => {
+    insertGpsShot(db, {
+      id: `8i-${index}`,
+      holeId: hole.id,
+      clubId: 'club_8i',
+      seq: sevenYards.length + index + 1,
+      startLat: 35.1,
+      startLng: -92.3,
+      endLat: 35.102,
+      endLng: -92.3,
+      yards,
+    });
+  });
+
+  const before = listClubAverages(db);
+  const before7 = before.find((row) => row.club.id === 'club_7i');
+  const before8 = before.find((row) => row.club.id === 'club_8i');
+  assert.equal(before7?.count, 5);
+  assert.equal(before7?.avgYards, 150);
+  assert.equal(before7?.bag.kind, 'live');
+  assert.equal(clubCarryMeta(before7!.bag), '5 shots');
+  assert.equal(before8?.count, 4);
+  assert.equal(before8?.avgYards, 139);
+  assert.equal(before8?.bag.kind, 'estimated');
+  assert.equal(clubCarryMeta(before8!.bag), 'Estimated · 4 shots');
+
+  updateShotClub(db, '7i-4', 'club_8i');
+  const moved = getShot(db, '7i-4');
+  assert.equal(moved?.clubId, 'club_8i');
+  assert.equal(moved?.source, 'gps');
+  assert.equal(moved?.distanceYards, 155);
+
+  const after = listClubAverages(db);
+  const after7 = after.find((row) => row.club.id === 'club_7i');
+  const after8 = after.find((row) => row.club.id === 'club_8i');
+  assert.equal(after7?.count, 4);
+  assert.equal(after7?.avgYards, 148.75);
+  assert.ok((after7?.avgYards ?? 0) < (before7?.avgYards ?? 0));
+  assert.equal(after7?.bag.kind, 'estimated');
+  assert.equal(clubCarryMeta(after7!.bag), 'Estimated · 4 shots');
+  assert.equal(after8?.count, 5);
+  assert.equal(after8?.avgYards, 142.2);
+  assert.ok((after8?.avgYards ?? 0) > (before8?.avgYards ?? 0));
+  assert.equal(after8?.bag.kind, 'live');
+  assert.equal(after8?.bag.yards, 142);
+  assert.equal(clubCarryMeta(after8!.bag), '5 shots');
+});
+
+test('the update line follows a club change on both clubs', {
+  skip: DatabaseSync ? false : 'node:sqlite needs Node 22.5+',
+}, () => {
+  const db = memoryDb();
+  updateClubCarry(db, 'club_7i', 200);
+  updateClubCarry(db, 'club_8i', 220);
+  const round = startRound(db, 18, 'North Hills');
+  const hole = getHole(db, round.id, 1);
+  assert.ok(hole);
+  if (!hole) return;
+
+  for (let i = 0; i < 5; i += 1) {
+    insertGpsShot(db, {
+      id: `far-7-${i}`,
+      holeId: hole.id,
+      clubId: 'club_7i',
+      seq: i + 1,
+      startLat: 35.1,
+      startLng: -92.3,
+      endLat: 35.102,
+      endLng: -92.3,
+      yards: 150,
+      startedAt: `2026-06-01T18:00:0${i}.000Z`,
+    });
+  }
+  for (let i = 0; i < 4; i += 1) {
+    insertGpsShot(db, {
+      id: `far-8-${i}`,
+      holeId: hole.id,
+      clubId: 'club_8i',
+      seq: i + 6,
+      startLat: 35.1,
+      startLng: -92.3,
+      endLat: 35.102,
+      endLng: -92.3,
+      yards: 140,
+      startedAt: `2026-06-01T18:00:1${i}.000Z`,
+    });
+  }
+
+  const before = listClubAverages(db);
+  const before7 = before.find((row) => row.club.id === 'club_7i');
+  const before8 = before.find((row) => row.club.id === 'club_8i');
+  assert.equal(before7?.suggestion?.yards, 150);
+  assert.equal(
+    formatBagCarrySuggestion(before7!.club.name, before7!.suggestion!.yards),
+    'Your last five 7 Iron shots averaged 150. Update your 7 Iron to 150?',
+  );
+  assert.equal(before8?.suggestion, null);
+
+  updateShotClub(db, 'far-7-4', 'club_8i');
+  assert.equal(getShot(db, 'far-7-4')?.source, 'gps');
+
+  const after = listClubAverages(db);
+  const after7 = after.find((row) => row.club.id === 'club_7i');
+  const after8 = after.find((row) => row.club.id === 'club_8i');
+  assert.equal(after7?.suggestion, null);
+  assert.equal(after8?.suggestion?.yards, 142);
+  assert.equal(
+    formatBagCarrySuggestion(after8!.club.name, after8!.suggestion!.yards),
+    'Your last five 8 Iron shots averaged 142. Update your 8 Iron to 142?',
+  );
+});
+
+test('editing a Yard Test round leaves club stats and dispersion untouched', {
+  skip: DatabaseSync ? false : 'node:sqlite needs Node 22.5+',
+}, () => {
+  const db = memoryDb();
+  const real = startRound(db, 9, 'Fixture');
+  const realHole = getHole(db, real.id, 1);
+  assert.ok(realHole);
+  if (!realHole) return;
+  setHoleGreen(db, realHole.id, { lat: 35.104, lng: -92.3, source: 'course_centroid' });
+  insertGpsShot(db, {
+    id: 'real-7',
+    holeId: realHole.id,
+    clubId: 'club_7i',
+    seq: 1,
+    startLat: 35.1,
+    startLng: -92.3,
+    endLat: 35.102,
+    endLng: -92.3,
+    yards: 150,
+  });
+
+  const testRound = startRound(db, 9, 'Yard Test', { apiId: YARD_TEST_COURSE_ID });
+  assert.equal(testRound.isTest, true);
+  const testHole = getHole(db, testRound.id, 1);
+  assert.ok(testHole);
+  if (!testHole) return;
+  insertGpsShot(db, {
+    id: 'test-7',
+    holeId: testHole.id,
+    clubId: 'club_7i',
+    seq: 1,
+    startLat: 35.2,
+    startLng: -92.4,
+    endLat: 35.202,
+    endLng: -92.4,
+    yards: 170,
+  });
+
+  const fingerprint = () => ({
+    clubs: listClubAverages(db).map((row) => ({
+      id: row.club.id,
+      count: row.count,
+      avgYards: row.avgYards,
+      meta: clubCarryMeta(row.bag),
+      suggestion: row.suggestion
+        ? formatBagCarrySuggestion(row.club.name, row.suggestion.yards)
+        : null,
+    })),
+    dispersion: listDispersionShots(db).map((shot) => ({
+      shotId: shot.shotId,
+      clubId: shot.clubId,
+      source: shot.source,
+      distanceYards: shot.distanceYards,
+    })),
+  });
+  const before = fingerprint();
+  assert.equal(before.clubs.find((row) => row.id === 'club_7i')?.count, 1);
+  assert.equal(before.dispersion.length, 1);
+  assert.equal(before.dispersion[0]?.source, 'gps');
+
+  updateShotClub(db, 'test-7', 'club_8i');
+  const dropped = { lat: 35.203, lng: -92.401 };
+  const moved = moveShotSpotOnHole(db, {
+    roundId: testRound.id,
+    holeNumber: 1,
+    shotId: 'test-7',
+    point: dropped,
+    dropped: true,
+    confirmed: true,
+  });
+  assert.equal(moved.status, 'commit');
+  const edited = getShot(db, 'test-7');
+  assert.equal(edited?.clubId, 'club_8i');
+  assert.equal(edited?.source, 'placed');
+  assert.equal(edited?.endLat, dropped.lat);
+  assert.equal(edited?.endLng, dropped.lng);
+  assert.deepEqual(fingerprint(), before);
+});
+
+test("export and restore keep a moved shot's new spot and Placed source", {
+  skip: DatabaseSync ? false : 'node:sqlite needs Node 22.5+',
+}, () => {
+  const db = memoryDb();
+  const round = startRound(db, 18, 'North Hills');
+  const hole = getHole(db, round.id, 1);
+  assert.ok(hole);
+  if (!hole) return;
+  setHoleGreen(db, hole.id, { lat: 35.104, lng: -92.3, source: 'course_centroid' });
+  insertGpsShot(db, {
+    id: 'move-1',
+    holeId: hole.id,
+    clubId: 'club_7i',
+    seq: 1,
+    startLat: 35.1,
+    startLng: -92.3,
+    endLat: 35.102,
+    endLng: -92.3,
+    yards: 150,
+  });
+  assert.equal(getShot(db, 'move-1')?.source, 'gps');
+
+  const dropped = { lat: 35.103, lng: -92.301 };
+  const moved = moveShotSpotOnHole(db, {
+    roundId: round.id,
+    holeNumber: 1,
+    shotId: 'move-1',
+    point: dropped,
+    dropped: true,
+    confirmed: true,
+  });
+  assert.equal(moved.status, 'commit');
+  assert.equal(getShot(db, 'move-1')?.source, 'placed');
+
+  const exported = serializeRoundHistory(collectRoundHistoryExport(db, '2026-06-02T00:00:00.000Z'));
+  const fresh = memoryDb();
+  const restored = restoreRoundHistory(fresh, exported);
+  assert.equal(restored.ok, true);
+  const restoredHole = getHole(fresh, round.id, 1);
+  assert.ok(restoredHole);
+  if (!restoredHole) return;
+  const shot = listShotsForHole(fresh, restoredHole.id).find((row) => row.seq === 1);
+  assert.equal(shot?.source, 'placed');
+  assert.equal(shot?.fixQuality, null);
+  assert.equal(shot?.clubId, 'club_7i');
+  assert.equal(shot?.startLat, 35.1);
+  assert.equal(shot?.startLng, -92.3);
+  assert.equal(shot?.endLat, dropped.lat);
+  assert.equal(shot?.endLng, dropped.lng);
+
+  const plan = planDispersion(listDispersionShots(fresh), 'club_7i');
+  assert.equal(plan.placed, 1);
+  assert.equal(plan.points[0]?.placed, true);
+  assert.equal(showNumbersLabel(plan.points[0]!).endsWith(' · Placed'), true);
+  assert.match(collectRoundCsv(fresh).shotsCsv, /Placed/);
+  assert.match(collectRoundCsv(fresh).shotsCsv, new RegExp(String(dropped.lat)));
 });
