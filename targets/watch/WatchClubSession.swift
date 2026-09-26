@@ -354,6 +354,9 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   private var locationAuthRequestInFlight = false
   /// Launch splash is covering the UI. When In Use waits so it does not cover the clip.
   private var splashShowing = false
+  /// Logo cover while watchOS takes the launch snapshot. The view ignores this
+  /// once the scene is active and the clip is not due.
+  @Published var snapshotCover = false
   /// Walking filter once the wrist is down. Wrist-up stays unfiltered so a
   /// stationary club mark still has a fix younger than 3 seconds.
   private static let liveDistanceFilterM: CLLocationDistance = 3
@@ -2782,6 +2785,20 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   /// The splash will cover the first open. Set before any scene callback.
   func prepareLaunchSplash() {
     splashShowing = true
+  }
+
+  /// Put the logo still up for the system snapshot. A fresh live round keeps the hole.
+  func raiseSnapshotCover() {
+    guard !liveHoleInProgress else { return }
+    guard !snapshotCover else { return }
+    snapshotCover = true
+    WatchSplashClip.splashLog.info("snapshot cover")
+  }
+
+  /// Warm resume. The clip is not replayed; Home shows on the active frame.
+  func lowerSnapshotCover() {
+    guard snapshotCover else { return }
+    snapshotCover = false
   }
 
   /// Splash left the screen. Ask for When In Use when the scene is active.

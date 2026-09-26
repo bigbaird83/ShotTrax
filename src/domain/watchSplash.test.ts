@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { watchLocationAuthorizationWaitsForSplash, watchSplashPlayback } from './watchSplash';
+import {
+  watchLaunchCoverVisible,
+  watchLocationAuthorizationWaitsForSplash,
+  watchSplashPlayback,
+} from './watchSplash';
 
 const root = new URL('../../', import.meta.url);
 const read = (path: string) => readFileSync(new URL(path, root), 'utf8');
@@ -19,13 +23,23 @@ test('Watch splash clip ships in the Watch target with no audio track', () => {
 test('Watch splash plays over the app on cold start and never blocks it', () => {
   const app = read('targets/watch/index.swift');
   // Skipped on a relaunch mid-round, and cut short if a round goes live.
-  assert.match(app, /@State private var showSplash = !WatchClubSession\.shared\.liveHoleInProgress/);
-  assert.match(app, /onChange\(of: session\.liveHoleInProgress\) \{ _, live in\s*[^}]*if live \{ skipSplashForLiveRound\(\) \}/);
+  assert.match(app, /@State private var splashDue = !WatchClubSession\.shared\.liveHoleInProgress/);
+  assert.match(app, /onChange\(of: session\.liveHoleInProgress\) \{ _, live in\s*[^}]*if live \{\s*[^}]*skipSplashForLiveRound\(\)/);
   const session = read('targets/watch/WatchClubSession.swift');
   assert.match(session, /var liveHoleInProgress: Bool \{\n    roundLooksLive && roundIsFresh/);
   assert.match(session, /var roundLooksLive: Bool \{\n    !userLeftApp && list\.roundLive && \(\(hasLiveHole && !list\.roundComplete\) \|\| putt\.open\)/);
   assert.match(app, /@Environment\(\\\.scenePhase\) private var scenePhase/);
-  assert.match(app, /ZStack \{\s*ContentView\(\)[\s\S]*if showSplash \{\s*WatchSplash\(scenePhase: scenePhase\)/);
+  assert.match(app, /ZStack \{\s*ContentView\(\)[\s\S]*if showLaunchCover \{\s*if splashDue \{\s*WatchSplash\(scenePhase: scenePhase\)/);
+  assert.match(app, /WatchSplashCover\(\)/);
+  assert.match(app, /backgroundTask\(\.snapshot\)/);
+  assert.match(app, /raiseSnapshotCover\(\)/);
+  assert.match(app, /SnapshotResponse\(\s*restoredDefaultState: true/);
+  const coverRule = app.slice(app.indexOf('private var showLaunchCover'), app.indexOf('var body: some View'));
+  assert.match(coverRule, /if session\.liveHoleInProgress \{ return false \}/);
+  assert.match(coverRule, /if splashDue \{ return true \}/);
+  assert.match(coverRule, /if scenePhase != \.active \{ return true \}/);
+  assert.ok(coverRule.indexOf('if splashDue { return true }') < coverRule.indexOf('if scenePhase != .active { return true }'));
+  assert.match(coverRule, /return false/);
 
   const splash = read('targets/watch/WatchSplash.swift');
   assert.match(splash, /static let resource = "WatchSplash"/);
@@ -59,9 +73,15 @@ test('Watch splash plays over the app on cold start and never blocks it', () => 
   assert.match(apply, /splash pending/);
   const run = splash.slice(splash.indexOf('private func run'), splash.indexOf('private func dismiss'));
   assert.ok(run.indexOf('next.play()') > run.indexOf('playback started'));
+  assert.match(splash, /static let poster: UIImage = loadPoster\(\) \?\? UIImage\(\)/);
+  assert.match(splash, /struct WatchSplashCover/);
   assert.match(splash, /Image\(uiImage: poster\)/);
   assert.match(splash, /VideoPlayer\(player: player\)/);
   assert.ok(splash.indexOf('Image(uiImage: poster)') < splash.indexOf('VideoPlayer(player: player)'));
+  assert.ok(splash.indexOf('WatchSplashCover()') < splash.indexOf('VideoPlayer(player: player)'));
+  const appear = splash.slice(splash.indexOf('.onAppear'), splash.indexOf('.onChange(of: scenePhase)'));
+  assert.doesNotMatch(appear, /loadPoster|poster =/);
+  assert.doesNotMatch(splash, /@State private var poster/);
 });
 
 test('background launch does not start the splash until the first active scene', () => {
@@ -94,6 +114,57 @@ test('background launch does not start the splash until the first active scene',
     watchSplashPlayback({ scene: 'active', started: true, liveHoleInProgress: false }),
     'playing',
   );
+});
+
+test('the logo cover is up before playback, and the snapshot is the logo unless a live round is on the hole', () => {
+  assert.equal(
+    watchLaunchCoverVisible({ scene: 'background', splashDue: true, liveHoleInProgress: false }),
+    true,
+  );
+  assert.equal(
+    watchLaunchCoverVisible({ scene: 'inactive', splashDue: true, liveHoleInProgress: false }),
+    true,
+  );
+  assert.equal(
+    watchLaunchCoverVisible({ scene: 'active', splashDue: true, liveHoleInProgress: false }),
+    true,
+  );
+  assert.equal(
+    watchSplashPlayback({ scene: 'background', started: false, liveHoleInProgress: false }),
+    'pending',
+  );
+  assert.equal(
+    watchLaunchCoverVisible({ scene: 'background', splashDue: false, liveHoleInProgress: false }),
+    true,
+  );
+  assert.equal(
+    watchLaunchCoverVisible({ scene: 'inactive', splashDue: false, liveHoleInProgress: false }),
+    true,
+  );
+  assert.equal(
+    watchLaunchCoverVisible({ scene: 'active', splashDue: false, liveHoleInProgress: false }),
+    false,
+  );
+  assert.equal(
+    watchLaunchCoverVisible({ scene: 'active', splashDue: true, liveHoleInProgress: true }),
+    false,
+  );
+  assert.equal(
+    watchLaunchCoverVisible({ scene: 'background', splashDue: false, liveHoleInProgress: true }),
+    false,
+  );
+  assert.equal(
+    watchLaunchCoverVisible({ scene: 'background', splashDue: true, liveHoleInProgress: true }),
+    false,
+  );
+
+  const session = read('targets/watch/WatchClubSession.swift');
+  const raise = session.slice(session.indexOf('func raiseSnapshotCover'), session.indexOf('func lowerSnapshotCover'));
+  assert.match(raise, /guard !liveHoleInProgress else \{ return \}/);
+  assert.match(raise, /snapshot cover/);
+  const app = read('targets/watch/index.swift');
+  assert.match(app, /phase == \.active \{\s*session\.lowerSnapshotCover\(\)/);
+  assert.match(app, /session\.raiseSnapshotCover\(\)/);
 });
 
 test('a fresh live round skips the splash and does not hold the location prompt', () => {

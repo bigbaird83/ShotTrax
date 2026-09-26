@@ -20,6 +20,24 @@ export function watchSplashPlayback(args: {
 }
 
 /**
+ * Logo still on screen. True from the first frame while the clip is still due,
+ * including before the scene is active (playback is separate). Also true while
+ * the scene is inactive or background and there is no fresh live round, so the
+ * system snapshot is the logo. Active with the clip already finished is the
+ * app underneath. A fresh live round never covers.
+ */
+export function watchLaunchCoverVisible(args: {
+  scene: WatchSplashScene;
+  /** Clip has not finished, been skipped, or been dismissed this process. */
+  splashDue: boolean;
+  liveHoleInProgress: boolean;
+}): boolean {
+  if (args.liveHoleInProgress) return false;
+  if (args.splashDue) return true;
+  return args.scene !== 'active';
+}
+
+/**
  * When In Use waits while the splash overlay is up so the system sheet does
  * not cover the clip. A fresh live round skips the splash, so it does not wait.
  */

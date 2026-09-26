@@ -23,10 +23,27 @@ enum WatchSplashClip {
 
   static let splashLog = Logger(subsystem: "com.shottrax.app.watch", category: "splash")
 
+  /// Decoded before the first frame that shows the cover. Not loaded in onAppear, .task, or after the player starts.
+  static let poster: UIImage = loadPoster() ?? UIImage()
+
   static func loadPoster() -> UIImage? {
     if let named = UIImage(named: firstFrame) { return named }
     guard let url = Bundle.main.url(forResource: firstFrame, withExtension: "png") else { return nil }
     return UIImage(contentsOfFile: url.path)
+  }
+}
+
+/// Brand field and the frame-0 logo. No phase, player, or session gate.
+struct WatchSplashCover: View {
+  var body: some View {
+    let poster = WatchSplashClip.poster
+    ZStack {
+      WatchSplashClip.background
+      Image(uiImage: poster)
+        .resizable()
+        .aspectRatio(WatchSplashClip.aspectRatio, contentMode: .fit)
+    }
+    .ignoresSafeArea()
   }
 }
 
@@ -41,12 +58,10 @@ struct WatchSplash: View {
   init(scenePhase: ScenePhase, onDone: @escaping () -> Void) {
     self.scenePhase = scenePhase
     self.onDone = onDone
-    _poster = State(initialValue: WatchSplashClip.loadPoster())
   }
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var player: AVPlayer?
-  @State private var poster: UIImage?
   @State private var dismissing = false
   @State private var opacity = 1.0
   @State private var playbackStarted = false
@@ -55,12 +70,8 @@ struct WatchSplash: View {
 
   var body: some View {
     ZStack {
-      WatchSplashClip.background
-      if let poster {
-        Image(uiImage: poster)
-          .resizable()
-          .aspectRatio(WatchSplashClip.aspectRatio, contentMode: .fit)
-      }
+      // Still is in this tree on the first frame. Playback is the only part that waits.
+      WatchSplashCover()
       if let player {
         // Contain, never fill: the clip is taller than any Watch screen.
         // The still stays underneath so the first decoded frame is never a black gap.
@@ -78,7 +89,6 @@ struct WatchSplash: View {
     .accessibilityHint("Tap to skip")
     .accessibilityAddTraits(.isButton)
     .onAppear {
-      if poster == nil { poster = WatchSplashClip.loadPoster() }
       applyPhase(scenePhase)
     }
     .onChange(of: scenePhase) { _, phase in
@@ -120,10 +130,7 @@ struct WatchSplash: View {
 
   private func run() async {
     guard !dismissing else { return }
-    if poster == nil {
-      poster = WatchSplashClip.loadPoster()
-    }
-    if poster == nil, !loggedMissingPoster {
+    if WatchSplashClip.poster.size.width <= 0, !loggedMissingPoster {
       loggedMissingPoster = true
       WatchSplashClip.splashLog.info("resource missing")
     }
