@@ -99,3 +99,36 @@ test('Watch cold launch loads defaults before WCSession and applies context on m
   );
   assert.ok(enable.indexOf('hasBackgroundLocationMode') < enable.indexOf('allowsBackgroundLocationUpdates = true'));
 });
+
+test('every WCSession and location callback hops before it touches session state', () => {
+  const session = read('targets/watch/WatchClubSession.swift');
+  const methods = [
+    'func session(_ session: WCSession, activationDidCompleteWith',
+    'func session(_ session: WCSession, didReceiveApplicationContext',
+    'func session(_ session: WCSession, didReceiveMessage',
+    'func session(_ session: WCSession, didReceiveUserInfo',
+    'func sessionReachabilityDidChange',
+    'func locationManagerDidChangeAuthorization',
+    'func locationManager(_: CLLocationManager, didFailWithError',
+    'func locationManager(_ manager: CLLocationManager, didUpdateLocations',
+  ];
+  const stateTouch = /self\.|applyClubList\(|applyWatchAck\(|applyWatchHome\(|flushPending\(|syncRoundStay\(|adoptWatchFix\(|lastFix\s*=/;
+  for (let i = 0; i < methods.length; i++) {
+    const start = session.indexOf(methods[i]);
+    assert.ok(start >= 0, methods[i]);
+    const end =
+      i + 1 < methods.length
+        ? session.indexOf(methods[i + 1], start + methods[i].length)
+        : session.indexOf('func noteScenePhase', start);
+    assert.ok(end > start, methods[i]);
+    const body = session.slice(start, end);
+    const hop = body.indexOf('DispatchQueue.main.async');
+    assert.ok(hop >= 0, methods[i]);
+    const before = body
+      .slice(0, hop)
+      .split('\n')
+      .map((line) => line.replace(/\/\/.*$/, ''))
+      .join('\n');
+    assert.equal(stateTouch.test(before), false, methods[i]);
+  }
+});

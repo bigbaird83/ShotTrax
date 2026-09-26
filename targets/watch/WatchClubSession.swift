@@ -2711,11 +2711,12 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     syncRoundStay()
   }
 
+  // WCSessionDelegate and CLLocationManagerDelegate are not the main thread.
+  // Copy the callback arguments, then hop before reading or writing this object.
+  // Cold launch is the one that overlaps init and the first body: activation
+  // delivers the live club list while those are still using `list`.
   func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
-    // WCSession calls this on its queue, not main. A live clubList writes
-    // @Published state and syncRoundStay then uses CLLocationManager and may
-    // start an HKWorkoutSession. Those have to run on main, after init has
-    // loaded defaults. Last context from any launch — not a receive this process.
+    // Last context from any launch — not a receive during this process.
     let context = session.receivedApplicationContext
     let activated = activationState == .activated
     DispatchQueue.main.async {
