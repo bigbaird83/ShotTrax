@@ -26,6 +26,13 @@ import { isValidLatLng, type LatLng } from './latLng';
 /** Broadie's "around the green" band. */
 export const ARG_MAX_YARDS = 30;
 
+/**
+ * Trends average ignores shorter rounds. Scaling a 2-hole round by 9
+ * would let a couple of holes swing the chart. A round's own stats screen
+ * still uses every finished hole.
+ */
+export const SG_TRENDS_MIN_HOLES = 9;
+
 /** First shot on a hole with no par: this long or more counts as a drive. */
 export const NO_PAR_DRIVE_YARDS = 250;
 
@@ -305,9 +312,13 @@ export function roundStrokesGained(holes: readonly SgHoleIn[]): SgRound | null {
   return { ...totals, holes: rows, holesCounted: rows.length, shotsSplit, shotsTotal };
 }
 
-/** Average per round across several rounds, scaled to 18 holes. Null when none count. */
+/**
+ * Average per round across several rounds, scaled to 18 holes.
+ * Only rounds with at least `SG_TRENDS_MIN_HOLES` counted holes are included.
+ * `rounds` is how many qualified. Null when none do.
+ */
 export function averageStrokesGainedPer18(rounds: readonly (SgRound | null)[]): (SgTotals & { rounds: number }) | null {
-  const counted = rounds.filter((r): r is SgRound => r != null && r.holesCounted > 0);
+  const counted = rounds.filter((r): r is SgRound => r != null && r.holesCounted >= SG_TRENDS_MIN_HOLES);
   if (counted.length === 0) return null;
   const totals = emptyTotals();
   for (const round of counted) {

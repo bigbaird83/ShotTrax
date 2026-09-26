@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   averageStrokesGainedPer18,
   expectedFromTee,
+  SG_TRENDS_MIN_HOLES,
   expectedOffGreen,
   expectedPuttsForBucket,
   formatStrokesGained,
@@ -10,6 +11,7 @@ import {
   roundStrokesGained,
   weakestCategory,
   type SgHoleIn,
+  type SgRound,
   type SgShotIn,
 } from './strokesGained';
 
@@ -155,7 +157,7 @@ test('a posted score that disagrees with the log lands in unsplit', () => {
   close(sg?.unsplit ?? null, -1);
 });
 
-test('round totals sum holes; per-18 average scales nine-hole rounds', () => {
+test('round totals sum finished holes', () => {
   const round = roundStrokesGained([hole(), hole({ number: 2, puttsDone: false })]);
   assert.ok(round);
   assert.equal(round.holesCounted, 1);
@@ -163,10 +165,47 @@ test('round totals sum holes; per-18 average scales nine-hole rounds', () => {
   assert.equal(round.shotsSplit, 2);
   close(round.total, 3.99 - 4);
   assert.equal(roundStrokesGained([hole({ puttsDone: false })]), null);
+  assert.equal(averageStrokesGainedPer18([round, null]), null);
+});
 
-  const avg = averageStrokesGainedPer18([round, null]);
+function trendRound(holesCounted: number, total: number, offTee = 0): SgRound {
+  return {
+    offTee,
+    approach: 0,
+    aroundGreen: 0,
+    putting: 0,
+    total,
+    unsplit: 0,
+    holes: [],
+    holesCounted,
+    shotsSplit: 0,
+    shotsTotal: 0,
+  };
+}
+
+test('trends average skips rounds under 9 holes', () => {
+  assert.equal(SG_TRENDS_MIN_HOLES, 9);
+  const fullA = trendRound(18, -2, 1);
+  const fullB = trendRound(18, -4, 3);
+  const short = trendRound(2, -20, 50);
+  const withShort = averageStrokesGainedPer18([fullA, short, fullB]);
+  const without = averageStrokesGainedPer18([fullA, fullB]);
+  assert.equal(withShort?.rounds, 2);
+  assert.deepEqual(withShort, without);
+  close(withShort?.total ?? null, -3);
+  close(withShort?.offTee ?? null, 2);
+});
+
+test('a 9-hole round is counted and scaled by 2', () => {
+  const nine = trendRound(9, -1.5, 0.4);
+  const avg = averageStrokesGainedPer18([nine, trendRound(8, 100, 100), null]);
   assert.equal(avg?.rounds, 1);
-  close(avg?.total ?? null, (3.99 - 4) * 18);
+  close(avg?.total ?? null, -3);
+  close(avg?.offTee ?? null, 0.8);
+});
+
+test('a window of only short rounds has no strokes-gained average', () => {
+  assert.equal(averageStrokesGainedPer18([trendRound(2, -1), trendRound(8, -4), null]), null);
 });
 
 test('format and weakest category', () => {
