@@ -17,7 +17,11 @@ test('Watch splash clip ships in the Watch target with no audio track', () => {
 
 test('Watch splash plays over the app on cold start and never blocks it', () => {
   const app = read('targets/watch/index.swift');
-  assert.match(app, /@State private var showSplash = true/);
+  // Skipped on a relaunch mid-round, and cut short if a round goes live.
+  assert.match(app, /@State private var showSplash = !WatchClubSession\.shared\.liveHoleInProgress/);
+  assert.match(app, /onChange\(of: session\.liveHoleInProgress\) \{ _, live in\s*[^}]*if live \{ showSplash = false \}/);
+  const session = read('targets/watch/WatchClubSession.swift');
+  assert.match(session, /\n  var liveHoleInProgress: Bool \{\n    !userLeftApp && list\.roundLive && \(\(hasLiveHole && !list\.roundComplete\) \|\| putt\.open\)/);
   assert.match(app, /ZStack \{\s*ContentView\(\)[\s\S]*if showSplash \{\s*WatchSplash \{ showSplash = false \}/);
 
   const splash = read('targets/watch/WatchSplash.swift');
