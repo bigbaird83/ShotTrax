@@ -57,7 +57,7 @@ import { clubMarkGpsConfidence } from '@/src/domain/gpsConfidence';
 import { planDistanceRings } from '@/src/domain/distanceRings';
 import {
   phoneHoleMapYardageOverlaysHidden,
-  yardageOverlayFixFreshUntilMs,
+  type YardsCardLive,
 } from '@/src/domain/yardageOverlayVisibility';
 import { planShotTrail, shotTrailDash } from '@/src/domain/shotTrail';
 import { QualityBadge } from './Badge';
@@ -108,11 +108,10 @@ type Props = {
   /** Play may show a phone pin. Add shot never does. */
   showPhonePin?: boolean;
   /**
-   * Live phone GPS for hiding yardage overlays. Play passes the same fix
-   * the yards card measures, including while Add shot hides the phone dot.
-   * Omit to use `userFix`.
+   * The yards card's live reading (`planLiveGpsToPin`). Overlay hiding uses
+   * this number and its trust gate. It does not measure a second distance.
    */
-  liveFix?: GpsFix | null;
+  liveGpsToPin?: YardsCardLive | null;
   /** Play / edit may reveal Legal and compass after a tap. Add shot never does. */
   allowMapsChrome?: boolean;
   /** HARD-MISS / need-pins copy. Default is the generic tee+green miss. */
@@ -382,7 +381,7 @@ function NativeHoleMap({
   hideYardsOverlay,
   onFrameReady,
   showPhonePin,
-  liveFix,
+  liveGpsToPin,
   allowMapsChrome = true,
   missCopy,
   paintNotice,
@@ -447,27 +446,11 @@ function NativeHoleMap({
       }),
     [userFix?.lat, userFix?.lng, green?.lat, green?.lng, yardsToGreen.yards, yardsToGreen.quality],
   );
-  // Add shot clears userFix so the phone dot stays off. The yards card still
-  // measures `liveFix`, and that is the only distance that may hide overlays.
-  const overlayFix = liveFix !== undefined ? liveFix : userFix;
-  const [overlayNowMs, setOverlayNowMs] = useState(() => Date.now());
   const [yardageOverlaysHidden, setYardageOverlaysHidden] = useState(false);
   const [yardageOverlayHole, setYardageOverlayHole] = useState(holeNumber);
-  const overlayFreshUntil = yardageOverlayFixFreshUntilMs(overlayFix);
-  useEffect(() => {
-    const now = Date.now();
-    setOverlayNowMs(now);
-    if (overlayFreshUntil == null) return undefined;
-    const remainingMs = overlayFreshUntil - now;
-    if (remainingMs <= 0) return undefined;
-    const id = setTimeout(() => setOverlayNowMs(Date.now()), remainingMs + 1);
-    return () => clearTimeout(id);
-  }, [overlayFreshUntil]);
   if (yardageOverlayHole !== holeNumber) setYardageOverlayHole(holeNumber);
   const hideYardageOverlays = phoneHoleMapYardageOverlaysHidden({
-    fix: overlayFix,
-    green,
-    nowMs: overlayNowMs,
+    live: liveGpsToPin,
     hidden: yardageOverlayHole === holeNumber ? yardageOverlaysHidden : false,
   });
   if (hideYardageOverlays !== yardageOverlaysHidden) setYardageOverlaysHidden(hideYardageOverlays);
