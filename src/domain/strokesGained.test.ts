@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   averageStrokesGainedPer18,
+  expectedFromLie,
   expectedFromTee,
   expectedOffGreen,
   expectedPuttsForBucket,
@@ -189,4 +190,26 @@ test('shot chip reads SG with a sign, or nothing', () => {
   assert.equal(strokesGainedChip(0.34), 'SG +0.3');
   assert.equal(strokesGainedChip(-1.26), 'SG −1.3');
   assert.equal(strokesGainedChip(null), null);
+});
+
+test('a known lie uses its own baseline; unknown averages fairway and rough', () => {
+  close(expectedFromLie('fairway', 150), 2.945);
+  close(expectedFromLie('rough', 150), 3.19);
+  close(expectedFromLie('sand', 100), 3.23);
+  close(expectedFromLie('tee', 400), 3.99);
+  close(expectedFromLie(null, 150), (2.945 + 3.19) / 2);
+
+  const fromSand = holeStrokesGained(hole({ shots: [shot(1, 400), shot(2, 100, { lie: 'sand' })] }));
+  const fromFairway = holeStrokesGained(hole({ shots: [shot(1, 400), shot(2, 100, { lie: 'fairway' })] }));
+  assert.ok(fromSand && fromFairway);
+  // Same result from a harder lie: the drive loses more, the approach gains more.
+  assert.ok(fromSand.offTee < fromFairway.offTee);
+  assert.ok(fromSand.approach > fromFairway.approach);
+  close(fromSand.total, fromFairway.total);
+});
+
+test('the tee shot ignores any lie', () => {
+  const sg = holeStrokesGained(hole({ shots: [shot(1, 400, { lie: 'sand' }), shot(2, 150)] }));
+  close(sg?.total ?? null, 3.99 - 4);
+  close(sg?.offTee ?? null, 3.99 - (expectedOffGreen(150) as number) - 1);
 });

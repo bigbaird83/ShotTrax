@@ -2,6 +2,7 @@ import { isPuttLengthId, type PuttLengthId } from './putts';
 import { finishedHoleDisplayScore } from './holeScore';
 import { haversineYards } from './haversine';
 import { isValidLatLng, type LatLng } from './latLng';
+import type { ShotLie } from './shotLie';
 
 /**
  * Strokes gained (Broadie method) from saved rounds only.
@@ -15,8 +16,8 @@ import { isValidLatLng, type LatLng } from './latLng';
  * - Around the green: shots starting within ARG_MAX_YARDS (never a putter — putts are not shots).
  * - Putting: expected putts for the first putt's length bucket − putts.
  *
- * Lie is not tracked, so every non-tee, non-green start reads as the mean of the
- * fairway and rough baselines. Distance to the hole is the straight line to the
+ * Each later shot uses its lie (auto from mapped outlines, or the player's tap).
+ * An unknown lie reads as the mean of the fairway and rough baselines. Distance to the hole is the straight line to the
  * saved green pin (the flag position is not known). No green pin, no start GPS,
  * or no first-putt length → that stroke has no SG. The hole total
  * (expected from the tee − score) still counts; the part that could not be
@@ -60,6 +61,13 @@ const ROUGH_TABLE: Table = [
   [280, 3.83], [300, 3.9], [320, 3.95], [340, 4.02], [360, 4.11], [380, 4.21],
   [400, 4.3], [420, 4.34], [440, 4.39], [460, 4.48], [480, 4.59], [500, 4.72],
   [520, 4.85], [540, 4.97], [560, 5.05], [580, 5.1], [600, 5.13],
+];
+
+/** PGA Tour baseline from a bunker, yards to the hole. Starts at 20 yd; closer reads as 20. */
+const SAND_TABLE: Table = [
+  [20, 2.53], [40, 2.82], [60, 3.15], [80, 3.24], [100, 3.23], [120, 3.21], [140, 3.22],
+  [160, 3.28], [180, 3.4], [200, 3.55], [220, 3.7], [240, 3.84], [260, 3.93], [280, 4.0],
+  [300, 4.04], [320, 4.12], [340, 4.26], [360, 4.41], [380, 4.55], [400, 4.69],
 ];
 
 /** PGA Tour baseline on the green, feet to the hole. */
@@ -107,6 +115,23 @@ export function expectedOffGreen(yards: number): number | null {
   return (lookup(FAIRWAY_TABLE, yards) + lookup(ROUGH_TABLE, yards)) / 2;
 }
 
+/** Expected strokes from this many yards on a known lie; unknown lie → fairway/rough mean. */
+export function expectedFromLie(lie: ShotLie | null | undefined, yards: number): number | null {
+  if (!validYards(yards)) return null;
+  switch (lie) {
+    case 'tee':
+      return lookup(TEE_TABLE, yards);
+    case 'fairway':
+      return lookup(FAIRWAY_TABLE, yards);
+    case 'rough':
+      return lookup(ROUGH_TABLE, yards);
+    case 'sand':
+      return lookup(SAND_TABLE, yards);
+    default:
+      return expectedOffGreen(yards);
+  }
+}
+
 /** Expected putts from this many feet. */
 export function expectedPuttsFromFeet(feet: number): number | null {
   return validYards(feet) ? lookup(GREEN_TABLE, feet) : null;
@@ -135,6 +160,8 @@ export type SgShotIn = {
   startLat: number | null;
   startLng: number | null;
   holeOut: boolean;
+  /** Lie at the start. Ignored on the tee shot. Null / missing → unknown. */
+  lie?: ShotLie | null;
 };
 
 export type SgPenaltyIn = {
@@ -233,7 +260,7 @@ export function holeStrokesGained(hole: SgHoleIn): SgHole | null {
     return start && pin ? haversineYards(start, pin) : null;
   });
   const startExpected = startYards.map((yards, i) =>
-    i === 0 ? teeExpected : yards == null ? null : expectedOffGreen(yards),
+    i === 0 ? teeExpected : yards == null ? null : expectedFromLie(shots[i].lie, yards),
   );
   const penaltiesAfter = (seq: number) =>
     hole.penalties

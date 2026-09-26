@@ -7,6 +7,7 @@ import type { OsmOverlay } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
 import {
   deletePenalty,
+  fillAutoShotLies,
   getClubMap,
   getRound,
   listClubAverages,
@@ -14,6 +15,7 @@ import {
   listHoles,
   listPenaltiesForHole,
   listShotsForHole,
+  setShotLie,
   updatePenaltyReason,
 } from '@/src/db/repo';
 import { formatClubStripLabel, planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
@@ -36,6 +38,7 @@ import {
   shotReviewPuttLines,
   shotReviewShotListWindow,
 } from '@/src/domain/shotReviewLayout';
+import { SHOT_LIE_LABELS, SHOT_LIES, type ShotLie } from '@/src/domain/shotLie';
 import { holeStrokesGained, strokesGainedChip, type SgHole } from '@/src/domain/strokesGained';
 import type { Club, PenaltyReason, Shot } from '@/src/domain/types';
 import { changeShotClub, deleteHoleShot, moveShotSpot } from '@/src/services/shotActions';
@@ -89,6 +92,11 @@ export default function ReviewShotsScreen() {
   const shots = useMemo(() => (hole ? listShotsForHole(db, hole.id) : []), [db, hole, revision]);
   const penalties = useMemo(() => (hole ? listPenaltiesForHole(db, hole.id) : []), [db, hole, revision]);
   const holeSteps = useMemo(() => orderHoleSteps(shots, penalties), [shots, penalties]);
+  // Auto lie for this hole from the course outlines. Player taps stay.
+  useEffect(() => {
+    if (!hole || !osmOverlay) return;
+    if (fillAutoShotLies(db, [hole.id], osmOverlay.features) > 0) bump();
+  }, [db, hole, osmOverlay, shots, bump]);
   const holeSg = useMemo(
     () => (hole ? holeStrokesGained({ ...hole, shots, penalties }) : null),
     [hole, shots, penalties],
@@ -229,6 +237,12 @@ export default function ReviewShotsScreen() {
     setMoveDropped(false);
     setMoveDraft(null);
     setEditOpen(true);
+    bump();
+  };
+
+  const commitLie = (lie: ShotLie | null) => {
+    if (!editShotId) return;
+    setShotLie(db, editShotId, lie);
     bump();
   };
 
@@ -440,6 +454,41 @@ export default function ReviewShotsScreen() {
           {editingShot ? (
             <>
               <BigButton label={COPY.changeClub} onPress={() => setClubOpen(true)} />
+              {editingShot.seq > 1 ? (
+                <View style={styles.lieBlock} testID="shot-lie-picker">
+                  <Text style={styles.lieTitle}>
+                    {COPY.shotLie}
+                    {editingShot.lie
+                      ? ` · ${SHOT_LIE_LABELS[editingShot.lie]}${editingShot.lieSource === 'auto' ? ` (${COPY.shotLieAuto})` : ''}`
+                      : ` · ${COPY.shotLieUnknown}`}
+                  </Text>
+                  <View style={styles.reasonRow}>
+                    {SHOT_LIES.map((lie) => {
+                      const on = editingShot.lie === lie;
+                      return (
+                        <Pressable
+                          key={lie}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: on }}
+                          testID={`shot-lie-${lie}`}
+                          onPress={() => commitLie(lie)}
+                          style={[styles.reasonChip, on && styles.reasonOn]}>
+                          <Text style={styles.reasonText}>{SHOT_LIE_LABELS[lie]}</Text>
+                        </Pressable>
+                      );
+                    })}
+                    {editingShot.lieSource === 'player' ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        testID="shot-lie-auto"
+                        onPress={() => commitLie(null)}
+                        style={styles.reasonChip}>
+                        <Text style={styles.reasonText}>{COPY.shotLieAuto}</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                </View>
+              ) : null}
               <BigButton label={COPY.moveSpot} variant="secondary" onPress={() => void startMoveSpot()} />
               <BigButton
                 label={COPY.deleteShot}
@@ -581,6 +630,7 @@ function ReviewShotList({
             <Text style={textStyle}>
               {shot.seq}. {shot.clubId ? (clubs[shot.clubId]?.name ?? 'Club') : '—'}
               {shot.distanceYards != null ? ` · ${Math.round(shot.distanceYards)} yd` : ''}
+              {shot.seq > 1 && shot.lie ? ` · ${SHOT_LIE_LABELS[shot.lie]}` : ''}
               {sgChip ? ` · ${sgChip}` : ''}
             </Text>
           </Pressable>
@@ -636,6 +686,8 @@ function makeStyles(colors: ColorPalette) {
     navBtn: { flex: 1 },
     sheetPad: { gap: 12, padding: 16 },
     placeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    lieBlock: { gap: 8 },
+    lieTitle: { color: colors.cream, fontSize: 16, fontWeight: '800' },
     reasonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     reasonChip: {
       minHeight: 48,
