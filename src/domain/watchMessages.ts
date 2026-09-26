@@ -30,6 +30,7 @@ export const WATCH_MESSAGE_TYPES = [
   'puttPick',
   'penaltyPick',
   'shotUndo',
+  'watchConfirm',
   'clubNav',
   'nearbyCourses',
   'nearbyTees',
@@ -398,6 +399,35 @@ export function shotUndoPayload(args: {
     at: args.at ?? new Date().toISOString(),
     holeNumber: Math.round(args.holeNumber),
   };
+}
+
+/**
+ * Phone → Watch. The id was accepted.
+ * sendMessage can reply directly. transferUserInfo cannot, so the phone also
+ * pushes this. A duplicate id (already saved, or already undone) is still ok.
+ * A failed save does not send one: Retry stays up while the row is queued.
+ */
+export type WatchConfirmMessage = {
+  type: 'watchConfirm';
+  kind: 'penalty' | 'undo';
+  id: string;
+  ok: true;
+};
+
+export function parseWatchConfirm(raw: unknown): WatchConfirmMessage | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as Record<string, unknown>;
+  if (row.type !== 'watchConfirm') return null;
+  if (row.kind !== 'penalty' && row.kind !== 'undo') return null;
+  if (row.ok !== true) return null;
+  if (typeof row.id !== 'string') return null;
+  const id = row.id.trim();
+  if (!id || id.length > 80 || /\s/.test(id)) return null;
+  return { type: 'watchConfirm', kind: row.kind, id, ok: true };
+}
+
+export function watchConfirmPayload(kind: 'penalty' | 'undo', id: string): WatchConfirmMessage | null {
+  return parseWatchConfirm({ type: 'watchConfirm', kind, id, ok: true });
 }
 
 export function parseClubPick(raw: unknown): ClubPickMessage | null {

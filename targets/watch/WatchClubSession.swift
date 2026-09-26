@@ -1068,18 +1068,26 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     if session.isReachable {
       session.sendMessage(payload, replyHandler: { [weak self] reply in
         DispatchQueue.main.async {
-          let ok = (reply["ok"] as? Bool) ?? false
+          let ok = self?.replyIsOk(reply) ?? false
           if ok {
             self?.dequeuePending(at: payload["at"] as? String)
+            self?.acceptConfirmed(kind: "penalty", id: payload["id"] as? String)
             self?.finishPenaltySend()
             self?.handleReply(reply, fallbackClubId: nil, type: payload["type"] as? String)
-          } else {
+          } else if self?.stillQueued(kind: "penalty", id: payload["id"] as? String, at: payload["at"] as? String) == true {
             self?.showPenaltyRetry("Couldn’t save")
+          } else {
+            self?.finishPenaltySend()
           }
         }
       }, errorHandler: { [weak self] _ in
         DispatchQueue.main.async {
-          self?.showPenaltyRetry("Couldn’t save")
+          // A watchConfirm may already have removed this id. Do not put Retry back.
+          if self?.stillQueued(kind: "penalty", id: payload["id"] as? String, at: payload["at"] as? String) == true {
+            self?.showPenaltyRetry("Couldn’t save")
+          } else {
+            self?.finishPenaltySend()
+          }
         }
       })
     } else {
@@ -1109,18 +1117,25 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     if session.isReachable {
       session.sendMessage(payload, replyHandler: { [weak self] reply in
         DispatchQueue.main.async {
-          let ok = (reply["ok"] as? Bool) ?? false
+          let ok = self?.replyIsOk(reply) ?? false
           if ok {
             self?.dequeuePending(at: payload["at"] as? String)
+            self?.acceptConfirmed(kind: "undo", id: payload["id"] as? String)
             self?.finishUndoSend(shotId: payload["shotId"] as? String)
             self?.handleReply(reply, fallbackClubId: nil, type: payload["type"] as? String)
-          } else {
+          } else if self?.stillQueued(kind: "undo", id: payload["id"] as? String, at: payload["at"] as? String) == true {
             self?.showUndoRetry("Couldn’t undo")
+          } else {
+            self?.finishUndoSend(shotId: nil)
           }
         }
       }, errorHandler: { [weak self] _ in
         DispatchQueue.main.async {
-          self?.showUndoRetry("Couldn’t undo")
+          if self?.stillQueued(kind: "undo", id: payload["id"] as? String, at: payload["at"] as? String) == true {
+            self?.showUndoRetry("Couldn’t undo")
+          } else {
+            self?.finishUndoSend(shotId: nil)
+          }
         }
       })
     } else {
@@ -1165,6 +1180,56 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     penaltyRetry = stillPending
     if !stillPending {
       penaltyNotice = ""
+    }
+  }
+
+  /// JSON true may arrive as Bool or as an NSNumber. Either one is a confirm.
+  private func replyIsOk(_ reply: [String: Any]) -> Bool {
+    if let flag = reply["ok"] as? Bool { return flag }
+    if let number = reply["ok"] as? NSNumber { return number.boolValue }
+    return false
+  }
+
+  /// Phone → Watch. sendMessage can reply; transferUserInfo cannot, so the
+  /// phone also pushes `watchConfirm` with the accepted id. A duplicate id
+  /// confirms again and removes nothing else. `ok` false leaves the queue.
+  private func applyWatchAck(_ message: [String: Any]) -> Bool {
+    guard (message["type"] as? String) == "watchConfirm" else { return false }
+    guard replyIsOk(message) else { return true }
+    let id = message["id"] as? String
+    let kind = message["kind"] as? String
+    if kind == "penalty" {
+      acceptConfirmed(kind: "penalty", id: id)
+      finishPenaltySend()
+    } else if kind == "undo" {
+      let shotId = pendingQueue.first(where: { isShotUndo($0) && ($0["id"] as? String) == id })?["shotId"] as? String
+      acceptConfirmed(kind: "undo", id: id)
+      finishUndoSend(shotId: shotId)
+    }
+    return true
+  }
+
+  /// Drop one accepted id. Matching `at` is not required: the confirm names the id.
+  private func acceptConfirmed(kind: String, id: String?) {
+    guard let id, !id.isEmpty else { return }
+    pendingQueue.removeAll { payload in
+      guard (payload["id"] as? String) == id else { return false }
+      let type = payload["type"] as? String
+      if kind == "penalty" { return type == "penaltyPick" }
+      if kind == "undo" { return type == "shotUndo" }
+      return false
+    }
+    savePendingQueue()
+  }
+
+  private func stillQueued(kind: String, id: String?, at: String?) -> Bool {
+    pendingQueue.contains { payload in
+      let type = payload["type"] as? String
+      let matchesKind = (kind == "penalty" && type == "penaltyPick") || (kind == "undo" && type == "shotUndo")
+      guard matchesKind else { return false }
+      if let id, !id.isEmpty, (payload["id"] as? String) == id { return true }
+      if let at, !at.isEmpty, (payload["at"] as? String) == at { return true }
+      return false
     }
   }
 
@@ -1927,6 +1992,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
     savePendingQueue()
     syncUndoPending()
+    finishPenaltySend()
   }
 
   private func flushPending() {
@@ -2267,12 +2333,14 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
 
   func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
     DispatchQueue.main.async {
+      if self.applyWatchAck(message) { return }
       self.applyClubList(message)
     }
   }
 
   func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
     DispatchQueue.main.async {
+      if self.applyWatchAck(userInfo) { return }
       self.applyClubList(userInfo)
     }
   }

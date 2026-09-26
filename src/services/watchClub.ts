@@ -14,6 +14,7 @@ import {
   parsePuttPick,
   parseWatchInboundIntent,
   puttSheetPayload,
+  watchConfirmPayload,
   toWatchYardsQuality,
   type ClubListMessage,
   type ClubPickReply,
@@ -279,6 +280,23 @@ export function buildClubList(args: {
   return msg;
 }
 
+/**
+ * transferUserInfo has no reply channel. Push the accepted id so the Watch
+ * can drop it even when the sendMessage reply never arrives. A duplicate id
+ * still confirms: the phone did not insert a second stroke.
+ */
+async function pushWatchConfirm(kind: 'penalty' | 'undo', id: string): Promise<void> {
+  const message = watchConfirmPayload(kind, id);
+  if (!message) return;
+  const mod = native();
+  if (!mod || typeof mod.pushWatchMessageJson !== 'function') return;
+  try {
+    await mod.pushWatchMessageJson(JSON.stringify(message));
+  } catch {
+    // The sendMessage reply is the other confirm path.
+  }
+}
+
 async function replyToken(token: string, payload: ClubPickReply | PuttPickReply): Promise<void> {
   const mod = native();
   if (!mod) return;
@@ -513,6 +531,7 @@ async function applyWatchPenalty(
     // Existing row and tombstone both mean the id is done. Reply ok either way.
     if (saved.replay === 'deleted' || saved.replay === 'existing' || saved.replay === 'inserted') {
       ctx.bump();
+      await pushWatchConfirm('penalty', pick.id);
       await replyToken(token, { ok: true, feedback: formatWatchPenaltyFeedback(pick.reason) });
       return;
     }
@@ -546,6 +565,7 @@ async function applyWatchShotUndo(token: string, undo: ShotUndoMessage): Promise
     shots: hole ? listShotsForHole(ctx.db, hole.id) : [],
   });
   if (decision.action !== 'undo') {
+    await pushWatchConfirm('undo', undo.id);
     await replyToken(token, { ok: true, feedback: decision.feedback });
     return;
   }
@@ -553,6 +573,7 @@ async function applyWatchShotUndo(token: string, undo: ShotUndoMessage): Promise
     const result = undoLastShot(ctx.db, ctx.roundId, undo.holeNumber, undo.shotId);
     if (!result.ok) {
       // Checked again inside the repo: the shot is no longer the last one. Remove nothing.
+      await pushWatchConfirm('undo', undo.id);
       await replyToken(token, { ok: true, feedback: WATCH_SHOT_UNDO_SKIPPED });
       return;
     }
@@ -560,6 +581,7 @@ async function applyWatchShotUndo(token: string, undo: ShotUndoMessage): Promise
     lastClubMark = null;
     hapticSelect();
     ctx.bump();
+    await pushWatchConfirm('undo', undo.id);
     await replyToken(token, { ok: true, feedback: decision.feedback });
   } catch {
     await replyToken(token, { ok: false, feedback: WATCH_SHOT_UNDO_FAILED });
