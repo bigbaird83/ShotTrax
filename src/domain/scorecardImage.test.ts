@@ -2,10 +2,15 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { inflateSync } from 'node:zlib';
+import { DEFAULT_GROUP_GAMES, formatMatchLine, planGroupGames, type GroupHoleIn, type GroupPlayerIn } from './groupGames';
+import { planGroupScorecard } from './groupScorecard';
+import { COPY } from './playerCopy';
 import { planScorecard } from './scorecard';
 import {
   SCORECARD_IMAGE_COLORS,
+  layoutGroupScorecardImage,
   layoutScorecardImage,
+  planGroupScorecardImage,
   planScorecardImage,
   renderScorecardPng,
   scorecardImageIncludesGps,
@@ -191,6 +196,237 @@ test('an 18-hole card fits one image with OUT / IN nines', () => {
   assert.deepEqual(layout.blocks.map((block) => block.rows.length), [9, 9]);
   assert.ok(img.height < 1200);
   assert.ok(png.length < 400_000, `png is ${png.length} bytes`);
+});
+
+function groupHoles(n: number, par: number | null = 4): GroupHoleIn[] {
+  return Array.from({ length: n }, (_, i) => ({ number: i + 1, par, strokeIndex: i + 1 }));
+}
+
+function groupPlayer(name: string, scores: (number | null)[], handicap: number | null = null): GroupPlayerIn {
+  return { id: name, name, handicap, scores: Object.fromEntries(scores.map((score, i) => [i + 1, score])) };
+}
+
+const NO_FORMAT = {
+  net: false,
+  skins: false,
+  skinsCarry: true,
+  stableford: false,
+  matchPlay: false,
+  nassau: false,
+  matchPlayerIds: null,
+};
+
+test('whole-group image uses the group scorecard numbers: owner, then partners, blanks never 0', () => {
+  const holes = groupHoles(18);
+  const you = [4, 5, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, null];
+  const sam = [3, 5, null, ...Array<number | null>(15).fill(null)];
+  const players = [groupPlayer('You', you, 4), groupPlayer('Sam', sam, 10), groupPlayer('Pat', [6], 12)];
+  const settings = NO_FORMAT;
+  const card = planGroupScorecard({ holes, players, result: planGroupGames({ holes, players, settings }) });
+  const model = planGroupScorecardImage({ holes, players, settings });
+  assert.deepEqual(
+    model.players.map((player) => player.name),
+    ['You', 'Sam', 'Pat'],
+  );
+  assert.deepEqual(model.holeNumbers, holes.map((hole) => hole.number));
+  const text = (label: 'Out' | 'In' | 'Total', index: number) => {
+    const strokes = card.totals.find((entry) => entry.label === label)?.cells[index]?.strokes;
+    return strokes == null ? '' : String(strokes);
+  };
+  model.players.forEach((player, index) => {
+    assert.equal(player.out, text('Out', index));
+    assert.equal(player.in, text('In', index));
+    assert.equal(player.total, text('Total', index));
+    assert.deepEqual(
+      player.scores,
+      [...card.front, ...card.back].map((row) => {
+        const score = row.cells[index]?.score;
+        return score == null ? '' : String(score);
+      }),
+    );
+  });
+  assert.equal(model.players[0].scores[17], '');
+  assert.equal(model.players[1].scores[2], '');
+  assert.equal(model.players[2].in, '');
+  assert.ok(model.players.every((player) => player.scores.every((score) => score !== '0')));
+  assert.equal(model.results, null);
+
+  const withZero = planGroupScorecardImage({
+    holes: groupHoles(9),
+    players: [groupPlayer('You', [4, null, 3]), groupPlayer('Sam', [0, 5, null])],
+    settings,
+  });
+  assert.equal(withZero.players[0].scores[1], '');
+  assert.equal(withZero.players[1].scores[0], '');
+  assert.equal(withZero.players[1].scores[2], '');
+  assert.ok(withZero.players.every((player) => player.scores.every((score) => score !== '0')));
+  assert.equal(withZero.players[0].out, null);
+  assert.equal(withZero.players[0].in, null);
+  assert.equal(withZero.players[1].total, '5');
+});
+
+test('a 9-hole group image has Total and no Out or In', () => {
+  const holes = groupHoles(9);
+  const players = [groupPlayer('You', Array(9).fill(4)), groupPlayer('Sam', [5, 5, 5, 5, 5, 5, 5, 5, 5])];
+  const model = planGroupScorecardImage({ holes, players, settings: NO_FORMAT });
+  assert.equal(model.players[0].out, null);
+  assert.equal(model.players[0].in, null);
+  assert.equal(model.players[0].total, '36');
+  const layout = layoutGroupScorecardImage(model);
+  assert.equal(layout.blocks.length, 1);
+  assert.deepEqual(layout.blocks[0].holeNumbers, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  assert.ok(!layout.blocks[0].columns.some((column) => column.kind === 'out' || column.kind === 'in'));
+  assert.ok(layout.blocks[0].columns.some((column) => column.kind === 'total' && column.label === 'Total'));
+});
+
+test('results block is present only when a format is on, and a blank handicap blocks net', () => {
+  const holes = groupHoles(18);
+  const players = [groupPlayer('You', Array(18).fill(4), 2), groupPlayer('Sam', Array(18).fill(5), 8)];
+  assert.equal(planGroupScorecardImage({ holes, players, settings: NO_FORMAT }).results, null);
+  assert.equal(planGroupScorecardImage({ holes, players, settings: { ...NO_FORMAT, net: true } }).results, null);
+
+  const settings = { ...DEFAULT_GROUP_GAMES, net: true, stableford: true, matchPlay: true, nassau: true };
+  const result = planGroupGames({ holes, players, settings });
+  const model = planGroupScorecardImage({ holes, players, settings });
+  assert.equal(model.net, true);
+  assert.equal(model.netBlocked, false);
+  assert.ok(model.results);
+  assert.deepEqual(
+    model.results?.map((block) => block.title),
+    [COPY.groupLeaderboardNet, COPY.groupSkins, COPY.groupStableford, COPY.groupMatchPlay, COPY.groupNassau],
+  );
+  const nameOf = (id: string) => players.find((player) => player.id === id)?.name ?? '—';
+  const lines = model.results?.flatMap((block) => block.lines) ?? [];
+  assert.ok(result.match && lines.includes(formatMatchLine(result.match, nameOf)));
+  assert.ok(lines.some((line) => line.includes(`${result.stableford?.[0]?.points} pts`)));
+  assert.ok(result.nassau && lines.some((line) => line.includes(`Front 9  ${formatMatchLine(result.nassau.front, nameOf)}`)));
+  const sam = result.strokePlay.find((row) => row.playerId === 'Sam');
+  assert.ok(sam && sam.net !== sam.gross);
+  assert.equal(model.players[1].scores[0], '5');
+  assert.ok(lines.some((line) => line.includes('Sam') && line.endsWith(`· ${sam?.net}`)));
+
+  const blockedHoles = groupHoles(9);
+  const blockedPlayers = [groupPlayer('You', Array(9).fill(4), 8), groupPlayer('Sam', [5, 6, 4, 4, 4, 4, 4, 4, 4], null)];
+  const blockedResult = planGroupGames({ holes: blockedHoles, players: blockedPlayers, settings: { ...DEFAULT_GROUP_GAMES, net: true } });
+  const blocked = planGroupScorecardImage({
+    holes: blockedHoles,
+    players: blockedPlayers,
+    settings: { ...DEFAULT_GROUP_GAMES, net: true },
+  });
+  assert.equal(blocked.net, false);
+  assert.equal(blocked.netBlocked, true);
+  assert.equal(blocked.results?.[0]?.title, COPY.groupLeaderboard);
+  assert.ok(blocked.results?.[0]?.lines.includes(COPY.groupNetNeedsHandicaps));
+  const blockedSam = blockedResult.strokePlay.find((row) => row.playerId === 'Sam');
+  assert.equal(blockedSam?.net, blockedSam?.gross);
+  assert.equal(blocked.players[1].scores[0], '5');
+  assert.ok(blocked.results?.[0]?.lines.some((line) => line.includes('Sam') && line.endsWith(`· ${blockedSam?.gross}`)));
+});
+
+test('Just me matches today\'s scorecard plan even when partners are on the round', () => {
+  const group = {
+    holes: groupHoles(9),
+    players: [groupPlayer('You', Array(9).fill(4), 4), groupPlayer('Sam', Array(9).fill(5), 10)],
+    settings: DEFAULT_GROUP_GAMES,
+  };
+  const today = planScorecardImage({ courseName: 'Magnolia', holes: rows, finished: true });
+  const justMe = planScorecardImage({ courseName: 'Magnolia', holes: rows, finished: true, audience: 'me', group });
+  const omitted = planScorecardImage({ courseName: 'Magnolia', holes: rows, finished: true, group });
+  assert.deepEqual(justMe, today);
+  assert.deepEqual(omitted, today);
+  assert.equal(justMe.group, undefined);
+
+  const whole = planScorecardImage({ courseName: 'Magnolia', holes: rows, finished: true, audience: 'group', group });
+  assert.equal(whole.courseName, today.courseName);
+  assert.deepEqual(whole.rows, today.rows);
+  assert.deepEqual(whole.group?.players.map((player) => player.name), ['You', 'Sam']);
+});
+
+test('group scorecard layout stays readable at 1, 2, and 4 players for 9 and 18 holes', () => {
+  const heights: number[] = [];
+  for (const count of [1, 2, 4]) {
+    for (const holeCount of [9, 18]) {
+      const players = Array.from({ length: count }, (_, i) => groupPlayer(`P${i + 1}`, Array(holeCount).fill(4), i));
+      const model = planGroupScorecardImage({ holes: groupHoles(holeCount), players, settings: NO_FORMAT });
+      const layout = layoutGroupScorecardImage(model);
+      heights.push(layout.height);
+      assert.equal(layout.width, 1080);
+      assert.equal(layout.blocks.length, holeCount === 18 ? 2 : 1);
+      assert.equal(layout.results, null);
+      for (const block of layout.blocks) {
+        assert.equal(block.rows.length, count);
+        assert.ok(block.rows.every((row) => row.h >= 48));
+        const name = block.columns.find((column) => column.kind === 'name');
+        assert.ok(name && name.w >= 160);
+        const holes = block.columns.filter((column) => column.kind === 'hole');
+        assert.ok(holes.length >= 1 && holes.every((column) => column.w >= 64));
+        const sorted = [...block.columns].sort((a, b) => a.x - b.x);
+        for (let i = 1; i < sorted.length; i += 1) {
+          assert.ok(sorted[i].x >= sorted[i - 1].x + sorted[i - 1].w - 0.01);
+        }
+        const right = sorted[sorted.length - 1].x + sorted[sorted.length - 1].w;
+        assert.ok(right <= layout.width - 56 + 1);
+        for (let i = 1; i < block.rows.length; i += 1) {
+          assert.ok(block.rows[i].y >= block.rows[i - 1].y + block.rows[i - 1].h - 0.01);
+        }
+      }
+      if (holeCount === 9) {
+        assert.deepEqual(layout.blocks[0].holeNumbers, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        assert.ok(!layout.blocks[0].columns.some((column) => column.kind === 'in' || column.kind === 'out'));
+        assert.equal(layout.blocks[0].columns.filter((column) => column.kind === 'total').length, 1);
+      } else {
+        assert.deepEqual(layout.blocks[0].holeNumbers, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        assert.deepEqual(layout.blocks[1].holeNumbers, [10, 11, 12, 13, 14, 15, 16, 17, 18]);
+        assert.ok(layout.blocks[0].columns.some((column) => column.kind === 'out'));
+        assert.ok(!layout.blocks[0].columns.some((column) => column.kind === 'in' || column.kind === 'total'));
+        assert.ok(layout.blocks[1].columns.some((column) => column.kind === 'in'));
+        assert.ok(layout.blocks[1].columns.some((column) => column.kind === 'total'));
+        assert.ok(layout.blocks[1].top >= layout.blocks[0].top + layout.blocks[0].height);
+      }
+    }
+  }
+  const oneNine = heights[0];
+  const fourEighteen = heights[heights.length - 1];
+  assert.ok(fourEighteen > oneNine);
+
+  const withResults = layoutGroupScorecardImage(
+    planGroupScorecardImage({
+      holes: groupHoles(18),
+      players: [groupPlayer('You', Array(18).fill(4)), groupPlayer('Sam', Array(18).fill(5))],
+      settings: DEFAULT_GROUP_GAMES,
+    }),
+  );
+  assert.ok(withResults.results);
+  const noResults = layoutGroupScorecardImage(
+    planGroupScorecardImage({
+      holes: groupHoles(18),
+      players: [groupPlayer('You', Array(18).fill(4)), groupPlayer('Sam', Array(18).fill(5))],
+      settings: NO_FORMAT,
+    }),
+  );
+  assert.equal(noResults.results, null);
+  assert.ok(withResults.height > noResults.height);
+});
+
+test('whole-group png renders the layout and stays a local image', () => {
+  const players = [groupPlayer('You', Array(9).fill(4), 4), groupPlayer('Sam', [5, null, 4, 4, 4, 4, 4, 4, 3], 10)];
+  const plan = planScorecardImage({
+    courseName: 'Magnolia',
+    holes: planScorecard(Array.from({ length: 9 }, (_, i) => ({ number: i + 1, par: 4, score: 4, putts: 2, puttsDone: true, shotCount: 2 }))),
+    finished: true,
+    audience: 'group',
+    group: { holes: groupHoles(9), players, settings: DEFAULT_GROUP_GAMES },
+  });
+  assert.ok(plan.group);
+  const png = renderScorecardPng(plan);
+  assert.equal(scorecardPngHasSignature(png), true);
+  const layout = layoutGroupScorecardImage(plan.group);
+  const img = decode(png);
+  assert.equal(img.width, layout.width);
+  assert.equal(img.height, layout.height);
+  assert.equal(layout.width, 1080);
+  const ascii = Buffer.from(png).toString('latin1');
+  assert.doesNotMatch(ascii, /http|shottrax:\/\/|\?p=/i);
 });
 
 test('every Share path renders the table from planScorecard; text message stays short', () => {

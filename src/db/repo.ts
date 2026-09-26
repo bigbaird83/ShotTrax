@@ -1350,6 +1350,19 @@ export function markRoundShared(db: SQLiteDatabase, roundId: string, at?: string
   ]);
 }
 
+/** Last Whole group / Just me choice for this round. Null means not chosen yet. */
+export function getRoundShareAudience(db: SQLiteDatabase, roundId: string): 'group' | 'me' | null {
+  const row = db.getFirstSync<{ share_audience: string | null }>(
+    'SELECT share_audience FROM rounds WHERE id = ?',
+    [roundId],
+  );
+  return row?.share_audience === 'group' || row?.share_audience === 'me' ? row.share_audience : null;
+}
+
+export function setRoundShareAudience(db: SQLiteDatabase, roundId: string, audience: 'group' | 'me'): void {
+  db.runSync('UPDATE rounds SET share_audience = ? WHERE id = ?', [audience, roundId]);
+}
+
 /** Same token for live + finished so the share link stays up after the round. */
 export function ensureRoundShareToken(db: SQLiteDatabase, roundId: string): string {
   const existing = getRoundShareToken(db, roundId);

@@ -3,6 +3,7 @@ import { useMemo, useRef, useState } from 'react';
 import { findNodeHandle, Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatParLabel, formatSiLabel, formatTeeMeta } from '@/src/course/layout';
 import { useDb } from '@/src/db/DbProvider';
+import { listGroupPlayers } from '@/src/db/groupRepo';
 import { getClubMap, getRound, listHoles, listPenaltiesForHole, listShotsForHole } from '@/src/db/repo';
 import { finishedHoleDisplayScore } from '@/src/domain/holeScore';
 import { formatPenaltyRow, totalPenaltyStrokes } from '@/src/domain/penalty';
@@ -15,10 +16,12 @@ import {
 import { COPY, holeOutClosedOnShot } from '@/src/domain/playerCopy';
 import { holeClosedByShot } from '@/src/domain/putts';
 import { formatHoleTimeSpan, formatRoundPaceLine, planLivePace } from '@/src/domain/livePace';
+import { planScorecardAudienceChoices } from '@/src/domain/shareChoice';
 import { toastFromShareAttempt } from '@/src/domain/spectator';
 import { shareRoundSnapshot } from '@/src/services/shareRound';
 import { reconcileHoleScore } from '@/src/domain/scoreReconcile';
 import { BigButton } from '@/src/ui/BigButton';
+import { ScorecardImageShareButton } from '@/src/ui/ShareChoice';
 import { Screen } from '@/src/ui/Screen';
 import { useColors } from '@/src/ui/ColorThemeProvider';
 import { type ColorPalette } from '@/src/ui/theme';
@@ -30,6 +33,10 @@ export default function RoundSummaryScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [toast, setToast] = useState<string | null>(null);
   const shareAnchorRef = useRef<View>(null);
+  const partnerCount = useMemo(
+    () => listGroupPlayers(db, id).filter((player) => !player.isMe).length,
+    [db, id, revision],
+  );
   const round = useMemo(() => getRound(db, id), [db, id, revision]);
   const holes = useMemo(() => (round ? listHoles(db, round.id) : []), [db, round, revision]);
   const clubs = useMemo(() => getClubMap(db), [db, revision]);
@@ -204,13 +211,14 @@ export default function RoundSummaryScreen() {
         onPress={() => router.push(`/round/${id}/board`)}
       />
       <View ref={shareAnchorRef} collapsable={false}>
-        <BigButton
+        <ScorecardImageShareButton
           label={COPY.share}
           variant="secondary"
-          onPress={() => {
+          choices={planScorecardAudienceChoices(partnerCount)}
+          onShare={(audience) => {
             const anchor = findNodeHandle(shareAnchorRef.current);
             void toastFromShareAttempt(
-              () => shareRoundSnapshot(db, id, { anchor }),
+              () => shareRoundSnapshot(db, id, { anchor, audience }),
               COPY.shareScorecardFail,
             ).then((fail) => {
               if (fail) setToast(fail);

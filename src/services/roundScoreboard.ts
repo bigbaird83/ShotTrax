@@ -1,18 +1,23 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
+import { loadGroup, listGroupPlayers } from '../db/groupRepo';
 import {
   ensureRoundShareToken,
   getClubMap,
   getHole,
   getRound,
+  getRoundShareAudience,
   isRoundShared,
   listHoles,
   listPenaltiesForHole,
   listShotsForHole,
   markRoundShared,
   putShareBoard,
+  setRoundShareAudience,
 } from '../db/repo';
+import { planSpectatorGroup } from '../domain/groupScorecard';
 import { totalPenaltyStrokes } from '../domain/penalty';
 import { planScorecard, type ScorecardHole } from '../domain/scorecard';
+import { shareAudienceForPublish, type ScorecardAudience } from '../domain/shareChoice';
 import { formatShareScorecard, planSpectatorPayload, type SpectatorHoleInput, type SpectatorPayload } from '../domain/spectator';
 
 export type SharedPayloadUpload = (
@@ -31,12 +36,14 @@ export type PublishRoundScoreboardArgs = {
   currentHoleNumber?: number;
   /** Test seam. Production uses `putSharedPayload` in shareSync. */
   upload?: SharedPayloadUpload;
+  /** Whole group or Just me. Omitted calls follow the choice stored for this round. */
+  audience?: ScorecardAudience;
 };
 
 export function planRoundShare(
   db: SQLiteDatabase,
   roundId: string,
-  args?: { currentHoleNumber?: number },
+  args?: { currentHoleNumber?: number; audience?: ScorecardAudience },
 ): RoundSharePlan | null {
   const round = getRound(db, roundId);
   if (!round) return null;
@@ -72,6 +79,21 @@ export function planRoundShare(
     holes: input,
     updatedAt: new Date().toISOString(),
   });
+  const partnerCount = listGroupPlayers(db, round.id).filter((player) => !player.isMe).length;
+  const choice = shareAudienceForPublish({
+    explicit: args?.audience,
+    stored: getRoundShareAudience(db, round.id),
+    partnerCount,
+  });
+  if (choice === 'group') {
+    const snapshot = loadGroup(db, round.id);
+    const group = planSpectatorGroup({
+      holes: snapshot.holes,
+      players: snapshot.players,
+      settings: snapshot.settings,
+    });
+    if (group) payload.group = group;
+  }
   const cardHoles = holes.map((hole) => ({ hole: hole.number, score: hole.score }));
   // Same rows as the in-app scorecard. A finished round flags every unclosed hole.
   const scorecard = planScorecard(
@@ -128,6 +150,9 @@ export function publishExplicitRoundShare(
   args?: PublishRoundScoreboardArgs,
 ): SpectatorPayload | null {
   if (!getRound(db, roundId)) return null;
+  if (args?.audience === 'group' || args?.audience === 'me') {
+    setRoundShareAudience(db, roundId, args.audience);
+  }
   markRoundShared(db, roundId);
   return publishRoundScoreboard(db, roundId, args);
 }

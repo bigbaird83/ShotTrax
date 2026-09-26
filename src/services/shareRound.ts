@@ -2,7 +2,9 @@ import * as Linking from 'expo-linking';
 import { InteractionManager, Platform, Share } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { encodeScoreSnapshot, formatLiveBoardShare, normalizeShareBoardCode } from '../domain/liveBoard';
+import { loadGroup } from '../db/groupRepo';
 import { planScorecardImage, renderScorecardPng } from '../domain/scorecardImage';
+import type { ScorecardAudience } from '../domain/shareChoice';
 import {
   androidImageUrlShareBlock,
   scorecardImageShareContent,
@@ -69,20 +71,43 @@ async function presentShare(
 export async function shareRoundSnapshot(
   db: SQLiteDatabase,
   roundId: string,
-  args?: { currentHoleNumber?: number; anchor?: number | null },
+  args?: { currentHoleNumber?: number; anchor?: number | null; audience?: ScorecardAudience },
 ): Promise<boolean | string> {
   const planned = planRoundShare(db, roundId, args);
   if (!planned) return false;
+  // Whole group uploads the group card. Just me replaces that board with the owner's card only.
   publishExplicitRoundShare(db, roundId, args);
   let imageUrl: string | null = null;
   try {
-    const png = renderScorecardPng(
-      planScorecardImage({
-        courseName: planned.payload.courseName,
-        holes: planned.scorecard,
-        finished: planned.payload.finished,
-      }),
-    );
+    // Just me, and any call that omits audience, is today's single-player image.
+    let image = planScorecardImage({
+      courseName: planned.payload.courseName,
+      holes: planned.scorecard,
+      finished: planned.payload.finished,
+    });
+    if (args?.audience === 'group') {
+      const group = loadGroup(db, roundId);
+      if (group.players.some((player) => !player.isMe)) {
+        // Same Whole group rows as the link page. The PNG stays on this phone.
+        image = planScorecardImage({
+          courseName: planned.payload.courseName,
+          holes: planned.scorecard,
+          finished: planned.payload.finished,
+          audience: 'group',
+          group: {
+            holes: group.holes,
+            players: group.players.map((player) => ({
+              id: player.id,
+              name: player.name,
+              handicap: player.handicap,
+              scores: player.scores,
+            })),
+            settings: group.settings,
+          },
+        });
+      }
+    }
+    const png = renderScorecardPng(image);
     imageUrl = await writeScorecardPngFile(png);
   } catch {
     imageUrl = null;

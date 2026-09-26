@@ -2,7 +2,9 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
 import { findNodeHandle, StyleSheet, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
+import { listGroupPlayers } from '@/src/db/groupRepo';
 import { getRound, listHoles, listPenaltiesForHole, listShotsForHole } from '@/src/db/repo';
+import { planScorecardAudienceChoices } from '@/src/domain/shareChoice';
 import { totalPenaltyStrokes } from '@/src/domain/penalty';
 import { COPY } from '@/src/domain/playerCopy';
 import { toastFromShareAttempt } from '@/src/domain/spectator';
@@ -20,6 +22,10 @@ export default function ReviewScorecardScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [toast, setToast] = useState<string | null>(null);
   const anchorRef = useRef<View>(null);
+  const partnerCount = useMemo(
+    () => listGroupPlayers(db, id).filter((player) => !player.isMe).length,
+    [db, id, revision],
+  );
   const round = useMemo(() => getRound(db, id), [db, id, revision]);
   const holes = useMemo(
     () =>
@@ -53,10 +59,11 @@ export default function ReviewScorecardScreen() {
         <ScorecardBody
           holes={holes}
           onBack={() => router.back()}
-          onShareImage={() => {
+          audiences={planScorecardAudienceChoices(partnerCount)}
+          onShareImage={(audience) => {
             const anchor = findNodeHandle(anchorRef.current);
             void toastFromShareAttempt(
-              () => shareRoundSnapshot(db, round.id, { anchor }),
+              () => shareRoundSnapshot(db, round.id, { anchor, audience }),
               COPY.shareScorecardFail,
             ).then((fail) => {
               if (fail) setToast(fail);

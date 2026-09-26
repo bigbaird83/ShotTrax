@@ -11,9 +11,9 @@ import {
   scorecardMarkGlyph,
   type ScorecardHole,
 } from '@/src/domain/scorecard';
-import type { ShareKind } from '@/src/domain/shareChoice';
+import type { ScorecardAudience, ScorecardAudienceChoice, ShareKind } from '@/src/domain/shareChoice';
 import { BigButton } from './BigButton';
-import { ShareChoice } from './ShareChoice';
+import { ScorecardImageShareButton, ShareChoice } from './ShareChoice';
 import { useColors } from './ColorThemeProvider';
 import { type, type ColorPalette } from './theme';
 
@@ -34,15 +34,18 @@ export function ScorecardBody({
   onBack,
   onShare,
   onShareImage,
+  audiences = null,
   onNerdOut,
   onSelectHole,
 }: {
   holes: HoleIn[];
   currentHoleNumber?: number;
   onBack: () => void;
-  onShare?: (kind: ShareKind) => void;
+  onShare?: (kind: ShareKind, audience?: ScorecardAudience) => void;
   /** Saved-round review: one Share scorecard button, image only — no live link pick. */
-  onShareImage?: () => void;
+  onShareImage?: (audience?: ScorecardAudience) => void;
+  /** Null when the round has no partner: sharing does not ask Whole group / Just me. */
+  audiences?: readonly ScorecardAudienceChoice[] | null;
   onNerdOut?: () => void;
   onSelectHole?: (holeNumber: number) => void;
 }) {
@@ -110,9 +113,9 @@ export function ScorecardBody({
           );
         })}
       </View>
-      {onShare ? <ShareChoice variant="secondary" onPick={onShare} /> : null}
+      {onShare ? <ShareChoice variant="secondary" onPick={onShare} audiences={audiences} /> : null}
       {!onShare && onShareImage ? (
-        <BigButton label={COPY.shareScorecard} variant="secondary" onPress={onShareImage} />
+        <ScorecardImageShareButton choices={audiences ?? null} onShare={onShareImage} />
       ) : null}
       {onNerdOut ? <BigButton label={COPY.nerdOut} variant="ghost" onPress={onNerdOut} /> : null}
       <BigButton label={COPY.back} variant="secondary" onPress={onBack} />

@@ -92,6 +92,8 @@ export const COPY = {
   shareLive: 'Share live',
   shareScorecard: 'Share scorecard',
   shareLiveRound: 'Share live round',
+  shareWholeGroup: 'Whole group',
+  shareJustMe: 'Just me',
   liveBoard: 'Live board',
   liveBoardLede: 'Hole scores for friends. No map.',
   liveBoardPrivacy: 'Scores only — no map.',

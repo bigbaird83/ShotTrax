@@ -281,6 +281,8 @@ export function migrate(db: SQLiteDatabase): void {
   ensureColumn(db, 'rounds', 'shared_at', 'TEXT');
   // JSON GroupGameSettings. Null until the group picks games.
   ensureColumn(db, 'rounds', 'group_games', 'TEXT');
+  // Last scorecard share choice: 'group' or 'me'. Null until the golfer picks one.
+  ensureColumn(db, 'rounds', 'share_audience', 'TEXT');
   ensureColumn(db, 'holes', 'green_front_lat', 'REAL');
   ensureColumn(db, 'holes', 'green_front_lng', 'REAL');
   ensureColumn(db, 'holes', 'green_back_lat', 'REAL');

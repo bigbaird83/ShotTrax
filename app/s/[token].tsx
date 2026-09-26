@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
 import { getShareBoard } from '@/src/db/repo';
 import {
@@ -17,6 +17,8 @@ import {
 } from '@/src/domain/livePace';
 import {
   decodeSpectatorPayload,
+  planSpectatorGroupColumns,
+  type SpectatorGroup,
   type SpectatorPayload,
 } from '@/src/domain/spectator';
 import { COPY } from '@/src/domain/playerCopy';
@@ -24,6 +26,73 @@ import { getShareSyncUrl, loadSharedPayload } from '@/src/services/shareSync';
 import { Screen } from '@/src/ui/Screen';
 import { useColors } from '@/src/ui/ColorThemeProvider';
 import { type, type ColorPalette } from '@/src/ui/theme';
+
+function groupCell(score: number | null | undefined): string {
+  return score != null && score >= 1 ? String(score) : '—';
+}
+
+function SpectatorGroupTable({
+  group,
+  styles,
+}: {
+  group: SpectatorGroup;
+  styles: ReturnType<typeof makeStyles>;
+}) {
+  const columns = planSpectatorGroupColumns(group);
+  return (
+    <View testID="spectator-group" style={styles.groupBlock}>
+      <Text style={styles.groupTitle}>{COPY.groupCard}</Text>
+      <View style={styles.groupTable}>
+        <View style={styles.groupNames}>
+          <View style={styles.groupCorner} />
+          {group.players.map((player, index) => (
+            <View key={`${player.name}-${index}`} style={styles.groupNameCell}>
+              <Text style={styles.groupName} numberOfLines={1}>
+                {player.handicap != null ? `${player.name} ${player.handicap}` : player.name}
+              </Text>
+            </View>
+          ))}
+        </View>
+        <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator>
+          <View>
+            <View style={styles.groupHead}>
+              {columns.holes.map((hole) => (
+                <Text key={hole} style={styles.groupHoleHead}>
+                  {hole}
+                </Text>
+              ))}
+              {columns.out ? <Text style={styles.groupTotalHead}>Out</Text> : null}
+              {columns.inn ? <Text style={styles.groupTotalHead}>In</Text> : null}
+              <Text style={styles.groupTotalHead}>Total</Text>
+            </View>
+            {group.players.map((player, index) => (
+              <View key={`${player.name}-${index}`} style={styles.groupScoreRow}>
+                {columns.holes.map((hole) => (
+                  <Text key={hole} style={styles.groupScore}>
+                    {groupCell(player.holes.find((cell) => cell.hole === hole)?.score)}
+                  </Text>
+                ))}
+                {columns.out ? <Text style={styles.groupTotal}>{groupCell(player.out)}</Text> : null}
+                {columns.inn ? <Text style={styles.groupTotal}>{groupCell(player.in)}</Text> : null}
+                <Text style={styles.groupTotal}>{groupCell(player.total)}</Text>
+              </View>
+            ))}
+          </View>
+        </ScrollView>
+      </View>
+      {group.results?.map((block) => (
+        <View key={block.title} style={styles.resultBlock}>
+          <Text style={styles.resultTitle}>{block.title}</Text>
+          {block.lines.map((line, index) => (
+            <Text key={`${block.title}-${index}`} style={styles.resultLine}>
+              {line}
+            </Text>
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
 
 function payloadFromSnapshot(token: string, raw: string | null | undefined): SpectatorPayload | null {
   const scores = decodeScoreSnapshot(Array.isArray(raw) ? raw[0] : raw);
@@ -146,6 +215,7 @@ export default function SpectatorScreen() {
         {live ? <Text style={styles.muted}>On hole {live.hole}</Text> : null}
         {live && live.lastClubYards ? <Text style={styles.hint}>Last: {live.lastClubYards}</Text> : null}
       </View>
+      {payload.group ? <SpectatorGroupTable group={payload.group} styles={styles} /> : null}
       <View style={styles.headRow}>
         <Text style={[styles.headCell, styles.colHole]}>Hole</Text>
         <Text style={[styles.headCell, styles.colNum]}>Par</Text>
@@ -215,5 +285,28 @@ function makeStyles(colors: ColorPalette) {
     cell: { color: colors.cream, fontSize: type.meta, fontWeight: '700' },
     rowHole: { color: colors.cream, fontSize: type.body, fontWeight: '800' },
     rowScore: { color: colors.lime, fontSize: type.button, fontWeight: '900' },
+    groupBlock: {
+      marginTop: 16,
+      padding: 12,
+      borderRadius: 16,
+      backgroundColor: colors.bgElevated,
+      borderWidth: 1,
+      borderColor: colors.line,
+    },
+    groupTitle: { color: colors.cream, fontSize: type.body, fontWeight: '800' },
+    groupTable: { marginTop: 10, flexDirection: 'row' },
+    groupNames: { width: 96 },
+    groupCorner: { height: 28 },
+    groupNameCell: { height: 36, justifyContent: 'center' },
+    groupName: { color: colors.cream, fontSize: type.tiny, fontWeight: '800' },
+    groupHead: { height: 28, flexDirection: 'row', alignItems: 'center' },
+    groupHoleHead: { width: 36, color: colors.muted, fontSize: type.tiny, fontWeight: '800', textAlign: 'center' },
+    groupTotalHead: { width: 48, color: colors.muted, fontSize: type.tiny, fontWeight: '800', textAlign: 'center' },
+    groupScoreRow: { height: 36, flexDirection: 'row', alignItems: 'center' },
+    groupScore: { width: 36, color: colors.cream, fontSize: type.meta, fontWeight: '700', textAlign: 'center' },
+    groupTotal: { width: 48, color: colors.lime, fontSize: type.meta, fontWeight: '800', textAlign: 'center' },
+    resultBlock: { marginTop: 12 },
+    resultTitle: { color: colors.cream, fontSize: type.meta, fontWeight: '800' },
+    resultLine: { color: colors.muted, fontSize: type.tiny, marginTop: 4 },
   });
 }

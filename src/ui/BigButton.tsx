@@ -10,14 +10,29 @@ type Props = {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
+  testID?: string;
+  accessibilityLabel?: string;
+  accessibilityState?: { disabled?: boolean; selected?: boolean; busy?: boolean; expanded?: boolean };
 };
 
-export function BigButton({ label, onPress, variant = 'primary', disabled, style }: Props) {
+export function BigButton({
+  label,
+  onPress,
+  variant = 'primary',
+  disabled,
+  style,
+  testID,
+  accessibilityLabel,
+  accessibilityState,
+}: Props) {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <Pressable
+      testID={testID}
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ disabled, ...accessibilityState }}
       onPress={onPress}
       disabled={disabled}
       style={({ pressed }) => [

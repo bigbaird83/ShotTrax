@@ -166,7 +166,7 @@ import { resolveStickyClub, selectClubForMark } from '@/src/domain/stickyClub';
 import type { Club, PenaltyReason } from '@/src/domain/types';
 import { courseTeeYards, lastLandingMark, markToGreen, planLiveGpsToPin, planPlayHeaderYards, toGreenDisplayFromHole } from '@/src/domain/yardsToGreen';
 import { watchClubCarry, watchGreenFields } from '@/src/domain/watchLive';
-import { loadGroup } from '@/src/db/groupRepo';
+import { listGroupPlayers, loadGroup } from '@/src/db/groupRepo';
 import { planGroupGames } from '@/src/domain/groupGames';
 import {
   formatLiveGroupLine,
@@ -183,7 +183,7 @@ import { planPaintMissBanner } from '@/src/domain/paintMiss';
 import { thunderbirdCupOnGreen, thunderbirdDailyPin, thunderbirdPinHoleFor } from '@/src/domain/thunderbirdPins';
 import { MENU_SHARE_FALLBACK_MS, toastFromShareAttempt } from '@/src/domain/spectator';
 import { publishRoundScoreboard, shareLiveBoard, shareRoundSnapshot } from '@/src/services/shareRound';
-import { shareKindOrScorecard, type ShareKind } from '@/src/domain/shareChoice';
+import { planScorecardAudienceChoices, shareKindOrScorecard, type ScorecardAudience, type ShareKind } from '@/src/domain/shareChoice';
 import { endOpenShot, markShotWithClub, promptForPlan, undoLastShot, undoLastSoftGpsClubMark, closeApproachBeforePutts, addPlacedShot, changeShotClub, moveShotPin, moveShotSpot, undoShotEdit, deleteHoleShot } from '@/src/services/shotActions';
 import { useLiveFix } from '@/src/services/useLiveFix';
 import { useWatchClubList } from '@/src/services/useWatchClubList';
@@ -249,6 +249,12 @@ function HoleScreenBody() {
   const pendingShareRef = useRef(false);
   const suggestHoldRef = useRef<LiveSuggestHold | null>(null);
   const pendingShareKindRef = useRef<ShareKind>('scorecard');
+  const pendingShareAudienceRef = useRef<ScorecardAudience | undefined>(undefined);
+  const scorecardPartnerCount = useMemo(
+    () => listGroupPlayers(db, id).filter((player) => !player.isMe).length,
+    [db, id, revision],
+  );
+  const scorecardAudiences = planScorecardAudienceChoices(scorecardPartnerCount);
   const shareFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [playFrameNonce, setPlayFrameNonce] = useState(0);
   const [mapFramed, setMapFramed] = useState(false);
@@ -1009,19 +1015,22 @@ function HoleScreenBody() {
     }
     const anchor = findNodeHandle(menuButtonRef.current);
     const kind = shareKindOrScorecard(pendingShareKindRef.current);
+    const audience = pendingShareAudienceRef.current;
     pendingShareKindRef.current = 'scorecard';
+    pendingShareAudienceRef.current = undefined;
     void toastFromShareAttempt(() =>
       kind === 'live'
         ? shareLiveBoard(db, id, { currentHoleNumber: holeNumber, anchor })
-        : shareRoundSnapshot(db, id, { currentHoleNumber: holeNumber, anchor }),
+        : shareRoundSnapshot(db, id, { currentHoleNumber: holeNumber, anchor, audience }),
       kind === 'live' ? COPY.shareFail : COPY.shareScorecardFail,
     ).then((fail) => {
       if (fail) setToast(fail);
     });
   }, [db, id, holeNumber]);
 
-  const queueMenuShare = useCallback((kind: ShareKind = 'scorecard') => {
+  const queueMenuShare = useCallback((kind: ShareKind = 'scorecard', audience?: ScorecardAudience) => {
     pendingShareKindRef.current = shareKindOrScorecard(kind);
+    pendingShareAudienceRef.current = kind === 'live' ? undefined : audience;
     pendingShareRef.current = true;
     setMenuOpen(false);
     setScorecardOpen(false);
@@ -2303,7 +2312,7 @@ function HoleScreenBody() {
               router.push({ pathname: '/nerd-out', params: { roundId: id } });
             }}
           />
-          <ShareChoice variant="ghost" onPick={queueMenuShare} />
+          <ShareChoice variant="ghost" onPick={queueMenuShare} audiences={scorecardAudiences} />
           <BigButton
             label={COPY.roundsTransfer}
             variant="ghost"
@@ -2377,6 +2386,7 @@ function HoleScreenBody() {
             }}
             onBack={dismissScorecard}
             onShare={queueMenuShare}
+            audiences={scorecardAudiences}
             onNerdOut={() => {
               setScorecardOpen(false);
               router.push({ pathname: '/nerd-out', params: { roundId: id } });
