@@ -43,6 +43,13 @@ export type OsmOverlayDeps = {
   getBaseUrl?: () => string | null;
   /** Worker request timeout. A timeout falls back to Overpass. Tests pass a small value. */
   workerTimeoutMs?: number;
+  /** Clock for the upstream_busy cooldown. Tests advance this instead of waiting. */
+  nowMs?: () => number;
+  /**
+   * Ask the Worker even if the busy cooldown has not quite elapsed.
+   * The hole-screen timer uses this so a retry is not dropped on clock skew.
+   */
+  bypassBusyCooldown?: boolean;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -290,13 +297,70 @@ function waitMs(ms: number): Promise<void> {
 
 /** Cold Overpass misses on the Worker can take most of this. Then we fall back. */
 export const WORKER_OVERLAY_TIMEOUT_MS = 30_000;
+/**
+ * After Worker `upstream_busy`, wait before the next course request.
+ * The step is the attempt (two busy answers), then it stays at the last step.
+ */
+export const OSM_BUSY_BACKOFF_MS = [20_000, 60_000, 120_000] as const;
+/** A Retry-After longer than this is ignored and the backoff step is used. */
+export const OSM_BUSY_RETRY_AFTER_MAX_MS = 10 * 60 * 1000;
+
+function backoffMsForStrike(strikes: number): number {
+  const index = Math.min(Math.max(strikes, 1), OSM_BUSY_BACKOFF_MS.length) - 1;
+  return OSM_BUSY_BACKOFF_MS[index];
+}
+
+/** Delta-seconds or an HTTP-date. Zero, past, and huge values are not sane. */
+function saneRetryAfterMs(header: string | null, nowMs: number): number | null {
+  if (header == null) return null;
+  const trimmed = header.trim();
+  if (!trimmed) return null;
+  if (/^\d+(\.\d+)?$/.test(trimmed)) {
+    const seconds = Number(trimmed);
+    if (!Number.isFinite(seconds) || seconds <= 0) return null;
+    const ms = Math.round(seconds * 1000);
+    if (ms > OSM_BUSY_RETRY_AFTER_MAX_MS) return null;
+    return ms;
+  }
+  const when = Date.parse(trimmed);
+  if (!Number.isFinite(when)) return null;
+  const delta = when - nowMs;
+  if (delta <= 0 || delta > OSM_BUSY_RETRY_AFTER_MAX_MS) return null;
+  return delta;
+}
+
+function preferRetryAfter(current: number | null, next: number | null): number | null {
+  if (next == null) return current;
+  if (current == null) return next;
+  return Math.max(current, next);
+}
+
+function osmOverlayDevLogsEnabled(): boolean {
+  if (typeof __DEV__ !== 'undefined') return __DEV__ === true;
+  return (globalThis as { __DEV__?: boolean }).__DEV__ === true;
+}
+
+/** Dev-only. Says why a course is waiting or retrying. Release builds stay quiet. */
+export function logOsmOverlayDev(
+  courseId: string,
+  message: string,
+  detail?: Record<string, unknown>,
+): void {
+  if (!osmOverlayDevLogsEnabled()) return;
+  const id = courseId.trim() || '(no course)';
+  if (detail) console.log(`[osm overlay] ${id}: ${message}`, detail);
+  else console.log(`[osm overlay] ${id}: ${message}`);
+}
 
 function workerErrorCode(json: unknown): string | null {
   const error = asRecord(json)?.error;
   return typeof error === 'string' ? error : null;
 }
 
-type WorkerFetch = { kind: 'skip' } | { kind: 'overlay'; overlay: OsmOverlay | null } | { kind: 'busy' };
+type WorkerFetch =
+  | { kind: 'skip' }
+  | { kind: 'overlay'; overlay: OsmOverlay | null }
+  | { kind: 'busy'; retryAfterMs: number | null };
 
 /**
  * OSM course overlay (golf=green/fairway/tee/hole, plus bunker, water hazard, and cartpath).
@@ -305,11 +369,15 @@ type WorkerFetch = { kind: 'skip' } | { kind: 'overlay'; overlay: OsmOverlay | n
  * OSM par tags are ignored (par comes from course API only).
  * When the share-sync Worker is configured and the course has a catalog pin,
  * ask for one course-wide overlay: that pin rounded to 4 decimals, radius 1800.
- * Hole screens slice the result locally. A definitive miss (`no_overlay`) or a
- * busy Worker (`upstream_busy`) is not sent on to Overpass. A timeout or any
+ * Hole screens slice the result locally. A definitive miss (`no_overlay`) is not
+ * sent on to Overpass and blocks the course for this session. `upstream_busy`
+ * is not sent on to Overpass either, and it does not block the session: the
+ * course waits out a short cooldown (20s, then 60s, then 2 min, capped), longer
+ * when the Worker sends a sane Retry-After. The next hole open, hole change,
+ * map refocus, or favorite backfill tries the Worker again. A timeout or any
  * other Worker failure falls back to a direct Overpass request and stores nothing
  * for the failed Worker call. No catalog pin skips the Worker.
- * One retry with backoff on Worker busy, Overpass 429 or 504, or a thrown Overpass timeout.
+ * One immediate retry on Worker busy, Overpass 429 or 504, or a thrown Overpass timeout.
  */
 export async function fetchOsmOverlay(
   query: OsmOverlayQuery | string,
@@ -326,6 +394,7 @@ export async function fetchOsmOverlay(
   const url = deps.overpassUrl ?? OVERPASS_URL;
   const retryDelayMs = deps.retryDelayMs ?? OVERPASS_RETRY_DELAY_MS;
   const courseId = q.courseId?.trim() ?? '';
+  const nowMs = deps.nowMs ?? Date.now;
   const workerHost = (deps.getBaseUrl ?? getCourseProxyHost)()?.trim().replace(/\/+$/, '') ?? '';
 
   const readWorker = async (): Promise<WorkerFetch> => {
@@ -356,7 +425,9 @@ export async function fetchOsmOverlay(
       }
       const error = workerErrorCode(json);
       if (res.status === 404 && error === 'no_overlay') return { kind: 'overlay', overlay: null };
-      if (res.status === 503 && error === 'upstream_busy') return { kind: 'busy' };
+      if (res.status === 503 && error === 'upstream_busy') {
+        return { kind: 'busy', retryAfterMs: saneRetryAfterMs(res.headers.get('Retry-After'), nowMs()) };
+      }
       if (res.ok && json !== undefined) {
         return { kind: 'overlay', overlay: overlayFromPayload(json, undefined) };
       }
@@ -399,7 +470,10 @@ export async function fetchOsmOverlay(
   };
 
   const rememberCourse = (overlay: OsmOverlay | null): OsmOverlay | null => {
-    if (courseId && overlay && overlay.features.length > 0) adoptCourseOverlay(courseId, overlay);
+    if (courseId && overlay && overlay.features.length > 0) {
+      busyCooldown.delete(courseId);
+      adoptCourseOverlay(courseId, overlay);
+    }
     return overlay;
   };
 
@@ -414,27 +488,54 @@ export async function fetchOsmOverlay(
   if (workerHost && courseId && catalog) {
     const cached = courseWideOsmOverlay(courseId);
     if (cached) return finish(cached);
-    if (sessionFetched.has(courseId)) return null;
+    if (sessionFetched.has(courseId)) {
+      logOsmOverlayDev(courseId, 'waiting: blocked for this session');
+      return null;
+    }
+    const cooling = busyCooldown.get(courseId);
+    const now = nowMs();
+    if (cooling && cooling.untilMs > now && !deps.bypassBusyCooldown) {
+      logOsmOverlayDev(courseId, 'waiting: Worker upstream_busy', {
+        remainingMs: cooling.untilMs - now,
+        strikes: cooling.strikes,
+      });
+      return null;
+    }
+    if (cooling && cooling.strikes > 0) {
+      logOsmOverlayDev(courseId, 'retrying: busy cooldown elapsed', { strikes: cooling.strikes });
+    }
     const pending = workerInflight.get(courseId);
     if (pending) return finish(await pending);
 
     const job = (async (): Promise<OsmOverlay | null> => {
       let worker = await readWorker();
+      let retryAfterMs: number | null = null;
       if (worker.kind === 'busy') {
+        retryAfterMs = worker.retryAfterMs;
         await waitMs(retryDelayMs);
         worker = await readWorker();
         if (worker.kind === 'busy') {
-          sessionFetched.add(courseId);
+          retryAfterMs = preferRetryAfter(retryAfterMs, worker.retryAfterMs);
+          const armed = armBusyCooldown(courseId, retryAfterMs, nowMs);
+          logOsmOverlayDev(courseId, 'waiting: Worker upstream_busy', {
+            waitMs: armed.waitMs,
+            strikes: armed.strikes,
+            retryAfterMs,
+          });
           return null;
         }
       }
       if (worker.kind === 'overlay') {
         if (worker.overlay && worker.overlay.features.length > 0) return rememberCourse(worker.overlay);
-        sessionFetched.add(courseId);
+        blockCourseForSession(courseId);
+        logOsmOverlayDev(courseId, 'blocked for this session: Worker had no overlay');
         return null;
       }
       const overlay = rememberCourse(await runOverpass());
-      if (!overlay) sessionFetched.add(courseId);
+      if (!overlay) {
+        blockCourseForSession(courseId);
+        logOsmOverlayDev(courseId, 'blocked for this session: Worker failed and Overpass was empty');
+      }
       return overlay;
     })();
     workerInflight.set(courseId, job);
@@ -452,11 +553,47 @@ const overlayCache = new Map<string, OsmOverlay>();
 const teeCache = new Map<string, LatLng>();
 /** Full course overlay for this session, keyed by course id. Not persisted here. */
 const courseWide = new Map<string, OsmOverlay>();
-/** Course ids already asked this session. A miss is not stored as overlay data. */
+/**
+ * Course ids with a definitive miss this session (`no_overlay`, an empty Worker
+ * body, or a failed Overpass fallback). A miss is not stored as overlay data.
+ * `upstream_busy` is not in this set.
+ */
 const sessionFetched = new Set<string>();
+/** Per-course wait after Worker `upstream_busy`. Strikes stay until a real result. */
+const busyCooldown = new Map<string, { untilMs: number; strikes: number }>();
 const inflight = new Map<string, Promise<OsmOverlay | null>>();
 /** One in-flight course-wide Worker/Overpass read per course. Not the hole-screen inflight map. */
 const workerInflight = new Map<string, Promise<OsmOverlay | null>>();
+
+function armBusyCooldown(
+  courseId: string,
+  retryAfterMs: number | null,
+  nowMs: () => number,
+): { waitMs: number; strikes: number } {
+  const strikes = (busyCooldown.get(courseId)?.strikes ?? 0) + 1;
+  const backoffMs = backoffMsForStrike(strikes);
+  const waitMs = retryAfterMs != null && retryAfterMs > backoffMs ? retryAfterMs : backoffMs;
+  busyCooldown.set(courseId, { untilMs: nowMs() + waitMs, strikes });
+  return { waitMs, strikes };
+}
+
+function blockCourseForSession(courseId: string): void {
+  if (!courseId) return;
+  busyCooldown.delete(courseId);
+  sessionFetched.add(courseId);
+}
+
+/** Milliseconds until a busy course may ask the Worker again. Zero means it may. */
+export function osmOverlayBusyRemainingMs(
+  courseId: string | null | undefined,
+  nowMs: () => number = Date.now,
+): number {
+  const id = courseId?.trim() ?? '';
+  if (!id) return 0;
+  const row = busyCooldown.get(id);
+  if (!row) return 0;
+  return Math.max(0, row.untilMs - nowMs());
+}
 
 function holeOverlayKey(courseId: string | null | undefined, holeNumber: number): string {
   return `${courseId?.trim() ?? ''}:${holeNumber}`;
@@ -582,6 +719,7 @@ export function dropCourseOverlayMemory(courseId: string | null | undefined): vo
   if (!id) return;
   courseWide.delete(id);
   sessionFetched.delete(id);
+  busyCooldown.delete(id);
   inflight.delete(id);
   workerInflight.delete(id);
   for (let hole = 1; hole <= 18; hole += 1) overlayCache.delete(holeOverlayKey(id, hole));
@@ -603,6 +741,7 @@ async function fetchCourseWide(
   args: { holeNumber: number; green: LatLng | null },
   query: OsmOverlayQuery,
   fetchOverlay: (query: OsmOverlayQuery) => Promise<OsmOverlay | null>,
+  nowMs: () => number,
 ): Promise<OsmOverlay | null> {
   try {
     const overlay = await fetchOverlay(query);
@@ -611,7 +750,8 @@ async function fetchCourseWide(
     rememberOsmOverlay({ courseId, holeNumber: args.holeNumber, green: args.green }, overlay);
     return overlay;
   } finally {
-    sessionFetched.add(courseId);
+    // A busy Worker stays retryable. A definitive miss still settles the course.
+    if (osmOverlayBusyRemainingMs(courseId, nowMs) <= 0) sessionFetched.add(courseId);
     inflight.delete(courseId);
   }
 }
@@ -619,7 +759,8 @@ async function fetchCourseWide(
 /**
  * Stored or session course overlay, else one live course-wide query.
  * A failed or empty response is not cached as data. Later holes in this
- * session do not each call Overpass again.
+ * session do not each call Overpass again. Worker `upstream_busy` does not
+ * settle the course; the next request after the cooldown asks again.
  */
 export async function loadCachedOrFetchCourseOverlay(
   args: {
@@ -630,8 +771,15 @@ export async function loadCachedOrFetchCourseOverlay(
     /** Catalog course pin. Worker calls use this, not the hole green. */
     courseLocation?: LatLng | null;
   },
-  deps: { fetchOverlay?: (query: OsmOverlayQuery) => Promise<OsmOverlay | null> } = {},
+  deps: {
+    fetchOverlay?: (query: OsmOverlayQuery) => Promise<OsmOverlay | null>;
+    /** Same clock `fetchOsmOverlay` used to arm a busy cooldown. */
+    nowMs?: () => number;
+    /** Hole-screen timer. Do not drop the one retry on a short clock skew. */
+    bypassBusyCooldown?: boolean;
+  } = {},
 ): Promise<OsmOverlay | null> {
+  const nowMs = deps.nowMs ?? Date.now;
   const cached = cachedOsmOverlay({
     courseId: args.courseId,
     holeNumber: args.holeNumber,
@@ -641,6 +789,11 @@ export async function loadCachedOrFetchCourseOverlay(
 
   const courseId = args.courseId?.trim() ?? '';
   if (courseId && courseOverlaySettled(courseId)) return null;
+  const remainingMs = courseId ? osmOverlayBusyRemainingMs(courseId, nowMs) : 0;
+  if (remainingMs > 0 && !deps.bypassBusyCooldown) {
+    logOsmOverlayDev(courseId, 'waiting: Worker upstream_busy', { remainingMs });
+    return null;
+  }
 
   const center = isValidLatLng(args.green)
     ? args.green
@@ -649,7 +802,10 @@ export async function loadCachedOrFetchCourseOverlay(
       : null;
   if (!center) return null;
 
-  const fetchOverlay = deps.fetchOverlay ?? ((query: OsmOverlayQuery) => fetchOsmOverlay(query));
+  const fetchOverlay =
+    deps.fetchOverlay ??
+    ((query: OsmOverlayQuery) =>
+      fetchOsmOverlay(query, { nowMs, bypassBusyCooldown: deps.bypassBusyCooldown }));
   const query: OsmOverlayQuery = {
     courseId: args.courseId,
     location: center,
@@ -665,7 +821,7 @@ export async function loadCachedOrFetchCourseOverlay(
 
   const pending = inflight.get(courseId);
   if (pending) return pending;
-  const next = fetchCourseWide(courseId, args, query, fetchOverlay);
+  const next = fetchCourseWide(courseId, args, query, fetchOverlay, nowMs);
   inflight.set(courseId, next);
   return next;
 }

@@ -8,6 +8,9 @@ import {
   fetchOsmOverlay,
   fillLayoutTeesFromOsm,
   loadCachedOrFetchCourseOverlay,
+  OSM_BUSY_BACKOFF_MS,
+  OSM_BUSY_RETRY_AFTER_MAX_MS,
+  osmOverlayBusyRemainingMs,
   WORKER_OVERLAY_TIMEOUT_MS,
   osmFeatureRendersAsLine,
   parseOverpassOverlay,
@@ -960,6 +963,215 @@ test('a Worker timeout stores nothing and falls back to Overpass once', async ()
   assert.equal(again, null);
   assert.equal(calls.includes('again'), false);
   dropCourseOverlayMemory(courseId);
+});
+
+test('Worker upstream_busy succeeds after the cooldown without a restart', async () => {
+  const courseId = 'magnolia-busy-later';
+  dropCourseOverlayMemory(courseId);
+  const catalog = { lat: 33.26741, lng: -93.23916 };
+  const green = { lat: 33.267, lng: -93.239 };
+  let now = 1_700_000_000_000;
+  const nowMs = () => now;
+  let calls = 0;
+  const urls: string[] = [];
+  const lines: string[] = [];
+  const originalLog = console.log;
+  const dev = globalThis as { __DEV__?: boolean };
+  const previousDev = dev.__DEV__;
+  console.log = (...args: unknown[]) => {
+    lines.push(args.map((part) => (typeof part === 'string' ? part : JSON.stringify(part))).join(' '));
+  };
+  dev.__DEV__ = true;
+  const fetchImpl: typeof fetch = async (input) => {
+    calls += 1;
+    urls.push(String(input));
+    if (calls <= 2) {
+      return new Response(JSON.stringify({ error: 'upstream_busy' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return new Response(JSON.stringify(WORKER_GREEN), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  };
+  const deps = {
+    retryDelayMs: 0,
+    nowMs,
+    getBaseUrl: () => WORKER,
+    fetch: fetchImpl,
+  };
+  try {
+    const blocked = await loadCachedOrFetchCourseOverlay(
+      { courseId, holeNumber: 1, green, location: green, courseLocation: catalog },
+      { fetchOverlay: (query) => fetchOsmOverlay(query, deps), nowMs },
+    );
+    assert.equal(blocked, null);
+    assert.equal(calls, 2);
+    assert.equal(urls.every((url) => url.includes('/osm/v1/overlay?')), true);
+    assert.equal(osmOverlayBusyRemainingMs(courseId, nowMs), OSM_BUSY_BACKOFF_MS[0]);
+    assert.ok(lines.some((line) => line.includes(courseId) && line.includes('upstream_busy')));
+
+    const stillCooling = await loadCachedOrFetchCourseOverlay(
+      { courseId, holeNumber: 4, green, location: green, courseLocation: catalog },
+      { fetchOverlay: (query) => fetchOsmOverlay(query, deps), nowMs },
+    );
+    assert.equal(stillCooling, null);
+    assert.equal(calls, 2);
+
+    now += OSM_BUSY_BACKOFF_MS[0];
+    const overlay = await loadCachedOrFetchCourseOverlay(
+      { courseId, holeNumber: 1, green, location: green, courseLocation: catalog },
+      { fetchOverlay: (query) => fetchOsmOverlay(query, deps), nowMs },
+    );
+    assert.equal(calls, 3);
+    assert.equal(overlay?.source, 'osm');
+    assert.equal(overlay?.features.some((feature) => feature.kind === 'green' && feature.holeNumber === 1), true);
+    assert.equal(
+      cachedOsmOverlay({ courseId, holeNumber: 1, green })?.features.some((feature) => feature.holeNumber === 2),
+      false,
+    );
+    assert.ok(lines.some((line) => line.includes(courseId) && line.includes('retrying')));
+    const again = await loadCachedOrFetchCourseOverlay(
+      { courseId, holeNumber: 2, green: { lat: 33.271, lng: -93.233 }, courseLocation: catalog },
+      { fetchOverlay: (query) => fetchOsmOverlay(query, deps), nowMs },
+    );
+    assert.equal(calls, 3);
+    assert.equal(again?.features.some((feature) => feature.holeNumber === 2), true);
+  } finally {
+    console.log = originalLog;
+    dev.__DEV__ = previousDev;
+    dropCourseOverlayMemory(courseId);
+  }
+});
+
+test('repeated Worker upstream_busy backs off and honors a sane Retry-After', async () => {
+  const catalog = { lat: 33.26741, lng: -93.23916 };
+  const queryFor = (courseId: string) => ({
+    courseId,
+    location: catalog,
+    courseLocation: catalog,
+    radiusM: 1800,
+  });
+
+  const courseId = 'busy-backoff';
+  dropCourseOverlayMemory(courseId);
+  let now = 1_700_000_000_000;
+  const nowMs = () => now;
+  let calls = 0;
+  const deps = {
+    retryDelayMs: 0,
+    nowMs,
+    getBaseUrl: () => WORKER,
+    fetch: async () => {
+      calls += 1;
+      return new Response(JSON.stringify({ error: 'upstream_busy' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+  };
+  try {
+    for (const wait of [OSM_BUSY_BACKOFF_MS[0], OSM_BUSY_BACKOFF_MS[1], OSM_BUSY_BACKOFF_MS[2], OSM_BUSY_BACKOFF_MS[2]]) {
+      const before = calls;
+      assert.equal(await fetchOsmOverlay(queryFor(courseId), deps), null);
+      assert.equal(calls - before, 2);
+      assert.equal(osmOverlayBusyRemainingMs(courseId, nowMs), wait);
+      const during = await fetchOsmOverlay(queryFor(courseId), deps);
+      assert.equal(during, null);
+      assert.equal(calls - before, 2);
+      now += wait;
+    }
+  } finally {
+    dropCourseOverlayMemory(courseId);
+  }
+
+  async function waitFor(courseId: string, retryAfter: string | (() => string)): Promise<number> {
+    dropCourseOverlayMemory(courseId);
+    const started = nowMs();
+    await fetchOsmOverlay(queryFor(courseId), {
+      retryDelayMs: 0,
+      nowMs,
+      getBaseUrl: () => WORKER,
+      fetch: async () =>
+        new Response(JSON.stringify({ error: 'upstream_busy' }), {
+          status: 503,
+          headers: {
+            'Content-Type': 'application/json',
+            'Retry-After': typeof retryAfter === 'function' ? retryAfter() : retryAfter,
+          },
+        }),
+    });
+    const remaining = osmOverlayBusyRemainingMs(courseId, nowMs);
+    assert.equal(nowMs(), started);
+    dropCourseOverlayMemory(courseId);
+    return remaining;
+  }
+
+  assert.equal(await waitFor('busy-retry-after-long', '90'), 90_000);
+  assert.equal(await waitFor('busy-retry-after-short', '2'), OSM_BUSY_BACKOFF_MS[0]);
+  assert.equal(await waitFor('busy-retry-after-zero', '0'), OSM_BUSY_BACKOFF_MS[0]);
+  assert.equal(
+    await waitFor('busy-retry-after-huge', String(Math.floor(OSM_BUSY_RETRY_AFTER_MAX_MS / 1000) + 60)),
+    OSM_BUSY_BACKOFF_MS[0],
+  );
+  assert.equal(
+    await waitFor('busy-retry-after-date', () => new Date(nowMs() + 45_000).toUTCString()),
+    45_000,
+  );
+  assert.equal(
+    await waitFor('busy-retry-after-past', () => new Date(nowMs() - 5_000).toUTCString()),
+    OSM_BUSY_BACKOFF_MS[0],
+  );
+});
+
+test('Worker no_overlay still blocks the course for the session', async () => {
+  const courseId = 'session-no-overlay';
+  dropCourseOverlayMemory(courseId);
+  const catalog = { lat: 33.26741, lng: -93.23916 };
+  let now = 1_700_000_000_000;
+  const nowMs = () => now;
+  let calls = 0;
+  const deps = {
+    retryDelayMs: 0,
+    nowMs,
+    getBaseUrl: () => WORKER,
+    fetch: async () => {
+      calls += 1;
+      if (calls === 1) {
+        return new Response(JSON.stringify({ error: 'no_overlay' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify(WORKER_GREEN), { status: 200 });
+    },
+  };
+  try {
+    const overlay = await fetchOsmOverlay(
+      { courseId, location: catalog, courseLocation: catalog, radiusM: 1800 },
+      deps,
+    );
+    assert.equal(overlay, null);
+    assert.equal(calls, 1);
+    now += 6 * 60 * 60 * 1000;
+    const again = await fetchOsmOverlay(
+      { courseId, location: catalog, courseLocation: catalog, holeNumber: 3 },
+      deps,
+    );
+    assert.equal(again, null);
+    assert.equal(calls, 1);
+    const viaHole = await loadCachedOrFetchCourseOverlay(
+      { courseId, holeNumber: 3, green: catalog, courseLocation: catalog },
+      { fetchOverlay: (query) => fetchOsmOverlay(query, deps), nowMs },
+    );
+    assert.equal(viaHole, null);
+    assert.equal(calls, 1);
+    assert.equal(osmOverlayBusyRemainingMs(courseId, nowMs), 0);
+  } finally {
+    dropCourseOverlayMemory(courseId);
+  }
 });
 
 test('fillLayoutTeesFromOsm keeps API tees and fills missing tees from the hole line', async () => {

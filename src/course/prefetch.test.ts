@@ -11,9 +11,17 @@ import {
   rememberLayoutHoles,
   satelliteTilesBulkDownload,
   satelliteTilesWarmPerHole,
+  scheduleOpenHoleOverlayRetry,
   startRoundBlocksOnCardPrefetch,
 } from './prefetch';
-import { cachedOsmOverlay, cachedResolvedTee, rememberResolvedTee } from './osmOverlay';
+import {
+  cachedOsmOverlay,
+  cachedResolvedTee,
+  dropCourseOverlayMemory,
+  fetchOsmOverlay,
+  OSM_BUSY_BACKOFF_MS,
+  rememberResolvedTee,
+} from './osmOverlay';
 import type { CourseLayoutSeed } from './layout';
 import type { OsmOverlay, OsmOverlayQuery } from './types';
 
@@ -421,9 +429,264 @@ test('Signal Lab: prefetch never blocks hole 1 or falls back to the phone for fr
   assert.doesNotMatch(camera, /phone: fix/);
 });
 
+const HOLE_WORKER = 'https://share.test';
+const HOLE_CATALOG = { lat: 33.26741, lng: -93.23916 };
+const HOLE_GREEN = { lat: 33.267, lng: -93.239 };
+const HOLE_TEE = { lat: 33.264, lng: -93.242 };
+const HOLE_OVERLAY = {
+  elements: [
+    {
+      type: 'way',
+      tags: { golf: 'green', ref: '1' },
+      geometry: [
+        { lat: HOLE_GREEN.lat, lon: HOLE_GREEN.lng },
+        { lat: HOLE_GREEN.lat + 0.0002, lon: HOLE_GREEN.lng },
+      ],
+    },
+  ],
+};
+
+test('hole screen auto retry fires once after upstream_busy', async () => {
+  const courseId = 'hole-screen-once';
+  dropCourseOverlayMemory(courseId);
+  let now = 1_700_000_000_000;
+  const nowMs = () => now;
+  let calls = 0;
+  const fetchOverlay = (query: OsmOverlayQuery) =>
+    fetchOsmOverlay(query, {
+      retryDelayMs: 0,
+      nowMs,
+      getBaseUrl: () => HOLE_WORKER,
+      fetch: async () => {
+        calls += 1;
+        if (calls <= 2) {
+          return new Response(JSON.stringify({ error: 'upstream_busy' }), {
+            status: 503,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        return new Response(JSON.stringify(HOLE_OVERLAY), { status: 200 });
+      },
+    });
+  const args = {
+    courseId,
+    holeNumber: 1,
+    tee: HOLE_TEE,
+    green: HOLE_GREEN,
+    location: HOLE_GREEN,
+    courseLocation: HOLE_CATALOG,
+  };
+  let scheduleCalls = 0;
+  let fire: () => void = () => {};
+  let drawn = false;
+  try {
+    await ensureHoleTeeGreen(args, { fetchOverlay, nowMs });
+    assert.equal(calls, 2);
+    assert.equal(cachedOsmOverlay({ courseId, holeNumber: 1, green: HOLE_GREEN }), null);
+    const arrived = new Promise<void>((resolve) => {
+      scheduleOpenHoleOverlayRetry(
+        args,
+        {
+          onOverlay: (overlay) => {
+            assert.equal(overlay.features[0]?.coordinates[0]?.lat, HOLE_GREEN.lat);
+            drawn = true;
+            resolve();
+          },
+        },
+        {
+          fetchOverlay,
+          nowMs,
+          schedule: (run, delay) => {
+            scheduleCalls += 1;
+            assert.equal(delay, OSM_BUSY_BACKOFF_MS[0]);
+            fire = run;
+            return () => {};
+          },
+        },
+      );
+    });
+    assert.equal(scheduleCalls, 1);
+    now += OSM_BUSY_BACKOFF_MS[0];
+    fire();
+    await Promise.race([
+      arrived,
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('hole overlay retry did not draw')), 1000);
+      }),
+    ]);
+    assert.equal(drawn, true);
+    assert.equal(calls, 3);
+    assert.equal(scheduleCalls, 1);
+    assert.equal(cachedOsmOverlay({ courseId, holeNumber: 1, green: HOLE_GREEN })?.source, 'osm');
+  } finally {
+    dropCourseOverlayMemory(courseId);
+  }
+});
+
+test('a still-busy hole-screen retry does not schedule another', async () => {
+  const courseId = 'hole-screen-still-busy';
+  dropCourseOverlayMemory(courseId);
+  let now = 1_700_000_000_000;
+  const nowMs = () => now;
+  let calls = 0;
+  let scheduleCalls = 0;
+  let fire: () => void = () => {};
+  const fetchOverlay = (query: OsmOverlayQuery) =>
+    fetchOsmOverlay(query, {
+      retryDelayMs: 0,
+      nowMs,
+      getBaseUrl: () => HOLE_WORKER,
+      fetch: async () => {
+        calls += 1;
+        return new Response(JSON.stringify({ error: 'upstream_busy' }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      },
+    });
+  const args = {
+    courseId,
+    holeNumber: 1,
+    tee: HOLE_TEE,
+    green: HOLE_GREEN,
+    location: HOLE_GREEN,
+    courseLocation: HOLE_CATALOG,
+  };
+  try {
+    await ensureHoleTeeGreen(args, { fetchOverlay, nowMs });
+    assert.equal(calls, 2);
+    scheduleOpenHoleOverlayRetry(args, { onOverlay: () => {} }, {
+      fetchOverlay,
+      nowMs,
+      schedule: (run, delay) => {
+        scheduleCalls += 1;
+        assert.equal(delay, OSM_BUSY_BACKOFF_MS[0]);
+        fire = run;
+        return () => {};
+      },
+    });
+    now += OSM_BUSY_BACKOFF_MS[0];
+    fire();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(calls, 4);
+    assert.equal(scheduleCalls, 1);
+    now += OSM_BUSY_BACKOFF_MS[1];
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(calls, 4);
+    assert.equal(scheduleCalls, 1);
+  } finally {
+    dropCourseOverlayMemory(courseId);
+  }
+});
+
+test('hole screen auto retry is cancelled on unmount', async () => {
+  const courseId = 'hole-screen-cancel';
+  dropCourseOverlayMemory(courseId);
+  let now = 1_700_000_000_000;
+  const nowMs = () => now;
+  let calls = 0;
+  const fetchOverlay = (query: OsmOverlayQuery) =>
+    fetchOsmOverlay(query, {
+      retryDelayMs: 0,
+      nowMs,
+      getBaseUrl: () => HOLE_WORKER,
+      fetch: async () => {
+        calls += 1;
+        return new Response(JSON.stringify({ error: 'upstream_busy' }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      },
+    });
+  const args = {
+    courseId,
+    holeNumber: 1,
+    tee: HOLE_TEE,
+    green: HOLE_GREEN,
+    location: HOLE_GREEN,
+    courseLocation: HOLE_CATALOG,
+  };
+  let fire: () => void = () => {};
+  let cleared = false;
+  let seen = 0;
+  try {
+    await ensureHoleTeeGreen(args, { fetchOverlay, nowMs });
+    assert.equal(calls, 2);
+    const cancel = scheduleOpenHoleOverlayRetry(
+      args,
+      { onOverlay: () => { seen += 1; } },
+      {
+        fetchOverlay,
+        nowMs,
+        schedule: (run, delay) => {
+          assert.equal(delay, OSM_BUSY_BACKOFF_MS[0]);
+          fire = run;
+          return () => {
+            cleared = true;
+          };
+        },
+      },
+    );
+    cancel();
+    assert.equal(cleared, true);
+    now += OSM_BUSY_BACKOFF_MS[0];
+    fire();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(calls, 2);
+    assert.equal(seen, 0);
+    assert.equal(cachedOsmOverlay({ courseId, holeNumber: 1, green: HOLE_GREEN }), null);
+  } finally {
+    dropCourseOverlayMemory(courseId);
+  }
+});
+
+test('a Worker no_overlay does not schedule a hole-screen retry', async () => {
+  const courseId = 'hole-screen-miss';
+  dropCourseOverlayMemory(courseId);
+  let calls = 0;
+  const fetchOverlay = (query: OsmOverlayQuery) =>
+    fetchOsmOverlay(query, {
+      retryDelayMs: 0,
+      getBaseUrl: () => HOLE_WORKER,
+      fetch: async () => {
+        calls += 1;
+        return new Response(JSON.stringify({ error: 'no_overlay' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      },
+    });
+  const args = {
+    courseId,
+    holeNumber: 1,
+    tee: HOLE_TEE,
+    green: HOLE_GREEN,
+    location: HOLE_GREEN,
+    courseLocation: HOLE_CATALOG,
+  };
+  let scheduled = 0;
+  try {
+    await ensureHoleTeeGreen(args, { fetchOverlay });
+    assert.equal(calls, 1);
+    scheduleOpenHoleOverlayRetry(args, { onOverlay: () => {} }, {
+      fetchOverlay,
+      schedule: () => {
+        scheduled += 1;
+        return () => {};
+      },
+    });
+    assert.equal(scheduled, 0);
+    assert.equal(calls, 1);
+  } finally {
+    dropCourseOverlayMemory(courseId);
+  }
+});
+
 test('hole camera still uses cached tee+green and fetches the current hole only', () => {
   const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   assert.match(hole, /ensureHoleTeeGreen/);
+  assert.match(hole, /scheduleOpenHoleOverlayRetry/);
+  assert.match(hole, /cancelOverlayRetry\(\)/);
   assert.match(hole, /cachedResolvedTee/);
   assert.match(hole, /planCourseCardCamera/);
   assert.match(hole, /phone: null/);
