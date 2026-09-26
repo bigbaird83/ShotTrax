@@ -1,10 +1,26 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
-import { getClubMap, listHoles, listPenaltiesForHole, listShotsForHole, listStatRounds } from '@/src/db/repo';
+import {
+  getClubMap,
+  listHoles,
+  listPenaltiesForHole,
+  listShotsForHole,
+  listStatRounds,
+  listStrokesGainedHoles,
+} from '@/src/db/repo';
 import { totalPenaltyStrokes } from '@/src/domain/penalty';
 import { COPY } from '@/src/domain/playerCopy';
 import { planRoundStats } from '@/src/domain/roundReview';
+import {
+  averageStrokesGainedPer18,
+  formatStrokesGained,
+  roundStrokesGained,
+  SG_CATEGORIES,
+  SG_CATEGORY_LABELS,
+  weakestCategory,
+  type SgRound,
+} from '@/src/domain/strokesGained';
 import {
   formatTrendChange,
   formatTrendValue,
@@ -62,6 +78,16 @@ export default function TrendsScreen() {
       }));
   }, [db, revision]);
 
+  /** Newest first, same order as `rounds`. */
+  const sgRounds = useMemo<(SgRound | null)[]>(
+    () => rounds.map((round) => roundStrokesGained(listStrokesGainedHoles(db, round.id))),
+    [db, rounds],
+  );
+  const sgAverage = useMemo(
+    () => averageStrokesGainedPer18(sgRounds.slice(0, windowSize)),
+    [sgRounds, windowSize],
+  );
+
   const clubs = useMemo(() => trendClubs(rounds, windowSize), [rounds, windowSize]);
   const activeClub = clubs.find((club) => club.id === clubId) ?? clubs[0] ?? null;
 
@@ -93,6 +119,8 @@ export default function TrendsScreen() {
           );
         })}
       </View>
+
+      <StrokesGainedCard styles={styles} average={sgAverage} />
 
       {METRICS.map((metric) => {
         const series = planTrend({ rounds, metric: metric.id, window: windowSize });
@@ -140,6 +168,48 @@ export default function TrendsScreen() {
         )}
       </View>
     </Screen>
+  );
+}
+
+function StrokesGainedCard({
+  styles,
+  average,
+}: {
+  styles: ReturnType<typeof makeStyles>;
+  average: ReturnType<typeof averageStrokesGainedPer18>;
+}) {
+  const weakest = average ? weakestCategory(average) : null;
+  return (
+    <View style={styles.card} testID="trend-strokes-gained">
+      <Text style={styles.section}>{COPY.strokesGained}</Text>
+      <Text style={styles.hint}>{COPY.trendsStrokesGainedHint}</Text>
+      {average ? (
+        <>
+          <View style={styles.headline}>
+            <Text style={styles.value}>{formatStrokesGained(average.total)}</Text>
+            <Text style={styles.change}>
+              {average.rounds} {average.rounds === 1 ? 'round' : 'rounds'}
+            </Text>
+          </View>
+          {SG_CATEGORIES.map((key) => (
+            <View key={key} style={styles.sgRow}>
+              <Text style={[styles.sgLabel, key === weakest && styles.bad]}>{SG_CATEGORY_LABELS[key]}</Text>
+              <Text style={[styles.sgValue, key === weakest && styles.bad]}>
+                {formatStrokesGained(average[key])}
+              </Text>
+            </View>
+          ))}
+          {Math.abs(average.unsplit) >= 0.05 ? (
+            <View style={styles.sgRow}>
+              <Text style={styles.sgLabel}>{COPY.strokesGainedUnsplit}</Text>
+              <Text style={styles.sgValue}>{formatStrokesGained(average.unsplit)}</Text>
+            </View>
+          ) : null}
+        </>
+      ) : (
+        <Text style={styles.muted}>{COPY.trendsNoData}</Text>
+      )}
+    </View>
   );
 }
 
@@ -228,6 +298,9 @@ function makeStyles(colors: ColorPalette) {
     headline: { flexDirection: 'row', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' },
     value: { color: colors.cream, fontSize: 30, fontWeight: '900' },
     change: { color: colors.muted, fontSize: 14, fontWeight: '800' },
+    sgRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+    sgLabel: { color: colors.muted, fontSize: 16, fontWeight: '800', flexShrink: 1 },
+    sgValue: { color: colors.cream, fontSize: 18, fontWeight: '900' },
     good: { color: colors.good },
     bad: { color: colors.red },
   });

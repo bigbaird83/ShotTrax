@@ -24,6 +24,7 @@ import {
   isFirstLaunchTipSeen,
 } from '../domain/firstLaunchTip';
 import { planInsertPlacedShot } from '../domain/insertShot';
+import type { SgHoleIn } from '../domain/strokesGained';
 import {
   COURSE_DISTANCE_SETTING_KEY,
   parseCourseDistanceUnit,
@@ -1636,6 +1637,23 @@ export function setHoleGreen(
     valid ? (green?.source ?? 'user_estimate') : null,
     holeId,
   ]);
+}
+
+/** One round's holes, shots, and penalties in the shape strokes gained reads. */
+export function listStrokesGainedHoles(db: SQLiteDatabase, roundId: string): SgHoleIn[] {
+  return listHoles(db, roundId).map((hole) => ({
+    number: hole.number,
+    par: hole.par,
+    score: hole.score,
+    yards: hole.yards,
+    greenLat: hole.greenLat,
+    greenLng: hole.greenLng,
+    putts: hole.putts,
+    puttLengths: hole.puttLengths,
+    puttsDone: hole.puttsDone,
+    shots: listShotsForHole(db, hole.id),
+    penalties: listPenaltiesForHole(db, hole.id),
+  }));
 }
 
 export function listShotsForHole(db: SQLiteDatabase, holeId: string): Shot[] {

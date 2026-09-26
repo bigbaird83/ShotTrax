@@ -2,13 +2,28 @@ import { useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useDb } from '@/src/db/DbProvider';
-import { getClubMap, getRound, listHandicapRounds, listHoles, listPenaltiesForHole, listShotsForHole } from '@/src/db/repo';
+import {
+  getClubMap,
+  getRound,
+  listHandicapRounds,
+  listHoles,
+  listPenaltiesForHole,
+  listShotsForHole,
+  listStrokesGainedHoles,
+} from '@/src/db/repo';
 import { formatDifferential, planHandicap, roundDifferential } from '@/src/domain/handicap';
 import { formatFairwayMisses, formatHitRate } from '@/src/domain/fairwayGir';
 import { totalPenaltyStrokes } from '@/src/domain/penalty';
 import { COPY } from '@/src/domain/playerCopy';
 import { planRoundStats, type ReviewShotPick } from '@/src/domain/roundReview';
 import { scorecardDiffLabel } from '@/src/domain/scorecard';
+import {
+  formatStrokesGained,
+  roundStrokesGained,
+  SG_CATEGORIES,
+  SG_CATEGORY_LABELS,
+  weakestCategory,
+} from '@/src/domain/strokesGained';
 import { Screen } from '@/src/ui/Screen';
 import { useColors } from '@/src/ui/ColorThemeProvider';
 import { type ColorPalette } from '@/src/ui/theme';
@@ -43,6 +58,11 @@ export default function ReviewStatsScreen() {
       clubs: getClubMap(db),
     });
   }, [db, round, revision]);
+
+  const strokesGained = useMemo(
+    () => (round ? roundStrokesGained(listStrokesGainedHoles(db, round.id)) : null),
+    [db, round, revision],
+  );
 
   const differential = useMemo(
     () => (round ? roundDifferential(planHandicap(listHandicapRounds(db)), round.id) : null),
@@ -80,6 +100,8 @@ export default function ReviewStatsScreen() {
           {stats.marks.eagle} eagle · {stats.marks.birdie} birdie · {stats.marks.par} par · {stats.marks.bogey} bogey · {stats.marks.double} double+
         </Text>
       </View>
+
+      <StrokesGainedBlock styles={styles} sg={strokesGained} />
 
       <View style={styles.block}>
         <Row styles={styles} label={COPY.putts} value={stats.putts} />
@@ -143,6 +165,47 @@ export default function ReviewStatsScreen() {
   );
 }
 
+function StrokesGainedBlock({
+  styles,
+  sg,
+}: {
+  styles: ReturnType<typeof makeStyles>;
+  sg: ReturnType<typeof roundStrokesGained>;
+}) {
+  if (!sg) {
+    return (
+      <View style={styles.block} testID="stats-strokes-gained">
+        <Text style={styles.section}>{COPY.strokesGained}</Text>
+        <Text style={styles.muted}>{COPY.strokesGainedEmpty}</Text>
+      </View>
+    );
+  }
+  const weakest = weakestCategory(sg);
+  const showUnsplit = Math.abs(sg.unsplit) >= 0.05;
+  return (
+    <View style={styles.block} testID="stats-strokes-gained">
+      <Text style={styles.section}>{COPY.strokesGained}</Text>
+      <Text style={styles.note}>{COPY.strokesGainedLede}</Text>
+      {SG_CATEGORIES.map((key) => (
+        <Row key={key} styles={styles} label={SG_CATEGORY_LABELS[key]} value={formatStrokesGained(sg[key])} />
+      ))}
+      {showUnsplit ? (
+        <Row styles={styles} label={COPY.strokesGainedUnsplit} value={formatStrokesGained(sg.unsplit)} />
+      ) : null}
+      <Row styles={styles} label={COPY.strokesGainedTotal} value={formatStrokesGained(sg.total)} />
+      {weakest ? (
+        <Text style={styles.muted}>
+          {COPY.strokesGainedWeakest} {SG_CATEGORY_LABELS[weakest]}
+        </Text>
+      ) : null}
+      <Text style={styles.note}>
+        {sg.holesCounted} holes · {sg.shotsSplit} of {sg.shotsTotal} shots split
+      </Text>
+      <Text style={styles.note}>{COPY.strokesGainedLimits}</Text>
+    </View>
+  );
+}
+
 function Row({
   styles,
   label,
@@ -165,6 +228,7 @@ function makeStyles(colors: ColorPalette) {
     title: { color: colors.cream, fontSize: 24, fontWeight: '900' },
     section: { color: colors.cream, fontSize: 18, fontWeight: '800' },
     muted: { color: colors.muted, fontSize: 16 },
+    note: { color: colors.muted, fontSize: 13 },
     block: { gap: 8, backgroundColor: colors.bgElevated, padding: 14, borderRadius: 16 },
     row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
     label: { color: colors.muted, fontSize: 16, fontWeight: '800', flexShrink: 1 },

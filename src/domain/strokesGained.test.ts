@@ -1,0 +1,185 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import {
+  averageStrokesGainedPer18,
+  expectedFromTee,
+  expectedOffGreen,
+  expectedPuttsForBucket,
+  formatStrokesGained,
+  holeStrokesGained,
+  roundStrokesGained,
+  weakestCategory,
+  type SgHoleIn,
+  type SgShotIn,
+} from './strokesGained';
+
+const GREEN = { lat: 35.0, lng: -92.0 };
+const METERS_PER_DEG_LAT = (6_371_000 * Math.PI) / 180;
+
+/** A point this many yards due south of the green. */
+function south(yards: number): { startLat: number; startLng: number } {
+  return { startLat: GREEN.lat - (yards * 0.9144) / METERS_PER_DEG_LAT, startLng: GREEN.lng };
+}
+
+function shot(seq: number, yards: number | null, extra: Partial<SgShotIn> = {}): SgShotIn {
+  const start = yards == null ? { startLat: null, startLng: null } : south(yards);
+  return { id: `s${seq}`, seq, holeOut: false, ...start, ...extra };
+}
+
+function hole(extra: Partial<SgHoleIn> = {}): SgHoleIn {
+  return {
+    number: 1,
+    par: 4,
+    score: null,
+    yards: 400,
+    greenLat: GREEN.lat,
+    greenLng: GREEN.lng,
+    putts: 2,
+    puttLengths: ['10_to_20', 'inside_3'],
+    puttsDone: true,
+    shots: [shot(1, 400), shot(2, 150)],
+    penalties: [],
+    ...extra,
+  };
+}
+
+const close = (a: number | null, b: number, eps = 0.011) => {
+  assert.ok(a != null, 'expected a value');
+  assert.ok(Math.abs(a - b) < eps, `${a} ≈ ${b}`);
+};
+
+test('baseline tables interpolate and clamp', () => {
+  close(expectedFromTee(400), 3.99);
+  close(expectedFromTee(410), 4.005);
+  close(expectedFromTee(40), 2.92);
+  close(expectedFromTee(900), 4.82);
+  close(expectedOffGreen(150), (2.945 + 3.19) / 2);
+  close(expectedOffGreen(5), (2.4 + 2.59) / 2);
+  assert.equal(expectedFromTee(Number.NaN), null);
+});
+
+test('putt buckets average the green baseline over their feet', () => {
+  close(expectedPuttsForBucket('inside_3'), (1.0 + 1.01 + 1.04) / 3);
+  close(expectedPuttsForBucket('3_to_10'), 1.354);
+  assert.ok((expectedPuttsForBucket('10_to_20') as number) > 1.7);
+  assert.ok((expectedPuttsForBucket('over_20') as number) > 1.9);
+  assert.equal(expectedPuttsForBucket(''), null);
+  assert.equal(expectedPuttsForBucket('nope'), null);
+});
+
+test('par 4 in four: categories add up to the hole total', () => {
+  const sg = holeStrokesGained(hole());
+  assert.ok(sg);
+  // Tee 400 yd → 3.99. Score 4 (2 shots + 2 putts).
+  close(sg.total, 3.99 - 4);
+  const approachStart = expectedOffGreen(150) as number;
+  close(sg.offTee, 3.99 - approachStart - 1);
+  const firstPutt = expectedPuttsForBucket('10_to_20') as number;
+  close(sg.approach, approachStart - firstPutt - 1);
+  close(sg.putting, firstPutt - 2);
+  close(sg.aroundGreen, 0);
+  close(sg.unsplit, 0);
+  assert.deepEqual(
+    sg.shots.map((s) => s.category),
+    ['offTee', 'approach'],
+  );
+});
+
+test('par 3 tee shot is an approach', () => {
+  const sg = holeStrokesGained(hole({ par: 3, yards: 160, shots: [shot(1, 160)] }));
+  assert.equal(sg?.shots[0].category, 'approach');
+  close(sg?.offTee ?? null, 0);
+});
+
+test('a short shot is around the green', () => {
+  const sg = holeStrokesGained(
+    hole({ shots: [shot(1, 400), shot(2, 150), shot(3, 20)], puttLengths: ['3_to_10', 'inside_3'] }),
+  );
+  assert.equal(sg?.shots[2].category, 'aroundGreen');
+  close(sg?.unsplit ?? null, 0);
+});
+
+test('chip-in with no putts ends at zero', () => {
+  const sg = holeStrokesGained(
+    hole({ shots: [shot(1, 400), shot(2, 150), shot(3, 15, { holeOut: true })], putts: 0, puttLengths: [] }),
+  );
+  assert.ok(sg);
+  close(sg.shots[2].sg, (expectedOffGreen(15) as number) - 1);
+  close(sg.putting, 0);
+  close(sg.unsplit, 0);
+});
+
+test('penalty strokes are charged to the shot they follow', () => {
+  const sg = holeStrokesGained(
+    hole({
+      shots: [shot(1, 400), shot(2, 180)],
+      penalties: [{ strokes: 1, afterShotSeq: 1 }],
+    }),
+  );
+  assert.ok(sg);
+  close(sg.total, 3.99 - 5);
+  close(sg.offTee, 3.99 - (expectedOffGreen(180) as number) - 2);
+  close(sg.unsplit, 0);
+});
+
+test('missing GPS, green, or putt length leaves the gap unsplit, never invented', () => {
+  const noGps = holeStrokesGained(hole({ shots: [shot(1, 400), shot(2, null)] }));
+  assert.ok(noGps);
+  assert.equal(noGps.shots[0].sg, null);
+  assert.equal(noGps.shots[1].sg, null);
+  close(noGps.total, 3.99 - 4);
+  close(noGps.unsplit, noGps.total - noGps.putting);
+
+  const noLength = holeStrokesGained(hole({ puttLengths: [] }));
+  assert.equal(noLength?.puttingSg, null);
+  assert.equal(noLength?.shots[1].sg, null);
+
+  const noGreen = holeStrokesGained(hole({ greenLat: null, greenLng: null }));
+  assert.equal(noGreen?.shots[1].sg, null);
+  close(noGreen?.total ?? null, 3.99 - 4);
+});
+
+test('open hole, or no tee length, has no SG', () => {
+  assert.equal(holeStrokesGained(hole({ puttsDone: false })), null);
+  assert.equal(holeStrokesGained(hole({ yards: null, shots: [shot(1, null)] })), null);
+});
+
+test('tee length falls back to the first shot start when the card has none', () => {
+  const sg = holeStrokesGained(hole({ yards: null }));
+  close(sg?.total ?? null, 3.99 - 4, 0.02);
+});
+
+test('a posted score that disagrees with the log lands in unsplit', () => {
+  const sg = holeStrokesGained(hole({ score: 5 }));
+  close(sg?.total ?? null, 3.99 - 5);
+  close(sg?.unsplit ?? null, -1);
+});
+
+test('round totals sum holes; per-18 average scales nine-hole rounds', () => {
+  const round = roundStrokesGained([hole(), hole({ number: 2, puttsDone: false })]);
+  assert.ok(round);
+  assert.equal(round.holesCounted, 1);
+  assert.equal(round.shotsTotal, 2);
+  assert.equal(round.shotsSplit, 2);
+  close(round.total, 3.99 - 4);
+  assert.equal(roundStrokesGained([hole({ puttsDone: false })]), null);
+
+  const avg = averageStrokesGainedPer18([round, null]);
+  assert.equal(avg?.rounds, 1);
+  close(avg?.total ?? null, (3.99 - 4) * 18);
+});
+
+test('format and weakest category', () => {
+  assert.equal(formatStrokesGained(1.24), '+1.2');
+  assert.equal(formatStrokesGained(-0.46), '−0.5');
+  assert.equal(formatStrokesGained(0.02), '0.0');
+  assert.equal(formatStrokesGained(null), '—');
+  assert.equal(
+    weakestCategory({ offTee: -1, approach: -2.5, aroundGreen: 0.3, putting: -0.4, total: -3.6, unsplit: 0 }),
+    'approach',
+  );
+  assert.equal(
+    weakestCategory({ offTee: 1, approach: 0, aroundGreen: 0, putting: 0, total: 1, unsplit: 0 }),
+    null,
+  );
+});
