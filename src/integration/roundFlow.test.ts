@@ -45,6 +45,9 @@ import { decideCourseCardPaint, showPlayDockForCourseCard } from '../domain/cour
 import { isPutterClubId } from '../domain/defaultBag';
 import { shotPinsForHoleCamera } from '../domain/holeCamera';
 import { loggedHoleStrokes } from '../domain/holeScore';
+import { scoreAfterPenalty, totalPenaltyStrokes } from '../domain/penalty';
+import { formatHoleCountLine } from '../domain/penaltySteps';
+import { scorecardDiff, scorecardDiffLabel } from '../domain/scorecard';
 import { isValidLatLng, type LatLng } from '../domain/latLng';
 import { shotReviewHoleHeader, shotReviewPuttLines } from '../domain/shotReviewLayout';
 import { playHrefAfterHoleChange } from '../domain/playNav';
@@ -70,7 +73,14 @@ import {
 } from '../domain/roundHistory';
 import type { Hole, Round } from '../domain/types';
 import { planWatchMadeItAdvance } from '../domain/watchPuttSync';
-import { MADE_IT_FEEDBACK, PHONE_UNAVAILABLE, puttPickPayload, type PuttPickMessage } from '../domain/watchMessages';
+import {
+  MADE_IT_FEEDBACK,
+  PHONE_UNAVAILABLE,
+  penaltyPickPayload,
+  puttPickPayload,
+  type PenaltyPickMessage,
+  type PuttPickMessage,
+} from '../domain/watchMessages';
 import { layoutForPlayedHoles, resolveCourseNumHoles } from '../domain/nineByTwo';
 
 const GOOD_FIX_ACCURACY_M = 8;
@@ -472,6 +482,9 @@ test('round flow', { skip: DatabaseSync ? false : 'node:sqlite needs Node 22.5+'
   const watchApi = modExports(await import('../services/watchClub.ts')) as unknown as WatchClub;
   watchApi.startWatchClubBridge();
   assert.equal(typeof listeners.get('onPuttPick'), 'function');
+  assert.equal(typeof listeners.get('onClubPick'), 'function');
+  await watchPenaltyRound(shotsApi, watchApi);
+  gpsQueue.length = 0;
 
   const holeScreen = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
   const madeStart = holeScreen.indexOf('const applyMadeIt');
@@ -815,6 +828,124 @@ test('round flow', { skip: DatabaseSync ? false : 'node:sqlite needs Node 22.5+'
     check(step, 0, listHoles(db, round.id).length);
   }
 });
+
+async function watchPenaltyRound(shotsApi: ShotActions, watchApi: WatchClub): Promise<void> {
+  gpsQueue.length = 0;
+  const db = memoryDb();
+  const { layout, courseName } = fixtureLayout();
+  const listener = listeners.get('onClubPick');
+  if (!listener) throw new Error('Watch onClubPick listener is not registered');
+
+  const round = startRound(db, 18, courseName, layout);
+  const clubs = listClubs(db, true).filter((club) => !isPutterClubId(club.id));
+  const clubA = clubs[0];
+  const clubB = clubs.find((club) => club.id !== clubA?.id);
+  if (!clubA || !clubB) throw new Error('expected two clubs');
+
+  async function mark(clubId: string, point: LatLng): Promise<void> {
+    enqueueFix(point);
+    const hole = mustHole(db, round.id, 1);
+    const { plan } = await shotsApi.markShotWithClub(db, {
+      roundId: round.id,
+      holeNumber: 1,
+      clubId,
+      tee: teeOf(hole),
+    });
+    if (plan.status !== 'commit') throw new Error(`mark did not commit (${plan.status})`);
+  }
+
+  await mark(clubA.id, locationPoint(layout, 1, 'tee'));
+  await mark(clubB.id, locationPoint(layout, 1, 'green'));
+  const shots = listShotsForHole(db, mustHole(db, round.id, 1).id);
+  const last = shots.reduce((best, shot) => (shot.seq >= best.seq ? shot : best));
+  const before = mustHole(db, round.id, 1);
+  if (before.par == null) throw new Error('fixture hole has no par');
+
+  watchApi.setWatchClubContext({
+    db,
+    roundId: round.id,
+    holeNumber: 1,
+    readOnly: false,
+    tee: teeOf(before),
+    bump() {},
+    labelForClub: (clubId) => clubs.find((club) => club.id === clubId)?.shortName ?? null,
+  });
+
+  async function settle(): Promise<void> {
+    for (let i = 0; i < 8; i += 1) {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+  }
+
+  async function sendPenalty(pick: PenaltyPickMessage, token: string): Promise<void> {
+    listener?.({ token, json: JSON.stringify(pick) });
+    await settle();
+  }
+
+  const reasons = ['water', 'ob', 'unplayable', 'other'] as const;
+  let score = before.score;
+  for (const reason of reasons) {
+    score = scoreAfterPenalty(score, before.par, 1);
+    const pick = penaltyPickPayload({
+      id: `round-flow-${reason}`,
+      reason,
+      at: `2026-09-26T15:00:0${reasons.indexOf(reason)}.000Z`,
+      holeNumber: 1,
+    });
+    await sendPenalty(pick, `penalty-${reason}`);
+    const hole = mustHole(db, round.id, 1);
+    if (hole.score !== score) {
+      throw new Error(`penalty ${reason}: expected score ${score}, actual ${hole.score ?? null}`);
+    }
+    const row = listPenaltiesForHole(db, hole.id).find((penalty) => penalty.id === pick.id);
+    if (!row || row.strokes !== 1 || row.kind !== 'penalty' || row.reason !== reason) {
+      throw new Error(`penalty ${reason}: expected one ${reason} stroke, actual ${JSON.stringify(row ?? null)}`);
+    }
+    if (row.afterShotId !== last.id || row.afterShotSeq !== last.seq) {
+      throw new Error(`penalty ${reason}: expected after ${last.id}#${last.seq}, actual ${row.afterShotId}#${row.afterShotSeq ?? null}`);
+    }
+  }
+
+  const afterOne = listPenaltiesForHole(db, before.id);
+  if (afterOne.length !== 4 || totalPenaltyStrokes(afterOne) !== 4) {
+    throw new Error(`expected four penalty strokes, actual ${JSON.stringify(afterOne.map((row) => row.reason))}`);
+  }
+  const holeNow = mustHole(db, round.id, 1);
+  if (formatHoleCountLine({ shotCount: 2, penaltyStrokes: 1, puttCount: 2 }) !== '2 shots · 1 penalty · 2 putts') {
+    throw new Error('expected the phone hole line to count one penalty between shots and putts');
+  }
+  const liveLine = formatHoleCountLine({
+    shotCount: shots.length,
+    penaltyStrokes: totalPenaltyStrokes(afterOne),
+    puttCount: holeNow.putts,
+    omitZeroPutts: true,
+  });
+  if (liveLine !== '2 shots · 4 penalties') {
+    throw new Error(`expected the live hole line to include the penalties, actual ${liveLine}`);
+  }
+  const diff = scorecardDiff(holeNow.score, holeNow.par);
+  const beforeShown = before.score ?? before.par;
+  const beforeDiff = scorecardDiff(beforeShown, before.par);
+  if (diff == null || beforeDiff == null || diff !== beforeDiff + 4) {
+    throw new Error(`expected to-par to include 4 penalty strokes, actual ${scorecardDiffLabel(diff)} from ${scorecardDiffLabel(beforeDiff)}`);
+  }
+
+  await sendPenalty(
+    penaltyPickPayload({
+      id: 'round-flow-water',
+      reason: 'water',
+      at: '2026-09-26T15:00:00.000Z',
+      holeNumber: 1,
+    }),
+    'penalty-water-retry',
+  );
+  const retried = listPenaltiesForHole(db, before.id);
+  if (retried.length !== 4 || mustHole(db, round.id, 1).score !== holeNow.score) {
+    throw new Error(`retry added a stroke: ${retried.length} rows, score ${mustHole(db, round.id, 1).score ?? null}`);
+  }
+  watchApi.setWatchClubContext(null as unknown as Parameters<WatchClub['setWatchClubContext']>[0]);
+  gpsQueue.length = 0;
+}
 
 function mustHole(db: SQLiteDatabase, roundId: string, holeNumber: number): Hole {
   const hole = getHole(db, roundId, holeNumber);

@@ -36,6 +36,14 @@ import {
   queueWatchPuttPickEvent,
   watchPuttPickShouldApply,
 } from '../domain/watchPuttSync';
+import { getHole, insertPenalty, listShotsForHole } from '../db/repo';
+import {
+  drainWatchPenaltyQueue,
+  formatWatchPenaltyFeedback,
+  planWatchPenaltyInsert,
+  queueWatchPenaltyEvent,
+  WATCH_PENALTY_SAVE_FAILED,
+} from '../domain/watchPenalty';
 import { hapticMark, hapticSelect, hapticWarn } from '../ui/haptics';
 import { markShotWithClub, promptForPlan } from './shotActions';
 import { handleWatchHomeJson, isWatchHomeJson } from './watchHome';
@@ -84,6 +92,7 @@ export function setWatchClubContext(next: WatchClubContext | null): void {
   if (next) {
     void flushPendingClubPicks(next.holeNumber);
     void flushPendingPuttPicks();
+    void flushPendingPenalties();
   }
 }
 
@@ -318,6 +327,14 @@ async function handlePickNow(token: string, json: string): Promise<void> {
       });
       return;
     }
+    if (intent.kind === 'penalty') {
+      if (!ctx) {
+        queueWatchPenaltyEvent({ token, json, id: intent.pick.id });
+        return;
+      }
+      await replyToken(token, { ok: false, feedback: WATCH_PENALTY_SAVE_FAILED });
+      return;
+    }
     await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
     return;
   }
@@ -341,6 +358,11 @@ async function handlePickNow(token: string, json: string): Promise<void> {
     hapticSelect();
     ctx.onPutter?.();
     await replyToken(token, { ok: true, feedback: PUTTS_ON_WATCH });
+    return;
+  }
+
+  if (intent.kind === 'penalty') {
+    await applyWatchPenalty(token, intent.pick);
     return;
   }
 
@@ -418,6 +440,61 @@ async function handlePickNow(token: string, json: string): Promise<void> {
     hapticWarn();
     Alert.alert(COPY.waitingOnLocation, COPY.locationOff, [{ text: COPY.cancel, style: 'cancel' }]);
     await replyToken(token, { ok: false, feedback: PHONE_UNAVAILABLE });
+  }
+}
+
+/**
+ * Phone writes the penalty row. Same id (Watch retry, sendMessage, and
+ * transferUserInfo) inserts once. No GPS and no club mark.
+ */
+async function applyWatchPenalty(
+  token: string,
+  pick: { id: string; reason: 'water' | 'ob' | 'unplayable' | 'other'; at: string; holeNumber: number },
+): Promise<void> {
+  const ctx = context;
+  if (!ctx) {
+    queueWatchPenaltyEvent({ token, json: JSON.stringify(pick), id: pick.id });
+    return;
+  }
+  if (ctx.readOnly) {
+    await replyToken(token, { ok: false, feedback: WATCH_PENALTY_SAVE_FAILED });
+    return;
+  }
+  const hole = getHole(ctx.db, ctx.roundId, pick.holeNumber);
+  if (!hole) {
+    await replyToken(token, { ok: false, feedback: WATCH_PENALTY_SAVE_FAILED });
+    return;
+  }
+  const planned = planWatchPenaltyInsert({
+    id: pick.id,
+    reason: pick.reason,
+    shots: listShotsForHole(ctx.db, hole.id),
+  });
+  try {
+    insertPenalty(ctx.db, {
+      id: planned.id,
+      holeId: hole.id,
+      par: hole.par,
+      currentScore: hole.score,
+      strokes: planned.strokes,
+      reason: planned.reason,
+      note: planned.note,
+      kind: planned.kind,
+      afterShotId: planned.afterShotId,
+      afterShotSeq: planned.afterShotSeq,
+    });
+  } catch {
+    await replyToken(token, { ok: false, feedback: WATCH_PENALTY_SAVE_FAILED });
+    return;
+  }
+  ctx.bump();
+  await replyToken(token, { ok: true, feedback: formatWatchPenaltyFeedback(pick.reason) });
+}
+
+async function flushPendingPenalties(): Promise<void> {
+  const rows = drainWatchPenaltyQueue();
+  for (const row of rows) {
+    await handlePick(row.token, row.json);
   }
 }
 

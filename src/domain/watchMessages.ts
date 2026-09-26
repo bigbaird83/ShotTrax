@@ -1,6 +1,7 @@
 /** Watch Connectivity: clubList + clubPick, plus puttSheet + puttPick for hole finish,
  * clubNav (Back / Home — never a mark), and nearbyCourses / startRound.
  * Phone owns undo, averages, Drop/Penalty, GPS, and marks.
+ * A Watch penalty is one score stroke the phone writes (`penaltyPick`). It is not a club mark.
  * Nearby course list uses the phone fix only. Watch never guesses a course.
  * Ranking/seeds/avgs stay on phone. Bag, settings, and scoring stay off the Watch.
  * Watch UI shows a carry-sorted bag strip by default; All clubs opens the bag menu.
@@ -14,6 +15,7 @@ import { isCourseCardLatLng } from './latLng';
 import { watchClubCarry } from './watchLive';
 import { isPutterClubId } from './defaultBag';
 import { isPuttLengthId, PUTT_LENGTHS, type PuttLengthId } from './putts';
+import type { PenaltyReason } from './types';
 import { OPEN_PHONE } from './watchNearby';
 
 export type ClubId = string;
@@ -26,6 +28,7 @@ export const WATCH_MESSAGE_TYPES = [
   'clubSelect',
   'puttSheet',
   'puttPick',
+  'penaltyPick',
   'clubNav',
   'nearbyCourses',
   'nearbyTees',
@@ -272,6 +275,72 @@ export function clubNavPayload(args: { action: 'back' | 'home'; at?: string }): 
   };
 }
 
+export const PENALTY_PICK_REASONS = ['water', 'ob', 'unplayable', 'other'] as const satisfies readonly PenaltyReason[];
+
+/** Watch → Phone. One penalty stroke after the last shot. Phone writes the row. */
+export type PenaltyPickMessage = {
+  type: 'penaltyPick';
+  /** Stable id. sendMessage, transferUserInfo, and Retry all reuse it. */
+  id: string;
+  reason: PenaltyReason;
+  /** Always one stroke. The Watch has no stroke stepper. */
+  strokes: 1;
+  at: string;
+  /** Hole at tap time. The phone attaches the penalty on this hole. */
+  holeNumber: number;
+};
+
+export function isPenaltyReason(value: unknown): value is PenaltyReason {
+  return value === 'water' || value === 'ob' || value === 'unplayable' || value === 'other';
+}
+
+export function parsePenaltyPick(raw: unknown): PenaltyPickMessage | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as Record<string, unknown>;
+  if (row.type !== 'penaltyPick') return null;
+  if (typeof row.id !== 'string') return null;
+  const id = row.id.trim();
+  if (!id || id.length > 80 || /\s/.test(id)) return null;
+  if (!isPenaltyReason(row.reason)) return null;
+  if (row.strokes !== 1) return null;
+  if (typeof row.at !== 'string' || !isIso8601(row.at)) return null;
+  const holeNumber = watchPenaltyHoleNumber(row.holeNumber);
+  if (holeNumber == null) return null;
+  return {
+    type: 'penaltyPick',
+    id,
+    reason: row.reason,
+    strokes: 1,
+    at: row.at,
+    holeNumber,
+  };
+}
+
+function watchPenaltyHoleNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 1) return Math.round(value);
+  if (typeof value === 'string' && /^\d+$/.test(value)) {
+    const hole = Number(value);
+    if (hole >= 1) return hole;
+  }
+  return null;
+}
+
+export function penaltyPickPayload(args: {
+  id: string;
+  reason: PenaltyReason;
+  at?: string;
+  holeNumber: number;
+}): PenaltyPickMessage {
+  return {
+    type: 'penaltyPick',
+    id: args.id.trim(),
+    reason: args.reason,
+    strokes: 1,
+    at: args.at ?? new Date().toISOString(),
+    holeNumber: Math.round(args.holeNumber),
+  };
+}
+
 export function parseClubPick(raw: unknown): ClubPickMessage | null {
   if (!raw || typeof raw !== 'object') return null;
   const row = raw as Record<string, unknown>;
@@ -326,6 +395,13 @@ export type WatchInboundIntent =
       closesPendingShot: false;
     }
   | {
+      kind: 'penalty';
+      pick: PenaltyPickMessage;
+      runsAcceptFix: false;
+      savesGps: false;
+      closesPendingShot: false;
+    }
+  | {
       kind: 'club';
       pick: ClubPickMessage;
       runsAcceptFix: true;
@@ -347,6 +423,16 @@ export function parseWatchInboundIntent(raw: unknown): WatchInboundIntent | null
     return {
       kind: 'select',
       clubId: select.clubId,
+      runsAcceptFix: false,
+      savesGps: false,
+      closesPendingShot: false,
+    };
+  }
+  const penalty = parsePenaltyPick(raw);
+  if (penalty) {
+    return {
+      kind: 'penalty',
+      pick: penalty,
       runsAcceptFix: false,
       savesGps: false,
       closesPendingShot: false,

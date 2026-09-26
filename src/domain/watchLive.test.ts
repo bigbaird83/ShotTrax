@@ -26,6 +26,8 @@ import {
   watchAppLiveYardsDisplay,
   watchAppShowsLiveYards,
   watchShotHoldDecision,
+  watchMarkStartsShotHold,
+  watchPenaltyStartsShotHold,
   watchShotMarkStartsHold,
   watchShouldRequestLocationAuthorization,
   watchWidgetShouldReload,
@@ -279,8 +281,12 @@ test('Watch app yards freeze wrist-down and refresh on raise, and a putter mark 
   assert.deepEqual(draw(true, false, false, { yards: 98, quality: 'soft' }), { yards: 98, quality: 'soft' });
 
   // Putter does not start the hold, so nothing keeps the old number once the wrist is up.
+  // A penalty is not a club mark and must not start it either.
   assert.equal(watchShotMarkStartsHold('club_putter'), false);
   assert.equal(watchShotMarkStartsHold('club_7i'), true);
+  assert.equal(watchPenaltyStartsShotHold(), false);
+  assert.equal(watchMarkStartsShotHold({ kind: 'penalty' }), false);
+  assert.equal(watchMarkStartsShotHold({ kind: 'club', clubId: 'club_7i' }), true);
   assert.equal(
     watchShotHoldDecision({
       hold: null,
