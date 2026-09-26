@@ -105,7 +105,7 @@ export function planScorecardImage(args: {
   const puttRows = imageRows.filter((row) => row.putts !== '');
   const markCount = (...marks: ScorecardMark[]) => imageRows.filter((row) => marks.includes(row.mark)).length;
   return {
-    brand: SHOTTRAXX_BRAND.replace(/[^A-Za-z0-9 ]/g, ''),
+    brand: SHOTTRAXX_BRAND,
     courseName: args.courseName?.trim() ? args.courseName.trim() : 'Round',
     total: scored.length ? String(total) : '—',
     status: toPar ? `${progress} · ${toPar}` : progress,
@@ -522,7 +522,15 @@ function sumOf(values: string[], requireAll: boolean): string {
 
 function drawHeader(c: Canvas, plan: ScorecardImagePlan, layout: ScorecardImageLayout): void {
   const { header } = layout;
-  drawText(c, PAD, header.brand, plan.brand.toUpperCase(), { cap: BRAND_CAP, weight: 3.4, tracking: 5, color: C.lime });
+  const brandStyle: TextStyle = { cap: BRAND_CAP, weight: 3.4, tracking: 5, color: C.lime };
+  const trademark = plan.brand.includes('™');
+  const brandName = plan.brand.replace('™', '').toUpperCase();
+  drawText(c, PAD, header.brand, brandName, brandStyle);
+  if (trademark) {
+    // Superscript TM: the stroke font has no ™ glyph.
+    const tmStyle: TextStyle = { cap: 9, weight: 1.6, tracking: 1.5, color: C.lime };
+    drawText(c, PAD + measureText(brandName, brandStyle) + 5, header.brand, 'TM', tmStyle);
+  }
 
   const course = fitText(plan.courseName.toUpperCase(), { cap: COURSE_CAP, weight: 5.2, tracking: 1, color: C.cream }, CONTENT_W, 32);
   drawText(c, PAD, header.course + (COURSE_CAP - course.style.cap), course.text, course.style);
