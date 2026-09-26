@@ -71,6 +71,7 @@ import { tapTarget, type, type ColorPalette } from '@/src/ui/theme';
 import { TopoRings } from '@/src/ui/TopoRings';
 import { getCurrentFix } from '@/src/services/location';
 import { setWatchCoursePickedHandler } from '@/src/services/watchNearby';
+import { TabSwipe } from '@/src/ui/TabSwipe';
 
 function playedLayout(
   layout: CourseLayoutSeed,
@@ -345,345 +346,347 @@ export default function HomeScreen() {
         : COPY.start9;
 
   return (
-    <Screen edges={['bottom']} refreshing={refreshing} onRefresh={() => void onRefresh()}>
-      <View style={styles.homeBar}>
-        <View style={styles.brand}>
-          <View style={[styles.mark, accentFill(colors), glow(colors)]}>
-            <Icon name="flag.fill" color={colors.onAccent} size={19} glyph="⚑" />
-          </View>
-          <Text style={styles.title}>{SHOTTRAXX_BRAND}</Text>
-        </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={COPY.menu}
-          onPress={() => router.push('/settings')}
-          style={({ pressed }) => [styles.menuButton, pressed && styles.pressed]}>
-          <Icon name="gearshape.fill" color={colors.cream} size={22} glyph="☰" />
-        </Pressable>
-      </View>
-      {active ? null : (
-        <View style={styles.greeting}>
-          <Text style={styles.kicker}>{greeting}</Text>
-          <Text style={styles.h1}>{COPY.homeHeroTitle}</Text>
-        </View>
-      )}
-
-      <FullSheet
-        visible={bagPromptOpen}
-        title={COPY.bagCustomizeTitle}
-        onClose={skipBagSetup}>
-        <ScrollView contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 40 }}>
-          <Text style={styles.lede}>{COPY.bagCustomizeLede}</Text>
-          <BagCustomizeActions
-            onSkip={skipBagSetup}
-            onDone={finishBagSetup}
-            doneDisabled={!canFinishBag}
-          />
-          <BagCarryList db={db} clubs={clubs} onChange={bump} />
-        </ScrollView>
-      </FullSheet>
-
-      {simMessage ? <GpsBanner message={simMessage} /> : null}
-
-      {active && activeSummary ? (
-        <View style={[styles.hero, heroFill(colors)]}>
-          {colors.flat ? null : <TopoRings color={colors.heroText} />}
-          <View style={styles.liveTag}>
-            <View style={styles.liveDot} />
-            <Text style={styles.liveTagText}>{COPY.roundInProgress.toUpperCase()}</Text>
-          </View>
-          <View>
-            <Text style={styles.heroTitle}>{active.courseName ?? 'Round'}</Text>
-            <Text style={styles.heroMeta}>
-              {active.teeName
-                ? `${formatTeeMeta({
-                    name: active.teeName,
-                    rating: active.teeRating,
-                    slope: active.teeSlope,
-                    totalYards: active.teeTotalYards,
-                  })} · `
-                : ''}
-              {`${active.holeCount} holes`}
-            </Text>
-          </View>
-          <View style={styles.liveBig}>
-            <View>
-              <Text style={styles.heroKicker}>HOLE</Text>
-              <Text style={styles.liveHole}>{activeSummary.currentHole ?? '—'}</Text>
+    <TabSwipe tab="index">
+      <Screen edges={['bottom']} refreshing={refreshing} onRefresh={() => void onRefresh()}>
+        <View style={styles.homeBar}>
+          <View style={styles.brand}>
+            <View style={[styles.mark, accentFill(colors), glow(colors)]}>
+              <Icon name="flag.fill" color={colors.onAccent} size={19} glyph="⚑" />
             </View>
-            <View style={styles.liveStats}>
-              <View style={styles.liveStat}>
-                <Text style={styles.liveStatValue}>{activeSummary.toParLabel ?? '—'}</Text>
-                <Text style={styles.heroMeta}>{`Thru ${activeSummary.thru}`}</Text>
-              </View>
-              <View style={styles.liveStat}>
-                <Text style={styles.liveStatValue}>{activeSummary.putts}</Text>
-                <Text style={styles.heroMeta}>Putts</Text>
-              </View>
-            </View>
+            <Text style={styles.title}>{SHOTTRAXX_BRAND}</Text>
           </View>
-          <View style={styles.progress}>
-            {Array.from({ length: active.holeCount }, (_, i) => {
-              const number = i + 1;
-              const done = activeHoles.some((h) => h.number === number && h.score != null);
-              const current = number === activeSummary.currentHole && !done;
-              return (
-                <View
-                  key={number}
-                  style={[styles.progressSeg, done && styles.progressDone, current && styles.progressCurrent]}
-                />
-              );
-            })}
-          </View>
-          <View style={styles.liveActions}>
-            <BigButton
-              label={COPY.continueRound}
-              style={{ flex: 1.6 }}
-              onPress={() => router.push(playHrefAfterRoundStart(active.id))}
-            />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Finish round"
-              onPress={() => {
-                finishRound(db, active.id);
-                endWatchRound(active.id);
-                bump();
-                router.push(`/round/${active.id}/summary`);
-              }}
-              style={({ pressed }) => [styles.glassButton, pressed && styles.pressed]}>
-              <Text style={styles.glassButtonText}>Finish</Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : (
-        <View style={[styles.hero, heroFill(colors)]}>
-          {colors.flat ? null : <TopoRings color={colors.heroText} />}
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={COPY.courseNamePlaceholder}
-            onPress={() => router.push('/search')}
-            style={({ pressed }) => [styles.searchPill, pressed && styles.pressed]}>
-            <Icon name="magnifyingglass" color={colors.heroText} size={18} glyph="⌕" />
-            <Text style={styles.searchPillText} numberOfLines={1}>
-              {COPY.courseNamePlaceholder}
-            </Text>
+            accessibilityLabel={COPY.menu}
+            onPress={() => router.push('/settings')}
+            style={({ pressed }) => [styles.menuButton, pressed && styles.pressed]}>
+            <Icon name="gearshape.fill" color={colors.cream} size={22} glyph="☰" />
           </Pressable>
-          <View style={styles.heroRow}>
+        </View>
+        {active ? null : (
+          <View style={styles.greeting}>
+            <Text style={styles.kicker}>{greeting}</Text>
+            <Text style={styles.h1}>{COPY.homeHeroTitle}</Text>
+          </View>
+        )}
+
+        <FullSheet
+          visible={bagPromptOpen}
+          title={COPY.bagCustomizeTitle}
+          onClose={skipBagSetup}>
+          <ScrollView contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 40 }}>
+            <Text style={styles.lede}>{COPY.bagCustomizeLede}</Text>
+            <BagCustomizeActions
+              onSkip={skipBagSetup}
+              onDone={finishBagSetup}
+              doneDisabled={!canFinishBag}
+            />
+            <BagCarryList db={db} clubs={clubs} onChange={bump} />
+          </ScrollView>
+        </FullSheet>
+
+        {simMessage ? <GpsBanner message={simMessage} /> : null}
+
+        {active && activeSummary ? (
+          <View style={[styles.hero, heroFill(colors)]}>
+            {colors.flat ? null : <TopoRings color={colors.heroText} />}
+            <View style={styles.liveTag}>
+              <View style={styles.liveDot} />
+              <Text style={styles.liveTagText}>{COPY.roundInProgress.toUpperCase()}</Text>
+            </View>
+            <View>
+              <Text style={styles.heroTitle}>{active.courseName ?? 'Round'}</Text>
+              <Text style={styles.heroMeta}>
+                {active.teeName
+                  ? `${formatTeeMeta({
+                      name: active.teeName,
+                      rating: active.teeRating,
+                      slope: active.teeSlope,
+                      totalYards: active.teeTotalYards,
+                    })} · `
+                  : ''}
+                {`${active.holeCount} holes`}
+              </Text>
+            </View>
+            <View style={styles.liveBig}>
+              <View>
+                <Text style={styles.heroKicker}>HOLE</Text>
+                <Text style={styles.liveHole}>{activeSummary.currentHole ?? '—'}</Text>
+              </View>
+              <View style={styles.liveStats}>
+                <View style={styles.liveStat}>
+                  <Text style={styles.liveStatValue}>{activeSummary.toParLabel ?? '—'}</Text>
+                  <Text style={styles.heroMeta}>{`Thru ${activeSummary.thru}`}</Text>
+                </View>
+                <View style={styles.liveStat}>
+                  <Text style={styles.liveStatValue}>{activeSummary.putts}</Text>
+                  <Text style={styles.heroMeta}>Putts</Text>
+                </View>
+              </View>
+            </View>
+            <View style={styles.progress}>
+              {Array.from({ length: active.holeCount }, (_, i) => {
+                const number = i + 1;
+                const done = activeHoles.some((h) => h.number === number && h.score != null);
+                const current = number === activeSummary.currentHole && !done;
+                return (
+                  <View
+                    key={number}
+                    style={[styles.progressSeg, done && styles.progressDone, current && styles.progressCurrent]}
+                  />
+                );
+              })}
+            </View>
+            <View style={styles.liveActions}>
+              <BigButton
+                label={COPY.continueRound}
+                style={{ flex: 1.6 }}
+                onPress={() => router.push(playHrefAfterRoundStart(active.id))}
+              />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Finish round"
+                onPress={() => {
+                  finishRound(db, active.id);
+                  endWatchRound(active.id);
+                  bump();
+                  router.push(`/round/${active.id}/summary`);
+                }}
+                style={({ pressed }) => [styles.glassButton, pressed && styles.pressed]}>
+                <Text style={styles.glassButtonText}>Finish</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : (
+          <View style={[styles.hero, heroFill(colors)]}>
+            {colors.flat ? null : <TopoRings color={colors.heroText} />}
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel={COPY.courseNamePlaceholder}
               onPress={() => router.push('/search')}
-              style={({ pressed }) => [
-                styles.nearPill,
-                accentFill(colors),
-                !pressed && glow(colors),
-                pressed && styles.pressed,
-              ]}>
-              <Icon name="location.fill" color={colors.onAccent} size={15} glyph="◉" />
-              <Text style={styles.nearPillText}>Courses near you</Text>
+              style={({ pressed }) => [styles.searchPill, pressed && styles.pressed]}>
+              <Icon name="magnifyingglass" color={colors.heroText} size={18} glyph="⌕" />
+              <Text style={styles.searchPillText} numberOfLines={1}>
+                {COPY.courseNamePlaceholder}
+              </Text>
             </Pressable>
-            <Text style={styles.heroMeta}>Pull to refresh</Text>
-          </View>
-        </View>
-      )}
-
-      {picked ? (
-        <View style={styles.card}>
-          <View style={styles.courseRow}>
-            <View style={styles.thumb}>
-              <Icon name="flag.fill" color={colors.lime} size={22} glyph="⚑" />
-            </View>
-            <View style={styles.courseText}>
-              <Text style={styles.cardTitle}>{picked.name}</Text>
-              {teeLabel || needsTee ? (
-                <Text style={styles.cardMeta}>{teeLabel ? teeLabel : COPY.pickTee}</Text>
-              ) : null}
-              {paintSourceLabel || lastPlayedChip ? (
-                <View style={styles.chips}>
-                  {paintSourceLabel ? (
-                    <Text testID="paint-source-chip" style={[styles.chip, styles.chipAccent]}>
-                      {paintSourceLabel}
-                    </Text>
-                  ) : null}
-                  {lastPlayedChip ? <Text style={styles.chip}>{lastPlayedChip}</Text> : null}
-                </View>
-              ) : null}
-            </View>
-          </View>
-          <PaintMissBanner notice={paintBanner} />
-        </View>
-      ) : null}
-
-      {active ? null : (
-        <View style={styles.starts}>
-          <StartTile
-            holes={18}
-            primary
-            accessibilityLabel={startLabel(18)}
-            caption={pickedTee ? pickedTee.name : undefined}
-            disabled={starting || !canStart}
-            onPress={() => onStart(18)}
-          />
-          <StartTile
-            holes={9}
-            accessibilityLabel={startLabel(9)}
-            disabled={starting || !canStart}
-            onPress={() => onStart(9)}
-          />
-        </View>
-      )}
-
-      <View style={styles.quick}>
-        <QuickTile
-          icon="chart.bar.fill"
-          glyph="▮"
-          color={colors.lime}
-          label={COPY.nerdOut}
-          onPress={() =>
-            router.push({
-              pathname: '/nerd-out',
-              params: active ? { roundId: active.id } : undefined,
-            })
-          }
-        />
-        <QuickTile
-          icon="dot.radiowaves.left.and.right"
-          glyph="◎"
-          color={colors.accent2}
-          label="Live board"
-          accessibilityLabel={COPY.liveBoardWatch}
-          onPress={() => router.push('/board')}
-        />
-        <QuickTile
-          icon="bag.fill"
-          glyph="⛳"
-          color={colors.amber}
-          label="My bag"
-          onPress={() => router.push('/bag')}
-        />
-      </View>
-
-      <Text style={styles.section}>{COPY.roundHistory}</Text>
-      {rounds.length === 0 ? (
-        <EmptyPanel title={COPY.noRounds} hint={COPY.firstRoundHint} />
-      ) : (
-        rounds.map((round) => {
-          const holes = listHoles(db, round.id);
-          const scored = holes.filter((h) => h.score != null);
-          const total = scored.reduce((sum, h) => sum + (h.score ?? 0), 0);
-          const summary = summarizeHomeRound(holes);
-          const tone = toParTone(summary.toPar);
-          const toneColor =
-            tone === 'good'
-              ? colors.good
-              : tone === 'warn'
-                ? colors.amber
-                : tone === 'bad'
-                  ? colors.red
-                  : colors.muted;
-          const open = round.finishedAt == null;
-          const paceLine = open
-            ? null
-            : formatRoundPaceLine(
-                planLivePace({
-                  holes: holes.map((h) => ({
-                    hole: h.number,
-                    score: h.score,
-                    par: h.par,
-                    startedAt: h.startedAt,
-                    completedAt: h.completedAt,
-                  })),
-                  nowMs: Date.now(),
-                  finished: true,
-                }),
-              );
-          const row = formatHistoryRow({
-            startedAt: round.startedAt,
-            courseName: round.courseName,
-            teeName: round.teeName,
-            score: scored.length ? total : null,
-            test: round.isTest,
-          });
-          const prompt = historyDeletePrompt();
-          const catalog = round.courseApiId ? catalogEntryById(round.courseApiId) : null;
-          const favorite = favoriteFromHistoryRound({
-            courseApiId: round.courseApiId,
-            courseName: round.courseName,
-            courseLat: round.courseLat,
-            courseLng: round.courseLng,
-            city: catalog?.city ?? null,
-            state: catalog?.state ?? null,
-            country: catalog?.country ?? null,
-          });
-          const starred = favorite ? isFavorite(favoriteStore, favorite.id) : false;
-          return (
-            <HistorySwipeRow
-              key={round.id}
-              open={openHistoryId === round.id}
-              onOpen={() => setOpenHistoryId(round.id)}
-              onClose={() => setOpenHistoryId((current) => (current === round.id ? null : current))}
-              onPress={() =>
-                router.push(open ? playHrefAfterRoundStart(round.id) : `/round/${round.id}/summary`)
-              }
-              onEdit={() => {
-                if (!pastRoundEditAnytime()) return;
-                setOpenHistoryId(null);
-                router.push(pastRoundHoleHref(round.id, 1));
-              }}
-              onDelete={() => {
-                if (!prompt.cancelIsDefault) return;
-                Alert.alert(prompt.title, prompt.body, [
-                  { text: COPY.cancel, style: 'cancel' },
-                  {
-                    text: COPY.deleteRound,
-                    style: 'destructive',
-                    onPress: () => {
-                      const live = round.finishedAt == null;
-                      deleteRound(db, round.id);
-                      if (live) endWatchRound(round.id);
-                      setOpenHistoryId(null);
-                      bump();
-                    },
-                  },
-                ]);
-              }}
-              rowStyle={styles.row}>
-              <View
-                style={[
-                  styles.badge,
-                  { borderColor: tint(toneColor, 0.55), backgroundColor: tint(toneColor, 0.16) },
+            <View style={styles.heroRow}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push('/search')}
+                style={({ pressed }) => [
+                  styles.nearPill,
+                  accentFill(colors),
+                  !pressed && glow(colors),
+                  pressed && styles.pressed,
                 ]}>
-                <Text style={[styles.badgeText, { color: toneColor }]}>{summary.toParLabel ?? '—'}</Text>
+                <Icon name="location.fill" color={colors.onAccent} size={15} glyph="◉" />
+                <Text style={styles.nearPillText}>Courses near you</Text>
+              </Pressable>
+              <Text style={styles.heroMeta}>Pull to refresh</Text>
+            </View>
+          </View>
+        )}
+
+        {picked ? (
+          <View style={styles.card}>
+            <View style={styles.courseRow}>
+              <View style={styles.thumb}>
+                <Icon name="flag.fill" color={colors.lime} size={22} glyph="⚑" />
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.rowTitle} numberOfLines={1}>
-                  {row.courseName}
-                </Text>
-                <Text style={styles.cardMeta}>
-                  {row.date} · {row.tees}
-                  {row.testLabel ? ` · ${row.testLabel}` : ''}
-                  {open ? ' · in progress' : ''}
-                  {paceLine ? ` · ${paceLine}` : ''}
-                </Text>
-                <Text style={styles.relative}>{row.relative}</Text>
-              </View>
-              <View style={styles.scoreCol}>
-                <Text style={styles.score}>{row.score}</Text>
-                {favorite && courseAllowsFavorite(favorite.id) ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={starred ? COPY.unfavorite : COPY.favorite}
-                    onPress={() => starHistoryRound(round)}
-                    hitSlop={10}
-                    style={styles.star}>
-                    <Text style={[styles.starText, !starred && styles.starOff]}>{starred ? '★' : '☆'}</Text>
-                  </Pressable>
+              <View style={styles.courseText}>
+                <Text style={styles.cardTitle}>{picked.name}</Text>
+                {teeLabel || needsTee ? (
+                  <Text style={styles.cardMeta}>{teeLabel ? teeLabel : COPY.pickTee}</Text>
+                ) : null}
+                {paintSourceLabel || lastPlayedChip ? (
+                  <View style={styles.chips}>
+                    {paintSourceLabel ? (
+                      <Text testID="paint-source-chip" style={[styles.chip, styles.chipAccent]}>
+                        {paintSourceLabel}
+                      </Text>
+                    ) : null}
+                    {lastPlayedChip ? <Text style={styles.chip}>{lastPlayedChip}</Text> : null}
+                  </View>
                 ) : null}
               </View>
-            </HistorySwipeRow>
-          );
-        })
-      )}
-    </Screen>
+            </View>
+            <PaintMissBanner notice={paintBanner} />
+          </View>
+        ) : null}
+
+        {active ? null : (
+          <View style={styles.starts}>
+            <StartTile
+              holes={18}
+              primary
+              accessibilityLabel={startLabel(18)}
+              caption={pickedTee ? pickedTee.name : undefined}
+              disabled={starting || !canStart}
+              onPress={() => onStart(18)}
+            />
+            <StartTile
+              holes={9}
+              accessibilityLabel={startLabel(9)}
+              disabled={starting || !canStart}
+              onPress={() => onStart(9)}
+            />
+          </View>
+        )}
+
+        <View style={styles.quick}>
+          <QuickTile
+            icon="chart.bar.fill"
+            glyph="▮"
+            color={colors.lime}
+            label={COPY.nerdOut}
+            onPress={() =>
+              router.push({
+                pathname: '/nerd-out',
+                params: active ? { roundId: active.id } : undefined,
+              })
+            }
+          />
+          <QuickTile
+            icon="dot.radiowaves.left.and.right"
+            glyph="◎"
+            color={colors.accent2}
+            label="Live board"
+            accessibilityLabel={COPY.liveBoardWatch}
+            onPress={() => router.push('/board')}
+          />
+          <QuickTile
+            icon="bag.fill"
+            glyph="⛳"
+            color={colors.amber}
+            label="My bag"
+            onPress={() => router.push('/bag')}
+          />
+        </View>
+
+        <Text style={styles.section}>{COPY.roundHistory}</Text>
+        {rounds.length === 0 ? (
+          <EmptyPanel title={COPY.noRounds} hint={COPY.firstRoundHint} />
+        ) : (
+          rounds.map((round) => {
+            const holes = listHoles(db, round.id);
+            const scored = holes.filter((h) => h.score != null);
+            const total = scored.reduce((sum, h) => sum + (h.score ?? 0), 0);
+            const summary = summarizeHomeRound(holes);
+            const tone = toParTone(summary.toPar);
+            const toneColor =
+              tone === 'good'
+                ? colors.good
+                : tone === 'warn'
+                  ? colors.amber
+                  : tone === 'bad'
+                    ? colors.red
+                    : colors.muted;
+            const open = round.finishedAt == null;
+            const paceLine = open
+              ? null
+              : formatRoundPaceLine(
+                  planLivePace({
+                    holes: holes.map((h) => ({
+                      hole: h.number,
+                      score: h.score,
+                      par: h.par,
+                      startedAt: h.startedAt,
+                      completedAt: h.completedAt,
+                    })),
+                    nowMs: Date.now(),
+                    finished: true,
+                  }),
+                );
+            const row = formatHistoryRow({
+              startedAt: round.startedAt,
+              courseName: round.courseName,
+              teeName: round.teeName,
+              score: scored.length ? total : null,
+              test: round.isTest,
+            });
+            const prompt = historyDeletePrompt();
+            const catalog = round.courseApiId ? catalogEntryById(round.courseApiId) : null;
+            const favorite = favoriteFromHistoryRound({
+              courseApiId: round.courseApiId,
+              courseName: round.courseName,
+              courseLat: round.courseLat,
+              courseLng: round.courseLng,
+              city: catalog?.city ?? null,
+              state: catalog?.state ?? null,
+              country: catalog?.country ?? null,
+            });
+            const starred = favorite ? isFavorite(favoriteStore, favorite.id) : false;
+            return (
+              <HistorySwipeRow
+                key={round.id}
+                open={openHistoryId === round.id}
+                onOpen={() => setOpenHistoryId(round.id)}
+                onClose={() => setOpenHistoryId((current) => (current === round.id ? null : current))}
+                onPress={() =>
+                  router.push(open ? playHrefAfterRoundStart(round.id) : `/round/${round.id}/summary`)
+                }
+                onEdit={() => {
+                  if (!pastRoundEditAnytime()) return;
+                  setOpenHistoryId(null);
+                  router.push(pastRoundHoleHref(round.id, 1));
+                }}
+                onDelete={() => {
+                  if (!prompt.cancelIsDefault) return;
+                  Alert.alert(prompt.title, prompt.body, [
+                    { text: COPY.cancel, style: 'cancel' },
+                    {
+                      text: COPY.deleteRound,
+                      style: 'destructive',
+                      onPress: () => {
+                        const live = round.finishedAt == null;
+                        deleteRound(db, round.id);
+                        if (live) endWatchRound(round.id);
+                        setOpenHistoryId(null);
+                        bump();
+                      },
+                    },
+                  ]);
+                }}
+                rowStyle={styles.row}>
+                <View
+                  style={[
+                    styles.badge,
+                    { borderColor: tint(toneColor, 0.55), backgroundColor: tint(toneColor, 0.16) },
+                  ]}>
+                  <Text style={[styles.badgeText, { color: toneColor }]}>{summary.toParLabel ?? '—'}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.rowTitle} numberOfLines={1}>
+                    {row.courseName}
+                  </Text>
+                  <Text style={styles.cardMeta}>
+                    {row.date} · {row.tees}
+                    {row.testLabel ? ` · ${row.testLabel}` : ''}
+                    {open ? ' · in progress' : ''}
+                    {paceLine ? ` · ${paceLine}` : ''}
+                  </Text>
+                  <Text style={styles.relative}>{row.relative}</Text>
+                </View>
+                <View style={styles.scoreCol}>
+                  <Text style={styles.score}>{row.score}</Text>
+                  {favorite && courseAllowsFavorite(favorite.id) ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={starred ? COPY.unfavorite : COPY.favorite}
+                      onPress={() => starHistoryRound(round)}
+                      hitSlop={10}
+                      style={styles.star}>
+                      <Text style={[styles.starText, !starred && styles.starOff]}>{starred ? '★' : '☆'}</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              </HistorySwipeRow>
+            );
+          })
+        )}
+      </Screen>
+    </TabSwipe>
   );
 }
 
