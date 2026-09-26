@@ -321,6 +321,13 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   private var endingGolfWorkout = false
   /// `handleActiveWorkoutRecovery` is in flight. Do not create another session.
   private var recoveringGolfWorkout = false
+  /// True from init until the next main turn. `handleActiveWorkoutRecovery`
+  /// runs during launch, before that turn, when a session outlived the process.
+  private var workoutLaunchGate = false
+  /// Set when the system asks us to recover. The launch gate must not start one.
+  private var workoutRecoveryRequested = false
+  /// Set around `HKWorkoutSession` init so a synchronous callback cannot start another.
+  private var creatingGolfWorkout = false
   private var loggedBlockedGolfStart = false
   private var loggedStaleRoundSkip = false
   private var golfAuthInFlight = false
@@ -387,11 +394,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     // Do not request here. A complication push or workout often launches this
     // process in the background, and watchOS will not show the sheet then.
 
-    if WCSession.isSupported() {
-      let session = WCSession.default
-      session.delegate = self
-      session.activate()
-    }
+    // Defaults before activate(). The activation callback can otherwise mutate
+    // `list` while this init and the first body are still reading it.
     loadFromDefaults()
     seedAppLiveYardsFromList()
     loadHome()
@@ -405,9 +409,21 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       penaltyNotice = "Queued · will sync"
     }
     syncUndoPending()
+    // A crashed launch can leave an HKWorkoutSession. Do not create another
+    // until watchOS has had a chance to hand that one back.
+    holdWorkoutLaunchGate()
     syncRoundStay()
     syncLiveYardsReason()
     appLiveYardsFrozen = true
+
+    if WCSession.isSupported() {
+      let session = WCSession.default
+      session.delegate = self
+      session.activate()
+    }
+    // After activate(), so a callback queued inside activate() applies the
+    // live club list before this turn is allowed to start a workout.
+    scheduleWorkoutLaunchGateRelease()
   }
 
   /// Top-right live yards in the Watch app. Not the complication.
@@ -2483,23 +2499,53 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
   }
 
+  /// One HKWorkoutSession per process. Recovery, a create already in this
+  /// function, and a session that has not ended all refuse another init:
+  /// a second `HKWorkoutSession` throws, and a second `startActivity` raises.
+  /// Mirrors `watchMayCreateGolfWorkout` in src/domain/watchColdLaunch.ts.
+  private static func mayCreateGolfWorkout(
+    launchGate: Bool,
+    recovering: Bool,
+    ending: Bool,
+    creating: Bool,
+    hasSession: Bool,
+    sessionEnded: Bool
+  ) -> Bool {
+    if launchGate || recovering || ending || creating { return false }
+    if hasSession && !sessionEnded { return false }
+    return true
+  }
+
   private func beginGolfWorkoutSession() {
-    if recoveringGolfWorkout {
-      if !loggedBlockedGolfStart {
-        loggedBlockedGolfStart = true
-        workoutLog.info("golf workout not started; recoverActiveWorkoutSession in progress")
-      }
-      return
+    if golfWorkout?.state == .ended {
+      golfWorkout = nil
+      endingGolfWorkout = false
     }
-    if golfWorkoutOccupied {
+    let allowed = Self.mayCreateGolfWorkout(
+      launchGate: workoutLaunchGate,
+      recovering: recoveringGolfWorkout,
+      ending: endingGolfWorkout,
+      creating: creatingGolfWorkout,
+      hasSession: golfWorkout != nil,
+      sessionEnded: false
+    )
+    if !allowed {
       if !loggedBlockedGolfStart {
         loggedBlockedGolfStart = true
-        workoutLog.info("golf workout not started; a session is already running")
+        if recoveringGolfWorkout {
+          workoutLog.info("golf workout not started; recoverActiveWorkoutSession in progress")
+        } else if workoutLaunchGate {
+          workoutLog.info("golf workout not started; waiting for workout recovery")
+        } else {
+          workoutLog.info("golf workout not started; a session is already running")
+        }
       }
       return
     }
     if suppressGolfStart { return }
     loggedBlockedGolfStart = false
+    creatingGolfWorkout = true
+    defer { creatingGolfWorkout = false }
     let configuration = HKWorkoutConfiguration()
     configuration.activityType = .golf
     configuration.locationType = .outdoor
@@ -2508,7 +2554,18 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       session.delegate = self
       golfWorkout = session
       // end() writes nothing to Health. No builder and no extra sample types.
-      session.startActivity(with: Date())
+      // startActivity raises if this session is already running. A brand-new
+      // session is prepared; running/paused/ended must not be started again.
+      if session.state == .running || session.state == .paused {
+        workoutLog.info("golf workout already running; startActivity not called again")
+      } else if session.state == .ended {
+        golfWorkout = nil
+        suppressGolfStart = true
+        workoutLog.info("golf workout session did not start: session already ended")
+        return
+      } else {
+        session.startActivity(with: Date())
+      }
       // Location background mode is in the watch Info.plist. The property and
       // that mode ship together; setting it without the mode crashes.
       enableWorkoutBackgroundLocation()
@@ -2578,9 +2635,38 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
   }
 
+  /// Block workout creation until `scheduleWorkoutLaunchGateRelease` runs.
+  /// Init's `syncRoundStay` happens while this is held.
+  private func holdWorkoutLaunchGate() {
+    workoutLaunchGate = true
+  }
+
+  /// Next main turn. Queued after `WCSession.activate()` so a club list
+  /// delivered inside activate is applied before a workout can start.
+  /// If the system is recovering, that callback starts or keeps the session.
+  private func scheduleWorkoutLaunchGateRelease() {
+    DispatchQueue.main.async { [weak self] in
+      self?.releaseWorkoutLaunchGateIfIdle()
+    }
+  }
+
+  private func releaseWorkoutLaunchGateIfIdle() {
+    guard workoutLaunchGate else { return }
+    if workoutRecoveryRequested || recoveringGolfWorkout {
+      workoutLaunchGate = false
+      return
+    }
+    workoutLaunchGate = false
+    loggedBlockedGolfStart = false
+    workoutLog.info("no recoverActiveWorkoutSession this launch; golf session may start")
+    syncRoundStay()
+  }
+
   /// Called from `handleActiveWorkoutRecovery` before `recoverActiveWorkoutSession`.
   func beginGolfWorkoutRecovery() {
+    workoutRecoveryRequested = true
     recoveringGolfWorkout = true
+    workoutLaunchGate = false
     loggedBlockedGolfStart = false
     workoutLog.info("recoverActiveWorkoutSession requested")
   }
@@ -2589,6 +2675,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   /// not fresh. This app does not use a workout builder.
   func finishGolfWorkoutRecovery(_ session: HKWorkoutSession?, error: Error?) {
     recoveringGolfWorkout = false
+    workoutLaunchGate = false
     if let error {
       workoutLog.info("recoverActiveWorkoutSession failed: \(error.localizedDescription, privacy: .public)")
       syncRoundStay()
@@ -2625,20 +2712,24 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
-    // Last context from any launch. Not a receive during this process.
-    applyClubList(session.receivedApplicationContext)
-    if activationState == .activated {
-      flushPending()
-      DispatchQueue.main.async {
-        self.syncRoundStay()
-        if self.hasLiveHole && !self.nearbyFromHome {
-          self.nearby.active = false
-          return
-        }
-        self.nearby.active = true
-        self.nearby.awaitingSelect = true
-        self.requestHome()
+    // WCSession calls this on its queue, not main. A live clubList writes
+    // @Published state and syncRoundStay then uses CLLocationManager and may
+    // start an HKWorkoutSession. Those have to run on main, after init has
+    // loaded defaults. Last context from any launch — not a receive this process.
+    let context = session.receivedApplicationContext
+    let activated = activationState == .activated
+    DispatchQueue.main.async {
+      self.applyClubList(context)
+      guard activated else { return }
+      self.flushPending()
+      self.syncRoundStay()
+      if self.hasLiveHole && !self.nearbyFromHome {
+        self.nearby.active = false
+        return
       }
+      self.nearby.active = true
+      self.nearby.awaitingSelect = true
+      self.requestHome()
     }
   }
 
