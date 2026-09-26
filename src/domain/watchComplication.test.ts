@@ -183,7 +183,7 @@ test('complication uses the watch widget families and the phone hole-map number'
   const watchUi = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
   const clubPick = watchUi.slice(watchUi.indexOf('private var clubPick'), watchUi.indexOf('private var moreClubs'));
   assert.match(clubPick, /session\.list\.statusLine/);
-  assert.match(clubPick, /session\.list\.liveYardsLabel/);
+  assert.match(clubPick, /session\.appLiveYardsLabel/);
   assert.match(clubPick, /Text\("to hole"\)/);
   assert.match(clubPick, /session\.liveYardsReason/);
   assert.match(clubPick, /!reason\.isEmpty/);
@@ -191,8 +191,8 @@ test('complication uses the watch widget families and the phone hole-map number'
   assert.match(clubPick, /size: 11/);
   assert.ok(clubPick.indexOf('size: 28') < clubPick.indexOf('Text("to hole")'));
   assert.ok(clubPick.indexOf('Text("to hole")') < clubPick.indexOf('size: 11'));
-  assert.ok(clubPick.indexOf('session.list.liveYardsLabel') < clubPick.indexOf('session.liveYardsReason'));
-  assert.match(clubPick, /if session\.list\.liveYardsTrusted/);
+  assert.ok(clubPick.indexOf('session.appLiveYardsLabel') < clubPick.indexOf('session.liveYardsReason'));
+  assert.match(clubPick, /if session\.appLiveYardsTrusted/);
   assert.match(clubPick, /foregroundStyle\(outdoorLime\)/);
   assert.doesNotMatch(clubPick, /Color\("accent"\) : Color\("muted"\)/);
   const emptyMark = clubPick.slice(clubPick.indexOf('} else {'), clubPick.indexOf('Group {'));
@@ -200,10 +200,10 @@ test('complication uses the watch widget families and the phone hole-map number'
   assert.match(emptyMark, /\.fill\(outdoorCream\)/);
   assert.match(emptyMark, /frame\(width: 26, height: 5\)/);
   assert.match(emptyMark, /frame\(minHeight: 28, alignment: \.center\)/);
-  assert.match(emptyMark, /accessibilityLabel\(session\.list\.liveYardsLabel\)/);
+  assert.match(emptyMark, /accessibilityLabel\(session\.appLiveYardsLabel\)/);
   assert.doesNotMatch(emptyMark, /minimumScaleFactor|Color\("muted"\)|Color\("accent"\)/);
-  assert.ok(clubPick.indexOf('session.list.statusLine') < clubPick.indexOf('session.list.liveYardsLabel'));
-  assert.ok(clubPick.indexOf('session.list.liveYardsLabel') < clubPick.indexOf('session.madeIt()'));
+  assert.ok(clubPick.indexOf('session.list.statusLine') < clubPick.indexOf('session.appLiveYardsLabel'));
+  assert.ok(clubPick.indexOf('session.appLiveYardsLabel') < clubPick.indexOf('session.madeIt()'));
   assert.match(clubPick, /fixedSize\(horizontal: true, vertical: true\)/);
 
   const widget = readFileSync(new URL('../../targets/watch-widget/index.swift', import.meta.url), 'utf8');

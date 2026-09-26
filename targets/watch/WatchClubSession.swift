@@ -229,6 +229,10 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   @Published var feedback: String = ""
   /// Caption under the dash. Nil when a yardage is showing. Never an empty string.
   @Published private(set) var liveYardsReason: String? = nil
+  /// Number drawn in the Watch app. Frozen while the wrist is down. The
+  /// complication keeps `list` yards, which still update from GPS.
+  @Published private(set) var appLiveYards: Int? = nil
+  @Published private(set) var appLiveYardsQuality = "none"
   /// Shown on the club list when Health already denied workout share. Empty when hidden.
   @Published var workoutDeniedHint = ""
   static let workoutDeniedHintText = "Watch may sleep wrist-down. Turn on Workouts for ShotTraxx in the Health app on your iPhone."
@@ -290,6 +294,10 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   private var userLeftApp = false
   /// Frontmost. `requestAuthorization` only presents the sheet while this is true.
   private var sceneIsActive = false
+  /// Dimmed always-on. The scene can stay active while this is true.
+  private var luminanceReduced = false
+  /// Wrist-down: do not redraw the in-app yards caption until the wrist is up.
+  private var appLiveYardsFrozen = false
   /// Share sheet from a request issued while `sceneIsActive`, until its callback.
   private var golfAuthSheetUp = false
   /// Course picked from Watch Home after Home/Back. The next fresh live club list
@@ -335,6 +343,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       session.activate()
     }
     loadFromDefaults()
+    seedAppLiveYardsFromList()
     loadHome()
     if !hasLiveHole {
       // Open straight onto Watch Home from the cached rows.
@@ -342,6 +351,68 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
     loadPending()
     syncRoundStay()
+    syncLiveYardsReason()
+    appLiveYardsFrozen = true
+  }
+
+  /// Top-right live yards in the Watch app. Not the complication.
+  var appLiveYardsTrusted: Bool {
+    (appLiveYardsQuality == "good" || appLiveYardsQuality == "soft") && (appLiveYards ?? 0) > 0
+  }
+
+  var appLiveYardsLabel: String {
+    if appLiveYardsTrusted, let yards = appLiveYards {
+      return "\(yards) yd"
+    }
+    return "—"
+  }
+
+  /// Mirrors `watchAppLiveYardsDisplay`. Wrist-down keeps `shown`. A raise
+  /// shows `current` unless a shot hold is still on.
+  private static func appLiveYardsDisplay(
+    sceneActive: Bool,
+    luminanceReduced: Bool,
+    holdActive: Bool,
+    shownYards: Int?,
+    shownQuality: String,
+    currentYards: Int?,
+    currentQuality: String
+  ) -> (yards: Int?, quality: String) {
+    let showing = sceneActive && !luminanceReduced
+    if !showing || holdActive {
+      return (shownYards, shownQuality)
+    }
+    return (currentYards, currentQuality)
+  }
+
+  private func seedAppLiveYardsFromList() {
+    appLiveYards = list.liveYardsTrusted ? list.complicationYards : nil
+    appLiveYardsQuality = list.liveYardsTrusted ? list.complicationQuality : "none"
+  }
+
+  /// Copy the latest yards into the on-screen number only while the app is
+  /// showing and no shot hold is on. GPS and `persist` are not touched.
+  private func syncAppLiveYards() {
+    let showing = sceneIsActive && !luminanceReduced
+    let holdActive = shotHold.map { $0.hole == list.holeNumber } ?? false
+    let next = Self.appLiveYardsDisplay(
+      sceneActive: sceneIsActive,
+      luminanceReduced: luminanceReduced,
+      holdActive: holdActive,
+      shownYards: appLiveYards,
+      shownQuality: appLiveYardsQuality,
+      currentYards: list.liveYardsTrusted ? list.complicationYards : nil,
+      currentQuality: list.liveYardsTrusted ? list.complicationQuality : "none"
+    )
+    appLiveYardsFrozen = !showing
+    if next.yards != appLiveYards || next.quality != appLiveYardsQuality {
+      appLiveYards = next.yards
+      appLiveYardsQuality = next.quality
+    }
+  }
+
+  private func refreshAppLiveYardsFace() {
+    syncAppLiveYards()
     syncLiveYardsReason()
   }
 
@@ -1292,7 +1363,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
     list = next
     persist(next)
-    syncLiveYardsReason()
+    refreshAppLiveYardsFace()
     if holeChanged {
       dropStaleClubPicks(liveHole: next.holeNumber)
     }
@@ -1403,7 +1474,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     return meters / metersPerYard
   }
 
-  /// Walking update. A locked phone sends nothing; this is the live number.
+  /// Walking update. A locked phone sends nothing. This keeps the latest yards
+  /// for the complication. The on-screen number stays put while the wrist is down.
   private func adoptWatchFix(_ fix: CLLocation) {
     let accuracy = fix.horizontalAccuracy
     let accuracyText = String(format: "%.1f", accuracy)
@@ -1458,6 +1530,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     liveYardsLog.info("fix accepted accuracy=\(accuracyText, privacy: .public) quality=\(quality, privacy: .public) yards=\(yardsText, privacy: .public) green=true")
     list = next
     persist(next)
+    refreshAppLiveYardsFace()
   }
 
   private func persist(_ state: ClubListState) {
@@ -1531,7 +1604,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   /// WidgetKit budget (~40–70 refreshes/day). Hole changes reload immediately.
   /// While this app is on screen the face is hidden, so nothing else reloads;
   /// leaving the app re-checks. Otherwise the displayed yards must move by ≥1
-  /// and the last reload must be at least 45s ago. In-app yards are not gated.
+  /// and the last reload must be at least 45s ago. The in-app wrist-down freeze
+  /// does not run here — the complication still follows `list`.
   /// Mirrors `watchWidgetShouldReload`.
   private func reloadWidgetIfNeeded(_ state: ClubListState) {
     let shown: Int? = state.liveYardsTrusted ? state.complicationYards : nil
@@ -2068,6 +2142,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   }
 
   private func syncLiveYardsReason() {
+    guard !appLiveYardsFrozen else { return }
     let next = Self.liveYardsReason(
       hasTrustedYards: list.liveYardsTrusted,
       hasGreen: list.greenLat != nil && list.greenLng != nil,
@@ -2151,7 +2226,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       guard let self else { return }
       self.lastFix = fix
       self.adoptWatchFix(fix)
-      self.syncLiveYardsReason()
+      self.refreshAppLiveYardsFace()
     }
   }
 
@@ -2189,6 +2264,7 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       syncWorkoutDeniedHint()
       noteLocationScene(active: true)
       requestLiveLocationAuthorizationIfNeeded()
+      refreshAppLiveYardsFace()
       return
     }
     if phase == "inactive" || phase == "background" {
@@ -2208,7 +2284,15 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       // The face is visible again. Catch it up now (same 45s rule); if that
       // is too soon, the next wrist-down fix or the 60s timeline does it.
       reloadWidgetIfNeeded(list)
+      refreshAppLiveYardsFace()
     }
+  }
+
+  /// Dimmed always-on keeps the scene active. The in-app number still freezes.
+  /// Location updates are unchanged.
+  func noteLuminanceReduced(_ reduced: Bool) {
+    luminanceReduced = reduced
+    refreshAppLiveYardsFace()
   }
 
   /// Wrist-down keeps a running stream. It does not start a stopped one, and

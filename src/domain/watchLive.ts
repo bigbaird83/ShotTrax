@@ -24,7 +24,8 @@ import { planLiveGpsToPin, type LiveGpsToPin } from './yardsToGreen';
  * Hole changes reload immediately. Any other displayed-yard change must be at
  * least 1 yard and must wait out 45 seconds. While the Watch app is on screen
  * the face is hidden, so only a hole change reloads; leaving the app re-checks
- * with the normal rule. The in-app number is not gated.
+ * with the normal rule. The in-app number is a separate freeze: it holds still
+ * while the wrist is down and refreshes when the app is showing again.
  */
 export const WATCH_WIDGET_RELOAD_MIN_YD = 1;
 export const WATCH_WIDGET_RELOAD_MIN_MS = 45_000;
@@ -63,6 +64,42 @@ export function watchShotHoldDecision(args: {
   if (!usable) return 'hold';
   if (!hold.anchor) return 'anchor';
   return haversineYards(hold.anchor, args.fix) >= WATCH_SHOT_HOLD_MIN_MOVE_YD ? 'release' : 'hold';
+}
+
+export type WatchAppLiveYards = { yards: number | null; quality: string };
+
+/**
+ * The Watch app is showing the live number only while the scene is active and
+ * the always-on view is not dimmed. Inactive, background, and
+ * `isLuminanceReduced` are wrist-down: keep the last drawn number.
+ */
+export function watchAppShowsLiveYards(sceneActive: boolean, luminanceReduced: boolean): boolean {
+  return sceneActive && !luminanceReduced;
+}
+
+/**
+ * Number drawn in the Watch app. GPS and the complication keep the latest
+ * yards either way. While the wrist is down, keep `shown`. On raise, show
+ * `current` immediately, unless a shot hold is still on — then `shown` (the
+ * mark) stays until that hold ends.
+ * `WatchClubSession.appLiveYardsDisplay` mirrors this.
+ */
+export function watchAppLiveYardsDisplay(args: {
+  sceneActive: boolean;
+  luminanceReduced: boolean;
+  holdActive: boolean;
+  shown: WatchAppLiveYards;
+  current: WatchAppLiveYards;
+}): WatchAppLiveYards {
+  if (!watchAppShowsLiveYards(args.sceneActive, args.luminanceReduced) || args.holdActive) {
+    return args.shown;
+  }
+  return args.current;
+}
+
+/** A putter mark opens the putt sheet and does not start the 30 s / 10 yd hold. */
+export function watchShotMarkStartsHold(clubId: string): boolean {
+  return !isPutterClubId(clubId);
 }
 
 /** Background GPS during the golf workout. Must ship with allowsBackgroundLocationUpdates. */

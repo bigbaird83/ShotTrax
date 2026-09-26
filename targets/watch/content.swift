@@ -8,6 +8,7 @@ private enum WatchHomePush: Hashable {
 struct ContentView: View {
   @EnvironmentObject private var session: WatchClubSession
   @Environment(\.scenePhase) private var scenePhase
+  @Environment(\.isLuminanceReduced) private var isLuminanceReduced
   @State private var showAllClubs = false
   /// Search nearby is a push on this stack so Back pops and Home stays mounted.
   @State private var homePath = NavigationPath()
@@ -74,14 +75,21 @@ struct ContentView: View {
       }
     }
     .background(Color("bg").ignoresSafeArea())
-    .onAppear { session.noteScenePhase("active") }
+    .onAppear {
+      session.noteLuminanceReduced(isLuminanceReduced)
+      session.noteScenePhase("active")
+    }
     .onChange(of: scenePhase) { phase in
+      session.noteLuminanceReduced(isLuminanceReduced)
       if phase == .active {
         session.noteScenePhase("active")
         session.refreshHomeIfShowing()
       }
       if phase == .inactive { session.noteScenePhase("inactive") }
       if phase == .background { session.noteScenePhase("background") }
+    }
+    .onChange(of: isLuminanceReduced) { reduced in
+      session.noteLuminanceReduced(reduced)
     }
     .onChange(of: session.showsHome) { showing in
       // Leaving Home (hole, or holes/tees) drops the push. Search → Back does not.
@@ -550,8 +558,8 @@ struct ContentView: View {
               // disappears on Ultra, while size-11 "to hole" in the same color
               // still reads. A filled bar cannot collapse or antialias away.
               // Trusted yards use literal lime: Color("accent") vanishes outdoors.
-              if session.list.liveYardsTrusted {
-                Text(session.list.liveYardsLabel)
+              if session.appLiveYardsTrusted {
+                Text(session.appLiveYardsLabel)
                   .font(.system(size: 28, weight: .heavy))
                   .foregroundStyle(outdoorLime)
                   .lineLimit(1)
@@ -561,7 +569,7 @@ struct ContentView: View {
                   .fill(outdoorCream)
                   .frame(width: 26, height: 5)
                   .frame(minHeight: 28, alignment: .center)
-                  .accessibilityLabel(session.list.liveYardsLabel)
+                  .accessibilityLabel(session.appLiveYardsLabel)
               }
               Group {
                 if let reason = session.liveYardsReason, !reason.isEmpty {

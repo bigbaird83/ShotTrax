@@ -23,7 +23,10 @@ import {
   watchGreenFields,
   watchLiveLocationBackgroundMode,
   watchLiveYardsReason,
+  watchAppLiveYardsDisplay,
+  watchAppShowsLiveYards,
   watchShotHoldDecision,
+  watchShotMarkStartsHold,
   watchShouldRequestLocationAuthorization,
   watchWidgetShouldReload,
   type WatchLiveYardsAuth,
@@ -247,6 +250,67 @@ test('after a Watch shot mark, live yards hold 30 s and then until the Watch mov
   assert.equal(at(1_000 + WATCH_SHOT_HOLD_MS, far, 5, unanchored), 'anchor');
   // A new hole ends the hold at once.
   assert.equal(watchShotHoldDecision({ hold, hole: 2, nowMs: 2_000, fix: mark, accuracyM: 5 }), 'update');
+});
+
+test('Watch app yards freeze wrist-down and refresh on raise, and a putter mark does not hold', () => {
+  const shown = { yards: 150, quality: 'good' as const };
+  const current = { yards: 120, quality: 'good' as const };
+  const dash = { yards: null, quality: 'none' as const };
+  const draw = (sceneActive: boolean, luminanceReduced: boolean, holdActive: boolean, next = current) =>
+    watchAppLiveYardsDisplay({ sceneActive, luminanceReduced, holdActive, shown, current: next });
+
+  assert.equal(watchAppShowsLiveYards(true, false), true);
+  assert.equal(watchAppShowsLiveYards(false, false), false);
+  assert.equal(watchAppShowsLiveYards(true, true), false);
+
+  // Frozen while inactive, background, or the dimmed always-on view.
+  assert.deepEqual(draw(false, false, false), shown);
+  assert.deepEqual(draw(false, true, false), shown);
+  assert.deepEqual(draw(true, true, false), shown);
+
+  // Wrist raise refreshes from the latest location.
+  assert.deepEqual(draw(true, false, false), current);
+
+  // Hold still wins on that raise.
+  assert.deepEqual(draw(true, false, true), shown);
+
+  // Hold ended: the raise shows the current distance.
+  assert.deepEqual(draw(true, false, false, dash), dash);
+  assert.deepEqual(draw(true, false, false, { yards: 98, quality: 'soft' }), { yards: 98, quality: 'soft' });
+
+  // Putter does not start the hold, so nothing keeps the old number once the wrist is up.
+  assert.equal(watchShotMarkStartsHold('club_putter'), false);
+  assert.equal(watchShotMarkStartsHold('club_7i'), true);
+  assert.equal(
+    watchShotHoldDecision({
+      hold: null,
+      hole: 1,
+      nowMs: 1_000,
+      fix: { lat: 33.31183, lng: -93.22676 },
+      accuracyM: 5,
+    }),
+    'update',
+  );
+
+  const session = readFileSync(new URL('../../targets/watch/WatchClubSession.swift', import.meta.url), 'utf8');
+  const content = readFileSync(new URL('../../targets/watch/content.swift', import.meta.url), 'utf8');
+  assert.match(session, /func appLiveYardsDisplay/);
+  assert.match(session, /sceneActive && !luminanceReduced/);
+  assert.match(session, /func noteLuminanceReduced/);
+  assert.match(content, /isLuminanceReduced/);
+  assert.match(content, /noteLuminanceReduced/);
+  const pick = session.slice(session.indexOf('func pick(clubId:'), session.indexOf('func select('));
+  const holdAt = pick.indexOf('beginShotHold()');
+  assert.ok(holdAt > pick.lastIndexOf('clubId != "club_putter"', holdAt));
+  const reload = session.slice(session.indexOf('private func reloadWidgetIfNeeded'), session.indexOf('private func loadFromDefaults'));
+  assert.match(reload, /if sceneIsActive \{ return \}/);
+  assert.doesNotMatch(reload, /luminanceReduced|appLiveYards/);
+  const adopt = session.slice(session.indexOf('private func adoptWatchFix'), session.indexOf('private func persist'));
+  assert.match(adopt, /list = next/);
+  assert.match(adopt, /persist\(next\)/);
+  const location = session.slice(session.indexOf('private func noteLocationScene'), session.indexOf('enum ComplicationReloader'));
+  assert.match(location, /keeping location updates for the live hole/);
+  assert.match(location, /startLiveLocationIfAuthorized\(\)/);
 });
 
 test('widget reload waits out yard drift and still fires on a hole change', () => {
