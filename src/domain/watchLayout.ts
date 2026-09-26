@@ -52,3 +52,34 @@ export function watchLayoutAddsToOne(): boolean {
 export function watchBackHomeAreTinyText(): false {
   return false;
 }
+
+/** Hole screen: Hole Out row + gap + club pills the top area must leave room for. */
+export const WATCH_HOLE_BOTTOM_BAND = WATCH_BACK_HOME_MIN_HEIGHT + 6 + 52;
+const WATCH_ACTION_ROW_GAP = 8;
+
+export type WatchFrame = { minX: number; maxX: number; minY: number; maxY: number };
+
+/**
+ * Mirror of the Watch hole screen (content.swift clubPick) in safe-area points.
+ * Penalty is one Hole Out-sized pill at the bottom-left of the top area, directly
+ * above Hole Out. The top area is 60% but never taller than safeHeight minus the
+ * Hole Out row + club pills, so those stay inside the bottom safe area.
+ */
+export function watchHoleFrames(safeWidth: number, safeHeight: number): {
+  penalty: WatchFrame;
+  holeOut: WatchFrame;
+  putt: WatchFrame;
+  clubPills: WatchFrame;
+} {
+  const width = safeWidth - 8; // .padding(.horizontal, 4)
+  const slot = (width - 2 * WATCH_ACTION_ROW_GAP) / 3;
+  const top = Math.max(0, Math.min(safeHeight * WATCH_MAP_RATIO, safeHeight - WATCH_HOLE_BOTTOM_BAND));
+  const h = WATCH_BACK_HOME_MIN_HEIGHT;
+  const col = (i: number) => ({ minX: 4 + i * (slot + WATCH_ACTION_ROW_GAP), maxX: 4 + i * (slot + WATCH_ACTION_ROW_GAP) + slot });
+  return {
+    penalty: { ...col(0), minY: top - 6 - h, maxY: top - 6 },
+    holeOut: { ...col(0), minY: top, maxY: top + h },
+    putt: { ...col(2), minY: top, maxY: top + h },
+    clubPills: { minX: 4, maxX: 4 + width, minY: top + h + 6, maxY: top + h + 6 + 52 },
+  };
+}

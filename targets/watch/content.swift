@@ -540,8 +540,10 @@ struct ContentView: View {
   @ViewBuilder
   private var clubPick: some View {
     GeometryReader { geo in
-      let mapHeight = geo.size.height * 0.6
-      let controlHeight = geo.size.height * 0.4
+      // 60% top, but never so tall that the Hole Out row + club pills (44 + 6 + 52)
+      // fall past the bottom safe area on a short face.
+      let mapHeight = max(0, min(geo.size.height * 0.6, geo.size.height - 102))
+      let controlHeight = geo.size.height - mapHeight
       VStack(alignment: .leading, spacing: 0) {
         VStack(alignment: .leading, spacing: 6) {
           // Left is Hole N · fixed tee length. Top-right is live yards to the green.
@@ -604,6 +606,20 @@ struct ContentView: View {
             .buttonStyle(.plain)
           }
           Spacer(minLength: 0)
+          // Penalty is one Hole Out-sized pill, left, directly above Hole Out.
+          // It sits in the top area's spare space so it never pushes the
+          // Hole Out / Home / Putt row or the club pills down. Never full width.
+          if !session.penaltyChoicesOpen {
+            HStack(spacing: 8) {
+              Button(action: { session.openPenaltyChoices() }) {
+                actionPill("Penalty")
+              }
+              .buttonStyle(.plain)
+              Color.clear.frame(maxWidth: .infinity, minHeight: 44)
+              Color.clear.frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .padding(.bottom, 6)
+          }
         }
         .frame(height: mapHeight, alignment: .topLeading)
 
@@ -653,11 +669,6 @@ struct ContentView: View {
               }
               .buttonStyle(.plain)
             }
-          } else {
-            Button(action: { session.openPenaltyChoices() }) {
-              actionPill("Penalty")
-            }
-            .buttonStyle(.plain)
           }
           HStack(spacing: 8) {
             Button(action: { session.madeIt() }) {
