@@ -359,8 +359,23 @@ function workerErrorCode(json: unknown): string | null {
 
 type WorkerFetch =
   | { kind: 'skip' }
-  | { kind: 'overlay'; overlay: OsmOverlay | null }
+  | { kind: 'overlay'; overlay: OsmOverlay }
+  | { kind: 'empty' }
   | { kind: 'busy'; retryAfterMs: number | null };
+
+/** Direct Overpass: real features, a definitive empty, or a failure that can be retried. */
+type OverpassResult =
+  | { kind: 'features'; overlay: OsmOverlay }
+  | { kind: 'empty' }
+  | { kind: 'failed' };
+
+type OverlayWaitReason = 'upstream_busy' | 'fetch_failed';
+
+function waitingDetail(reason: OverlayWaitReason): string {
+  return reason === 'fetch_failed'
+    ? 'waiting: Worker failed and Overpass failed'
+    : 'waiting: Worker upstream_busy';
+}
 
 /**
  * OSM course overlay (golf=green/fairway/tee/hole, plus bunker, water hazard, and cartpath).
@@ -369,14 +384,16 @@ type WorkerFetch =
  * OSM par tags are ignored (par comes from course API only).
  * When the share-sync Worker is configured and the course has a catalog pin,
  * ask for one course-wide overlay: that pin rounded to 4 decimals, radius 1800.
- * Hole screens slice the result locally. A definitive miss (`no_overlay`) is not
- * sent on to Overpass and blocks the course for this session. `upstream_busy`
- * is not sent on to Overpass either, and it does not block the session: the
- * course waits out a short cooldown (20s, then 60s, then 2 min, capped), longer
- * when the Worker sends a sane Retry-After. The next hole open, hole change,
- * map refocus, or favorite backfill tries the Worker again. A timeout or any
- * other Worker failure falls back to a direct Overpass request and stores nothing
- * for the failed Worker call. No catalog pin skips the Worker.
+ * Hole screens slice the result locally. A definitive empty blocks the course
+ * for this session and is not retried: Worker 404 `no_overlay`, or Overpass
+ * 200 with valid JSON and no golf features. `upstream_busy` is not sent on to
+ * Overpass. A timeout, network error, or other Worker failure falls back to
+ * one direct Overpass request. If that Overpass call fails (429, 504, 5xx,
+ * timeout, or a throw) the course is not blocked: it waits out the same
+ * cooldown as a busy Worker (20s, then 60s, then 2 min, capped), longer when
+ * the Worker sends a sane Retry-After. The next hole open, hole change, map
+ * refocus, or favorite backfill tries again. Nothing is stored for a failure.
+ * No catalog pin skips the Worker.
  * One immediate retry on Worker busy, Overpass 429 or 504, or a thrown Overpass timeout.
  */
 export async function fetchOsmOverlay(
@@ -424,12 +441,14 @@ export async function fetchOsmOverlay(
         }
       }
       const error = workerErrorCode(json);
-      if (res.status === 404 && error === 'no_overlay') return { kind: 'overlay', overlay: null };
+      if (res.status === 404 && error === 'no_overlay') return { kind: 'empty' };
       if (res.status === 503 && error === 'upstream_busy') {
         return { kind: 'busy', retryAfterMs: saneRetryAfterMs(res.headers.get('Retry-After'), nowMs()) };
       }
       if (res.ok && json !== undefined) {
-        return { kind: 'overlay', overlay: overlayFromPayload(json, undefined) };
+        const overlay = overlayFromPayload(json, undefined);
+        if (overlay && overlay.features.length > 0) return { kind: 'overlay', overlay };
+        return { kind: 'empty' };
       }
       return { kind: 'skip' };
     } catch {
@@ -439,7 +458,7 @@ export async function fetchOsmOverlay(
     }
   };
 
-  const overpassAttempt = async (): Promise<{ overlay: OsmOverlay | null; retry: boolean }> => {
+  const overpassAttempt = async (): Promise<{ result: OverpassResult; retry: boolean }> => {
     try {
       const res = await fetchImpl(url, {
         method: 'POST',
@@ -449,16 +468,18 @@ export async function fetchOsmOverlay(
         },
         body: `data=${encodeURIComponent(overpassQuery(location, radiusM))}`,
       });
-      if (res.status === 429 || res.status === 504) return { overlay: null, retry: true };
-      if (!res.ok) return { overlay: null, retry: false };
+      if (res.status === 429 || res.status === 504) return { result: { kind: 'failed' }, retry: true };
+      if (!res.ok) return { result: { kind: 'failed' }, retry: false };
       try {
         const json: unknown = await res.json();
-        return { overlay: overlayFromPayload(json, undefined), retry: false };
+        const overlay = overlayFromPayload(json, undefined);
+        if (overlay && overlay.features.length > 0) return { result: { kind: 'features', overlay }, retry: false };
+        return { result: { kind: 'empty' }, retry: false };
       } catch {
-        return { overlay: null, retry: false };
+        return { result: { kind: 'failed' }, retry: false };
       }
     } catch {
-      return { overlay: null, retry: true };
+      return { result: { kind: 'failed' }, retry: true };
     }
   };
 
@@ -477,12 +498,12 @@ export async function fetchOsmOverlay(
     return overlay;
   };
 
-  const runOverpass = async (): Promise<OsmOverlay | null> => {
+  const runOverpass = async (): Promise<OverpassResult> => {
     const first = await overpassAttempt();
-    if (!first.retry) return first.overlay;
+    if (!first.retry) return first.result;
     await waitMs(retryDelayMs);
     const second = await overpassAttempt();
-    return second.overlay;
+    return second.result;
   };
 
   if (workerHost && courseId && catalog) {
@@ -495,10 +516,7 @@ export async function fetchOsmOverlay(
     const cooling = busyCooldown.get(courseId);
     const now = nowMs();
     if (cooling && cooling.untilMs > now && !deps.bypassBusyCooldown) {
-      logOsmOverlayDev(courseId, 'waiting: Worker upstream_busy', {
-        remainingMs: cooling.untilMs - now,
-        strikes: cooling.strikes,
-      });
+      logOsmOverlayWaiting(courseId, nowMs);
       return null;
     }
     if (cooling && cooling.strikes > 0) {
@@ -516,8 +534,8 @@ export async function fetchOsmOverlay(
         worker = await readWorker();
         if (worker.kind === 'busy') {
           retryAfterMs = preferRetryAfter(retryAfterMs, worker.retryAfterMs);
-          const armed = armBusyCooldown(courseId, retryAfterMs, nowMs);
-          logOsmOverlayDev(courseId, 'waiting: Worker upstream_busy', {
+          const armed = armBusyCooldown(courseId, retryAfterMs, nowMs, 'upstream_busy');
+          logOsmOverlayDev(courseId, waitingDetail('upstream_busy'), {
             waitMs: armed.waitMs,
             strikes: armed.strikes,
             retryAfterMs,
@@ -525,18 +543,25 @@ export async function fetchOsmOverlay(
           return null;
         }
       }
-      if (worker.kind === 'overlay') {
-        if (worker.overlay && worker.overlay.features.length > 0) return rememberCourse(worker.overlay);
+      if (worker.kind === 'overlay') return rememberCourse(worker.overlay);
+      if (worker.kind === 'empty') {
         blockCourseForSession(courseId);
-        logOsmOverlayDev(courseId, 'blocked for this session: Worker had no overlay');
+        logOsmOverlayDev(courseId, 'blocked for this session: Worker no_overlay');
         return null;
       }
-      const overlay = rememberCourse(await runOverpass());
-      if (!overlay) {
+      const overpass = await runOverpass();
+      if (overpass.kind === 'features') return rememberCourse(overpass.overlay);
+      if (overpass.kind === 'empty') {
         blockCourseForSession(courseId);
-        logOsmOverlayDev(courseId, 'blocked for this session: Worker failed and Overpass was empty');
+        logOsmOverlayDev(courseId, 'blocked for this session: Overpass had no golf features');
+        return null;
       }
-      return overlay;
+      const armed = armBusyCooldown(courseId, null, nowMs, 'fetch_failed');
+      logOsmOverlayDev(courseId, waitingDetail('fetch_failed'), {
+        waitMs: armed.waitMs,
+        strikes: armed.strikes,
+      });
+      return null;
     })();
     workerInflight.set(courseId, job);
     try {
@@ -546,7 +571,8 @@ export async function fetchOsmOverlay(
     }
   }
 
-  return finish(await runOverpass());
+  const overpass = await runOverpass();
+  return finish(overpass.kind === 'features' ? overpass.overlay : null);
 }
 
 const overlayCache = new Map<string, OsmOverlay>();
@@ -554,13 +580,13 @@ const teeCache = new Map<string, LatLng>();
 /** Full course overlay for this session, keyed by course id. Not persisted here. */
 const courseWide = new Map<string, OsmOverlay>();
 /**
- * Course ids with a definitive miss this session (`no_overlay`, an empty Worker
- * body, or a failed Overpass fallback). A miss is not stored as overlay data.
- * `upstream_busy` is not in this set.
+ * Course ids with a definitive empty this session (Worker `no_overlay`, or
+ * Overpass 200 with no golf features). A miss is not stored as overlay data.
+ * Timeouts and other failures are not in this set.
  */
 const sessionFetched = new Set<string>();
-/** Per-course wait after Worker `upstream_busy`. Strikes stay until a real result. */
-const busyCooldown = new Map<string, { untilMs: number; strikes: number }>();
+/** Per-course wait after a transient Worker or Overpass failure. Strikes stay until a real result. */
+const busyCooldown = new Map<string, { untilMs: number; strikes: number; reason: OverlayWaitReason }>();
 const inflight = new Map<string, Promise<OsmOverlay | null>>();
 /** One in-flight course-wide Worker/Overpass read per course. Not the hole-screen inflight map. */
 const workerInflight = new Map<string, Promise<OsmOverlay | null>>();
@@ -569,12 +595,25 @@ function armBusyCooldown(
   courseId: string,
   retryAfterMs: number | null,
   nowMs: () => number,
+  reason: OverlayWaitReason,
 ): { waitMs: number; strikes: number } {
   const strikes = (busyCooldown.get(courseId)?.strikes ?? 0) + 1;
   const backoffMs = backoffMsForStrike(strikes);
   const waitMs = retryAfterMs != null && retryAfterMs > backoffMs ? retryAfterMs : backoffMs;
-  busyCooldown.set(courseId, { untilMs: nowMs() + waitMs, strikes });
+  busyCooldown.set(courseId, { untilMs: nowMs() + waitMs, strikes, reason });
   return { waitMs, strikes };
+}
+
+/** Dev log for a course still inside the transient-failure cooldown. Returns the remaining wait. */
+export function logOsmOverlayWaiting(courseId: string, nowMs: () => number = Date.now): number {
+  const id = courseId.trim();
+  if (!id) return 0;
+  const row = busyCooldown.get(id);
+  if (!row) return 0;
+  const remainingMs = Math.max(0, row.untilMs - nowMs());
+  if (remainingMs <= 0) return 0;
+  logOsmOverlayDev(id, waitingDetail(row.reason), { remainingMs, strikes: row.strikes });
+  return remainingMs;
 }
 
 function blockCourseForSession(courseId: string): void {
@@ -791,7 +830,7 @@ export async function loadCachedOrFetchCourseOverlay(
   if (courseId && courseOverlaySettled(courseId)) return null;
   const remainingMs = courseId ? osmOverlayBusyRemainingMs(courseId, nowMs) : 0;
   if (remainingMs > 0 && !deps.bypassBusyCooldown) {
-    logOsmOverlayDev(courseId, 'waiting: Worker upstream_busy', { remainingMs });
+    logOsmOverlayWaiting(courseId, nowMs);
     return null;
   }
 

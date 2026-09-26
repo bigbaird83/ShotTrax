@@ -18,7 +18,7 @@ import {
   dropCourseOverlayMemory,
   fetchOsmOverlay,
   loadCachedOrFetchCourseOverlay,
-  logOsmOverlayDev,
+  logOsmOverlayWaiting,
   osmOverlayBusyRemainingMs,
 } from './osmOverlay';
 import { loadCourseOsmOverlay, saveCourseOsmOverlay } from './osmOverlayStore';
@@ -238,7 +238,7 @@ async function backfillOneFavorite(
   const nowMs = deps.nowMs ?? Date.now;
   const waitingMs = osmOverlayBusyRemainingMs(course.id, nowMs);
   if (waitingMs > 0) {
-    logOsmOverlayDev(course.id, 'backfill waiting: Worker upstream_busy', { remainingMs: waitingMs });
+    logOsmOverlayWaiting(course.id, nowMs);
     return;
   }
 
@@ -273,7 +273,7 @@ async function backfillOneFavorite(
     const retryInMs = osmOverlayBusyRemainingMs(course.id, nowMs);
     if (retryInMs > 0) {
       backfillAttempted.delete(course.id);
-      logOsmOverlayDev(course.id, 'backfill will retry after upstream_busy', { remainingMs: retryInMs });
+      logOsmOverlayWaiting(course.id, nowMs);
     }
   } catch {
     // A failure stores nothing. The session attempt is already spent.

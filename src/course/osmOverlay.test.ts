@@ -965,6 +965,162 @@ test('a Worker timeout stores nothing and falls back to Overpass once', async ()
   dropCourseOverlayMemory(courseId);
 });
 
+test('Worker timeout plus Overpass 504 uses the cooldown and retries without a restart', async () => {
+  const courseId = 'timeout-then-504';
+  dropCourseOverlayMemory(courseId);
+  const catalog = { lat: 33.26741, lng: -93.23916 };
+  const green = { lat: 33.267, lng: -93.239 };
+  let now = 1_700_000_000_000;
+  const nowMs = () => now;
+  const calls: string[] = [];
+  let recover = false;
+  const lines: string[] = [];
+  const originalLog = console.log;
+  const dev = globalThis as { __DEV__?: boolean };
+  const previousDev = dev.__DEV__;
+  console.log = (...args: unknown[]) => {
+    lines.push(args.map((part) => (typeof part === 'string' ? part : JSON.stringify(part))).join(' '));
+  };
+  dev.__DEV__ = true;
+  const fetchImpl: typeof fetch = async (input, init) => {
+    const url = String(input);
+    calls.push(url);
+    if (url.includes('/osm/v1/overlay')) {
+      if (recover) {
+        return new Response(JSON.stringify(WORKER_GREEN), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      await new Promise((_resolve, reject) => {
+        const onAbort = () => reject(new DOMException('aborted', 'AbortError'));
+        if (init?.signal?.aborted) onAbort();
+        else init?.signal?.addEventListener('abort', onAbort, { once: true });
+      });
+    }
+    return new Response('gateway timeout', { status: 504 });
+  };
+  const deps = {
+    retryDelayMs: 0,
+    nowMs,
+    getBaseUrl: () => WORKER,
+    workerTimeoutMs: 30,
+    fetch: fetchImpl,
+  };
+  const load = () =>
+    loadCachedOrFetchCourseOverlay(
+      { courseId, holeNumber: 1, green, location: green, courseLocation: catalog },
+      { fetchOverlay: (query) => fetchOsmOverlay(query, deps), nowMs },
+    );
+  try {
+    assert.equal(await load(), null);
+    assert.deepEqual(
+      calls.map((url) => (url.includes('/osm/v1/overlay') ? 'worker' : 'overpass')),
+      ['worker', 'overpass', 'overpass'],
+    );
+    assert.equal(osmOverlayBusyRemainingMs(courseId, nowMs), OSM_BUSY_BACKOFF_MS[0]);
+    assert.ok(
+      lines.some((line) => line.includes(courseId) && line.includes('waiting: Worker failed and Overpass failed')),
+    );
+
+    assert.equal(await load(), null);
+    assert.equal(calls.length, 3);
+
+    now += OSM_BUSY_BACKOFF_MS[0];
+    recover = true;
+    const overlay = await load();
+    assert.equal(calls.length, 4);
+    assert.match(calls[3] ?? '', /\/osm\/v1\/overlay/);
+    assert.equal(overlay?.source, 'osm');
+    assert.equal(overlay?.features.some((feature) => feature.kind === 'green' && feature.holeNumber === 1), true);
+    assert.equal(overlay?.features.find((feature) => feature.holeNumber === 1)?.coordinates[0]?.lat, 33.267);
+  } finally {
+    console.log = originalLog;
+    dev.__DEV__ = previousDev;
+    dropCourseOverlayMemory(courseId);
+  }
+});
+
+test('Worker timeout plus Overpass 200 with no golf features stays blocked', async () => {
+  const courseId = 'timeout-then-empty';
+  dropCourseOverlayMemory(courseId);
+  const catalog = { lat: 33.26741, lng: -93.23916 };
+  const green = { lat: 33.267, lng: -93.239 };
+  let now = 1_700_000_000_000;
+  const nowMs = () => now;
+  const calls: string[] = [];
+  const lines: string[] = [];
+  const originalLog = console.log;
+  const dev = globalThis as { __DEV__?: boolean };
+  const previousDev = dev.__DEV__;
+  console.log = (...args: unknown[]) => {
+    lines.push(args.map((part) => (typeof part === 'string' ? part : JSON.stringify(part))).join(' '));
+  };
+  dev.__DEV__ = true;
+  const fetchImpl: typeof fetch = async (input, init) => {
+    const url = String(input);
+    calls.push(url);
+    if (url.includes('/osm/v1/overlay')) {
+      await new Promise((_resolve, reject) => {
+        const onAbort = () => reject(new DOMException('aborted', 'AbortError'));
+        if (init?.signal?.aborted) onAbort();
+        else init?.signal?.addEventListener('abort', onAbort, { once: true });
+      });
+    }
+    return new Response(JSON.stringify({ elements: [] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  };
+  const deps = {
+    retryDelayMs: 0,
+    nowMs,
+    getBaseUrl: () => WORKER,
+    workerTimeoutMs: 30,
+    fetch: fetchImpl,
+  };
+  try {
+    const overlay = await fetchOsmOverlay(
+      { courseId, location: green, courseLocation: catalog, holeNumber: 1 },
+      deps,
+    );
+    assert.equal(overlay, null);
+    assert.deepEqual(
+      calls.map((url) => (url.includes('/osm/v1/overlay') ? 'worker' : 'overpass')),
+      ['worker', 'overpass'],
+    );
+    assert.equal(osmOverlayBusyRemainingMs(courseId, nowMs), 0);
+    assert.ok(
+      lines.some(
+        (line) => line.includes(courseId) && line.includes('blocked for this session: Overpass had no golf features'),
+      ),
+    );
+
+    now += 6 * 60 * 60 * 1000;
+    const again = await loadCachedOrFetchCourseOverlay(
+      { courseId, holeNumber: 1, green, location: green, courseLocation: catalog },
+      {
+        nowMs,
+        fetchOverlay: (query) =>
+          fetchOsmOverlay(query, {
+            ...deps,
+            fetch: async () => {
+              calls.push('again');
+              return new Response(JSON.stringify(WORKER_GREEN), { status: 200 });
+            },
+          }),
+      },
+    );
+    assert.equal(again, null);
+    assert.equal(calls.includes('again'), false);
+    assert.equal(calls.length, 2);
+  } finally {
+    console.log = originalLog;
+    dev.__DEV__ = previousDev;
+    dropCourseOverlayMemory(courseId);
+  }
+});
+
 test('Worker upstream_busy succeeds after the cooldown without a restart', async () => {
   const courseId = 'magnolia-busy-later';
   dropCourseOverlayMemory(courseId);
