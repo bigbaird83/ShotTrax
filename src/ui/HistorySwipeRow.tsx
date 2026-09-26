@@ -53,6 +53,8 @@ export function HistorySwipeRow({
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gesture) =>
         Math.abs(gesture.dx) > 12 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
+      // Tab swipe asks on every move while this row is the responder. Refuse so the row keeps the touch.
+      onPanResponderTerminationRequest: () => false,
       onPanResponderMove: (_, gesture) => {
         const base = openRef.current ? -HISTORY_SWIPE_REVEAL_PX : 0;
         const next = Math.max(-HISTORY_SWIPE_REVEAL_PX, Math.min(0, base + gesture.dx));
@@ -81,6 +83,12 @@ export function HistorySwipeRow({
         });
         if (snap === 'open') callbacks.current.onOpen();
         else callbacks.current.onClose();
+        Animated.spring(x, {
+          toValue: historySwipeRestOffset(snap === 'open'),
+          useNativeDriver: true,
+          bounciness: 0,
+          speed: 20,
+        }).start();
       },
     }),
   ).current;
