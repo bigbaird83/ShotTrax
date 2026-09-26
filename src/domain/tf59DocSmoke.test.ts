@@ -65,7 +65,8 @@ test('TF 59: dedicated Putt shares the Back/Home row — clubs stay on-screen', 
 
   // Back / Home / Putt share one 44pt pill; its fill and hit area are clipped to the shape.
   const pill = watch.slice(watch.indexOf('private func actionPill'), watch.indexOf('private var clubPick'));
-  assert.match(pill, /minHeight: 44/);
+  // The pill fills its row: 44pt, less only on a short face (watchHoleFrames).
+  assert.match(pill, /maxWidth: \.infinity, maxHeight: \.infinity/);
   assert.match(pill, /\.clipShape\(RoundedRectangle\(cornerRadius: 10\)\)/);
   assert.match(pill, /\.contentShape\(RoundedRectangle\(cornerRadius: 10\)\)/);
 

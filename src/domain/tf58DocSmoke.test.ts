@@ -253,7 +253,8 @@ test('TF 58 P0: Made pill + 0–3 + hole Putt above the club strip', () => {
   assert.doesNotMatch(madeBtn, /\.disabled/);
   assert.doesNotMatch(madeBtn, /borderedProminent/);
   assert.match(madeBtn, /maxWidth: \.infinity/);
-  assert.match(madeBtn, /minHeight: 48/);
+  // 48pt, less only on a short face so Made never clips (watchPuttSheetFrames).
+  assert.match(madeBtn, /\.frame\(height: madeHeight\)/);
   assert.match(madeBtn, /outdoorLime/);
   assert.match(madeBtn, /stroke\(Color\("cream"\)/);
   // Lime fill is clipped to Made's rounded pill — not a rectangle behind it.
