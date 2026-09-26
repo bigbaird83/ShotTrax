@@ -319,6 +319,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
   private let pendingQueueKey = "pendingWatchQueue"
   private var golfWorkout: HKWorkoutSession?
   private var endingGolfWorkout = false
+  /// The object already passed to `end()`. A second `end()` of it raises.
+  private var endingSession: HKWorkoutSession?
   /// `handleActiveWorkoutRecovery` is in flight. Do not create another session.
   private var recoveringGolfWorkout = false
   /// True from init until the next main turn. `handleActiveWorkoutRecovery`
@@ -2578,20 +2580,66 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
     }
   }
 
+  /// `end()` raises unless the session is running or paused, and a second
+  /// `end()` of the same object raises. Nil and already-ended are dropped.
+  /// Mirrors `watchGolfWorkoutEnd` in src/domain/watchColdLaunch.ts.
+  private enum GolfWorkoutEndAction {
+    case dropNil
+    case dropEnded
+    case alreadyEnding
+    case end
+    case skipNotRunning
+  }
+
+  private static func golfWorkoutEndAction(
+    hasSession: Bool,
+    ended: Bool,
+    runningOrPaused: Bool,
+    endingThisSession: Bool
+  ) -> GolfWorkoutEndAction {
+    if !hasSession { return .dropNil }
+    if ended { return .dropEnded }
+    if endingThisSession { return .alreadyEnding }
+    if runningOrPaused { return .end }
+    return .skipNotRunning
+  }
+
+  private func endGolfWorkout(_ session: HKWorkoutSession?) {
+    let endingThisSession = session.map { endingSession === $0 } ?? false
+    let action = Self.golfWorkoutEndAction(
+      hasSession: session != nil,
+      ended: session?.state == .ended,
+      runningOrPaused: session?.state == .running || session?.state == .paused,
+      endingThisSession: endingThisSession
+    )
+    switch action {
+    case .dropNil:
+      if endingSession == nil { endingGolfWorkout = false }
+    case .dropEnded:
+      if let session {
+        if golfWorkout === session { golfWorkout = nil }
+        if endingSession === session {
+          endingSession = nil
+          endingGolfWorkout = false
+        }
+      }
+    case .alreadyEnding:
+      break
+    case .end:
+      guard let session else { return }
+      endingSession = session
+      endingGolfWorkout = true
+      session.end()
+    case .skipNotRunning:
+      workoutLog.info("golf workout not ended; session is not running")
+      if let session, golfWorkout === session { golfWorkout = nil }
+      if endingSession == nil { endingGolfWorkout = false }
+    }
+  }
+
   private func stopRoundStay() {
     disableWorkoutBackgroundLocation()
-    guard let session = golfWorkout else {
-      endingGolfWorkout = false
-      return
-    }
-    if session.state == .ended {
-      golfWorkout = nil
-      endingGolfWorkout = false
-      return
-    }
-    if endingGolfWorkout { return }
-    endingGolfWorkout = true
-    session.end()
+    endGolfWorkout(golfWorkout)
   }
 
   func workoutSession(
@@ -2611,10 +2659,13 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
         }
       }
       if toState == .ended {
+        if self.endingSession === workoutSession {
+          self.endingSession = nil
+          self.endingGolfWorkout = false
+        }
         if self.golfWorkout === workoutSession {
           self.golfWorkout = nil
         }
-        self.endingGolfWorkout = false
         self.disableWorkoutBackgroundLocation()
         self.syncLiveLocation()
       }
@@ -2691,9 +2742,9 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
       syncRoundStay()
       return
     }
-    if let created = golfWorkout, created !== session, created.state != .ended {
+    if let created = golfWorkout, created !== session {
       workoutLog.info("recovered golf workout; ending the session started this launch")
-      created.end()
+      endGolfWorkout(created)
     }
     // No workout builder is used. Reattach the delegate only.
     session.delegate = self
@@ -2713,8 +2764,8 @@ final class WatchClubSession: NSObject, ObservableObject, WCSessionDelegate, CLL
 
   // WCSessionDelegate and CLLocationManagerDelegate are not the main thread.
   // Copy the callback arguments, then hop before reading or writing this object.
-  // Cold launch is the one that overlaps init and the first body: activation
-  // delivers the live club list while those are still using `list`.
+  // Activation runs on every cold launch — live round, a round that just ended,
+  // or no round — and can overlap init and the first body.
   func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
     // Last context from any launch — not a receive during this process.
     let context = session.receivedApplicationContext

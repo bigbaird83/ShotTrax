@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { watchGolfShouldStartActivity, watchMayCreateGolfWorkout } from './watchColdLaunch';
+import {
+  watchColdLaunchFace,
+  watchGolfShouldStartActivity,
+  watchGolfWorkoutEnd,
+  watchMayCreateGolfWorkout,
+} from './watchColdLaunch';
 
 const root = new URL('../../', import.meta.url);
 const read = (path: string) => readFileSync(new URL(path, root), 'utf8');
@@ -35,6 +40,79 @@ test('a second golf workout is refused while recovery, launch, or a session is o
   assert.equal(watchGolfShouldStartActivity('running'), false);
   assert.equal(watchGolfShouldStartActivity('paused'), false);
   assert.equal(watchGolfShouldStartActivity('ended'), false);
+});
+
+test('ending a workout at launch does not end nil, ended, or an in-flight session', () => {
+  const idle = { hasSession: true, ended: false, runningOrPaused: true, endingThisSession: false };
+  assert.equal(watchGolfWorkoutEnd({ ...idle, hasSession: false, runningOrPaused: false }), 'drop-nil');
+  assert.equal(watchGolfWorkoutEnd({ ...idle, ended: true, runningOrPaused: false }), 'drop-ended');
+  assert.equal(watchGolfWorkoutEnd({ ...idle, endingThisSession: true }), 'already-ending');
+  assert.equal(watchGolfWorkoutEnd(idle), 'end');
+  assert.equal(watchGolfWorkoutEnd({ ...idle, runningOrPaused: false }), 'skip-not-running');
+  // Ended wins over a stale "already ending" flag so end() is not called again.
+  assert.equal(
+    watchGolfWorkoutEnd({ hasSession: true, ended: true, runningOrPaused: false, endingThisSession: true }),
+    'drop-ended',
+  );
+
+  const session = read('targets/watch/WatchClubSession.swift');
+  const action = session.slice(
+    session.indexOf('func golfWorkoutEndAction'),
+    session.indexOf('private func endGolfWorkout'),
+  );
+  assert.match(action, /if !hasSession \{ return \.dropNil \}/);
+  assert.match(action, /if ended \{ return \.dropEnded \}/);
+  assert.match(action, /if endingThisSession \{ return \.alreadyEnding \}/);
+  assert.match(action, /if runningOrPaused \{ return \.end \}/);
+  assert.match(action, /return \.skipNotRunning/);
+  const endFn = session.slice(session.indexOf('private func endGolfWorkout'), session.indexOf('private func stopRoundStay'));
+  assert.equal((endFn.match(/session\.end\(\)/g) ?? []).length, 1);
+  const stop = session.slice(session.indexOf('private func stopRoundStay'), session.indexOf('func workoutSession'));
+  assert.match(stop, /endGolfWorkout\(golfWorkout\)/);
+  assert.doesNotMatch(stop, /session\.end\(\)/);
+  const finish = session.slice(
+    session.indexOf('func finishGolfWorkoutRecovery'),
+    session.indexOf('activationDidCompleteWith'),
+  );
+  assert.match(finish, /session\.state == \.ended/);
+  assert.doesNotMatch(finish, /created\.end\(\)/);
+  assert.match(finish, /endGolfWorkout\(created\)/);
+  const app = read('targets/watch/index.swift');
+  const recovery = app.slice(app.indexOf('func handleActiveWorkoutRecovery'), app.indexOf('@main'));
+  const call = recovery.indexOf('recoverActiveWorkoutSession {');
+  const hopped = recovery.slice(call);
+  assert.ok(call >= 0);
+  assert.ok(hopped.indexOf('DispatchQueue.main.async') >= 0);
+  assert.ok(hopped.indexOf('DispatchQueue.main.async') < hopped.indexOf('finishGolfWorkoutRecovery'));
+});
+
+test('cold open face is hole, round complete, or home without a trap', () => {
+  assert.equal(
+    watchColdLaunchFace({ showsHome: false, showsNearby: false, roundComplete: false, puttOpen: false }),
+    'hole',
+  );
+  assert.equal(
+    watchColdLaunchFace({ showsHome: false, showsNearby: false, roundComplete: true, puttOpen: false }),
+    'roundComplete',
+  );
+  assert.equal(
+    watchColdLaunchFace({ showsHome: true, showsNearby: true, roundComplete: true, puttOpen: false }),
+    'home',
+  );
+  assert.equal(
+    watchColdLaunchFace({ showsHome: false, showsNearby: false, roundComplete: false, puttOpen: true }),
+    'putt',
+  );
+
+  const content = read('targets/watch/content.swift');
+  const body = content.slice(content.indexOf('var body: some View'), content.indexOf('private var watchHome'));
+  const homeAt = body.indexOf('if session.showsHome');
+  const nearbyAt = body.indexOf('else if session.showsNearby');
+  const doneAt = body.indexOf('else if session.list.roundComplete && !session.putt.open');
+  const puttAt = body.indexOf('else if session.putt.open');
+  assert.ok(homeAt >= 0 && nearbyAt > homeAt && doneAt > nearbyAt && puttAt > doneAt);
+  const roundComplete = content.slice(content.indexOf('private var roundComplete'), content.indexOf('private func carryFromLabel'));
+  assert.doesNotMatch(roundComplete, /fatalError|preconditionFailure|as!|try!|\[\d+\]/);
 });
 
 test('Watch cold launch loads defaults before WCSession and applies context on main', () => {
