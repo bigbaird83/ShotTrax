@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useDb } from '@/src/db/DbProvider';
 import { getActiveRound } from '@/src/db/repo';
-import { startWatchClubBridge } from './watchClub';
+import { noteWatchClubDatabase, startWatchClubBridge } from './watchClub';
 import { pushWatchHomeFromCache, rememberPhoneFix, setWatchHomeContext } from './watchHome';
 import { setWatchNearbyContext } from './watchNearby';
 import { useLiveFix } from './useLiveFix';
@@ -24,6 +24,7 @@ export function useWatchNearbyStart(): void {
 
   useEffect(() => {
     startWatchClubBridge();
+    noteWatchClubDatabase(db);
     setWatchNearbyContext({
       db,
       bump: () => bumpRef.current(),
