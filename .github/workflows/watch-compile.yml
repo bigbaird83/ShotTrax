@@ -1,12 +1,14 @@
-# Compiles the Apple Watch app and complication. The Ubuntu jobs in ci.yml
-# (Tests, Typecheck, Round flow) never compile Swift, so a broken Watch file
-# only used to fail inside a long EAS build.
+# Compiles the Apple Watch app and complication, the iPhone round Live Activity
+# widget, and typechecks the Live Activity module's plain Swift. The Ubuntu jobs
+# in ci.yml (Tests, Typecheck, Round flow) never compile Swift, so a broken
+# Swift file only used to fail inside a long EAS build.
 name: Watch compile
 
 on:
   workflow_dispatch:
   pull_request:
     paths:
+      - 'modules/live-activity/**'
       - 'targets/**'
       - 'app.json'
       - 'app.config.*'
@@ -19,6 +21,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'modules/live-activity/**'
       - 'targets/**'
       - 'app.json'
       - 'app.config.*'
@@ -69,6 +72,15 @@ jobs:
         env:
           CI: '1'
           EXPO_NO_TELEMETRY: '1'
+
+      # The module's Expo glue builds with the app in EAS; its ActivityKit and
+      # Core Location code has no Expo import, so check it here on its own.
+      - name: Typecheck Live Activity module Swift
+        run: >
+          xcrun --sdk iphonesimulator swiftc -typecheck
+          -target arm64-apple-ios16.4-simulator
+          modules/live-activity/ios/ShotTraxxRoundAttributes.swift
+          modules/live-activity/ios/RoundLiveActivity.swift
 
       - name: Compile Watch targets
         run: node .github/scripts/compile-watch-targets.mjs

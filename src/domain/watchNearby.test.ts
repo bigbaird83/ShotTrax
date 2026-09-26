@@ -410,7 +410,7 @@ test('build 26 locks stay: delete confirm, 60% map, one-line header, 600-yard te
   const app = readFileSync(new URL('../../app.json', import.meta.url), 'utf8');
   assert.match(
     app,
-    /NSLocationWhenInUseUsageDescription": "ShotTraxx™ uses your location while the app is open to find courses near you, show yards to the green, and mark where you hit from when you pick a club\./,
+    /NSLocationWhenInUseUsageDescription": "ShotTraxx™ uses your location while you use the app to find courses near you, show yards to the green, and mark where you hit from when you pick a club\. During a round, it keeps the yards on your Lock Screen up to date until the round ends\./,
   );
   assert.match(app, /NSPhotoLibraryUsageDescription": "ShotTraxx™ does not use your photo library/);
   assert.match(app, /"locationAlwaysAndWhenInUsePermission": false/);

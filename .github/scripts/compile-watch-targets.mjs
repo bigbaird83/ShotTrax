@@ -1,6 +1,8 @@
 /**
- * Compile every Swift file under targets/ by building the watchOS targets
- * prebuild just generated. No signing. Generic watchOS Simulator only.
+ * Compile every Swift file under targets/ by building the targets prebuild just
+ * generated: watchOS targets for the generic watchOS Simulator, and iPhone
+ * widget extensions (the round Live Activity) for the generic iOS Simulator.
+ * No signing.
  *
  * Expects `npx expo prebuild -p ios` to have already written ios/*.xcodeproj.
  */
@@ -33,7 +35,7 @@ function watchTargetConfigs() {
           },
         })
       : loaded;
-    if (cfg.type !== 'watch' && cfg.type !== 'watch-widget') continue;
+    if (cfg.type !== 'watch' && cfg.type !== 'watch-widget' && cfg.type !== 'widget') continue;
     const name = sanitizeTargetName(cfg.name || entry.name);
     if (!name) throw new Error(`Watch target in ${entry.name} has no usable name`);
     found.push({ name, type: cfg.type, dir: entry.name });
@@ -42,7 +44,7 @@ function watchTargetConfigs() {
     if (a.type === b.type) return a.name.localeCompare(b.name);
     return a.type === 'watch-widget' ? -1 : 1;
   });
-  if (found.length === 0) throw new Error('No watch or watch-widget targets under targets/');
+  if (found.length === 0) throw new Error('No watch, watch-widget, or widget targets under targets/');
   return found;
 }
 
@@ -195,7 +197,7 @@ function assertSwiftFilesAreMembers(pbx, targets) {
   for (const target of targets) {
     const dirs = synchronizedDirsForTarget(pbx, target);
     if (dirs.length === 0) {
-      throw new Error(`Target ${target.name} has no synchronized watch source folder`);
+      throw new Error(`Target ${target.name} has no synchronized source folder`);
     }
     for (const { dir, excluded } of dirs) {
       for (const file of listSwiftFiles(path.join(root, dir))) {
@@ -208,9 +210,9 @@ function assertSwiftFilesAreMembers(pbx, targets) {
   }
   const missing = swiftFiles.filter((file) => !covered.has(file));
   if (missing.length) {
-    throw new Error(`These Swift files are not in a watch target that this job builds:\n${missing.join('\n')}`);
+    throw new Error(`These Swift files are not in a target that this job builds:\n${missing.join('\n')}`);
   }
-  console.log(`Every Swift file under targets/ is in a watch target (${swiftFiles.length}):`);
+  console.log(`Every Swift file under targets/ is in a built target (${swiftFiles.length}):`);
   for (const file of swiftFiles) console.log(`  ${file} -> ${covered.get(file)}`);
   console.log(`Building: ${targets.map((target) => `${target.name} (${target.type})`).join(', ')}`);
 }
@@ -252,13 +254,20 @@ function signingArgs() {
   ];
 }
 
+function simulatorFor(target) {
+  return target.type === 'widget'
+    ? { sdk: 'iphonesimulator', destination: 'generic/platform=iOS Simulator' }
+    : { sdk: 'watchsimulator', destination: 'generic/platform=watchOS Simulator' };
+}
+
 async function buildTarget(projectPath, target) {
+  const sim = simulatorFor(target);
   const schemeArgs = [
     '-project', projectPath,
     '-scheme', target.name,
     '-configuration', 'Debug',
-    '-sdk', 'watchsimulator',
-    '-destination', 'generic/platform=watchOS Simulator',
+    '-sdk', sim.sdk,
+    '-destination', sim.destination,
     '-derivedDataPath', derived,
     '-disableAutomaticPackageResolution',
     ...signingArgs(),
@@ -277,7 +286,7 @@ async function buildTarget(projectPath, target) {
     '-project', projectPath,
     '-target', target.name,
     '-configuration', 'Debug',
-    '-sdk', 'watchsimulator',
+    '-sdk', sim.sdk,
     '-derivedDataPath', derived,
     '-disableAutomaticPackageResolution',
     ...signingArgs(),
@@ -405,6 +414,36 @@ function assertWatchWidgetEmbedded(pbx) {
   console.log('ShotTraxxHole.appex is embedded in ShotTraxxWatch (Embed Foundation Extensions).');
 }
 
+/**
+ * The round Live Activity needs these in the iPhone app's generated Info.plist.
+ * Checked after prebuild so a config plugin cannot drop them silently.
+ */
+function assertAppLiveActivityPlist() {
+  const iosDir = path.join(root, 'ios');
+  const candidates = fs
+    .readdirSync(iosDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.') && !entry.name.endsWith('.xcodeproj'))
+    .map((entry) => path.join(iosDir, entry.name, 'Info.plist'))
+    .filter((file) => fs.existsSync(file))
+    .filter((file) => fs.readFileSync(file, 'utf8').includes('<string>com.shottrax.app</string>') ||
+      /CFBundleIdentifier<\/key>\s*<string>\$\(PRODUCT_BUNDLE_IDENTIFIER\)<\/string>/.test(fs.readFileSync(file, 'utf8')))
+    .filter((file) => fs.readFileSync(file, 'utf8').includes('NSLocationWhenInUseUsageDescription'));
+  if (candidates.length !== 1) {
+    throw new Error(`Expected one iPhone app Info.plist under ios/, found: ${candidates.join(', ') || '(none)'}`);
+  }
+  const plist = fs.readFileSync(candidates[0], 'utf8');
+  if (!/<key>NSSupportsLiveActivities<\/key>\s*<true\/>/.test(plist)) {
+    throw new Error(`${candidates[0]} is missing NSSupportsLiveActivities = true`);
+  }
+  if (!/<key>UIBackgroundModes<\/key>\s*<array>[\s\S]*?<string>location<\/string>[\s\S]*?<\/array>/.test(plist)) {
+    throw new Error(`${candidates[0]} is missing UIBackgroundModes location (Lock Screen yards stop when locked)`);
+  }
+  if (/NSLocationAlways/.test(plist)) {
+    throw new Error(`${candidates[0]} must not ask for Always location`);
+  }
+  console.log(`${path.relative(root, candidates[0])}: Live Activities on, location background mode, no Always key.`);
+}
+
 async function main() {
   fs.mkdirSync(derived, { recursive: true });
   const configs = watchTargetConfigs();
@@ -423,9 +462,10 @@ async function main() {
   });
   assertSwiftFilesAreMembers(pbx, targets);
   assertWatchWidgetEmbedded(pbx);
+  assertAppLiveActivityPlist();
   for (const target of targets) writeScheme(projectPath, target);
   for (const target of targets) await buildTarget(projectPath, target);
-  console.log('\nWatch compile succeeded.');
+  console.log('\nWatch and widget compile succeeded.');
 }
 
 main().catch((err) => {

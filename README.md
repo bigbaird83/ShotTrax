@@ -71,6 +71,15 @@ Read-only Pro greens probe (course 4 = Bowling Green CC): `npm run gca:greens-pr
 
 Hole map draws Overpass `golf=green`, `golf=fairway`, `golf=tee`, and `golf=hole` around a real green pin or course coordinate. When that response also includes `golf=bunker`, `golf=water_hazard`, `golf=lateral_water_hazard`, or `golf=cartpath`, those outlines are drawn too. Cart paths are often also `highway=service`; a service road or pond without the golf tag is not drawn. Unmapped / timeout / empty → no overlay. OSM par tags are ignored.
 
+## Lock Screen and Dynamic Island (Live Activity)
+
+A round in progress shows on the Lock Screen and in the Dynamic Island (iOS 16.2+): course, hole and par, the running score (`thru 6, +3`), front / middle / back yards, the last shot (`7 Iron · 152 yd`), and, with a group, the leader and skins riding. The Dynamic Island's compact view shows `H7` and the middle yards.
+
+- The app sends the hole's green points and the text lines when they change (`src/domain/liveActivity.ts`, `src/services/liveActivity.ts`). Yards are worked out natively from live GPS (`modules/live-activity/ios/RoundLiveActivity.swift`) so they keep counting down while the phone is locked.
+- Yards show only from a fix of 25 m or better that is under 30 s old, and nothing past 1000 yd; otherwise **—**. Front and back show only when the course has both, the same rule as the hole screen. No green → "No green location for this hole". Nothing is invented.
+- Location for it runs only while the activity is up. It ends when the round is finished (from any screen, or on app launch with no round in progress) or when the golfer dismisses it.
+- The widget is `targets/live-activity` (`ShotTraxxRound`, `com.shottrax.app.round`). `ShotTraxxRoundAttributes.swift` exists in the module and the widget and must stay identical (checked in `liveActivity.test.ts`). The Watch compile workflow also builds this widget for the iOS Simulator and typechecks the module's plain Swift.
+
 ## Install on your iPhone (TestFlight)
 
 The Watch companion needs a **native** binary. A production EAS build submitted to TestFlight is the path that covers Watch on a real iPhone.
@@ -143,7 +152,7 @@ eas workflow:run .eas/workflows/production-ios-testflight.yml
 
 | Permission | When |
 | --- | --- |
-| **Location When In Use** | Nearby courses, yards to green, and club-pick shot marks while the app is open. ShotTraxx does not invent coordinates. Watch location marks a Watch club tap (phone fallback if that sample is missing or stale). Nearby stays phone-only. The `expo-location` plugin sets Always / background / motion purpose keys to `false` so prebuild does not inject them. `motionUsagePermission: false` alone still compiles ExpoLocation's CoreMotion activity APIs (ITMS-90683). `./plugins/withDisableExpoLocationMotion` strips that linkage from the shipping iOS binary. Do not add a dead `NSMotionUsageDescription`. |
+| **Location When In Use** | Nearby courses, yards to green, and club-pick shot marks while you use the app. During a round in progress, the round Live Activity keeps using that When In Use location with the phone locked (`UIBackgroundModes` `location`, iOS's blue indicator shown) so Lock Screen / Dynamic Island yards stay current; it stops when the round ends or the Live Activity is dismissed. No Always permission is requested. ShotTraxx does not invent coordinates. Watch location marks a Watch club tap (phone fallback if that sample is missing or stale). Nearby stays phone-only. The `expo-location` plugin sets Always / background / motion purpose keys to `false` so prebuild does not inject them. `motionUsagePermission: false` alone still compiles ExpoLocation's CoreMotion activity APIs (ITMS-90683). `./plugins/withDisableExpoLocationMotion` strips that linkage from the shipping iOS binary. Do not add a dead `NSMotionUsageDescription`. |
 | **Photo Library** (iOS) | Not used. `NSPhotoLibraryUsageDescription` and `NSPhotoLibraryAddUsageDescription` are in the plist so App Store review (ITMS-90683) can ship. Photos prompts stay out of scope. |
 | **Health (Watch)** | The Watch starts a golf workout session so the round stays on the Watch. It asks to share workouts only, reads nothing, and does not save the round to Health. The iPhone app carries the same purpose strings because Apple requires them on the paired app. The phone does not get the HealthKit entitlement and does not call HealthKit. |
 
