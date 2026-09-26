@@ -26,6 +26,7 @@ import { layoutFromTee } from '../course/layout';
 import type { CourseLayoutSeed } from '../course/layout';
 import {
   closeOpenShotToExistingPin,
+  deletePenalty,
   deleteRound,
   finishHoleOut,
   finishHolePutts,
@@ -38,6 +39,7 @@ import {
   listRounds,
   listShotsForHole,
   startRound,
+  updatePenaltyReason,
 } from '../db/repo';
 import { migrate } from '../db/schema';
 import { planClubStrip } from '../domain/clubStrip';
@@ -479,6 +481,9 @@ test('round flow', { skip: DatabaseSync ? false : 'node:sqlite needs Node 22.5+'
       note: null,
       kind: 'penalty',
     });
+    if (saved.replay === 'deleted') {
+      throw new Error('penalty: insert was treated as a deleted id');
+    }
     if (saved.penalty.kind !== 'penalty' || saved.score !== expectedDropScore + 2) {
       throw new Error(`penalty: expected kind penalty and score ${expectedDropScore + 2}, actual ${saved.penalty.kind} ${saved.score}`);
     }
@@ -1023,6 +1028,137 @@ async function watchPenaltyRound(shotsApi: ShotActions, watchApi: WatchClub): Pr
   if (retried.length !== 4 || mustHole(db, round.id, 1).score !== holeNow.score) {
     throw new Error(`retry added a stroke: ${retried.length} rows, score ${mustHole(db, round.id, 1).score ?? null}`);
   }
+
+  const shotSnap = () =>
+    listShotsForHole(db, before.id).map((shot) => ({
+      id: shot.id,
+      seq: shot.seq,
+      clubId: shot.clubId,
+      distanceYards: shot.distanceYards,
+    }));
+  const shotsBeforeEdit = shotSnap();
+  const changed = updatePenaltyReason(db, {
+    penaltyId: 'round-flow-water',
+    reason: 'ob',
+    note: 'cart path',
+  });
+  if (changed.status !== 'updated' || changed.penalty.reason !== 'ob' || changed.penalty.note !== 'cart path') {
+    throw new Error(`change penalty: expected OB with a note, actual ${JSON.stringify(changed)}`);
+  }
+  if (mustHole(db, round.id, 1).score !== holeNow.score) {
+    throw new Error('change penalty moved the hole score');
+  }
+  await sendPenalty(
+    penaltyPickPayload({
+      id: 'round-flow-water',
+      reason: 'water',
+      at: '2026-09-26T15:00:00.000Z',
+      holeNumber: 1,
+    }),
+    'penalty-water-after-edit',
+  );
+  const edited = listPenaltiesForHole(db, before.id).find((penalty) => penalty.id === 'round-flow-water');
+  if (!edited || edited.reason !== 'ob' || edited.note !== 'cart path' || listPenaltiesForHole(db, before.id).length !== 4) {
+    throw new Error(`watch duplicate reverted the edit: ${JSON.stringify(edited ?? null)}`);
+  }
+  if (mustHole(db, round.id, 1).score !== holeNow.score) {
+    throw new Error('watch duplicate after an edit added a stroke');
+  }
+
+  const removed = deletePenalty(db, 'round-flow-water');
+  if (removed.status !== 'deleted' || removed.score !== (holeNow.score ?? 0) - 1) {
+    throw new Error(`delete penalty: expected score ${(holeNow.score ?? 0) - 1}, actual ${JSON.stringify(removed)}`);
+  }
+  if (listPenaltiesForHole(db, before.id).some((penalty) => penalty.id === 'round-flow-water')) {
+    throw new Error('delete left the penalty row');
+  }
+  const afterDelete = mustHole(db, round.id, 1);
+  const deletedLine = formatHoleCountLine({
+    shotCount: shots.length,
+    penaltyStrokes: totalPenaltyStrokes(listPenaltiesForHole(db, before.id)),
+    puttCount: afterDelete.putts,
+    omitZeroPutts: true,
+  });
+  if (deletedLine !== '2 shots · 3 penalties') {
+    throw new Error(`expected the count line to drop one penalty, actual ${deletedLine}`);
+  }
+  await sendPenalty(
+    penaltyPickPayload({
+      id: 'round-flow-water',
+      reason: 'water',
+      at: '2026-09-26T15:00:00.000Z',
+      holeNumber: 1,
+    }),
+    'penalty-water-after-delete',
+  );
+  if (listPenaltiesForHole(db, before.id).some((penalty) => penalty.id === 'round-flow-water')) {
+    throw new Error('a delayed watch duplicate resurrected the deleted penalty');
+  }
+  if (mustHole(db, round.id, 1).score !== afterDelete.score) {
+    throw new Error('a delayed watch duplicate added a stroke after delete');
+  }
+
+  const context = {
+    db,
+    roundId: round.id,
+    holeNumber: 1,
+    readOnly: false,
+    tee: teeOf(before),
+    bump() {},
+    labelForClub: (clubId: string) => clubs.find((club) => club.id === clubId)?.shortName ?? null,
+  };
+  watchApi.setWatchClubContext(null as unknown as Parameters<WatchClub['setWatchClubContext']>[0]);
+  const queued = penaltyPickPayload({
+    id: 'round-flow-queued',
+    reason: 'unplayable',
+    at: '2026-09-26T15:10:00.000Z',
+    holeNumber: 1,
+  });
+  await sendPenalty(queued, 'penalty-queued');
+  await sendPenalty(
+    penaltyPickPayload({
+      id: 'round-flow-water',
+      reason: 'water',
+      at: '2026-09-26T15:00:00.000Z',
+      holeNumber: 1,
+    }),
+    'penalty-queued-deleted',
+  );
+  watchApi.setWatchClubContext(context);
+  await settle();
+  const afterQueue = listPenaltiesForHole(db, before.id);
+  const queuedRow = afterQueue.find((penalty) => penalty.id === 'round-flow-queued');
+  if (!queuedRow || queuedRow.reason !== 'unplayable' || queuedRow.strokes !== 1) {
+    throw new Error(`queued watch penalty did not insert: ${JSON.stringify(queuedRow ?? null)}`);
+  }
+  if (afterQueue.filter((penalty) => penalty.id === 'round-flow-queued').length !== 1) {
+    throw new Error('queued watch penalty inserted more than once');
+  }
+  if (queuedRow.afterShotId !== last.id || queuedRow.afterShotSeq !== last.seq) {
+    throw new Error(`queued penalty was not after the last shot: ${queuedRow.afterShotId}#${queuedRow.afterShotSeq ?? null}`);
+  }
+  if (afterQueue.some((penalty) => penalty.id === 'round-flow-water')) {
+    throw new Error('queued duplicate resurrected the deleted penalty');
+  }
+  if (afterQueue.length !== 4 || mustHole(db, round.id, 1).score !== holeNow.score) {
+    throw new Error(
+      `expected the new penalty to replace the deleted stroke, actual ${afterQueue.length} rows, score ${mustHole(db, round.id, 1).score ?? null}`,
+    );
+  }
+  const finalLine = formatHoleCountLine({
+    shotCount: shots.length,
+    penaltyStrokes: totalPenaltyStrokes(afterQueue),
+    puttCount: mustHole(db, round.id, 1).putts,
+    omitZeroPutts: true,
+  });
+  if (finalLine !== '2 shots · 4 penalties') {
+    throw new Error(`expected the count line to include the queued penalty, actual ${finalLine}`);
+  }
+  const shotsAfter = shotSnap();
+  if (JSON.stringify(shotsAfter) !== JSON.stringify(shotsBeforeEdit)) {
+    throw new Error(`penalty edits changed shots: ${JSON.stringify(shotsAfter)}`);
+  }
+
   watchApi.setWatchClubContext(null as unknown as Parameters<WatchClub['setWatchClubContext']>[0]);
   gpsQueue.length = 0;
 }

@@ -238,6 +238,8 @@ test('watch penalty is one stroke after the last shot, idempotent, and survives 
     afterShotId: 'shot-8i',
     afterShotSeq: 1,
   });
+  if (again.replay === 'deleted') throw new Error('retry treated the penalty as deleted');
+  assert.equal(again.replay, 'existing');
   assert.equal(again.score, 5);
   assert.equal(again.penalty.reason, 'water');
   assert.equal(again.penalty.afterShotId, 'shot-sw');
@@ -259,6 +261,7 @@ test('watch penalty is one stroke after the last shot, idempotent, and survives 
       afterShotId: next.afterShotId,
       afterShotSeq: next.afterShotSeq,
     });
+    if (wrote.replay === 'deleted') throw new Error('new penalty was treated as deleted');
     running = wrote.score;
     assert.equal(wrote.penalty.strokes, 1);
     assert.equal(wrote.penalty.afterShotId, 'shot-sw');
@@ -307,6 +310,7 @@ test('watch penalty is one stroke after the last shot, idempotent, and survives 
     afterShotId: emptyPlan.afterShotId,
     afterShotSeq: emptyPlan.afterShotSeq,
   });
+  if (emptySaved.replay === 'deleted') throw new Error('empty-hole penalty was treated as deleted');
   assert.equal(emptySaved.penalty.afterShotId, null);
   assert.equal(emptySaved.penalty.afterShotSeq, null);
   assert.equal(emptySaved.score, 5);

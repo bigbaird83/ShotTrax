@@ -421,8 +421,8 @@ export function acceptTransferPenalty(raw: unknown): RoundTransferPenalty | null
  * Missing or unparseable exportedAt treats every phone row as newer.
  * Created at exactly exportedAt follows the file.
  *
- * A penalty deleted on the phone after the export has no deleted-at, so a file
- * that still lists it puts that penalty back.
+ * A penalty deleted on the phone is a local Watch tombstone, not a field in
+ * this file, so a backup that still lists it puts that penalty back.
  */
 export function penaltiesNewerThanExport<T extends { id?: string | null; createdAt: string }>(
   file: readonly { id?: string | null }[],

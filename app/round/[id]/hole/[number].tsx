@@ -29,6 +29,7 @@ import { formatParLabel } from '@/src/course/layout';
 import type { OsmOverlay } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
 import {
+  deletePenalty,
   finishRound,
   getClubMap,
   getHole,
@@ -48,6 +49,7 @@ import {
   setHoleGreen,
   setThunderbirdPinSheet,
   updateHoleFairway,
+  updatePenaltyReason,
   updateHolePar,
   updateHolePutts,
   finishHolePutts,
@@ -124,6 +126,7 @@ import { planPlacedShot } from '@/src/domain/shotSource';
 import { planUndoPlacePins } from '@/src/domain/undoLastShot';
 import { planUndoLastSoftGpsClubMark } from '@/src/domain/undoSoftGpsClubMark';
 import type { LatLng } from '@/src/domain/latLng';
+import { penaltyNoteForSave, penaltyStepActionSheet } from '@/src/domain/penaltyEdit';
 import { formatPenaltyRow, PENALTY_REASONS, totalPenaltyStrokes } from '@/src/domain/penalty';
 import { defaultPenaltyAfterShot, formatHoleCountLine, formatShotStepChip, orderHoleSteps } from '@/src/domain/penaltySteps';
 import {
@@ -262,6 +265,9 @@ export default function HoleScreen() {
   const [penaltyReason, setPenaltyReason] = useState<PenaltyReason>('water');
   const [penaltyNote, setPenaltyNote] = useState('');
   const [penaltyAfterShotId, setPenaltyAfterShotId] = useState<string | null>(null);
+  const [changePenaltyId, setChangePenaltyId] = useState<string | null>(null);
+  const [changeReason, setChangeReason] = useState<PenaltyReason>('water');
+  const [changeNote, setChangeNote] = useState('');
   const [osmOverlay, setOsmOverlay] = useState<OsmOverlay | null>(null);
   const [checkNonce, setCheckNonce] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
@@ -1236,7 +1242,7 @@ export default function HoleScreen() {
         currentScore: hole.score,
         strokes: penaltyStrokes,
         reason: penaltyReason,
-        note: penaltyReason === 'other' || penaltyNote.trim() ? penaltyNote : null,
+        note: penaltyNoteForSave(penaltyReason, penaltyNote),
         kind: 'penalty',
         afterShotId: attached?.id ?? null,
         afterShotSeq: attached?.seq ?? null,
@@ -1253,6 +1259,51 @@ export default function HoleScreen() {
     setPenaltyReason('water');
     setPenaltyNote('');
     setPenaltyAfterShotId(null);
+  };
+
+  const beginChangePenalty = (penaltyId: string) => {
+    if (readOnly) return;
+    const penalty = penalties.find((row) => row.id === penaltyId);
+    if (!penalty) return;
+    setChangeReason(penalty.reason);
+    setChangeNote(penalty.note ?? '');
+    setChangePenaltyId(penalty.id);
+    setScoreOpen(false);
+  };
+
+  const onSavePenaltyReason = () => {
+    if (readOnly || !changePenaltyId) return;
+    const result = updatePenaltyReason(db, {
+      penaltyId: changePenaltyId,
+      reason: changeReason,
+      note: penaltyNoteForSave(changeReason, changeNote),
+    });
+    if (result.status !== 'updated') {
+      Alert.alert(COPY.penaltySaveFailed);
+      return;
+    }
+    setChangePenaltyId(null);
+    hapticTap();
+    bump();
+  };
+
+  const onDeletePenalty = (penaltyId: string) => {
+    if (readOnly) return;
+    const result = deletePenalty(db, penaltyId);
+    if (result.status !== 'deleted') return;
+    if (changePenaltyId === penaltyId) setChangePenaltyId(null);
+    hapticTap();
+    bump();
+  };
+
+  const openPenaltyActions = (penaltyId: string) => {
+    if (readOnly || placing) return;
+    const actions = penaltyStepActionSheet();
+    Alert.alert(actions.title, '', [
+      { text: actions.options[0], onPress: () => beginChangePenalty(penaltyId) },
+      { text: actions.options[1], style: 'destructive', onPress: () => onDeletePenalty(penaltyId) },
+      { text: actions.cancel, style: 'cancel' },
+    ]);
   };
 
   const openBag = () => {
@@ -1671,14 +1722,18 @@ export default function HoleScreen() {
                     holeSteps.map((step) => {
                       if (step.kind === 'penalty') {
                         return (
-                          <View
+                          <Pressable
                             key={`penalty-${step.sourceIndex}`}
+                            disabled={readOnly || placing}
+                            accessibilityRole="button"
+                            accessibilityLabel={step.label}
+                            onPress={() => openPenaltyActions(step.id)}
                             style={styles.shotLineItem}
                             testID="penalty-shot-chip">
-                            <View style={styles.shotLineShot} accessibilityRole="text">
+                            <View style={styles.shotLineShot}>
                               <Text style={styles.shotLinePenalty}>{step.label}</Text>
                             </View>
-                          </View>
+                          </Pressable>
                         );
                       }
                       const shot = shots.find((row) => row.id === step.id);
@@ -2449,10 +2504,16 @@ export default function HoleScreen() {
           )}
 
           {penalties.map((penalty) => (
-            <View key={penalty.id} style={styles.shot}>
+            <Pressable
+              key={penalty.id}
+              disabled={readOnly}
+              accessibilityRole="button"
+              accessibilityLabel={formatPenaltyRow(penalty)}
+              onPress={() => openPenaltyActions(penalty.id)}
+              style={styles.shot}>
               <Text style={styles.shotSeq}>+</Text>
               <Text style={styles.shotClub}>{formatPenaltyRow(penalty)}</Text>
-            </View>
+            </Pressable>
           ))}
 
           {!readOnly && pastRoundCanAddShot(marksOnly) ? (
@@ -2557,13 +2618,39 @@ export default function HoleScreen() {
             </View>
           ) : null}
           <TextInput
-            placeholder="Note (optional)"
+            placeholder={COPY.penaltyNote}
             placeholderTextColor={colors.muted}
             value={penaltyNote}
             onChangeText={setPenaltyNote}
             style={styles.note}
           />
           <BigButton label={`Add +${penaltyStrokes}`} onPress={onAddPenalty} />
+        </ScrollView>
+      </FullSheet>
+
+      <FullSheet
+        visible={changePenaltyId != null}
+        title={COPY.changePenalty}
+        onClose={() => setChangePenaltyId(null)}>
+        <ScrollView contentContainerStyle={styles.sheetPad}>
+          <View style={styles.reasonRow}>
+            {PENALTY_REASONS.map((item) => (
+              <Pressable
+                key={item.reason}
+                onPress={() => setChangeReason(item.reason)}
+                style={[styles.reasonChip, changeReason === item.reason && styles.chipOn]}>
+                <Text style={styles.reasonText}>{item.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <TextInput
+            placeholder={COPY.penaltyNote}
+            placeholderTextColor={colors.muted}
+            value={changeNote}
+            onChangeText={setChangeNote}
+            style={styles.note}
+          />
+          <BigButton label={COPY.savePenaltyReason} onPress={onSavePenaltyReason} />
         </ScrollView>
       </FullSheet>
     </Animated.View>

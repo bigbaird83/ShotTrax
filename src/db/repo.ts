@@ -78,7 +78,8 @@ import { planFinishHoleScore, planRecomputeFinishedHoleScore } from '../domain/h
 import { parseFairwayResult, type FairwayResult } from '../domain/fairwayGir';
 import type { HandicapRoundIn } from '../domain/handicap';
 import type { DispersionShotIn } from '../domain/dispersion';
-import { clampPenaltyStrokes, scoreAfterPenalty, totalPenaltyStrokes } from '../domain/penalty';
+import { planChangePenaltyReason } from '../domain/penaltyEdit';
+import { clampPenaltyStrokes, scoreAfterPenalty, scoreAfterPenaltyRemoval, totalPenaltyStrokes } from '../domain/penalty';
 import {
   clampPutts,
   planAttachPuttLength,
@@ -1005,8 +1006,8 @@ function insertTransferredRound(
       for (const penalty of phoneRows) insertCarriedPenalty(db, holeId, penalty);
     } else {
       // File list wins for rows at or before exportedAt. Newer phone rows are added.
-      // A delete on the phone after export is not timestamped, so a file that still
-      // lists that penalty writes it again.
+      // A phone delete is a local Watch tombstone, not a field in this file, so a
+      // backup that still lists that penalty writes it again.
       for (const penalty of hole.penalties) {
         const point =
           penalty.lat != null && penalty.lng != null && isValidLatLng({ lat: penalty.lat, lng: penalty.lng })
@@ -2156,10 +2157,15 @@ type InsertPenaltyArgs = {
   afterShotSeq?: number | null;
   /**
    * Caller-supplied id. A second insert with the same id returns the existing
-   * row and does not add another stroke. Omit on the phone menu (a new id).
+   * row and does not add another stroke. A deleted id is a tombstone: no row
+   * and no stroke. Omit on the phone menu (a new id).
    */
   id?: string | null;
 };
+
+export type InsertPenaltyResult =
+  | { replay: 'inserted' | 'existing'; penalty: HolePenalty; score: number }
+  | { replay: 'deleted'; penalty: null; score: number | null };
 
 function penaltyScoreOrStored(
   db: SQLiteDatabase,
@@ -2170,25 +2176,39 @@ function penaltyScoreOrStored(
   return typeof hole?.score === 'number' && Number.isFinite(hole.score) ? hole.score : fallback;
 }
 
+function storedHoleScore(db: SQLiteDatabase, holeId: string): number | null {
+  const hole = db.getFirstSync<{ score: number | null }>('SELECT score FROM holes WHERE id = ?', [holeId]);
+  return typeof hole?.score === 'number' && Number.isFinite(hole.score) ? hole.score : null;
+}
+
 /**
  * Writes the penalty row and hole score. Caller owns the transaction.
  * Do not call insertPenalty from inside withTransactionSync — that helper
  * opens its own BEGIN, and expo-sqlite cannot nest those.
- * The same id is one stroke: a retry returns the row already stored.
+ * The same id is one stroke: a retry returns the row already stored, including
+ * a reason the phone edited later. A deleted id is already handled.
  */
 export function insertPenaltyInTransaction(
   db: SQLiteDatabase,
   args: InsertPenaltyArgs,
-): { penalty: HolePenalty; score: number } {
+): InsertPenaltyResult {
   const requestedId = textOrNull(args.id);
   if (requestedId) {
     const existing = db.getFirstSync<PenaltyRow>('SELECT * FROM hole_penalties WHERE id = ?', [requestedId]);
     if (existing) {
       const penalty = mapPenalty(existing);
       return {
+        replay: 'existing',
         penalty,
         score: penaltyScoreOrStored(db, penalty.holeId, scoreAfterPenalty(args.currentScore, args.par, penalty.strokes)),
       };
+    }
+    const tombstone = db.getFirstSync<{ id: string }>(
+      'SELECT id FROM deleted_penalty_ids WHERE id = ?',
+      [requestedId],
+    );
+    if (tombstone) {
+      return { replay: 'deleted', penalty: null, score: storedHoleScore(db, args.holeId) };
     }
   }
   const strokes = clampPenaltyStrokes(args.strokes);
@@ -2223,15 +2243,12 @@ export function insertPenaltyInTransaction(
     ],
   );
   db.runSync('UPDATE holes SET score = ? WHERE id = ?', [score, args.holeId]);
-  return { penalty, score };
+  return { replay: 'inserted', penalty, score };
 }
 
 /** Score-only event. Never calls acceptFix, haversine, or club-average inserts. */
-export function insertPenalty(
-  db: SQLiteDatabase,
-  args: InsertPenaltyArgs,
-): { penalty: HolePenalty; score: number } {
-  let saved: { penalty: HolePenalty; score: number } | null = null;
+export function insertPenalty(db: SQLiteDatabase, args: InsertPenaltyArgs): InsertPenaltyResult {
+  let saved: InsertPenaltyResult | null = null;
   db.withTransactionSync(() => {
     saved = insertPenaltyInTransaction(db, args);
   });
@@ -2239,6 +2256,69 @@ export function insertPenalty(
     throw new Error('Penalty was not saved.');
   }
   return saved;
+}
+
+/**
+ * Reason and note only. Strokes, attachment, kind, and the posted score stay.
+ * A blank note is stored as null. Other shows that note as the row label.
+ */
+export function updatePenaltyReason(
+  db: SQLiteDatabase,
+  args: { penaltyId: string; reason: PenaltyReason; note: string | null },
+): { status: 'missing' } | { status: 'updated'; penalty: HolePenalty; score: number | null } {
+  const row = db.getFirstSync<PenaltyRow>('SELECT * FROM hole_penalties WHERE id = ?', [args.penaltyId]);
+  if (!row) return { status: 'missing' };
+  const planned = planChangePenaltyReason({ reason: args.reason, note: args.note });
+  if (!planned.ok) return { status: 'missing' };
+  db.runSync('UPDATE hole_penalties SET reason = ?, note = ? WHERE id = ?', [
+    planned.reason,
+    planned.note,
+    args.penaltyId,
+  ]);
+  const updated = db.getFirstSync<PenaltyRow>('SELECT * FROM hole_penalties WHERE id = ?', [args.penaltyId]);
+  if (!updated) return { status: 'missing' };
+  return { status: 'updated', penalty: mapPenalty(updated), score: storedHoleScore(db, row.hole_id) };
+}
+
+/**
+ * Remove one penalty stroke and remember its id so a delayed Watch duplicate
+ * cannot insert it again. Shots are not renumbered. Score drops by this row's
+ * strokes, never below shots + putts + penalties still on the hole.
+ * Do not call from inside withTransactionSync — this opens its own BEGIN.
+ */
+export function deletePenalty(
+  db: SQLiteDatabase,
+  penaltyId: string,
+): { status: 'missing' } | { status: 'deleted'; score: number | null } {
+  const row = db.getFirstSync<PenaltyRow>('SELECT * FROM hole_penalties WHERE id = ?', [penaltyId]);
+  if (!row) return { status: 'missing' };
+  const penalty = mapPenalty(row);
+  const hole = db.getFirstSync<{ score: number | null; putts: number | null }>(
+    'SELECT score, putts FROM holes WHERE id = ?',
+    [penalty.holeId],
+  );
+  const shotCount =
+    db.getFirstSync<{ n: number }>('SELECT COUNT(*) AS n FROM shots WHERE hole_id = ?', [penalty.holeId])?.n ?? 0;
+  const remaining = totalPenaltyStrokes(
+    listPenaltiesForHole(db, penalty.holeId).filter((item) => item.id !== penalty.id),
+  );
+  const score = scoreAfterPenaltyRemoval({
+    currentScore: hole?.score ?? null,
+    removedStrokes: penalty.strokes,
+    shotCount,
+    puttCount: hole?.putts ?? 0,
+    remainingPenaltyStrokes: remaining,
+  });
+  const deletedAt = new Date().toISOString();
+  db.withTransactionSync(() => {
+    db.runSync('DELETE FROM hole_penalties WHERE id = ?', [penalty.id]);
+    db.runSync('INSERT OR REPLACE INTO deleted_penalty_ids (id, deleted_at) VALUES (?, ?)', [
+      penalty.id,
+      deletedAt,
+    ]);
+    db.runSync('UPDATE holes SET score = ? WHERE id = ?', [score, penalty.holeId]);
+  });
+  return { status: 'deleted', score };
 }
 
 export type ClubAverageRow = ClubAverage & {
