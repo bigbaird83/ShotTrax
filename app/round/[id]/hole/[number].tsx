@@ -183,7 +183,7 @@ import { ClubButton } from '@/src/ui/ClubButton';
 import { ClubStrip } from '@/src/ui/ClubStrip';
 import { GpsBanner } from '@/src/ui/GpsBanner';
 import { hapticLight, hapticMark, hapticSelect, hapticTap, hapticWarn } from '@/src/ui/haptics';
-import { useColorTheme } from '@/src/ui/ColorThemeProvider';
+import { ColorThemeOverride, useColors, useColorTheme } from '@/src/ui/ColorThemeProvider';
 import { useAmbientLight } from '@/src/ui/useAmbientLight';
 import { playThemeId } from '@/src/domain/playTheme';
 import { formatShotLockChip } from '@/src/domain/shotLock';
@@ -197,9 +197,21 @@ import { ScorecardBody } from '@/src/ui/ScorecardBody';
 import { FairwayPicker } from '@/src/ui/FairwayPicker';
 import { ShareChoice } from '@/src/ui/ShareChoice';
 import { YardsToGreenBadge } from '@/src/ui/YardsToGreenBadge';
-import { COLOR_THEMES, tapTarget, type, type ColorPalette } from '@/src/ui/theme';
+import { tapTarget, type, type ColorPalette } from '@/src/ui/theme';
 
+/** Play may flip to high contrast in bright sun. The whole subtree — map chips,
+ * badges, sheets — reads that theme, not only this screen's own styles. */
 export default function HoleScreen() {
+  const { themeId: savedThemeId } = useColorTheme();
+  const ambient = useAmbientLight();
+  return (
+    <ColorThemeOverride themeId={playThemeId({ saved: savedThemeId, ambient })}>
+      <HoleScreenBody />
+    </ColorThemeOverride>
+  );
+}
+
+function HoleScreenBody() {
   const { id, number, putts: puttsParam, menu: menuParam, edit: editParam } = useLocalSearchParams<{
     id: string;
     number: string;
@@ -210,9 +222,7 @@ export default function HoleScreen() {
   const holeNumber = Number(number);
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { themeId: savedThemeId } = useColorTheme();
-  const ambient = useAmbientLight();
-  const colors = COLOR_THEMES[playThemeId({ saved: savedThemeId, ambient })];
+  const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { db, revision, bump } = useDb();
   const fix = useLiveFix(true);

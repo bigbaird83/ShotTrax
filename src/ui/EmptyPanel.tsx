@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useColors } from './ColorThemeProvider';
+import { cardBorder } from './surface';
 import { type, type ColorPalette } from './theme';
 
 /** Friendly empty / first-round panel. Not a blank block. */
@@ -19,9 +20,8 @@ function makeStyles(colors: ColorPalette) {
   return StyleSheet.create({
     panel: {
       backgroundColor: colors.bgElevated,
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: colors.line,
+      borderRadius: 18,
+      ...cardBorder(colors),
       padding: 16,
       gap: 8,
     },
