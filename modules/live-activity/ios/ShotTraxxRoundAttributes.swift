@@ -25,5 +25,7 @@ struct ShotTraxxRoundAttributes: ActivityAttributes {
     var groupLine: String?
   }
 
+  /// The app's round id: one activity per round, and a swipe-away is remembered per round.
+  var roundId: String
   var courseName: String
 }

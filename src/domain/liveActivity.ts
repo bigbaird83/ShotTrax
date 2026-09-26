@@ -13,6 +13,8 @@ import { isCourseCardLatLng, type LatLng } from './latLng';
  */
 
 export type LiveActivityPayload = {
+  /** The round's id. One activity per round; a swipe-away is remembered per round (native). */
+  roundId: string;
   courseName: string;
   hole: number;
   par: number | null;
@@ -75,6 +77,7 @@ function point(p: LatLng | null | undefined): LatLng | null {
 }
 
 export function planLiveActivityPayload(args: {
+  roundId: string;
   courseName: string | null;
   hole: { number: number; par: number | null };
   pins: { front: LatLng | null | undefined; middle: LatLng | null | undefined; back: LatLng | null | undefined };
@@ -86,6 +89,7 @@ export function planLiveActivityPayload(args: {
   const back = point(args.pins.back);
   const bothEnds = front != null && back != null;
   return {
+    roundId: args.roundId,
     courseName: args.courseName?.trim() || 'Round',
     hole: args.hole.number,
     par: args.hole.par != null && Number.isInteger(args.hole.par) ? args.hole.par : null,

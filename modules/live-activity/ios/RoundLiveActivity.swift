@@ -10,6 +10,8 @@ struct LivePoint: Equatable {
 
 /// What the app sends for the hole in play (JSON from JS).
 struct LiveRoundPayload: Equatable {
+  /// The app's round id. A swipe-away is remembered per round.
+  var roundId: String
   var courseName: String
   var hole: Int
   var par: Int?
@@ -24,7 +26,8 @@ struct LiveRoundPayload: Equatable {
     guard
       let data = json.data(using: .utf8),
       let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-      let hole = object["hole"] as? Int
+      let hole = object["hole"] as? Int,
+      let roundId = object["roundId"] as? String, !roundId.isEmpty
     else { return nil }
     func point(_ key: String) -> LivePoint? {
       guard
@@ -39,6 +42,7 @@ struct LiveRoundPayload: Equatable {
       guard let value = object[key] as? String, !value.isEmpty else { return nil }
       return value
     }
+    self.roundId = roundId
     self.courseName = text("courseName") ?? "Round"
     self.hole = hole
     self.par = object["par"] as? Int
@@ -85,13 +89,21 @@ enum LiveYards {
 /// When In Use permission the app already has, with iOS's blue indicator.
 /// It stops when the round ends or the Live Activity is dismissed. Fixes stay
 /// on the phone: they are only turned into yards here.
+///
+/// Each update carries a stale date 60 s after the fix its yards came from, so
+/// the views show "—" if GPS stops or the app is killed. A round the golfer
+/// swiped away is remembered (UserDefaults) and never started again; a
+/// different round clears that. Decisions live in LiveRoundPolicy.
 @available(iOS 16.2, *)
 final class RoundLiveActivity: NSObject, CLLocationManagerDelegate {
   static let shared = RoundLiveActivity()
 
   /// Yard changes push at most this often; text and hole changes push at once.
   static let minYardsUpdateS = 2.0
-  static let distanceFilterM = 3.0
+  /// Every fix, not every few meters: a golfer standing still still needs fresh
+  /// fixes so the yards (30 s fix age) and the stale date (60 s) stay current.
+  static let distanceFilter = kCLDistanceFilterNone
+  static let dismissedRoundKey = "shottraxx.liveActivity.dismissedRoundId"
 
   private let manager = CLLocationManager()
   private var activity: Activity<ShotTraxxRoundAttributes>?
@@ -102,12 +114,16 @@ final class RoundLiveActivity: NSObject, CLLocationManagerDelegate {
   private var tracking = false
   private var flushScheduled = false
   private var stateWatch: Task<Void, Never>?
+  private var lastSentStaleDate: Date?
+  /// Activities the app itself ended; their `.dismissed` is not a swipe-away.
+  private var endedByApp = Set<String>()
+  private let defaults = UserDefaults.standard
 
   private override init() {
     super.init()
     manager.delegate = self
     manager.desiredAccuracy = kCLLocationAccuracyBest
-    manager.distanceFilter = Self.distanceFilterM
+    manager.distanceFilter = Self.distanceFilter
     manager.activityType = .fitness
     manager.pausesLocationUpdatesAutomatically = false
   }
@@ -120,22 +136,39 @@ final class RoundLiveActivity: NSObject, CLLocationManagerDelegate {
   @discardableResult
   func sync(json: String) -> Bool {
     guard let next = LiveRoundPayload(json: json), Self.activitiesEnabled else { return false }
+    let dismissed = LiveRoundPolicy.dismissedRoundId(
+      afterSyncOf: next.roundId,
+      current: defaults.string(forKey: Self.dismissedRoundKey)
+    )
+    saveDismissed(dismissed)
+    guard LiveRoundPolicy.mayStart(roundId: next.roundId, dismissedRoundId: dismissed) else {
+      // Swiped away for this round: no new activity, and location stays off.
+      payload = nil
+      stopLocation()
+      return false
+    }
     payload = next
     if activity == nil || activity?.activityState != .active {
-      activity = Activity<ShotTraxxRoundAttributes>.activities.first { $0.activityState == .active }
+      activity = Activity<ShotTraxxRoundAttributes>.activities.first {
+        $0.activityState == .active && $0.attributes.roundId == next.roundId
+      }
     }
-    if let current = activity, current.attributes.courseName != next.courseName {
-      endActivity(current)
-      activity = nil
+    // Anything still up from another round goes.
+    for other in Activity<ShotTraxxRoundAttributes>.activities where other.id != activity?.id {
+      endActivity(other)
     }
     if activity == nil {
       do {
+        let content = state()
+        let stale = staleDate()
         activity = try Activity.request(
-          attributes: ShotTraxxRoundAttributes(courseName: next.courseName),
-          content: ActivityContent(state: state(), staleDate: nil),
+          attributes: ShotTraxxRoundAttributes(roundId: next.roundId, courseName: next.courseName),
+          content: ActivityContent(state: content, staleDate: stale),
           pushType: nil
         )
-        lastSent = nil
+        lastSent = content
+        lastSentStaleDate = stale
+        lastSentAt = Date()
       } catch {
         return false
       }
@@ -151,6 +184,7 @@ final class RoundLiveActivity: NSObject, CLLocationManagerDelegate {
     stopLocation()
     payload = nil
     lastSent = nil
+    lastSentStaleDate = nil
     stateWatch?.cancel()
     stateWatch = nil
     for item in Activity<ShotTraxxRoundAttributes>.activities {
@@ -160,19 +194,51 @@ final class RoundLiveActivity: NSObject, CLLocationManagerDelegate {
   }
 
   private func endActivity(_ item: Activity<ShotTraxxRoundAttributes>) {
+    endedByApp.insert(item.id)
     Task { await item.end(nil, dismissalPolicy: .immediate) }
   }
 
-  /// If the golfer swipes the activity away, stop using location for it.
+  private func saveDismissed(_ roundId: String?) {
+    if let roundId {
+      defaults.set(roundId, forKey: Self.dismissedRoundKey)
+    } else {
+      defaults.removeObject(forKey: Self.dismissedRoundKey)
+    }
+  }
+
+  /// When the activity leaves `.active`, stop location. A golfer's swipe-away
+  /// (dismissed without the app ending it) is remembered for that round.
   private func watchState() {
     stateWatch?.cancel()
     guard let current = activity else { return }
+    let roundId = current.attributes.roundId
+    let activityId = current.id
     stateWatch = Task { [weak self] in
       for await next in current.activityStateUpdates where next != .active {
-        await MainActor.run { self?.stopLocation() }
+        await MainActor.run {
+          guard let self else { return }
+          self.stopLocation()
+          let remembered = LiveRoundPolicy.dismissedRoundId(
+            afterLeaving: roundId,
+            userDismissed: next == .dismissed,
+            endedByApp: self.endedByApp.contains(activityId),
+            current: self.defaults.string(forKey: Self.dismissedRoundKey)
+          )
+          self.saveDismissed(remembered)
+          if self.activity?.id == activityId {
+            self.activity = nil
+            self.payload = nil
+            self.lastSent = nil
+          }
+        }
         return
       }
     }
+  }
+
+  /// Stale date for what is about to be shown: 60 s after the fix its yards came from.
+  private func staleDate() -> Date? {
+    LiveRoundPolicy.staleDate(fixTime: LiveYards.usable(lastFix)?.timestamp)
   }
 
   private func state() -> ShotTraxxRoundAttributes.ContentState {
@@ -195,8 +261,18 @@ final class RoundLiveActivity: NSObject, CLLocationManagerDelegate {
   private func push(force: Bool) {
     guard let current = activity, current.activityState == .active else { return }
     let next = state()
-    guard next != lastSent else { return }
+    let stale = staleDate()
     let now = Date()
+    if next == lastSent {
+      // Same numbers (standing still): only re-send to push the stale date out.
+      guard LiveRoundPolicy.needsStaleRefresh(sentStaleDate: lastSentStaleDate, newStaleDate: stale, now: now) else {
+        return
+      }
+      lastSentStaleDate = stale
+      lastSentAt = now
+      Task { await current.update(ActivityContent(state: next, staleDate: stale)) }
+      return
+    }
     let wait = Self.minYardsUpdateS - now.timeIntervalSince(lastSentAt)
     if !force, let sent = lastSent, sameText(sent, next), wait > 0 {
       // Throttled: send the latest yards once the interval is up, so a golfer who
@@ -211,8 +287,9 @@ final class RoundLiveActivity: NSObject, CLLocationManagerDelegate {
       return
     }
     lastSent = next
+    lastSentStaleDate = stale
     lastSentAt = now
-    Task { await current.update(ActivityContent(state: next, staleDate: nil)) }
+    Task { await current.update(ActivityContent(state: next, staleDate: stale)) }
   }
 
   private func sameText(_ a: ShotTraxxRoundAttributes.ContentState, _ b: ShotTraxxRoundAttributes.ContentState) -> Bool {

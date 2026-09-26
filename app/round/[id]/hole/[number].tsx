@@ -653,6 +653,7 @@ function HoleScreenBody() {
   const livePayload =
     round && hole && round.finishedAt == null && !marksOnly
       ? planLiveActivityPayload({
+          roundId: round.id,
           courseName: round.courseName,
           hole: { number: hole.number, par: hole.par },
           pins: { front: pins.front, middle: green, back: pins.back },

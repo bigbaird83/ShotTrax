@@ -8,6 +8,7 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - '.github/scripts/live-round-policy-tests/**'
       - 'modules/live-activity/**'
       - 'targets/**'
       - 'app.json'
@@ -21,6 +22,7 @@ on:
   push:
     branches: [main]
     paths:
+      - '.github/scripts/live-round-policy-tests/**'
       - 'modules/live-activity/**'
       - 'targets/**'
       - 'app.json'
@@ -80,7 +82,16 @@ jobs:
           xcrun --sdk iphonesimulator swiftc -typecheck
           -target arm64-apple-ios16.4-simulator
           modules/live-activity/ios/ShotTraxxRoundAttributes.swift
+          modules/live-activity/ios/LiveRoundPolicy.swift
           modules/live-activity/ios/RoundLiveActivity.swift
+
+      # Stale dates and swipe-away memory, run as real Swift on the Mac.
+      - name: Run Live Activity policy tests
+        run: |
+          xcrun swiftc -O modules/live-activity/ios/LiveRoundPolicy.swift \
+            .github/scripts/live-round-policy-tests/main.swift \
+            -o "$RUNNER_TEMP/live-round-policy-tests"
+          "$RUNNER_TEMP/live-round-policy-tests"
 
       - name: Compile Watch targets
         run: node .github/scripts/compile-watch-targets.mjs

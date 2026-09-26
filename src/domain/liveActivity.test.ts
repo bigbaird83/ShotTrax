@@ -16,6 +16,7 @@ const clubs: Record<string, string> = { c7: '7 Iron', cd: 'Driver' };
 
 test('payload: hole, par, running score, and green points', () => {
   const p = planLiveActivityPayload({
+    roundId: 'r1',
     courseName: '  North Hills ',
     hole: { number: 7, par: 4 },
     pins: { front: F, middle: G, back: B },
@@ -24,6 +25,7 @@ test('payload: hole, par, running score, and green points', () => {
     groupLine: null,
   });
   assert.deepEqual(p, {
+    roundId: 'r1',
     courseName: 'North Hills',
     hole: 7,
     par: 4,
@@ -38,6 +40,7 @@ test('payload: hole, par, running score, and green points', () => {
 
 test('front and back only when the course has both; no green → no middle; nothing invented', () => {
   const p = planLiveActivityPayload({
+    roundId: 'r1',
     courseName: null,
     hole: { number: 1, par: null },
     pins: { front: F, middle: null, back: null },
@@ -53,6 +56,7 @@ test('front and back only when the course has both; no green → no middle; noth
   assert.equal(p.scoreLine, '');
 
   const zero = planLiveActivityPayload({
+    roundId: 'r1',
     courseName: 'X',
     hole: { number: 2, par: 3 },
     pins: { front: { lat: 0, lng: 0 }, middle: { lat: 0, lng: 0 }, back: B },
@@ -106,6 +110,7 @@ test('group line: leader, ties, net, and skins riding', () => {
 
 test('payload key changes only when the payload does', () => {
   const base = planLiveActivityPayload({
+    roundId: 'r1',
     courseName: 'X',
     hole: { number: 1, par: 4 },
     pins: { front: null, middle: G, back: null },
@@ -155,4 +160,41 @@ test('app config: Live Activities on, location background mode, still When In Us
   assert.ok(extensions.some((e: { targetName: string; bundleIdentifier: string }) =>
     e.targetName === 'ShotTraxxRound' && e.bundleIdentifier === 'com.shottrax.app.round'));
   assert.match(read('../../targets/live-activity/expo-target.config.js'), /type: 'widget'[\s\S]*name: 'ShotTraxxRound'/);
+});
+
+test('stale yards: a stale date 60 s after the fix, and stale content shows — not the last numbers', () => {
+  const policy = read('../../modules/live-activity/ios/LiveRoundPolicy.swift');
+  assert.match(policy, /staleAfterS: TimeInterval = 60/);
+  assert.match(policy, /refreshBeforeStaleS: TimeInterval = 30/);
+  const swift = read('../../modules/live-activity/ios/RoundLiveActivity.swift');
+  assert.doesNotMatch(swift, /staleDate: nil/);
+  assert.equal((swift.match(/ActivityContent\(state: [a-z]+, staleDate: stale\)/g) ?? []).length, 3);
+  // Every fix (standing still keeps fresh yards and pushes the stale date out).
+  assert.match(swift, /distanceFilter = kCLDistanceFilterNone/);
+  const widget = read('../../targets/live-activity/index.swift');
+  assert.match(widget, /stale \? nil : yards/);
+  // Every yard value on screen goes through the stale check.
+  assert.doesNotMatch(widget, /yardsText\(state\./);
+  assert.doesNotMatch(widget, /yards: state\./);
+  assert.equal((widget.match(/context\.isStale/g) ?? []).length, 4);
+});
+
+test('swipe-away: remembered per round, no new activity or location for it; a new round clears it', () => {
+  const policy = read('../../modules/live-activity/ios/LiveRoundPolicy.swift');
+  assert.match(policy, /userDismissed && !endedByApp \? roundId : current/);
+  assert.match(policy, /roundId != dismissedRoundId/);
+  const swift = read('../../modules/live-activity/ios/RoundLiveActivity.swift');
+  assert.match(swift, /dismissedRoundKey = "shottraxx\.liveActivity\.dismissedRoundId"/);
+  assert.match(swift, /guard LiveRoundPolicy\.mayStart\(roundId: next\.roundId, dismissedRoundId: dismissed\) else \{[\s\S]*?stopLocation\(\)[\s\S]*?return false/);
+  // The guard runs before any Activity.request or startLocation in sync.
+  const sync = swift.slice(swift.indexOf('func sync(json: String)'), swift.indexOf('func end()'));
+  assert.ok(sync.indexOf('LiveRoundPolicy.mayStart') < sync.indexOf('Activity.request'));
+  assert.ok(sync.indexOf('LiveRoundPolicy.mayStart') < sync.indexOf('startLocation()'));
+  assert.match(swift, /userDismissed: next == \.dismissed/);
+  assert.match(swift, /endedByApp\.insert\(item\.id\)/);
+  assert.match(read('../../modules/live-activity/ios/ShotTraxxRoundAttributes.swift'), /var roundId: String/);
+  assert.match(read('../../app/round/[id]/hole/[number].tsx'), /roundId: round\.id,/);
+  // The Swift policy tests themselves run on the Mac runner.
+  const workflow = read('../../.github/workflows/watch-compile.yml');
+  assert.match(workflow, /live-round-policy-tests\/main\.swift/);
 });

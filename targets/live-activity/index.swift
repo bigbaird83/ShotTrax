@@ -4,7 +4,9 @@ import WidgetKit
 
 /// Lock Screen and Dynamic Island for a round in progress.
 /// The app sends the hole, score, last shot, and group line; yards come from
-/// the phone's live GPS (25 m or better). A missing value shows "—".
+/// the phone's live GPS (25 m or better). A missing value shows "—", and so do
+/// all yards once the content is stale (60 s after its fix: GPS stopped or the
+/// app was killed).
 @main
 struct ShotTraxxRoundBundle: WidgetBundle {
   var body: some Widget {
@@ -23,6 +25,11 @@ private func yardsText(_ yards: Int?) -> String {
   yards.map(String.init) ?? "—"
 }
 
+/// Yards to show: none once the content is stale, never the last numbers.
+private func liveYards(_ yards: Int?, stale: Bool) -> Int? {
+  stale ? nil : yards
+}
+
 private func holeLine(_ state: ShotTraxxRoundAttributes.ContentState) -> String {
   state.par.map { "Hole \(state.hole) · Par \($0)" } ?? "Hole \(state.hole)"
 }
@@ -37,6 +44,7 @@ struct YardsColumn: View {
   let label: String
   let yards: Int?
   let big: Bool
+  let stale: Bool
 
   var body: some View {
     VStack(spacing: 0) {
@@ -51,12 +59,15 @@ struct YardsColumn: View {
         .lineLimit(1)
     }
     .accessibilityElement(children: .combine)
-    .accessibilityLabel(yards.map { "\(label) \($0) yards" } ?? "\(label) no yards")
+    .accessibilityLabel(
+      stale ? "\(label) yards out of date" : yards.map { "\(label) \($0) yards" } ?? "\(label) no yards"
+    )
   }
 }
 
 struct YardsRow: View {
   let state: ShotTraxxRoundAttributes.ContentState
+  let stale: Bool
 
   var body: some View {
     if !state.hasGreen {
@@ -65,12 +76,12 @@ struct YardsRow: View {
         .foregroundStyle(RoundColors.muted)
     } else if state.hasEnds {
       HStack(alignment: .lastTextBaseline, spacing: 22) {
-        YardsColumn(label: "FRONT", yards: state.front, big: false)
-        YardsColumn(label: "MIDDLE", yards: state.middle, big: true)
-        YardsColumn(label: "BACK", yards: state.back, big: false)
+        YardsColumn(label: "FRONT", yards: liveYards(state.front, stale: stale), big: false, stale: stale)
+        YardsColumn(label: "MIDDLE", yards: liveYards(state.middle, stale: stale), big: true, stale: stale)
+        YardsColumn(label: "BACK", yards: liveYards(state.back, stale: stale), big: false, stale: stale)
       }
     } else {
-      YardsColumn(label: "MIDDLE", yards: state.middle, big: true)
+      YardsColumn(label: "MIDDLE", yards: liveYards(state.middle, stale: stale), big: true, stale: stale)
     }
   }
 }
@@ -102,7 +113,7 @@ struct RoundLockScreenView: View {
       }
       HStack {
         Spacer(minLength: 0)
-        YardsRow(state: state)
+        YardsRow(state: state, stale: context.isStale)
         Spacer(minLength: 0)
       }
       if let footer = footerLine(state) {
@@ -142,7 +153,7 @@ struct ShotTraxxRoundLiveActivity: Widget {
           }
         }
         DynamicIslandExpandedRegion(.center) {
-          YardsRow(state: state)
+          YardsRow(state: state, stale: context.isStale)
         }
         DynamicIslandExpandedRegion(.bottom) {
           if let footer = footerLine(state) {
@@ -157,12 +168,12 @@ struct ShotTraxxRoundLiveActivity: Widget {
           .font(.caption.weight(.heavy))
           .foregroundStyle(RoundColors.cream)
       } compactTrailing: {
-        Text(yardsText(state.middle))
+        Text(yardsText(liveYards(state.middle, stale: context.isStale)))
           .font(.caption.weight(.heavy))
           .monospacedDigit()
           .foregroundStyle(RoundColors.lime)
       } minimal: {
-        Text(yardsText(state.middle))
+        Text(yardsText(liveYards(state.middle, stale: context.isStale)))
           .font(.caption2.weight(.heavy))
           .monospacedDigit()
           .foregroundStyle(RoundColors.lime)
