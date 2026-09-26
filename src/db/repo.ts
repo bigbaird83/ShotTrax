@@ -41,7 +41,8 @@ import {
   type ThunderbirdPinSheetId,
 } from '../domain/thunderbirdPins';
 import { clubAverageFromShots, type ClubAverage } from '../domain/averages';
-import { rememberResolvedTee } from '../course/osmOverlay';
+import { dropCourseOverlayMemory, rememberResolvedTee } from '../course/osmOverlay';
+import { COURSE_OSM_OVERLAY_SETTING_KEY, forgetCourseOsmOverlay } from '../course/osmOverlayStore';
 import { COURSE_PAINT_CACHE_SETTING_KEY, forgetCoursePaintCacheForCourse } from '../course/paintCache';
 import { isYardTestCourseId, YARD_TEST_COURSE_ID, YARD_TEST_COURSE_KEY, yardTestCourseEnabled } from '../course/yardTestCourse';
 import { isValidLatLng } from '../domain/latLng';
@@ -2458,7 +2459,15 @@ export function getClubMap(db: SQLiteDatabase): Record<string, Club> {
 }
 
 export const GOLFAPI_HYDRATE_SETTING_KEY = 'golfapi.hydrates';
-export { COURSE_PAINT_CACHE_SETTING_KEY };
+export { COURSE_PAINT_CACHE_SETTING_KEY, COURSE_OSM_OVERLAY_SETTING_KEY };
+
+export function getCourseOsmOverlay(db: SQLiteDatabase): string | null {
+  return getSetting(db, COURSE_OSM_OVERLAY_SETTING_KEY);
+}
+
+export function setCourseOsmOverlay(db: SQLiteDatabase, json: string): void {
+  setSetting(db, COURSE_OSM_OVERLAY_SETTING_KEY, json);
+}
 
 export function getCoursePaintCache(db: SQLiteDatabase): string | null {
   return getSetting(db, COURSE_PAINT_CACHE_SETTING_KEY);
@@ -2522,6 +2531,10 @@ export function purgeYardTestCourseSaved(db: SQLiteDatabase): void {
     }
     forgetCoursePaintCacheForCourse(YARD_TEST_COURSE_ID);
     forgetCoursePaintCacheForCourse(YARD_TEST_COURSE_KEY);
+    forgetCourseOsmOverlay(YARD_TEST_COURSE_ID);
+    forgetCourseOsmOverlay(YARD_TEST_COURSE_KEY);
+    dropCourseOverlayMemory(YARD_TEST_COURSE_ID);
+    dropCourseOverlayMemory(YARD_TEST_COURSE_KEY);
   } catch {
     // Silent. A purge must not surface an error to the player.
   }

@@ -188,8 +188,8 @@ test('tee+green already present still remembers hazard overlays from Overpass', 
     },
   );
   assert.equal(queries.length, 1);
-  assert.equal(queries[0].holeNumber, 7);
-  assert.equal(queries[0].radiusM, 1000);
+  assert.equal(queries[0].holeNumber, undefined);
+  assert.equal(queries[0].radiusM, 1800);
   assert.deepEqual(queries[0].location, green);
   assert.equal(frame.fromCache, true);
   assert.equal(frame.fetched, false);
@@ -241,7 +241,8 @@ test('tee+green already present leaves overlay null when Overpass is empty', asy
       fetchOverlay: async (query) => {
         fetched += 1;
         assert.deepEqual(query.location, green);
-        assert.equal(query.radiusM, 1000);
+        assert.equal(query.radiusM, 1800);
+        assert.equal(query.holeNumber, undefined);
         return null;
       },
     },
@@ -271,9 +272,12 @@ test('background card prefetch remembers every hole tee+green without a phone fi
 
   const hole2Green = seed.holes![1].greenCentroid!;
   const hole2Tee = { lat: hole2Green.lat - 0.002, lng: hole2Green.lng };
+  let fetches = 0;
   const frames = await prefetchCourseCard(seed, {
     fetchOverlay: async (query) => {
-      if (query.holeNumber !== 2) return null;
+      fetches += 1;
+      assert.equal(query.holeNumber, undefined);
+      assert.equal(query.radiusM, 1800);
       return {
         source: 'osm',
         geojson: null,
@@ -281,10 +285,99 @@ test('background card prefetch remembers every hole tee+green without a phone fi
       };
     },
   });
+  assert.equal(fetches, 1);
   assert.equal(frames.length, 2);
   assert.equal(frames[0].fromCache, true);
   assert.deepEqual(frames[1].tee, hole2Tee);
   assert.deepEqual(cachedResolvedTee({ courseId: seed.apiId, holeNumber: 2, green: hole2Green }), hole2Tee);
+});
+
+test('one course-wide overlay is reused, including when the green shifts slightly', async () => {
+  const green2 = { lat: green.lat + 0.008, lng: green.lng };
+  const hole2Tee = { lat: green2.lat - 0.002, lng: green2.lng };
+  const bunker = [
+    { lat: green.lat + 0.0004, lng: green.lng + 0.0002 },
+    { lat: green.lat + 0.0005, lng: green.lng + 0.0003 },
+    { lat: green.lat + 0.0004, lng: green.lng + 0.0004 },
+  ];
+  const overlay: OsmOverlay = {
+    source: 'osm',
+    geojson: null,
+    features: [
+      {
+        kind: 'green',
+        holeNumber: 1,
+        coordinates: [green, { lat: green.lat + 0.0001, lng: green.lng }],
+      },
+      { kind: 'hole', holeNumber: 2, coordinates: [hole2Tee, green2] },
+      { kind: 'bunker', holeNumber: null, coordinates: bunker },
+    ],
+  };
+  let fetches = 0;
+  const first = await ensureHoleTeeGreen(
+    { courseId: 'session-hit', holeNumber: 1, tee: null, green, location: green },
+    {
+      fetchOverlay: async (query) => {
+        fetches += 1;
+        assert.equal(query.holeNumber, undefined);
+        assert.equal(query.radiusM, 1800);
+        assert.deepEqual(query.location, green);
+        return overlay;
+      },
+    },
+  );
+  const second = await ensureHoleTeeGreen(
+    { courseId: 'session-hit', holeNumber: 2, tee: null, green: green2, location: home },
+    {
+      fetchOverlay: async () => {
+        fetches += 1;
+        return null;
+      },
+    },
+  );
+  assert.equal(fetches, 1);
+  assert.equal(first.tee, null);
+  assert.deepEqual(first.green, green);
+  assert.deepEqual(second.tee, hole2Tee);
+  assert.notDeepEqual(second.tee, home);
+  const shifted = { lat: green.lat + 0.00021, lng: green.lng - 0.00019 };
+  const hole1 = cachedOsmOverlay({ courseId: 'session-hit', holeNumber: 1, green: shifted });
+  assert.equal(hole1?.features.some((feature) => feature.kind === 'green' && feature.holeNumber === 1), true);
+  assert.equal(hole1?.features.some((feature) => feature.kind === 'bunker'), true);
+  assert.equal(hole1?.features.some((feature) => feature.holeNumber === 2), false);
+  const hole2 = cachedOsmOverlay({
+    courseId: 'session-hit',
+    holeNumber: 2,
+    green: { lat: green2.lat + 0.0003, lng: green2.lng },
+  });
+  assert.equal(hole2?.features.some((feature) => feature.kind === 'hole' && feature.holeNumber === 2), true);
+  assert.equal(hole2?.features.some((feature) => feature.holeNumber === 1), false);
+});
+
+test('a failed course-wide overlay is not fetched again for the next hole', async () => {
+  let fetches = 0;
+  const green2 = { lat: green.lat + 0.01, lng: green.lng };
+  await ensureHoleTeeGreen(
+    { courseId: 'session-miss', holeNumber: 1, tee, green, location: green },
+    {
+      fetchOverlay: async () => {
+        fetches += 1;
+        return null;
+      },
+    },
+  );
+  await ensureHoleTeeGreen(
+    { courseId: 'session-miss', holeNumber: 2, tee, green: green2, location: green2 },
+    {
+      fetchOverlay: async () => {
+        fetches += 1;
+        return null;
+      },
+    },
+  );
+  assert.equal(fetches, 1);
+  assert.equal(cachedOsmOverlay({ courseId: 'session-miss', holeNumber: 1, green }), null);
+  assert.equal(cachedOsmOverlay({ courseId: 'session-miss', holeNumber: 2, green: green2 }), null);
 });
 
 test('Signal Lab: prefetch never blocks hole 1 or falls back to the phone for framing', async () => {

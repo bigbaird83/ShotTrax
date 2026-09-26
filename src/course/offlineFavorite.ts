@@ -1,13 +1,3 @@
-import { isYardTestCourseId } from './yardTestCourse';
-import { loadGcaPaintCandidate } from './client';
-import type { CourseHydrateMatch } from './hydrate';
-import { getSharedCoursePaintCache, type CoursePaintCache } from './paintCache';
-import {
-  loadGolfApiPaintCandidate,
-  loadOsmOpenGolfCandidate,
-  resolveCoursePaint,
-  type CoursePaintResult,
-} from './waterfall';
 import {
   courseIsHardMiss,
   offlineStatusAfterDownload,
@@ -16,6 +6,25 @@ import {
   type JsonStore,
   type OfflinePackStatus,
 } from '../domain/favorites';
+import { isValidLatLng, type LatLng } from '../domain/latLng';
+import { loadGcaPaintCandidate } from './client';
+import type { CourseHydrateMatch } from './hydrate';
+import {
+  adoptCourseOverlay,
+  COURSE_OSM_OVERLAY_RADIUS_M,
+  dropCourseOverlayMemory,
+  fetchOsmOverlay,
+} from './osmOverlay';
+import { loadCourseOsmOverlay, saveCourseOsmOverlay } from './osmOverlayStore';
+import { getSharedCoursePaintCache, type CoursePaintCache } from './paintCache';
+import type { OsmOverlay, OsmOverlayQuery } from './types';
+import {
+  loadGolfApiPaintCandidate,
+  loadOsmOpenGolfCandidate,
+  resolveCoursePaint,
+  type CoursePaintResult,
+} from './waterfall';
+import { isYardTestCourseId } from './yardTestCourse';
 
 export type OfflineDownloadDeps = {
   now?: () => string;
@@ -25,6 +34,9 @@ export type OfflineDownloadDeps = {
   getBaseUrl?: () => string | null;
   fetch?: typeof fetch;
   cache?: CoursePaintCache;
+  /** Course-wide Overpass read. Default is one real query. Failures are ignored. */
+  fetchOverlay?: (query: OsmOverlayQuery) => Promise<OsmOverlay | null>;
+  retryDelayMs?: number;
 };
 
 function matchOf(course: FavoriteCourse): CourseHydrateMatch {
@@ -55,9 +67,62 @@ async function resolveWithWaterfall(
   });
 }
 
+function overlayQueryCenter(course: FavoriteCourse, painted: CoursePaintResult): LatLng | null {
+  if (painted.ok) {
+    let lat = 0;
+    let lng = 0;
+    let count = 0;
+    for (const hole of painted.holes) {
+      if (!isValidLatLng(hole.green)) continue;
+      lat += hole.green.lat;
+      lng += hole.green.lng;
+      count += 1;
+    }
+    if (count > 0) return { lat: lat / count, lng: lng / count };
+  }
+  return isValidLatLng(course.location) ? course.location : null;
+}
+
+/**
+ * One course-wide Overpass read after a Ready paint. A failure or an empty
+ * course stores nothing and does not change the offline status already written.
+ */
+async function persistFavoriteOverlay(
+  course: FavoriteCourse,
+  painted: CoursePaintResult,
+  deps: OfflineDownloadDeps,
+  now: () => string,
+): Promise<void> {
+  if (isYardTestCourseId(course.id) || courseIsHardMiss(matchOf(course))) return;
+  const location = overlayQueryCenter(course, painted);
+  if (!location) return;
+  const fetchOverlay =
+    deps.fetchOverlay ??
+    ((query: OsmOverlayQuery) =>
+      fetchOsmOverlay(query, { fetch: deps.fetch, retryDelayMs: deps.retryDelayMs }));
+  const overlay = await fetchOverlay({
+    courseId: course.id,
+    location,
+    radiusM: COURSE_OSM_OVERLAY_RADIUS_M,
+  });
+  if (!overlay || overlay.source !== 'osm' || overlay.features.length === 0) return;
+  const saved = saveCourseOsmOverlay({
+    courseId: course.id,
+    fetchedAt: now(),
+    source: 'osm',
+    features: overlay.features,
+  });
+  if (!saved) return;
+  const stored = loadCourseOsmOverlay(course.id);
+  if (!stored) return;
+  dropCourseOverlayMemory(course.id);
+  adoptCourseOverlay(course.id, { source: 'osm', features: stored.features, geojson: null });
+}
+
 /**
  * Persist a full course card through the existing paint waterfall and its sanity gates.
  * HARD-MISS stays Miss and does not become Ready offline, even if a loader returned coordinates.
+ * A course overlay is saved only after that paint is Ready. Overlay failure leaves the status alone.
  */
 export async function downloadFavoriteForOffline(
   course: FavoriteCourse,
@@ -82,5 +147,13 @@ export async function downloadFavoriteForOffline(
   const status = offlineStatusAfterDownload(identity, painted.ok);
   writeOfflinePack(store, { courseId: course.id, status, updatedAt: now() });
   deps.onStatus?.(status);
+
+  if (status === 'ready') {
+    try {
+      await persistFavoriteOverlay(course, painted, deps, now);
+    } catch {
+      // Overlay is optional. Ready stays Ready.
+    }
+  }
   return status;
 }

@@ -441,7 +441,16 @@ test('cached overlay is available without a phone fix', () => {
   assert.ok(overlay);
   rememberOsmOverlay({ courseId: 'c1', holeNumber: 1, green }, overlay);
   assert.equal(cachedOsmOverlay({ courseId: 'c1', holeNumber: 1, green }), overlay);
-  assert.equal(cachedOsmOverlay({ courseId: 'c1', holeNumber: 1, green: null }), null);
+  assert.equal(
+    cachedOsmOverlay({
+      courseId: 'c1',
+      holeNumber: 1,
+      green: { lat: green.lat + 0.00021, lng: green.lng - 0.00019 },
+    }),
+    overlay,
+  );
+  assert.equal(cachedOsmOverlay({ courseId: 'c1', holeNumber: 1, green: null }), overlay);
+  assert.equal(cachedOsmOverlay({ courseId: 'c1', holeNumber: 2, green }), null);
   const tee = { lat: 37.0, lng: -122.0 };
   rememberResolvedTee({ courseId: 'c1', holeNumber: 1, green }, tee);
   assert.deepEqual(cachedResolvedTee({ courseId: 'c1', holeNumber: 1, green }), tee);
@@ -449,13 +458,93 @@ test('cached overlay is available without a phone fix', () => {
 });
 
 test('fetchOsmOverlay returns null on Overpass failure — graceful empty overlay', async () => {
+  let calls = 0;
   const overlay = await fetchOsmOverlay(
     { location: { lat: 37.01, lng: -86.43 }, holeNumber: 1 },
     {
-      fetch: async () => new Response('nope', { status: 504 }),
+      retryDelayMs: 0,
+      fetch: async () => {
+        calls += 1;
+        return new Response('nope', { status: 504 });
+      },
     },
   );
   assert.equal(overlay, null);
+  assert.equal(calls, 2);
+});
+
+test('fetchOsmOverlay retries once after 429 or a timeout, then keeps the real features', async () => {
+  let busy = 0;
+  const retried = await fetchOsmOverlay(
+    { location: { lat: 37.01, lng: -86.43 }, holeNumber: 1 },
+    {
+      retryDelayMs: 0,
+      fetch: async () => {
+        busy += 1;
+        if (busy === 1) return new Response('busy', { status: 429 });
+        return new Response(
+          JSON.stringify({
+            elements: [
+              {
+                type: 'way',
+                tags: { golf: 'green', ref: '1' },
+                geometry: [
+                  { lat: 37.01, lon: -86.43 },
+                  { lat: 37.011, lon: -86.431 },
+                ],
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      },
+    },
+  );
+  assert.equal(busy, 2);
+  assert.equal(retried?.features[0]?.kind, 'green');
+
+  let timeouts = 0;
+  const afterTimeout = await fetchOsmOverlay(
+    { location: { lat: 37.02, lng: -86.44 }, holeNumber: 4 },
+    {
+      retryDelayMs: 0,
+      fetch: async () => {
+        timeouts += 1;
+        if (timeouts === 1) throw new Error('timeout');
+        return new Response(
+          JSON.stringify({
+            elements: [
+              {
+                type: 'way',
+                tags: { golf: 'tee', ref: '4' },
+                geometry: [
+                  { lat: 37.02, lon: -86.44 },
+                  { lat: 37.021, lon: -86.441 },
+                ],
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      },
+    },
+  );
+  assert.equal(timeouts, 2);
+  assert.equal(afterTimeout?.features[0]?.holeNumber, 4);
+
+  let denied = 0;
+  const skipped = await fetchOsmOverlay(
+    { location: { lat: 37.03, lng: -86.45 } },
+    {
+      retryDelayMs: 0,
+      fetch: async () => {
+        denied += 1;
+        return new Response('no', { status: 500 });
+      },
+    },
+  );
+  assert.equal(skipped, null);
+  assert.equal(denied, 1);
 });
 
 test('fetchOsmOverlay POSTs around a real pin and returns parsed features', async () => {

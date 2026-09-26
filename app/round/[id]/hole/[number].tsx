@@ -505,6 +505,12 @@ function HoleScreenBody() {
     const greenPin = isCourseCardLatLng(greenCandidate) ? greenCandidate : null;
     const courseTee = isCourseCardLatLng(teeCandidate) ? teeCandidate : null;
     let live = true;
+    const storedOverlay = cachedOsmOverlay({
+      courseId: round?.courseApiId,
+      holeNumber,
+      green: greenPin,
+    });
+    if (storedOverlay) setOsmOverlay(storedOverlay);
     void ensureHoleTeeGreen({
       courseId: round?.courseApiId,
       holeNumber,

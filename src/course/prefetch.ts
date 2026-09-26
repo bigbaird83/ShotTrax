@@ -1,10 +1,8 @@
 import { isValidLatLng, type LatLng } from '../domain/latLng';
 import { diagnoseCourseCardFrame, planCourseCardCamera } from '../domain/holeCamera';
 import {
-  cachedOsmOverlay,
   cachedResolvedTee,
-  fetchOsmOverlay,
-  rememberOsmOverlay,
+  loadCachedOrFetchCourseOverlay,
   rememberResolvedTee,
   resolveOverlayTee,
 } from './osmOverlay';
@@ -63,13 +61,10 @@ export function satelliteTilesBulkDownload(): false {
   return false;
 }
 
-function overlayFetch(deps?: PrefetchDeps) {
-  return deps?.fetchOverlay ?? fetchOsmOverlay;
-}
-
 /**
  * Bunkers, water, and cart paths for a hole that already has a real green.
- * Query is the green, ~1000 m. A failed or empty Overpass response stays null.
+ * Uses the stored course overlay, or one course-wide query (~1800 m) shared
+ * by later holes. A failed or empty response stays null.
  * Does not invent tee, green, or geometry.
  */
 async function rememberOverlayAroundGreen(
@@ -77,14 +72,15 @@ async function rememberOverlayAroundGreen(
   deps?: PrefetchDeps,
 ): Promise<void> {
   if (!isValidLatLng(args.green)) return;
-  if (cachedOsmOverlay(args)) return;
-  const overlay = await overlayFetch(deps)({
-    courseId: args.courseId,
-    location: args.green,
-    holeNumber: args.holeNumber,
-    radiusM: 1000,
-  });
-  if (overlay) rememberOsmOverlay(args, overlay);
+  await loadCachedOrFetchCourseOverlay(
+    {
+      courseId: args.courseId,
+      holeNumber: args.holeNumber,
+      green: args.green,
+      location: args.green,
+    },
+    { fetchOverlay: deps?.fetchOverlay },
+  );
 }
 
 /** Cache API / OSM tees and greens so hole 1 can frame without waiting on the rest. */
@@ -134,11 +130,12 @@ export function cameraFrameFromCache(args: {
 }
 
 /**
- * If this hole is not cached yet, fetch that hole only.
- * Tee + green already on the card still load the OSM overlay around the green
- * before returning, so the hole screen can read bunkers, water, and cart paths
- * from cache. Never falls back to the phone for framing. Never bulk-warms
- * satellite tiles. Never invents a tee, green, or overlay geometry.
+ * If this hole is not cached yet, use the stored course overlay or one
+ * course-wide query shared for the session.
+ * Tee + green already on the card still load that overlay before returning,
+ * so the hole screen can read bunkers, water, and cart paths from cache.
+ * Never falls back to the phone for framing. Never bulk-warms satellite tiles.
+ * Never invents a tee, green, or overlay geometry.
  */
 export async function ensureHoleTeeGreen(
   args: {
@@ -192,15 +189,15 @@ export async function ensureHoleTeeGreen(
     };
   }
 
-  const overlay = await overlayFetch(deps)({
-    courseId: args.courseId,
-    location,
-    holeNumber: args.holeNumber,
-    radiusM: 1000,
-  });
-  if (overlay && green) {
-    rememberOsmOverlay({ courseId: args.courseId, holeNumber: args.holeNumber, green }, overlay);
-  }
+  const overlay = await loadCachedOrFetchCourseOverlay(
+    {
+      courseId: args.courseId,
+      holeNumber: args.holeNumber,
+      green,
+      location,
+    },
+    { fetchOverlay: deps?.fetchOverlay },
+  );
   const overlayTee = resolveOverlayTee(overlay, args.holeNumber, green);
   const tee = courseTee ?? overlayTee ?? cached.tee;
   if (tee && green) {
