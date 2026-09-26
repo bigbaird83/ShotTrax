@@ -177,6 +177,8 @@ export const COPY = {
   suggested: 'Suggested',
   changeClub: 'Change club',
   editShot: 'Edit shot',
+  moveSpot: 'Move spot',
+  moveSpotHint: 'Drag the pin, then confirm.',
   moveFrom: 'Move from',
   moveTo: 'Move to',
   undoEdit: 'Undo edit',

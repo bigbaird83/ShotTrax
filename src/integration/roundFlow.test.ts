@@ -282,6 +282,21 @@ type ShotActions = {
       force?: boolean;
     },
   ) => Promise<{ plan: { status: string } }>;
+  changeShotClub: (
+    db: SQLiteDatabase,
+    args: { roundId: string; shotId: string; clubId: string },
+  ) => { status: string };
+  moveShotSpot: (
+    db: SQLiteDatabase,
+    args: {
+      roundId: string;
+      holeNumber: number;
+      shotId: string;
+      point: LatLng;
+      dropped: boolean;
+      confirmed: boolean;
+    },
+  ) => { status: string };
 };
 
 type WatchClub = {
@@ -737,6 +752,71 @@ test('round flow', { skip: DatabaseSync ? false : 'node:sqlite needs Node 22.5+'
       return count + (isValidLatLng(start) ? 1 : 0) + (isValidLatLng(end) ? 1 : 0);
     }, 0);
     check(step, endpoints, pins.length);
+
+    // Edit a saved shot: cancel leaves it, club change keeps the pins, moving
+    // the spot updates this shot and the next one. Putts and score stay.
+    const clubC = clubs.find((club) => club.id !== clubA.id && club.id !== clubB.id);
+    if (!clubC) throw new Error(`Step ${step}: expected a third club`);
+    const editHole = mustHole(db, round.id, 1);
+    const beforeEdit = listShotsForHole(db, editHole.id);
+    const target = beforeEdit[0];
+    const follower = beforeEdit[1];
+    if (!target?.endLat || target.endLng == null || !follower) {
+      throw new Error(`Step ${step}: expected a stored spot on the first shot`);
+    }
+    if (follower.startLat !== target.endLat || follower.startLng !== target.endLng) {
+      throw new Error(`Step ${step}: expected the next shot to measure from the first shot`);
+    }
+    const beforeDist = target.distanceYards;
+    const beforeNext = follower.distanceYards;
+    const cancelled = shotsApi.moveShotSpot(db, {
+      roundId: round.id,
+      holeNumber: 1,
+      shotId: target.id,
+      point: { lat: target.endLat + 0.01, lng: target.endLng },
+      dropped: false,
+      confirmed: false,
+    });
+    check(step, 'cancel', cancelled.status);
+    const afterCancel = listShotsForHole(db, editHole.id);
+    check(step, target.endLat, afterCancel[0]?.endLat ?? null);
+    check(step, target.clubId, afterCancel[0]?.clubId ?? null);
+    check(step, beforeDist, afterCancel[0]?.distanceYards ?? null);
+    check(step, beforeNext, afterCancel[1]?.distanceYards ?? null);
+    const clubbed = shotsApi.changeShotClub(db, {
+      roundId: round.id,
+      shotId: target.id,
+      clubId: clubC.id,
+    });
+    check(step, 'commit', clubbed.status);
+    const droppedPoint = { lat: target.endLat + 0.01, lng: target.endLng + 0.01 };
+    const moved = shotsApi.moveShotSpot(db, {
+      roundId: round.id,
+      holeNumber: 1,
+      shotId: target.id,
+      point: droppedPoint,
+      dropped: true,
+      confirmed: true,
+    });
+    check(step, 'commit', moved.status);
+    const afterEdit = listShotsForHole(db, editHole.id);
+    check(step, clubC.id, afterEdit[0]?.clubId ?? null);
+    check(step, droppedPoint.lat, afterEdit[0]?.endLat ?? null);
+    check(step, droppedPoint.lng, afterEdit[0]?.endLng ?? null);
+    check(step, droppedPoint.lat, afterEdit[1]?.startLat ?? null);
+    check(step, droppedPoint.lng, afterEdit[1]?.startLng ?? null);
+    check(step, target.startLat, afterEdit[0]?.startLat ?? null);
+    check(step, follower.endLat, afterEdit[1]?.endLat ?? null);
+    if (afterEdit[0]?.distanceYards === beforeDist) {
+      throw new Error(`Step ${step}: expected the moved shot's distance to change`);
+    }
+    if (afterEdit[1]?.distanceYards === beforeNext) {
+      throw new Error(`Step ${step}: expected the next shot's distance to change`);
+    }
+    const editedHole = getHole(db, round.id, 1);
+    check(step, 4, editedHole?.score ?? null);
+    check(step, 2, editedHole?.putts ?? null);
+    check(step, 2, afterEdit.length);
   }
 
   // Step 5 — Watch Made it after Hole Out. Hole 1 stays 4 strokes / 2 putts,

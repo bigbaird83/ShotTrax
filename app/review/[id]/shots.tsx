@@ -1,13 +1,18 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { getCourseDataClient } from '@/src/course/client';
 import { teePointForHole, teePointFromHoleFeature } from '@/src/course/osmOverlay';
 import type { OsmOverlay } from '@/src/course/types';
 import { useDb } from '@/src/db/DbProvider';
-import { getClubMap, getRound, listHoles, listShotsForHole } from '@/src/db/repo';
+import { getClubMap, getRound, listClubAverages, listClubs, listHoles, listShotsForHole } from '@/src/db/repo';
+import { formatClubStripLabel, planClubStrip, toWheelFillClub } from '@/src/domain/clubStrip';
+import { isPutterClubId } from '@/src/domain/defaultBag';
 import { resolveHoleTee, shotPinsForHoleCamera } from '@/src/domain/holeCamera';
+import { isValidLatLng, type LatLng } from '@/src/domain/latLng';
 import { COPY } from '@/src/domain/playerCopy';
+import { deleteShotPrompt } from '@/src/domain/deleteShot';
+import { frameMapCenter, moveSpotDraftOrigin, shotStoredPosition } from '@/src/domain/shotEdit';
 import {
   SHOT_REVIEW_MAP_MIN_HEIGHT,
   SHOT_REVIEW_SHOT_LIST_MAX_HEIGHT,
@@ -19,8 +24,13 @@ import {
   shotReviewShotListWindow,
 } from '@/src/domain/shotReviewLayout';
 import type { Club, Shot } from '@/src/domain/types';
+import { changeShotClub, deleteHoleShot, moveShotSpot } from '@/src/services/shotActions';
+import { getCurrentFix } from '@/src/services/location';
 import { BigButton } from '@/src/ui/BigButton';
+import { ClubButton } from '@/src/ui/ClubButton';
+import { ClubStrip } from '@/src/ui/ClubStrip';
 import { HoleMap } from '@/src/ui/HoleMap';
+import { FullSheet } from '@/src/ui/Sheet';
 import { Screen } from '@/src/ui/Screen';
 import { useColors } from '@/src/ui/ColorThemeProvider';
 import { cardBorder } from '@/src/ui/surface';
@@ -30,7 +40,9 @@ const REVIEW_TRAIL_TO_GREEN = { yards: null, quality: 'none' as const };
 
 /**
  * Saved-round shot review: one locked tee-to-green map per hole with the marked shots
- * and their yard chips. Hole list + Prev / Next. No live GPS — the phone fix is never used.
+ * and their yard chips. Hole list + Prev / Next. The map never shows a live fix.
+ * A shot with no stored position may start its drag pin at the device location;
+ * that pin is not saved until it is dropped and confirmed.
  *
  * The map slot is the only flexible region (HoleMap's shared card is a fixed height,
  * so this screen overrides it with flex). The shot list and hole buttons are a pinned
@@ -38,15 +50,24 @@ const REVIEW_TRAIL_TO_GREEN = { yards: null, quality: 'none' as const };
  */
 export default function ReviewShotsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { db, revision } = useDb();
+  const { db, revision, bump } = useDb();
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [osmOverlay, setOsmOverlay] = useState<OsmOverlay | null>(null);
   const [index, setIndex] = useState(0);
   const [mapBox, setMapBox] = useState<ShotReviewBox | null>(null);
+  const [editShotId, setEditShotId] = useState<string | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [clubOpen, setClubOpen] = useState(false);
+  const [showAllClubs, setShowAllClubs] = useState(false);
+  const [movingSpot, setMovingSpot] = useState(false);
+  const [moveDraft, setMoveDraft] = useState<LatLng | null>(null);
+  const [moveDropped, setMoveDropped] = useState(false);
   const round = useMemo(() => getRound(db, id), [db, id, revision]);
   const holes = useMemo(() => (round ? listHoles(db, round.id) : []), [db, round, revision]);
   const clubs = useMemo(() => getClubMap(db), [db, revision]);
+  const clubList = useMemo(() => listClubs(db), [db, revision]);
+  const averages = useMemo(() => listClubAverages(db), [db, revision]);
   const hole = holes[Math.min(index, Math.max(0, holes.length - 1))] ?? null;
   const shots = useMemo(() => (hole ? listShotsForHole(db, hole.id) : []), [db, hole, revision]);
 
@@ -98,6 +119,127 @@ export default function ReviewShotsScreen() {
   const shotPins = shotPinsForHoleCamera(shots);
   // Fit tee → GPS shot pins → green to the measured map slot. Putts are not pins.
   const camera = hole ? shotReviewCamera({ tee, green, shotPins, box: mapBox }) : null;
+  const editingShot = editShotId ? shots.find((shot) => shot.id === editShotId) ?? null : null;
+  const framePoints = shotReviewFramePoints({ tee, green, shotPins });
+  const bag = clubList.filter((club) => !isPutterClubId(club.id));
+  const stripPlan = planClubStrip({
+    clubs: clubList.map((club) => {
+      const row = averages.find((item) => item.club.id === club.id);
+      return toWheelFillClub(club, row);
+    }),
+    yardsLeft: editingShot?.distanceYards ?? null,
+  });
+  const stripItems = stripPlan.ids
+    .filter((clubId) => !isPutterClubId(clubId))
+    .map((clubId) => {
+      const club = clubList.find((row) => row.id === clubId);
+      return {
+        id: clubId,
+        label: formatClubStripLabel({
+          id: clubId,
+          shortName: club?.shortName ?? clubId,
+          carry: stripPlan.carries[clubId],
+        }),
+      };
+    });
+
+  const openEdit = (shotId: string) => {
+    if (movingSpot) return;
+    setEditShotId(shotId);
+    setClubOpen(false);
+    setShowAllClubs(false);
+    setEditOpen(true);
+  };
+
+  const closeEdit = () => {
+    setEditOpen(false);
+    setClubOpen(false);
+    setShowAllClubs(false);
+    setEditShotId(null);
+  };
+
+  const startMoveSpot = async () => {
+    if (!editingShot) return;
+    const stored = shotStoredPosition(editingShot);
+    let device: LatLng | null = null;
+    if (!stored) {
+      try {
+        const current = await getCurrentFix();
+        const point = { lat: current.lat, lng: current.lng };
+        device = isValidLatLng(point) ? point : null;
+      } catch {
+        device = null;
+      }
+    }
+    const origin = moveSpotDraftOrigin({
+      stored,
+      device,
+      mapCenter: frameMapCenter(framePoints),
+    });
+    if (!origin) return;
+    setMoveDraft(origin.point);
+    setMoveDropped(false);
+    setEditOpen(false);
+    setMovingSpot(true);
+  };
+
+  const cancelMoveSpot = () => {
+    setMovingSpot(false);
+    setMoveDropped(false);
+    setMoveDraft(null);
+    if (editShotId) setEditOpen(true);
+  };
+
+  const commitMoveSpot = () => {
+    if (!hole || !editShotId || !moveDraft || !moveDropped) return;
+    const result = moveShotSpot(db, {
+      roundId: round.id,
+      holeNumber: hole.number,
+      shotId: editShotId,
+      point: moveDraft,
+      dropped: true,
+      confirmed: true,
+    });
+    if (result.status !== 'commit') return;
+    setMovingSpot(false);
+    setMoveDropped(false);
+    setMoveDraft(null);
+    setEditOpen(true);
+    bump();
+  };
+
+  const commitClub = (clubId: string) => {
+    if (!editShotId) return;
+    const result = changeShotClub(db, { roundId: round.id, shotId: editShotId, clubId });
+    if (result.status !== 'commit') return;
+    setClubOpen(false);
+    setShowAllClubs(false);
+    setEditOpen(true);
+    bump();
+  };
+
+  const onDeleteShot = (shotId: string) => {
+    if (!hole) return;
+    const prompt = deleteShotPrompt();
+    Alert.alert(prompt.title, '', [
+      { text: prompt.cancel, style: 'cancel' },
+      {
+        text: prompt.confirm,
+        style: 'destructive',
+        onPress: () => {
+          const result = deleteHoleShot(db, {
+            roundId: round.id,
+            holeNumber: hole.number,
+            shotId,
+            confirmed: true,
+          });
+          if (result.status !== 'commit') return;
+          closeEdit();
+          bump();
+        },
+      },
+    ]);
+  };
 
   return (
     <Screen scroll={false}>
@@ -151,6 +293,19 @@ export default function ReviewShotsScreen() {
                 longitude: point.lng,
               }))}
               style={styles.mapFill}
+              onShotPress={movingSpot ? undefined : openEdit}
+              placedTo={movingSpot ? moveDraft : null}
+              lineFrom={null}
+              lineGreen={null}
+              onPlaceToDrag={
+                movingSpot
+                  ? (point) => {
+                      setMoveDraft(point);
+                      setMoveDropped(true);
+                    }
+                  : undefined
+              }
+              placeHint={movingSpot ? COPY.moveSpotHint : null}
             />
           ) : hole && mapBox ? (
             <Text style={styles.muted}>{COPY.shotReviewNoMap}</Text>
@@ -168,8 +323,20 @@ export default function ReviewShotsScreen() {
             textStyle={styles.muted}
             listStyle={styles.shotList}
             contentStyle={styles.shotListContent}
+            onShotPress={movingSpot ? undefined : openEdit}
           />
         ) : null}
+        {movingSpot ? (
+          <View style={styles.nav}>
+            <BigButton label={COPY.cancel} variant="ghost" onPress={cancelMoveSpot} style={styles.navBtn} />
+            <BigButton
+              label={COPY.confirmPlace}
+              disabled={!moveDropped || !moveDraft}
+              onPress={commitMoveSpot}
+              style={styles.navBtn}
+            />
+          </View>
+        ) : (
         <View style={styles.nav}>
           <BigButton
             label={COPY.previousHole}
@@ -186,7 +353,76 @@ export default function ReviewShotsScreen() {
             style={styles.navBtn}
           />
         </View>
+        )}
       </View>
+
+      <FullSheet
+        visible={editOpen && !clubOpen}
+        title={
+          editingShot
+            ? `${COPY.editShot} · ${
+                editingShot.clubId ? clubs[editingShot.clubId]?.shortName ?? COPY.editShot : COPY.editShot
+              }${editingShot.distanceYards != null ? ` · ${editingShot.distanceYards} yd` : ''}`
+            : COPY.editShot
+        }
+        onClose={closeEdit}>
+        <ScrollView contentContainerStyle={styles.sheetPad}>
+          {editingShot ? (
+            <>
+              <BigButton label={COPY.changeClub} onPress={() => setClubOpen(true)} />
+              <BigButton label={COPY.moveSpot} variant="secondary" onPress={() => void startMoveSpot()} />
+              <BigButton
+                label={COPY.deleteShot}
+                variant="danger"
+                onPress={() => onDeleteShot(editingShot.id)}
+              />
+            </>
+          ) : (
+            <Text style={styles.muted}>{COPY.noShots}</Text>
+          )}
+        </ScrollView>
+      </FullSheet>
+
+      <FullSheet
+        visible={clubOpen}
+        title={
+          editingShot?.distanceYards != null
+            ? `${editingShot.distanceYards} yd · ${COPY.pickClub}`
+            : COPY.pickClub
+        }
+        onClose={() => {
+          setClubOpen(false);
+          setShowAllClubs(false);
+          setEditOpen(true);
+        }}>
+        <ScrollView contentContainerStyle={styles.sheetPad}>
+          {stripItems.length > 0 ? (
+            <ClubStrip
+              items={stripItems}
+              pickId={stripPlan.pickId}
+              windowStart={stripPlan.windowStart}
+              onPick={commitClub}
+            />
+          ) : null}
+          <BigButton
+            label={COPY.allClubs}
+            variant="secondary"
+            onPress={() => setShowAllClubs((open) => !open)}
+          />
+          {showAllClubs || stripItems.length === 0 ? (
+            <View style={styles.placeGrid}>
+              {bag.map((club) => (
+                <ClubButton
+                  key={club.id}
+                  shortName={club.shortName}
+                  name={club.name}
+                  onPress={() => commitClub(club.id)}
+                />
+              ))}
+            </View>
+          ) : null}
+        </ScrollView>
+      </FullSheet>
     </Screen>
   );
 }
@@ -198,6 +434,7 @@ function ReviewShotList({
   textStyle,
   listStyle,
   contentStyle,
+  onShotPress,
 }: {
   shots: Shot[];
   puttLines: string[];
@@ -205,6 +442,7 @@ function ReviewShotList({
   textStyle: StyleProp<TextStyle>;
   listStyle: StyleProp<ViewStyle>;
   contentStyle: StyleProp<ViewStyle>;
+  onShotPress?: (shotId: string) => void;
 }) {
   const [contentHeight, setContentHeight] = useState(0);
   const windowHeight = shotReviewShotListWindow(contentHeight);
@@ -219,10 +457,15 @@ function ReviewShotList({
         setContentHeight((prev) => (prev === height ? prev : height));
       }}>
       {shots.map((shot) => (
-        <Text key={shot.id} style={textStyle}>
-          {shot.seq}. {shot.clubId ? (clubs[shot.clubId]?.name ?? 'Club') : '—'}
-          {shot.distanceYards != null ? ` · ${Math.round(shot.distanceYards)} yd` : ''}
-        </Text>
+        <Pressable
+          key={shot.id}
+          accessibilityRole="button"
+          onPress={() => onShotPress?.(shot.id)}>
+          <Text style={textStyle}>
+            {shot.seq}. {shot.clubId ? (clubs[shot.clubId]?.name ?? 'Club') : '—'}
+            {shot.distanceYards != null ? ` · ${Math.round(shot.distanceYards)} yd` : ''}
+          </Text>
+        </Pressable>
       ))}
       {puttLines.map((line, i) => (
         <Text key={`putt-${i}`} style={textStyle}>
@@ -271,5 +514,7 @@ function makeStyles(colors: ColorPalette) {
     shotListContent: { gap: 8 },
     nav: { flexDirection: 'row', gap: 8, flexShrink: 0 },
     navBtn: { flex: 1 },
+    sheetPad: { gap: 12, padding: 16 },
+    placeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   });
 }
