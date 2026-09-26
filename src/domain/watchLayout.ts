@@ -186,7 +186,7 @@ export type WatchFrame = { minX: number; maxX: number; minY: number; maxY: numbe
 /**
  * Mirror of the Watch hole screen (content.swift clubPick) in safe-area points.
  * Header at the top. Row A at the bottom of the top area: [Penalty] [Home] [Putt].
- * Row B: [Hole Out] under Penalty, [Edit shot] (or [Retry] while a penalty, undo,
+ * Row B: [Hole Out] under Penalty, [Undo] (or [Retry] while a penalty, undo,
  * or club change is unconfirmed), [All clubs] last; then the club pills. The top area is 60% but never taller than
  * safeHeight minus Row B + club pills, so those stay on screen.
  */
@@ -196,7 +196,7 @@ export function watchHoleFrames(safeWidth: number, safeHeight: number): {
   home: WatchFrame;
   putt: WatchFrame;
   holeOut: WatchFrame;
-  /** Edit shot. Retry takes this slot while a penalty, undo, or club change is unconfirmed. */
+  /** Undo. Retry takes this slot while a penalty, undo, or club change is unconfirmed. */
   undo: WatchFrame;
   retry: WatchFrame;
   allClubs: WatchFrame;
@@ -349,7 +349,7 @@ export function watchChangeClubFrames(
   };
 }
 
-/** Middle-slot label fits the pill at the Edit shot minimum scale (0.5). */
+/** Middle-slot label fits the pill at the Undo minimum scale (0.5). */
 export function watchEditShotLabelFits(safeWidth: number): boolean {
   const slot = (safeWidth - 8 - 2 * WATCH_ACTION_ROW_GAP) / 3;
   return watchTextWidth(WATCH_EDIT_SHOT_LABEL, 16) * 0.5 <= slot;

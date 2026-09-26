@@ -235,7 +235,7 @@ test('Watch hole + penalty menu source match the layout model', () => {
 });
 
 test('Watch Edit shot screen and Change club list fit 40mm through Ultra', () => {
-  assert.equal(WATCH_EDIT_SHOT_LABEL, 'Edit shot');
+  assert.equal(WATCH_EDIT_SHOT_LABEL, 'Undo');
   const edit = watchUi.slice(watchUi.indexOf('private var editShotMenu'), watchUi.indexOf('private var changeClubList'));
   assert.match(edit, /let backHeight: CGFloat = 28/);
   assert.match(edit, /let rowHeight = max\(0, min\(44, \(geo\.size\.height - backHeight - 6 \* 3 - 8\) \/ 2\)\)/);

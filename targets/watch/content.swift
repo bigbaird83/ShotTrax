@@ -1,7 +1,9 @@
 import SwiftUI
 
-/// Row B's middle button. Change this one string to put "Undo" back.
-private let watchEditShotLabel = "Edit shot"
+/// Row B middle button. Opens the last-shot screen (Change club / Delete shot).
+private let watchEditShotLabel = "Undo"
+/// VoiceOver name. The visible word stays Undo.
+private let watchUndoAccessibilityLabel = "Undo or change last shot"
 
 /// Pushed off Watch Home. Appending this never starts or continues a round.
 private enum WatchHomePush: Hashable {
@@ -916,7 +918,7 @@ struct ContentView: View {
 
         VStack(alignment: .leading, spacing: 6) {
           // Hole Out keeps the same pill and column as Penalty. The middle slot is
-          // Edit shot (last shot on this hole). Retry takes it only while a
+          // Undo (last shot on this hole). Retry takes it only while a
           // penalty, undo, or club change is unconfirmed, and clears once the
           // phone confirms that id. The last slot holds All clubs (overlay below).
           HStack(spacing: 8) {
@@ -945,7 +947,7 @@ struct ContentView: View {
               .buttonStyle(.plain)
               .allowsHitTesting(session.canEditShot)
               .opacity(session.canEditShot ? 1 : 0.4)
-              .accessibilityLabel(Text(watchEditShotLabel))
+              .accessibilityLabel(Text(watchUndoAccessibilityLabel))
             }
             emptyPillSlot
           }

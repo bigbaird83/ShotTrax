@@ -381,12 +381,14 @@ test('Watch Row B: Edit shot in the middle slot; Retry takes it while a penalty,
   const rowB = pick.slice(pick.indexOf('actionPill("Hole Out")'), pick.indexOf('GeometryReader { wheelGeo'));
   const retryAt = rowB.indexOf('actionPill("Retry")');
   const editAt = rowB.indexOf('actionPill(watchEditShotLabel)');
-  assert.ok(retryAt > 0 && editAt > retryAt, 'Retry wins the slot, Edit shot is the else branch');
+  assert.ok(retryAt > 0 && editAt > retryAt, 'Retry wins the slot, Undo is the else branch');
   assert.match(rowB, /if session\.penaltyRetry \|\| session\.undoRetry \|\| session\.clubChangeRetry \{/);
   assert.match(rowB, /session\.retryPenalty\(\)/);
   assert.match(rowB, /session\.retryUndo\(\)/);
   assert.match(rowB, /session\.retryClubChange\(\)/);
-  assert.match(ui, /private let watchEditShotLabel = "Edit shot"/);
+  assert.match(ui, /private let watchEditShotLabel = "Undo"/);
+  assert.match(ui, /private let watchUndoAccessibilityLabel = "Undo or change last shot"/);
+  assert.match(rowB, /accessibilityLabel\(Text\(watchUndoAccessibilityLabel\)\)/);
   assert.match(rowB, /session\.openEditShot\(\)/);
   assert.doesNotMatch(rowB, /beginShotHold|undoLastShot|changeShotClub/);
   assert.match(rowB, /\.allowsHitTesting\(session\.canEditShot\)/);

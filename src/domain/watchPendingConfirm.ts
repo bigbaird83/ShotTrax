@@ -1,13 +1,15 @@
 /**
  * Row B's middle slot. Mirrors the Watch: Retry while a penalty, an undo, or a
- * club change is still in the unconfirmed queue, otherwise Edit shot.
+ * club change is still in the unconfirmed queue, otherwise Undo.
  * A phone `watchConfirm` removes that id. A second confirm for the same id
  * removes nothing else. `ok: false` removes nothing, so a failed or still-queued
  * row keeps Retry.
  */
 
-/** One place to put "Undo" back on the Watch. */
-export const WATCH_EDIT_SHOT_LABEL = 'Edit shot' as const;
+/** Visible Row B label. Tapping it opens Change club and Delete shot. */
+export const WATCH_EDIT_SHOT_LABEL = 'Undo' as const;
+/** VoiceOver name for that button. The visible word stays Undo. */
+export const WATCH_UNDO_ACCESSIBILITY_LABEL = 'Undo or change last shot' as const;
 
 export type WatchUnconfirmed =
   | { type: 'penaltyPick'; id: string }
