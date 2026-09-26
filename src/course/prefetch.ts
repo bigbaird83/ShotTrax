@@ -1,8 +1,11 @@
 import { isValidLatLng, type LatLng } from '../domain/latLng';
 import { diagnoseCourseCardFrame, planCourseCardCamera } from '../domain/holeCamera';
 import {
+  cachedOsmOverlay,
   cachedResolvedTee,
   loadCachedOrFetchCourseOverlay,
+  logOsmOverlayDev,
+  osmOverlayBusyRemainingMs,
   rememberResolvedTee,
   resolveOverlayTee,
 } from './osmOverlay';
@@ -36,6 +39,10 @@ export type PrefetchDeps = {
   courseNumHoles?: number | null;
   /** Persist a painted layout onto the open round. Never blocks Start. */
   applyLayout?: (layout: CourseLayoutSeed) => void;
+  /** Clock shared with the Worker busy cooldown. */
+  nowMs?: () => number;
+  /** Hole-screen timer. Ask again even if the cooldown is a few milliseconds short. */
+  bypassBusyCooldown?: boolean;
 };
 
 /** Start Round must open hole 1 immediately. Whole-card OSM is background only. */
@@ -85,7 +92,11 @@ async function rememberOverlayAroundGreen(
       location: args.green,
       courseLocation: args.courseLocation,
     },
-    { fetchOverlay: deps?.fetchOverlay },
+    {
+      fetchOverlay: deps?.fetchOverlay,
+      nowMs: deps?.nowMs,
+      bypassBusyCooldown: deps?.bypassBusyCooldown,
+    },
   );
 }
 
@@ -210,7 +221,11 @@ export async function ensureHoleTeeGreen(
       location,
       courseLocation: args.courseLocation,
     },
-    { fetchOverlay: deps?.fetchOverlay },
+    {
+      fetchOverlay: deps?.fetchOverlay,
+      nowMs: deps?.nowMs,
+      bypassBusyCooldown: deps?.bypassBusyCooldown,
+    },
   );
   const overlayTee = resolveOverlayTee(overlay, args.holeNumber, green);
   const tee = courseTee ?? overlayTee ?? cached.tee;
@@ -335,6 +350,72 @@ export async function cacheHolesAfterFirst(
     out.push(frame);
   }
   return out;
+}
+
+export type OpenHoleOverlayRetryDeps = PrefetchDeps & {
+  /** Test hook. Default is `setTimeout` / `clearTimeout`. */
+  schedule?: (run: () => void, delayMs: number) => () => void;
+};
+
+function defaultOverlayRetrySchedule(run: () => void, delayMs: number): () => void {
+  const id = setTimeout(run, delayMs);
+  return () => clearTimeout(id);
+}
+
+/**
+ * While the hole screen is open and nothing has drawn, schedule one Worker
+ * retry for when the `upstream_busy` cooldown ends. A definitive miss does
+ * not schedule. The returned function cancels the timer (hole unmount).
+ * One shot: a second busy answer does not schedule another retry.
+ */
+export function scheduleOpenHoleOverlayRetry(
+  args: {
+    courseId?: string | null;
+    holeNumber: number;
+    tee: LatLng | null;
+    green: LatLng | null;
+    location?: LatLng | null;
+    courseLocation?: LatLng | null;
+  },
+  hooks: {
+    onOverlay: (overlay: OsmOverlay) => void;
+  },
+  deps?: OpenHoleOverlayRetryDeps,
+): () => void {
+  const courseId = args.courseId?.trim() ?? '';
+  const nowMs = deps?.nowMs ?? Date.now;
+  const drawn = cachedOsmOverlay({
+    courseId: args.courseId,
+    holeNumber: args.holeNumber,
+    green: isValidLatLng(args.green) ? args.green : null,
+  });
+  if (drawn && drawn.features.length > 0) return () => {};
+  const remainingMs = osmOverlayBusyRemainingMs(courseId, nowMs);
+  if (!courseId || remainingMs <= 0) return () => {};
+
+  let cancelled = false;
+  logOsmOverlayDev(courseId, 'hole screen retry scheduled', { remainingMs });
+  const schedule = deps?.schedule ?? defaultOverlayRetrySchedule;
+  const cancelTimer = schedule(() => {
+    if (cancelled) return;
+    logOsmOverlayDev(courseId, 'hole screen retrying: busy cooldown elapsed');
+    void ensureHoleTeeGreen(args, { ...deps, bypassBusyCooldown: true }).then((frame) => {
+      if (cancelled) return;
+      const overlay = cachedOsmOverlay({
+        courseId: args.courseId,
+        holeNumber: args.holeNumber,
+        green: frame.green,
+      });
+      if (overlay && overlay.features.length > 0) hooks.onOverlay(overlay);
+    });
+  }, remainingMs);
+
+  return () => {
+    if (cancelled) return;
+    cancelled = true;
+    cancelTimer();
+    logOsmOverlayDev(courseId, 'hole screen retry cancelled');
+  };
 }
 
 /** Fire-and-forget wrapper so Start Round never awaits holes 2–18. */
