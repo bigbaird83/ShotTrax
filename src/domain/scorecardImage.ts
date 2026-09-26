@@ -1,3 +1,5 @@
+import { planGroupGames, type GroupGameSettings, type GroupHoleIn, type GroupPlayerIn } from './groupGames';
+import { formatGroupResultBlocks, planGroupScorecard, type GroupResultBlock } from './groupScorecard';
 import { SHOTTRAXX_BRAND } from './playerCopy';
 import {
   scorecardDiff,
@@ -6,6 +8,7 @@ import {
   type ScorecardHole,
   type ScorecardMark,
 } from './scorecard';
+import type { ScorecardAudience } from './shareChoice';
 
 const PNG_SIG = [137, 80, 78, 71, 13, 10, 26, 10];
 /** Messages-friendly width; 18 holes still fit one image. */
@@ -57,6 +60,35 @@ export type ScorecardImageRow = {
   incomplete: boolean;
 };
 
+/** One player on a whole-group share image. Unscored holes are `''`, never `"0"`. */
+export type GroupScorecardImagePlayer = {
+  name: string;
+  /** Aligned with `holeNumbers`. Blank when that hole has no score. */
+  scores: string[];
+  /** Null on a round that is not 18 holes — the Out column is absent, not faked. */
+  out: string | null;
+  /** Null on a round that is not 18 holes — no In column. */
+  in: string | null;
+  total: string;
+};
+
+/**
+ * Whole-group scorecard image. Hole scores and Out / In / Total come from
+ * `planGroupScorecard` (the group scorecard screen). Results use
+ * `formatGroupResultBlocks` and are null when no side game is on.
+ */
+export type GroupScorecardImageModel = {
+  holeNumbers: number[];
+  /** Par label per hole. Blank when the course has no par — never invented. */
+  pars: string[];
+  players: GroupScorecardImagePlayer[];
+  results: GroupResultBlock[] | null;
+  /** True only when net scoring is actually in use. */
+  net: boolean;
+  /** Net was requested and a blank handicap (or missing stroke index) blocked it. */
+  netBlocked: boolean;
+};
+
 export type ScorecardImagePlan = {
   brand: string;
   courseName: string;
@@ -70,6 +102,11 @@ export type ScorecardImagePlan = {
   toParValue: number | null;
   stats: { putts: string; underPar: number; pars: number; overPar: number };
   rows: ScorecardImageRow[];
+  /**
+   * Present only for a whole-group share. Just me, and any round with no
+   * partner, omit this so the plan matches today's single-player card.
+   */
+  group?: GroupScorecardImageModel;
 };
 
 /**
@@ -80,6 +117,13 @@ export function planScorecardImage(args: {
   courseName?: string | null;
   holes: ScorecardHole[];
   finished?: boolean;
+  /** Default and omitted are Just me: today's plan, even if `group` is passed. */
+  audience?: ScorecardAudience;
+  group?: {
+    holes: readonly GroupHoleIn[];
+    players: readonly GroupPlayerIn[];
+    settings: GroupGameSettings;
+  } | null;
 }): ScorecardImagePlan {
   const rows = [...args.holes].sort((a, b) => a.number - b.number);
   const scored = rows.filter((row) => row.score != null && Number.isFinite(row.score));
@@ -104,7 +148,7 @@ export function planScorecardImage(args: {
   });
   const puttRows = imageRows.filter((row) => row.putts !== '');
   const markCount = (...marks: ScorecardMark[]) => imageRows.filter((row) => marks.includes(row.mark)).length;
-  return {
+  const plan: ScorecardImagePlan = {
     brand: SHOTTRAXX_BRAND,
     courseName: args.courseName?.trim() ? args.courseName.trim() : 'Round',
     total: scored.length ? String(total) : '—',
@@ -119,6 +163,53 @@ export function planScorecardImage(args: {
       overPar: markCount('bogey', 'double'),
     },
     rows: imageRows,
+  };
+  // Just me (and a round with no partner) is today's plan: no `group` field.
+  if (args.audience === 'group' && args.group && args.group.players.length >= 2) {
+    return { ...plan, group: planGroupScorecardImage(args.group) };
+  }
+  return plan;
+}
+
+function totalText(cells: { playerId: string; strokes: number | null }[] | undefined, playerId: string): string {
+  const strokes = cells?.find((cell) => cell.playerId === playerId)?.strokes;
+  return strokes == null ? '' : String(strokes);
+}
+
+/**
+ * Player rows for the whole-group image, in the order given (owner first, then
+ * partners as they were added). Numbers are `planGroupScorecard`'s. An unscored
+ * hole is blank, never 0. A 9-hole round has Total and no Out or In.
+ */
+export function planGroupScorecardImage(args: {
+  holes: readonly GroupHoleIn[];
+  players: readonly GroupPlayerIn[];
+  settings: GroupGameSettings;
+}): GroupScorecardImageModel {
+  const result = planGroupGames(args);
+  const card = planGroupScorecard({ holes: args.holes, players: args.players, result });
+  const holeRows = [...card.front, ...card.back];
+  const eighteen = card.totals.some((entry) => entry.label === 'Out');
+  const out = card.totals.find((entry) => entry.label === 'Out');
+  const inn = card.totals.find((entry) => entry.label === 'In');
+  const grand = card.totals.find((entry) => entry.label === 'Total');
+  return {
+    holeNumbers: holeRows.map((row) => row.number),
+    pars: holeRows.map((row) => (row.par == null ? '' : String(row.par))),
+    players: card.players.map((player) => ({
+      name: player.name,
+      scores: holeRows.map((row) => {
+        const score = row.cells.find((cell) => cell.playerId === player.id)?.score ?? null;
+        // 0 is not a posted score. The group card leaves the cell blank.
+        return score == null || score === 0 ? '' : String(score);
+      }),
+      out: eighteen ? totalText(out?.cells, player.id) : null,
+      in: eighteen ? totalText(inn?.cells, player.id) : null,
+      total: totalText(grand?.cells, player.id),
+    })),
+    results: formatGroupResultBlocks(card.players, result, holeRows.length),
+    net: result.net,
+    netBlocked: result.netBlocked,
   };
 }
 
@@ -656,12 +747,285 @@ function drawLegend(c: Canvas, layout: ScorecardImageLayout): void {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Whole-group layout. Same 1080 width. Front and back are separate rows on
+// an 18-hole card so four players still have a readable hole column.
+// ---------------------------------------------------------------------------
+
+const GROUP_NAME_W = 200;
+const GROUP_HEAD_H = 68;
+const GROUP_ROW_H = 56;
+const GROUP_BLOCK_GAP = 22;
+const GROUP_HEADER_H = 188;
+const RESULT_LINE_GAP = 8;
+
+export type GroupScorecardColumn = {
+  kind: 'name' | 'hole' | 'out' | 'in' | 'total';
+  label: string;
+  x: number;
+  w: number;
+  hole?: number;
+};
+
+export type GroupScorecardLayoutBlock = {
+  top: number;
+  height: number;
+  holeNumbers: number[];
+  columns: GroupScorecardColumn[];
+  rows: { name: string; y: number; h: number }[];
+};
+
+export type GroupScorecardLayout = {
+  width: number;
+  height: number;
+  blocks: GroupScorecardLayoutBlock[];
+  results: {
+    top: number;
+    height: number;
+    blocks: { title: string; lines: { text: string; warning: boolean }[] }[];
+  } | null;
+};
+
+const RESULT_TITLE: TextStyle = { cap: 15, weight: 2.4, tracking: 2.2, color: C.lime };
+const RESULT_BODY: TextStyle = { cap: 16, weight: 2.2, color: C.cream };
+
+function wrapText(text: string, style: TextStyle, maxWidth: number): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  const lines: string[] = [];
+  let current = words[0] ?? '';
+  for (const word of words.slice(1)) {
+    const next = `${current} ${word}`;
+    if (measureText(next, style) <= maxWidth) current = next;
+    else {
+      lines.push(current);
+      current = word;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
+function groupDataColumns(
+  holeNumbers: number[],
+  side: 'out' | 'in' | null,
+  showTotal: boolean,
+): GroupScorecardColumn[] {
+  const extras: { kind: 'out' | 'in' | 'total'; label: string }[] = [];
+  if (side === 'out') extras.push({ kind: 'out', label: 'Out' });
+  if (side === 'in') extras.push({ kind: 'in', label: 'In' });
+  if (showTotal) extras.push({ kind: 'total', label: 'Total' });
+  const count = holeNumbers.length + extras.length;
+  const dataW = CONTENT_W - GROUP_NAME_W;
+  const base = count > 0 ? Math.floor(dataW / count) : dataW;
+  let leftover = count > 0 ? dataW - base * count : 0;
+  const columns: GroupScorecardColumn[] = [{ kind: 'name', label: '', x: PAD, w: GROUP_NAME_W }];
+  let x = PAD + GROUP_NAME_W;
+  const take = () => {
+    const w = base + (leftover > 0 ? 1 : 0);
+    if (leftover > 0) leftover -= 1;
+    const col = { x, w };
+    x += w;
+    return col;
+  };
+  for (const hole of holeNumbers) {
+    columns.push({ kind: 'hole', label: String(hole), hole, ...take() });
+  }
+  for (const extra of extras) columns.push({ ...extra, ...take() });
+  return columns;
+}
+
+/** Layout plan for the whole-group image. Width stays 1080; height grows with players and results. */
+export function layoutGroupScorecardImage(group: GroupScorecardImageModel): GroupScorecardLayout {
+  const eighteen = group.players.some((player) => player.out != null || player.in != null);
+  const frontHoles = eighteen ? group.holeNumbers.slice(0, 9) : group.holeNumbers;
+  const backHoles = eighteen ? group.holeNumbers.slice(9) : [];
+  const specs: { holes: number[]; side: 'out' | 'in' | null; showTotal: boolean }[] = [
+    { holes: frontHoles, side: eighteen ? 'out' : null, showTotal: !eighteen },
+  ];
+  if (backHoles.length) specs.push({ holes: backHoles, side: 'in', showTotal: true });
+
+  let top = PAD + GROUP_HEADER_H;
+  const blocks: GroupScorecardLayoutBlock[] = specs.map((spec) => {
+    const height = GROUP_HEAD_H + group.players.length * GROUP_ROW_H;
+    const block: GroupScorecardLayoutBlock = {
+      top,
+      height,
+      holeNumbers: spec.holes,
+      columns: groupDataColumns(spec.holes, spec.side, spec.showTotal),
+      rows: group.players.map((player, index) => ({
+        name: player.name,
+        y: top + GROUP_HEAD_H + index * GROUP_ROW_H,
+        h: GROUP_ROW_H,
+      })),
+    };
+    top += height + GROUP_BLOCK_GAP;
+    return block;
+  });
+
+  const gridBottom = blocks.length ? blocks[blocks.length - 1].top + blocks[blocks.length - 1].height : top - GROUP_BLOCK_GAP;
+  let results: GroupScorecardLayout['results'] = null;
+  let cursor = gridBottom + 28;
+  if (group.results && group.results.length) {
+    const maxW = CONTENT_W - 48;
+    const blocksWrapped = group.results.map((block) => ({
+      title: block.title,
+      lines: block.lines.flatMap((line) => {
+        const warning = line.startsWith('Net needs');
+        return wrapText(line, RESULT_BODY, maxW).map((text) => ({ text, warning }));
+      }),
+    }));
+    const inner = blocksWrapped.reduce((sum, block) => {
+      const titleH = RESULT_TITLE.cap + 10;
+      const linesH = block.lines.length * (RESULT_BODY.cap + RESULT_LINE_GAP);
+      return sum + titleH + linesH + 12;
+    }, 0);
+    const height = 20 + inner + 8;
+    results = { top: cursor, height, blocks: blocksWrapped };
+    cursor += height;
+  }
+  return { width: WIDTH, height: cursor + PAD, blocks, results };
+}
+
+function drawGroupHeader(c: Canvas, plan: ScorecardImagePlan): void {
+  const brandStyle: TextStyle = { cap: BRAND_CAP, weight: 3.4, tracking: 5, color: C.lime };
+  const trademark = plan.brand.includes('™');
+  const brandName = plan.brand.replace('™', '').toUpperCase();
+  drawText(c, PAD, PAD, brandName, brandStyle);
+  if (trademark) {
+    const tmStyle: TextStyle = { cap: 9, weight: 1.6, tracking: 1.5, color: C.lime };
+    drawText(c, PAD + measureText(brandName, brandStyle) + 5, PAD, 'TM', tmStyle);
+  }
+  const course = fitText(
+    plan.courseName.toUpperCase(),
+    { cap: 40, weight: 4.6, tracking: 1, color: C.cream },
+    CONTENT_W,
+    28,
+  );
+  drawText(c, PAD, PAD + 48, course.text, course.style);
+  drawText(c, PAD, PAD + 48 + 40 + 16, 'GROUP', { cap: 18, weight: 3, tracking: 3.5, color: C.lime });
+}
+
+function drawGroupBlock(c: Canvas, group: GroupScorecardImageModel, block: GroupScorecardLayoutBlock): void {
+  const card = { x: PAD, y: block.top, w: CONTENT_W, h: block.height };
+  const cardSdf = roundRectSdf(card, 18);
+  fillSdf(c, card, cardSdf, C.card);
+  block.rows.forEach((row, index) => {
+    if (index % 2 === 1) {
+      const band = { x: card.x, y: row.y, w: card.w, h: row.h };
+      fillSdf(c, band, both(cardSdf, roundRectSdf(band, 0)), { r: 16, g: 34, b: 24 });
+    }
+  });
+  for (const column of block.columns) {
+    if (column.kind !== 'out' && column.kind !== 'in' && column.kind !== 'total') continue;
+    const box = { x: column.x, y: card.y, w: column.w, h: card.h };
+    fillSdf(c, box, both(cardSdf, roundRectSdf(box, 0)), C.subtotal);
+  }
+  const head = { x: card.x, y: card.y, w: card.w, h: GROUP_HEAD_H };
+  fillSdf(c, head, both(cardSdf, roundRectSdf(head, 0)), C.wash);
+  for (let i = 1; i < block.rows.length; i += 1) {
+    fillRect(c, { x: card.x, y: block.rows[i].y, w: card.w, h: 1 }, C.line);
+  }
+  fillRect(c, { x: card.x, y: block.top + GROUP_HEAD_H, w: card.w, h: 2 }, C.line);
+  for (const column of block.columns) {
+    if (column.kind === 'name') continue;
+    fillRect(c, { x: column.x, y: card.y, w: 1, h: card.h }, C.line);
+  }
+  strokeRoundRect(c, card, 18, 2, C.border);
+
+  const parOf = new Map(group.holeNumbers.map((hole, index) => [hole, group.pars[index] ?? '']));
+  const scoreAt = new Map(group.holeNumbers.map((hole, index) => [hole, index]));
+  const holeStyle: TextStyle = { cap: 16, weight: 2.6, color: C.cream };
+  const parStyle: TextStyle = { cap: 13, weight: 2.2, color: C.muted };
+  const nameStyle: TextStyle = { cap: 18, weight: 2.8, color: C.cream };
+  const scoreStyle: TextStyle = { cap: 20, weight: 3, color: C.cream };
+  const totalStyle: TextStyle = { cap: 20, weight: 3.2, color: C.lime };
+
+  for (const column of block.columns) {
+    const cx = column.x + column.w / 2;
+    if (column.kind === 'hole' && column.hole != null) {
+      drawCentered(c, cx, block.top + 22, column.label, holeStyle);
+      drawCentered(c, cx, block.top + 46, parOf.get(column.hole) ?? '', parStyle);
+    } else if (column.kind !== 'name') {
+      drawCentered(c, cx, block.top + GROUP_HEAD_H / 2, column.label.toUpperCase(), { ...holeStyle, tracking: 1, color: C.lime });
+    }
+  }
+
+  block.rows.forEach((row, index) => {
+    const player = group.players[index];
+    if (!player) return;
+    const fitted = fitText(player.name, nameStyle, GROUP_NAME_W - 28, 13);
+    const nameTop = row.y + (row.h - fitted.style.cap) / 2;
+    drawText(c, PAD + 14, nameTop, fitted.text, fitted.style);
+    for (const column of block.columns) {
+      let text = '';
+      let style = scoreStyle;
+      if (column.kind === 'hole' && column.hole != null) {
+        text = player.scores[scoreAt.get(column.hole) ?? -1] ?? '';
+      } else if (column.kind === 'out') {
+        text = player.out ?? '';
+        style = totalStyle;
+      } else if (column.kind === 'in') {
+        text = player.in ?? '';
+        style = totalStyle;
+      } else if (column.kind === 'total') {
+        text = player.total;
+        style = totalStyle;
+      }
+      if (!text) continue;
+      drawCentered(c, column.x + column.w / 2, row.y + row.h / 2, text, style);
+    }
+  });
+}
+
+function drawGroupResults(c: Canvas, layout: GroupScorecardLayout): void {
+  const results = layout.results;
+  if (!results) return;
+  const card = { x: PAD, y: results.top, w: CONTENT_W, h: results.height };
+  fillRoundRect(c, card, 18, C.card);
+  strokeRoundRect(c, card, 18, 2, C.border);
+  let y = results.top + 16;
+  for (const block of results.blocks) {
+    drawText(c, PAD + 20, y, block.title.toUpperCase(), RESULT_TITLE);
+    y += RESULT_TITLE.cap + 10;
+    for (const line of block.lines) {
+      drawText(c, PAD + 20, y, line.text, line.warning ? { ...RESULT_BODY, color: C.red } : RESULT_BODY);
+      y += RESULT_BODY.cap + RESULT_LINE_GAP;
+    }
+    y += 12;
+  }
+}
+
+function renderGroupScorecardPng(plan: ScorecardImagePlan): Uint8Array {
+  const group = plan.group;
+  if (!group) return encodePng({ rgb: new Uint8Array(WIDTH * 3), width: WIDTH, height: 1 });
+  const layout = layoutGroupScorecardImage(group);
+  const c: Canvas = { rgb: new Uint8Array(layout.width * layout.height * 3), width: layout.width, height: layout.height };
+  const fade = Math.min(layout.height, 700);
+  for (let y = 0; y < c.height; y += 1) {
+    const t = Math.min(1, y / fade);
+    const e = t * t * (3 - 2 * t);
+    const color = {
+      r: Math.round(C.bgTop.r + (C.bg.r - C.bgTop.r) * e),
+      g: Math.round(C.bgTop.g + (C.bg.g - C.bgTop.g) * e),
+      b: Math.round(C.bgTop.b + (C.bg.b - C.bgTop.b) * e),
+    };
+    for (let x = 0; x < c.width; x += 1) blend(c, x, y, color, 1);
+  }
+  drawGroupHeader(c, plan);
+  for (const block of layout.blocks) drawGroupBlock(c, group, block);
+  drawGroupResults(c, layout);
+  return encodePng(c);
+}
+
 /**
  * Scorecard PNG laid out like a paper card: Hole · Par · Score · Putts in
  * nine-hole blocks with OUT / IN subtotals, marks drawn around the score.
- * No GPS, no map, no spectator URL.
+ * A whole-group plan draws one row per player instead. No GPS, no map, no spectator URL.
+ * The group image is local only — it is never the spectator payload.
  */
 export function renderScorecardPng(plan: ScorecardImagePlan): Uint8Array {
+  if (plan.group) return renderGroupScorecardPng(plan);
   const layout = layoutScorecardImage(plan);
   const c: Canvas = {
     rgb: new Uint8Array(layout.width * layout.height * 3),

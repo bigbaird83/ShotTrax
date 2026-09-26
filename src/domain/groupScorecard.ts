@@ -1,4 +1,13 @@
-import { strokesByHole, strokesOffLow, type GroupHoleIn, type GroupPlayerIn, type GroupResult } from './groupGames';
+import { COPY } from './playerCopy';
+import {
+  formatMatchLine,
+  formatToPar,
+  strokesByHole,
+  strokesOffLow,
+  type GroupHoleIn,
+  type GroupPlayerIn,
+  type GroupResult,
+} from './groupGames';
 
 /**
  * Hole-by-hole group scorecard: every player's score on each hole, the net
@@ -103,4 +112,77 @@ export function planGroupScorecard(args: {
       ? [total('Out', front, players), total('In', back, players), total('Total', rows, players)]
       : [total('Total', rows, players)],
   };
+}
+
+/** One compact block of the in-app group standings, same words as the group screen. */
+export type GroupResultBlock = { title: string; lines: string[] };
+
+/**
+ * Standings for the scorecard image. Null when no side game is on (skins,
+ * Stableford, match play, Nassau). Net or gross follows `result`, which already
+ * stays gross when a handicap is blank. Nothing here is invented.
+ */
+export function formatGroupResultBlocks(
+  players: readonly { id: string; name: string }[],
+  result: GroupResult,
+  holeCount: number,
+): GroupResultBlock[] | null {
+  const formatOn = result.skins != null || result.stableford != null || result.match != null || result.nassau != null;
+  if (!formatOn) return null;
+  const nameOf = (id: string) => players.find((p) => p.id === id)?.name ?? '—';
+  const blocks: GroupResultBlock[] = [];
+
+  const leaderboard: GroupResultBlock = {
+    title: result.net ? COPY.groupLeaderboardNet : COPY.groupLeaderboard,
+    lines: result.strokePlay.map((row) => {
+      const who = `${row.ranked ? `${row.place}. ` : ''}${row.name}${row.thru > 0 ? ` · thru ${row.thru}` : ''}`;
+      const value =
+        row.thru === 0
+          ? '—'
+          : `${formatToPar(result.net ? row.netToPar : row.toPar)} · ${result.net ? row.net : row.gross}`;
+      return `${who}  ${value}`;
+    }),
+  };
+  if (result.netBlocked) {
+    leaderboard.lines.push(result.netBlockReason === 'handicap' ? COPY.groupNetNeedsHandicaps : COPY.groupNetBlocked);
+  }
+  blocks.push(leaderboard);
+
+  if (result.skins) {
+    const skins = result.skins;
+    const lines = players.map((player) => `${player.name}  ${skins.won[player.id] ?? 0}`);
+    if (skins.carrying > 0) {
+      const tail = skins.holes.length === holeCount ? COPY.groupSkinsTiedAtEnd : COPY.groupSkinsCarrying;
+      lines.push(`${skins.carrying} ${skins.carrying === 1 ? 'skin' : 'skins'} ${tail}`);
+    }
+    if (skins.waitingOn) {
+      const names = skins.waitingOn.playerIds.map(nameOf).join(', ');
+      lines.push(`${COPY.groupSkinsWaitingPrefix} ${skins.waitingOn.holeNumber}: ${names}. ${COPY.groupSkinsWaitingSuffix}`);
+    }
+    blocks.push({ title: COPY.groupSkins, lines });
+  }
+
+  if (result.stableford) {
+    blocks.push({
+      title: COPY.groupStableford,
+      lines: result.stableford.map((row) => `${row.name}  ${row.points} pts`),
+    });
+  }
+
+  if (result.match) {
+    blocks.push({ title: COPY.groupMatchPlay, lines: [formatMatchLine(result.match, nameOf)] });
+  }
+
+  if (result.nassau) {
+    blocks.push({
+      title: COPY.groupNassau,
+      lines: [
+        `Front 9  ${formatMatchLine(result.nassau.front, nameOf)}`,
+        `Back 9  ${formatMatchLine(result.nassau.back, nameOf)}`,
+        `Overall  ${formatMatchLine(result.nassau.overall, nameOf)}`,
+      ],
+    });
+  }
+
+  return blocks;
 }

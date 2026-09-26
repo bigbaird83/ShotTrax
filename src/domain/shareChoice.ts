@@ -24,3 +24,26 @@ export function shareTapOpensChoice(): true {
 export function shareKindOrScorecard(kind: ShareKind | null | undefined): ShareKind {
   return kind === 'live' ? 'live' : 'scorecard';
 }
+
+/** Whose card the scorecard image shows. Whole group is local to the PNG. */
+export type ScorecardAudience = 'group' | 'me';
+
+export type ScorecardAudienceChoice = {
+  audience: ScorecardAudience;
+  label: string;
+  /** Whole group is the default, and it is listed first. */
+  default: boolean;
+};
+
+/**
+ * Scorecard share asks Whole group / Just me only when the round has a partner.
+ * No partners → null, and the share stays the single-player image with no extra prompt.
+ * The live-board link is not part of this pick.
+ */
+export function planScorecardAudienceChoices(partnerCount: number): ScorecardAudienceChoice[] | null {
+  if (!Number.isInteger(partnerCount) || partnerCount < 1) return null;
+  return [
+    { audience: 'group', label: COPY.shareWholeGroup, default: true },
+    { audience: 'me', label: COPY.shareJustMe, default: false },
+  ];
+}

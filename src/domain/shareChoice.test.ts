@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { COPY } from './playerCopy';
-import { planShareChoices, shareKindOrScorecard, shareTapOpensChoice } from './shareChoice';
+import { planScorecardAudienceChoices, planShareChoices, shareKindOrScorecard, shareTapOpensChoice } from './shareChoice';
 
 test('Share opens a pick: Share scorecard or Share live round', () => {
   assert.equal(shareTapOpensChoice(), true);
@@ -42,4 +42,45 @@ test('Menu and scorecard Share use the pick; the pick rides the queued share aft
   assert.match(open, /kind === 'live'\s*\? shareLiveBoard\(/);
   assert.match(open, /: shareRoundSnapshot\(/);
   assert.match(open, /toastFromShareAttempt/);
+});
+
+test('Whole group / Just me is asked only when the round has a partner', () => {
+  assert.equal(planScorecardAudienceChoices(0), null);
+  assert.equal(planScorecardAudienceChoices(-1), null);
+  assert.equal(planScorecardAudienceChoices(1.5), null);
+  const one = planScorecardAudienceChoices(1);
+  assert.deepEqual(one, [
+    { audience: 'group', label: 'Whole group', default: true },
+    { audience: 'me', label: 'Just me', default: false },
+  ]);
+  assert.equal(one?.[0]?.default, true);
+  assert.deepEqual(planScorecardAudienceChoices(3), one);
+  assert.equal(COPY.shareWholeGroup, 'Whole group');
+  assert.equal(COPY.shareJustMe, 'Just me');
+
+  const ui = readFileSync(new URL('../ui/ShareChoice.tsx', import.meta.url), 'utf8');
+  assert.match(ui, /audiences && audiences.length > 0/);
+  assert.match(ui, /choices && choices.length > 0/);
+  assert.match(ui, /accessibilityRole="menu"/);
+  assert.match(ui, /accessibilityState=\{choice\.default \? \{ selected: true \} : undefined\}/);
+  assert.match(ui, /testID="scorecard-audience"/);
+  assert.match(ui, /onPick\(choice\.kind\)/);
+  assert.doesNotMatch(ui, /shareLiveBoard|shareRoundSnapshot/);
+
+  const hole = readFileSync(new URL('../../app/round/[id]/hole/[number].tsx', import.meta.url), 'utf8');
+  const summary = readFileSync(new URL('../../app/round/[id]/summary.tsx', import.meta.url), 'utf8');
+  const review = readFileSync(new URL('../../app/review/[id]/scorecard.tsx', import.meta.url), 'utf8');
+  assert.match(hole, /planScorecardAudienceChoices\(scorecardPartnerCount\)/);
+  assert.match(hole, /<ShareChoice variant="ghost" onPick=\{queueMenuShare\}/);
+  assert.match(summary, /planScorecardAudienceChoices\(partnerCount\)/);
+  assert.match(review, /planScorecardAudienceChoices\(partnerCount\)/);
+  assert.doesNotMatch(review, /shareLiveBoard|onShare=/);
+
+  const share = readFileSync(new URL('../services/shareRound.ts', import.meta.url), 'utf8');
+  const snapshot = share.slice(share.indexOf('export async function shareRoundSnapshot'), share.indexOf('export async function shareLiveBoard'));
+  const live = share.slice(share.indexOf('export async function shareLiveBoard'));
+  assert.ok(snapshot.indexOf('publishExplicitRoundShare') < snapshot.indexOf("audience === 'group'"));
+  assert.ok(snapshot.indexOf('publishExplicitRoundShare') < snapshot.indexOf('loadGroup'));
+  assert.doesNotMatch(snapshot, /buildRoundSpectatorPayload/);
+  assert.doesNotMatch(live, /loadGroup|planGroupScorecard|planScorecardAudienceChoices|audience/);
 });
